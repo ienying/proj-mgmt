@@ -1,0 +1,57 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: proj-mgmt-app
+    ports:
+      - "${PORT:-5000}:${PORT:-5000}"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - COZE_PROJECT_ENV=${COZE_PROJECT_ENV:-DEV}
+      - PORT=${PORT:-5000}
+      - HOSTNAME=0.0.0.0
+      - COZE_WORKSPACE_PATH=/app
+      # PostgreSQL
+      - DATABASE_URL=postgresql://${PG_USER:-projmgmt}:${PG_PASSWORD:-projmgmt123}@postgres:5432/${PG_DB:-projmgmt}
+      # JWT
+      - JWT_SECRET=${JWT_SECRET:-project-management-secret-key-2026}
+      # S3 (optional)
+      - COZE_BUCKET_ENDPOINT_URL=${COZE_BUCKET_ENDPOINT_URL:-}
+      - COZE_BUCKET_NAME=${COZE_BUCKET_NAME:-}
+    command: pnpm dev
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:${PORT:-5000}',r=>{process.exit(r.statusCode===200?0:1)})"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: proj-mgmt-db
+    environment:
+      - POSTGRES_USER=${PG_USER:-projmgmt}
+      - POSTGRES_PASSWORD=${PG_PASSWORD:-projmgmt123}
+      - POSTGRES_DB=${PG_DB:-projmgmt}
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-projmgmt} -d ${PG_DB:-projmgmt}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
