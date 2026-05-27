@@ -8,7 +8,7 @@ import { sql } from "drizzle-orm";
 // 列配置接口（支持只读字段）
 export interface ColumnConfig {
   name: string;
-  type: 'text' | 'number' | 'date' | 'select' | 'textarea' | 'checkbox' | 'email' | 'phone';
+  type: 'text' | 'number' | 'date' | 'select' | 'textarea' | 'checkbox' | 'email' | 'phone' | 'column_reference';
   required?: boolean;
   description?: string;
   readonly?: boolean;           // 是否只读
@@ -21,6 +21,28 @@ export interface ColumnConfig {
     pattern?: string;
     message?: string;
   };
+}
+
+// 引用关系配置接口
+export interface ReferenceConfig {
+  id: string;
+  name: string;
+  source_table_code: string;
+  match_condition: {
+    target_column: string;
+    source_column: string;
+  };
+  column_mapping: Array<{
+    target_column: string;
+    source_column: string;
+  }>;
+  filter_condition?: Array<{
+    column: string;
+    operator: string;
+    value: string;
+  }>;
+  bidirectional: boolean;
+  entry_column: string;
 }
 
 // ============================================
@@ -219,6 +241,7 @@ export const data_table_definitions = pgTable("data_table_definitions", {
   module_type: jsonb("module_type").notNull().$type<string[]>(),
   description: text("description"),
   columns_config: jsonb("columns_config").notNull(),
+  references_config: jsonb("references_config").$type<ReferenceConfig[]>(),
   apply_project_types: jsonb("apply_project_types").$type<string[]>(),
   apply_project_stages: jsonb("apply_project_stages").$type<string[]>(),
   sort_order: integer("sort_order").default(0).notNull(),

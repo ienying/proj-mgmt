@@ -305,10 +305,12 @@ CREATE TABLE IF NOT EXISTS data_table_definitions (
   module_type JSONB NOT NULL DEFAULT '[]'::jsonb,
   description TEXT,
   columns_config JSONB NOT NULL DEFAULT '[]'::jsonb,
+  references_config JSONB DEFAULT '[]'::jsonb,
   apply_project_types JSONB DEFAULT '[]'::jsonb,
   apply_project_stages JSONB DEFAULT '[]'::jsonb,
   sort_order INTEGER DEFAULT 0 NOT NULL,
   is_active BOOLEAN DEFAULT true NOT NULL,
+  allow_add BOOLEAN DEFAULT true,
   created_by VARCHAR(36),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE

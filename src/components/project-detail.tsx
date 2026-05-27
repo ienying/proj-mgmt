@@ -10,7 +10,8 @@ import {
   ShoppingCart, Briefcase, Archive,
   Columns3, GitBranch, FileSearch, GanttChart, Group,
   ChevronDown, ChevronRight as ChevronRightIcon,
-  Settings2, Route, BarChart3, Trash2, Download, Upload, Filter
+  Settings2, Route, BarChart3, Trash2, Download, Upload, Filter,
+  Link as LinkIcon, Search, Table as TableIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import {
   Popover,
@@ -124,6 +131,11 @@ interface ColumnConfig {
   display_mode?: "dropdown" | "checkbox" | "project" | "system";
   max_size?: string; // 视频最大文件大小: "100MB" / "500MB" / "1GB"
   max_count?: number; // 视频最多上传个数
+  reference_config?: {
+    source_table_code: string;
+    source_column: string;
+    match_field?: string;
+  };
 }
 
 interface TableDefinition {
@@ -133,6 +145,16 @@ interface TableDefinition {
   module_codes: string[];
   allow_add?: boolean;
   columns_config: ColumnConfig[];
+  references_config?: Array<{
+    id: string;
+    name: string;
+    source_table_code: string;
+    match_condition: { target_column: string; source_column: string };
+    column_mapping: Array<{ target_column: string; source_column: string }>;
+    filter_condition?: Array<{ column: string; operator: string; value: string }>;
+    bidirectional: boolean;
+    entry_column: string;
+  }>;
 }
 
 interface TableData {
@@ -374,6 +396,17 @@ export function ProjectDetail({
   const [currentTableForAdd, setCurrentTableForAdd] = useState<TableDefinition | null>(null);
   const [newRowData, setNewRowData] = useState<Record<string, string>>({});
 
+  // 引用选择器状态
+  const [refSelectorOpen, setRefSelectorOpen] = useState(false);
+  const [refSelectorConfig, setRefSelectorConfig] = useState<{
+    ref: NonNullable<TableDefinition['references_config']>[0];
+    sourceTableDef: TableDefinition;
+    sourceData: TableData[];
+    targetTableCode: string;
+    entryColumn: string;
+  } | null>(null);
+  const [refSelectorSearch, setRefSelectorSearch] = useState("");
+
   // 获取项目统计
   const projectStats = useMemo(() => {
     const totalRecords = Object.values(tableDataMap).reduce((sum, data) => sum + data.length, 0);
@@ -527,6 +560,35 @@ export function ProjectDetail({
         //    确保每个采购模块都有一条对应记录
         await sortProcurementModuleRecords(definitions, dataMap);
 
+        // 4. 触发引用关系双向同步
+        const hasReferences = definitions.some((def: TableDefinition) =>
+          def.references_config && def.references_config.length > 0
+        );
+        if (hasReferences) {
+          try {
+            await fetch("/api/project-data/sync-references", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ projectSchema: project.project_schema }),
+            });
+            // 同步后重新获取相关表数据
+            const refTableCodes = new Set<string>();
+            definitions.forEach((def: TableDefinition) => {
+              if (def.references_config?.length) refTableCodes.add(def.table_code);
+              def.references_config?.forEach(ref => refTableCodes.add(ref.source_table_code));
+            });
+            for (const tc of refTableCodes) {
+              const res = await fetch(
+                `/api/project-data?projectSchema=${project.project_schema}&tableCode=${tc}`
+              );
+              const r = await res.json();
+              dataMap[tc] = r.data || [];
+            }
+          } catch (err) {
+            console.error("引用同步失败:", err);
+          }
+        }
+
         setTableDataMap(dataMap);
       }
     } catch (error) {
@@ -664,6 +726,31 @@ export function ProjectDetail({
     });
     setNewRowData(initialData);
     setAddDialogOpen(true);
+  };
+
+  // 打开引用选择器
+  const openRefSelector = async (
+    ref: NonNullable<TableDefinition['references_config']>[0],
+    sourceTableDef: TableDefinition,
+    targetTableCode: string,
+    entryColumn: string
+  ) => {
+    // 加载源表数据
+    const res = await fetch(
+      `/api/project-data?projectSchema=${project.project_schema}&tableCode=${ref.source_table_code}`
+    );
+    const result = await res.json();
+    setRefSelectorConfig({ ref, sourceTableDef, sourceData: result.data || [], targetTableCode, entryColumn });
+    setRefSelectorSearch("");
+    setRefSelectorOpen(true);
+  };
+
+  // 选择源记录并填充目标表
+  const handleSelectSourceRecord = async () => {
+    if (!refSelectorConfig) return;
+    // 此函数由用户在源表选择 Dialog 中点击确认后调用
+    // 实际填充逻辑在 add dialog 中处理
+    setRefSelectorOpen(false);
   };
 
   // 新增记录
@@ -4130,10 +4217,29 @@ export function ProjectDetail({
           <div className="space-y-4 py-4">
             {currentTableForAdd?.columns_config.map((col) => (
               <div key={col.name} className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">
-                  {col.label || col.name}
-                  {col.required && <span className="text-red-500 ml-1">*</span>}
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-slate-700">
+                    {col.label || col.name}
+                    {col.required && <span className="text-red-500 ml-1">*</span>}
+                  </label>
+                  {/* 引用选择器按钮 */}
+                  {currentTableForAdd?.references_config?.filter(ref => ref.entry_column === col.name).map(ref => {
+                    const sourceDef = tableDefinitions.find(t => t.table_code === ref.source_table_code);
+                    if (!sourceDef) return null;
+                    return (
+                      <Button
+                        key={ref.id}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-6 text-xs"
+                        onClick={() => openRefSelector(ref, sourceDef, currentTableForAdd.table_code, col.name)}
+                      >
+                        <LinkIcon className="h-3 w-3 mr-1" /> 选择{sourceDef.table_name}记录
+                      </Button>
+                    );
+                  })}
+                </div>
                 {col.type === "multiple_select" && (col.options || []).length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {(col.options || []).map((opt: string) => {
@@ -4258,6 +4364,89 @@ export function ProjectDetail({
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddDialogOpen(false)}>取消</Button>
             <Button onClick={handleAddRow}>保存</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 源表记录选择器 Dialog */}
+      <Dialog open={refSelectorOpen} onOpenChange={setRefSelectorOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>选择 {refSelectorConfig?.sourceTableDef.table_name} 记录</DialogTitle>
+            <DialogDescription>选择一条记录，其值将自动填充到目标表的对应列中</DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            {/* 搜索框 */}
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="搜索..."
+                value={refSelectorSearch}
+                onChange={(e) => setRefSelectorSearch(e.target.value)}
+                className="pl-9 h-9"
+              />
+            </div>
+            {/* 源表记录列表 */}
+            <div className="border rounded-md max-h-80 overflow-y-auto">
+              {refSelectorConfig && (
+                <Table className="w-full">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="w-10 px-3 py-2"></th>
+                      {refSelectorConfig.ref.column_mapping.map(m => {
+                        const srcCol = refSelectorConfig.sourceTableDef.columns_config.find(c => c.name === m.source_column);
+                        return <th key={m.source_column} className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">{srcCol?.label || m.source_column}</th>;
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const filtered = refSelectorConfig.sourceData.filter(row => {
+                        if (!refSelectorSearch) return true;
+                        const search = refSelectorSearch.toLowerCase();
+                        return refSelectorConfig.ref.column_mapping.some(m =>
+                          String(row[m.source_column] ?? "").toLowerCase().includes(search)
+                        );
+                      });
+                      if (filtered.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={refSelectorConfig.ref.column_mapping.length + 1} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                              无匹配记录
+                            </td>
+                          </tr>
+                        );
+                      }
+                      return filtered.map(row => (
+                        <tr key={row.id} className="border-b last:border-b-0 hover:bg-muted/50 cursor-pointer"
+                          onClick={() => {
+                            if (!refSelectorConfig || !currentTableForAdd) return;
+                            // 根据 column_mapping 填充目标表
+                            const updates: Record<string, string> = {};
+                            for (const m of refSelectorConfig.ref.column_mapping) {
+                              updates[m.target_column] = String(row[m.source_column] ?? "");
+                            }
+                            setNewRowData(prev => ({ ...prev, ...updates }));
+                            // 同时设置入口列的值（匹配条件中的源列值）
+                            const matchValue = String(row[refSelectorConfig.ref.match_condition.source_column] ?? "");
+                            setNewRowData(prev => ({ ...prev, [refSelectorConfig.ref.entry_column]: matchValue }));
+                            setRefSelectorOpen(false);
+                          }}
+                        >
+                          <td className="px-3 py-2"><div className="h-3 w-3 rounded-full border-2 border-muted-foreground/30" /></td>
+                          {refSelectorConfig.ref.column_mapping.map(m => (
+                            <td key={m.source_column} className="px-3 py-2 text-sm">{String(row[m.source_column] ?? "-")}</td>
+                          ))}
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </Table>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRefSelectorOpen(false)}>取消</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

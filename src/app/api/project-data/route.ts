@@ -17,9 +17,11 @@ export async function GET(request: NextRequest) {
 
     const client = await createServerClient();
 
+    const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema;
+
     // 查询项目 Schema 中的表数据
     const { data, error } = await client.rpc("execute_sql", {
-      p_sql: `SELECT * FROM ${projectSchema}."${tableCode}" ORDER BY sort_order, created_at`,
+      p_sql: `SELECT * FROM ${safeSchema}."${tableCode}" ORDER BY sort_order, created_at`,
     });
 
     if (error) {
@@ -50,6 +52,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "projectSchema, tableCode and data required" }, { status: 400 });
     }
 
+    const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema;
+
     // 如果调用方未指定 data_source/allow_delete，则设置默认值
     const dataWithMeta = { 
       ...data, 
@@ -70,7 +74,7 @@ export async function POST(request: NextRequest) {
     });
 
     const insertSQL = `
-      INSERT INTO ${projectSchema}."${tableCode}" (${columns.join(", ")})
+      INSERT INTO ${safeSchema}."${tableCode}" (${columns.join(", ")})
       VALUES (${values.join(", ")})
       RETURNING *
     `;
@@ -103,6 +107,8 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "projectSchema, tableCode, rowId and data required" }, { status: 400 });
     }
 
+    const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema;
+
     // 构建更新 SQL
     const setClauses = Object.entries(data).map(([key, value]) => {
       if (value === null || value === undefined) {
@@ -121,7 +127,7 @@ export async function PUT(request: NextRequest) {
     });
 
     const updateSQL = `
-      UPDATE ${projectSchema}."${tableCode}"
+      UPDATE ${safeSchema}."${tableCode}"
       SET ${setClauses.join(", ")}, updated_at = NOW()
       WHERE id = '${rowId}'
       RETURNING *
@@ -133,6 +139,14 @@ export async function PUT(request: NextRequest) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // 编辑时同步引用关系：检查被更新的表是否有引用关系
+    try {
+      await syncEditReferences(client, safeSchema, tableCode, rowId, data);
+    } catch (e) {
+      console.error('[syncEditReferences] error:', e);
+      // 引用同步失败不影响主更新流程
     }
 
     return NextResponse.json({ data: result?.[0] || data });
@@ -157,8 +171,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "projectSchema, tableCode and rowId required" }, { status: 400 });
     }
 
+    const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema;
+
     const deleteSQL = `
-      DELETE FROM ${projectSchema}."${tableCode}"
+      DELETE FROM ${safeSchema}."${tableCode}"
       WHERE id = '${rowId}'
     `;
 
@@ -174,5 +190,123 @@ export async function DELETE(request: NextRequest) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+/**
+ * 编辑时同步引用关系：将被更新的列的值同步到引用表
+ */
+async function syncEditReferences(
+  client: Awaited<ReturnType<typeof createServerClient>>,
+  safeSchema: string,
+  tableCode: string,
+  rowId: string,
+  updateData: Record<string, unknown>
+) {
+  // 获取所有表定义
+  const { data: definitions } = await client.rpc("dp_select", {
+    p_table: "data_table_definitions",
+  });
+
+  if (!definitions) return;
+
+  const tableDefs = definitions as Array<{
+    table_code: string;
+    references_config?: Array<{
+      id: string;
+      source_table_code: string;
+      match_condition: { target_column: string; source_column: string };
+      column_mapping: Array<{ target_column: string; source_column: string }>;
+      bidirectional: boolean;
+      entry_column: string;
+    }>;
+  }>;
+
+  // 查找当前表是否有引用关系（作为目标表）
+  const currentDef = tableDefs.find(d => d.table_code === tableCode);
+  if (currentDef?.references_config) {
+    // 获取当前行数据
+    const { data: currentRows } = await client.rpc("execute_sql", {
+      p_sql: `SELECT * FROM ${safeSchema}."${tableCode}" WHERE id = '${rowId}'`,
+    });
+    if (!currentRows || currentRows.length === 0) return;
+    const currentRow = currentRows[0];
+
+    for (const ref of currentDef.references_config) {
+      // 检查是否有更新的列在 column_mapping 中
+      const mappedCols = ref.column_mapping.filter(m => updateData.hasOwnProperty(m.target_column));
+      if (mappedCols.length === 0) continue;
+
+      // 获取匹配字段值
+      const matchValue = currentRow[ref.match_condition.target_column];
+      if (!matchValue) continue;
+
+      // 在源表中找匹配行
+      const { data: sourceRows } = await client.rpc("execute_sql", {
+        p_sql: `SELECT * FROM ${safeSchema}."${ref.source_table_code}" WHERE "${ref.match_condition.source_column}" = '${String(matchValue).replace(/'/g, "''")}'`,
+      });
+      if (!sourceRows || sourceRows.length === 0) continue;
+
+      // 同步到源表
+      const updates: Record<string, unknown> = {};
+      for (const m of mappedCols) {
+        updates[m.source_column] = currentRow[m.target_column];
+      }
+      if (Object.keys(updates).length > 0) {
+        const setClauses = Object.entries(updates).map(([key, value]) => {
+          if (value === null || value === undefined) return `"${key}" = NULL`;
+          if (typeof value === "boolean") return `"${key}" = ${value ? "TRUE" : "FALSE"}`;
+          if (typeof value === "number") return `"${key}" = ${value}`;
+          return `"${key}" = '${String(value).replace(/'/g, "''")}'`;
+        });
+        await client.rpc("execute_sql", {
+          p_sql: `UPDATE ${safeSchema}."${ref.source_table_code}" SET ${setClauses.join(", ")}, updated_at = NOW() WHERE id = '${sourceRows[0].id}'`,
+        });
+      }
+    }
+  }
+
+  // 查找当前表是否作为其他表的源表
+  for (const def of tableDefs) {
+    if (!def.references_config) continue;
+    for (const ref of def.references_config) {
+      if (ref.source_table_code !== tableCode) continue;
+
+      // 检查被更新的列是否是该引用关系的 source_column
+      const mappedCols = ref.column_mapping.filter(m => updateData.hasOwnProperty(m.source_column));
+      if (mappedCols.length === 0) continue;
+
+      // 获取被更新行的匹配字段值
+      const { data: sourceRows } = await client.rpc("execute_sql", {
+        p_sql: `SELECT * FROM ${safeSchema}."${tableCode}" WHERE id = '${rowId}'`,
+      });
+      if (!sourceRows || sourceRows.length === 0) continue;
+      const sourceRow = sourceRows[0];
+      const matchValue = sourceRow[ref.match_condition.source_column];
+      if (!matchValue) continue;
+
+      // 在目标表中找匹配行
+      const { data: targetRows } = await client.rpc("execute_sql", {
+        p_sql: `SELECT * FROM ${safeSchema}."${def.table_code}" WHERE "${ref.match_condition.target_column}" = '${String(matchValue).replace(/'/g, "''")}'`,
+      });
+      if (!targetRows || targetRows.length === 0) continue;
+
+      // 同步到目标表
+      const updates: Record<string, unknown> = {};
+      for (const m of mappedCols) {
+        updates[m.target_column] = sourceRow[m.source_column];
+      }
+      if (Object.keys(updates).length > 0) {
+        const setClauses = Object.entries(updates).map(([key, value]) => {
+          if (value === null || value === undefined) return `"${key}" = NULL`;
+          if (typeof value === "boolean") return `"${key}" = ${value ? "TRUE" : "FALSE"}`;
+          if (typeof value === "number") return `"${key}" = ${value}`;
+          return `"${key}" = '${String(value).replace(/'/g, "''")}'`;
+        });
+        await client.rpc("execute_sql", {
+          p_sql: `UPDATE ${safeSchema}."${def.table_code}" SET ${setClauses.join(", ")}, updated_at = NOW() WHERE id = '${targetRows[0].id}'`,
+        });
+      }
+    }
   }
 }

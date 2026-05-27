@@ -515,7 +515,7 @@ export function ProjectManagement({
     if (!selectedProject) return null;
 
     return (
-      <div className="w-80 shrink-0 h-full bg-white border-l border-slate-200 overflow-y-auto">
+      <div className="w-80 shrink-0 h-full border-l border-slate-200 overflow-y-auto">
         {/* 头部 */}
         <div className="px-4 py-2 border-b border-slate-200">
           <div className="flex items-center justify-between">
@@ -536,7 +536,7 @@ export function ProjectManagement({
         </div>
 
         {/* 项目概览信息 */}
-        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+        <div className="px-4 py-3 border-b border-slate-100">
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             {selectedProject.project_code && (
               <div>
@@ -1235,7 +1235,7 @@ export function ProjectManagement({
       <div className="flex-1 flex flex-col min-w-0">
         {/* 筛选工具栏 - 长条样式 */}
         <div className="p-6 pb-0">
-          <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+          <div className="border border-gray-200 rounded-xl p-4 space-y-3">
             {/* 第一行：搜索 + 基本筛选 + 操作按钮 */}
             <div className="flex items-center gap-3 flex-wrap">
               <div className="relative flex-1 min-w-[200px] max-w-[320px]">

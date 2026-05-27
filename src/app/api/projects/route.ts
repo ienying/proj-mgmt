@@ -106,6 +106,7 @@ export async function POST(request: NextRequest) {
       role_market_product: body.role_market_product || null,
       role_project_manager: body.role_project_manager || null,
       status: "active",
+      created_by: body.created_by || "system",
     };
 
     const { data, error } = await client.rpc("dp_insert", {

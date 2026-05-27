@@ -43,9 +43,17 @@ async function queryOne<T = unknown>(sql: string, params?: unknown[]): Promise<R
   return { data: (rows && rows.length > 0 ? rows[0] : null) as T, error: null };
 }
 
+function serializeForPg(val: unknown): unknown {
+  if (typeof val === 'object' && val !== null) {
+    if (val instanceof Date || ArrayBuffer.isView(val)) return val;
+    return JSON.stringify(val);
+  }
+  return val;
+}
+
 function buildSetClause(data: Record<string, unknown>, startIndex = 0): { setClause: string; values: unknown[] } {
   const keys = Object.keys(data).filter(k => data[k] !== undefined);
-  const values = keys.map(k => data[k]);
+  const values = keys.map(k => serializeForPg(data[k]));
   const setClause = keys.map((k, i) => `"${k}" = $${startIndex + i + 1}`).join(', ');
   return { setClause, values };
 }
@@ -97,7 +105,7 @@ class PgRpcClient {
   private async dpInsert(table: string, data: Record<string, unknown>): Promise<RpcResult<Record<string, unknown>>> {
     const t = table.includes('.') ? table : `"${table}"`;
     const keys = Object.keys(data).filter(k => data[k] !== undefined);
-    const values = keys.map(k => data[k]);
+    const values = keys.map(k => serializeForPg(data[k]));
     const columns = keys.map(k => `"${k}"`).join(', ');
     const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
     const sql = `INSERT INTO ${t} (${columns}) VALUES (${placeholders}) RETURNING *`;

@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
       module_type: module_type || [],
       description,
       columns_config: columns_config || [],
+      references_config: body.references_config || [],
       apply_project_types: apply_project_types || [],
       apply_project_stages: apply_project_stages || [],
       sort_order,

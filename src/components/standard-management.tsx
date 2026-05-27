@@ -68,8 +68,11 @@ import {
   Download,
   Upload,
   HelpCircle,
+  Link as LinkIcon,
+  ArrowLeftRight,
 } from "lucide-react";
 import { FileUploadField, renderFileCellDisplay } from "@/components/file-upload-field";
+import type { ReferenceConfig } from "@/storage/database/shared/schema";
 
 export interface TableDefinition {
   id: string;
@@ -78,6 +81,7 @@ export interface TableDefinition {
   module_type: string[];
   description?: string;
   columns_config: ColumnConfig[];
+  references_config?: ReferenceConfig[];
   apply_project_types: string[];
   apply_project_stages: string[];
   sort_order: number;
@@ -98,6 +102,11 @@ export interface ColumnConfig {
   label?: string;
   max_size?: string; // 视频最大文件大小: "100MB" / "500MB" / "1GB"
   max_count?: number; // 视频最多上传个数
+  reference_config?: {
+    source_table_code: string;
+    source_column: string;
+    match_field?: string;
+  };
 }
 
 const MODULE_TYPES = [
@@ -358,6 +367,33 @@ function PreviewPanel({
             <p className="pl-4 text-muted-foreground/60 italic">暂无列定义</p>
           )}
         </div>
+
+        {/* 引用关系 */}
+        <div>
+          <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+            <LinkIcon className="h-3 w-3" />
+            <span>引用关系</span>
+          </div>
+          {formData.references_config && formData.references_config.length > 0 ? (
+            <div className="pl-4 space-y-0.5">
+              <p className="text-muted-foreground">
+                共 <strong>{formData.references_config.length}</strong> 个引用
+              </p>
+              <div className="max-h-[80px] overflow-y-auto space-y-0.5 mt-1">
+                {formData.references_config.map((ref) => {
+                  const sourceDef = moduleTypesList.find(() => false) || definitions.find(d => d.table_code === ref.source_table_code);
+                  return (
+                    <div key={ref.id} className="text-[10px] text-muted-foreground">
+                      {ref.name} → {(sourceDef as any)?.table_name || ref.source_table_code}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className="pl-4 text-muted-foreground/60 italic">暂无引用</p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -562,6 +598,118 @@ export function StandardManagement({
   const [syncDataMode, setSyncDataMode] = useState<'overwrite' | 'append'>('overwrite');
   const [syncing, setSyncing] = useState(false);
 
+  // 引用关系对话框状态
+  const [refDialogOpen, setRefDialogOpen] = useState(false);
+  const [editingRef, setEditingRef] = useState<ReferenceConfig | null>(null);
+  const [refForm, setRefForm] = useState<Omit<ReferenceConfig, 'id'>>({
+    name: "",
+    source_table_code: "",
+    match_condition: { target_column: "", source_column: "" },
+    column_mapping: [],
+    bidirectional: true,
+    entry_column: "",
+  });
+
+  const openAddRefDialog = () => {
+    setEditingRef(null);
+    setRefForm({
+      name: "",
+      source_table_code: "",
+      match_condition: { target_column: "", source_column: "" },
+      column_mapping: [],
+      bidirectional: true,
+      entry_column: "",
+    });
+    setRefDialogOpen(true);
+  };
+
+  const openEditRefDialog = (ref: ReferenceConfig) => {
+    setEditingRef(ref);
+    setRefForm({
+      name: ref.name,
+      source_table_code: ref.source_table_code,
+      match_condition: { ...ref.match_condition },
+      column_mapping: ref.column_mapping.map(m => ({ ...m })),
+      bidirectional: ref.bidirectional,
+      entry_column: ref.entry_column,
+    });
+    setRefDialogOpen(true);
+  };
+
+  const handleSaveRef = () => {
+    if (!refForm.name || !refForm.source_table_code || !refForm.entry_column) return;
+    if (!refForm.match_condition.target_column || !refForm.match_condition.source_column) return;
+    if (refForm.column_mapping.length === 0) return;
+    if (editingRef) {
+      setFormData(prev => ({
+        ...prev,
+        references_config: (prev.references_config || []).map(r =>
+          r.id === editingRef.id ? { ...refForm, id: editingRef.id } : r
+        ),
+      }));
+    } else {
+      const newRef: ReferenceConfig = { ...refForm, id: crypto.randomUUID() };
+      setFormData(prev => ({
+        ...prev,
+        references_config: [...(prev.references_config || []), newRef],
+      }));
+    }
+    setRefDialogOpen(false);
+  };
+
+  const handleDeleteRef = (refId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      references_config: (prev.references_config || []).filter(r => r.id !== refId),
+    }));
+  };
+
+  const addRefColumnMapping = () => {
+    setRefForm(prev => ({
+      ...prev,
+      column_mapping: [...prev.column_mapping, { target_column: "", source_column: "" }],
+    }));
+  };
+
+  const updateRefColumnMapping = (index: number, field: 'target_column' | 'source_column', value: string) => {
+    setRefForm(prev => ({
+      ...prev,
+      column_mapping: prev.column_mapping.map((m, i) =>
+        i === index ? { ...m, [field]: value } : m
+      ),
+    }));
+  };
+
+  const removeRefColumnMapping = (index: number) => {
+    setRefForm(prev => ({
+      ...prev,
+      column_mapping: prev.column_mapping.filter((_, i) => i !== index),
+    }));
+  };
+
+  const addRefFilter = () => {
+    setRefForm(prev => ({
+      ...prev,
+      filter_condition: [...(prev.filter_condition || []), { column: "", operator: "=", value: "" }],
+    }));
+  };
+
+  const updateRefFilter = (index: number, field: 'column' | 'operator' | 'value', value: string) => {
+    setRefForm(prev => ({
+      ...prev,
+      filter_condition: (prev.filter_condition || []).map((f, i) =>
+        i === index ? { ...f, [field]: value } : f
+      ),
+    }));
+  };
+
+  const removeRefFilter = (index: number) => {
+    setRefForm(prev => ({
+      ...prev,
+      filter_condition: (prev.filter_condition || []).filter((_, i) => i !== index),
+    }));
+  };
+
   const openSyncDialog = async (def: TableDefinition, mode: 'structure' | 'data' | 'both' = 'both') => {
     setSyncTableDef(def);
     setSelectedProjectIds([]);
@@ -672,6 +820,7 @@ export function StandardManagement({
       module_type: [],
       description: "",
       columns_config: [],
+      references_config: [],
       apply_project_types: [],
       apply_project_stages: [],
       sort_order: definitions.length,
@@ -691,6 +840,7 @@ export function StandardManagement({
         : def.module_type
         ? [def.module_type]
         : [],
+      references_config: def.references_config || [],
     };
     setFormData(normalizedDef);
     setDialogOpen(true);
@@ -748,6 +898,103 @@ export function StandardManagement({
         i === colIndex ? { ...col, options: (col.options || []).filter((_, oi) => oi !== optIndex) } : col
       ),
     }));
+  };
+
+  // 导出列配置为 Excel
+  const handleExportColumns = async () => {
+    const cols = formData.columns_config || [];
+    if (cols.length === 0) {
+      toast.warning("暂无列配置，无法导出");
+      return;
+    }
+    try {
+      const XLSX = await import("xlsx");
+      const xlsxLib = (XLSX as any).default || XLSX;
+      const exportData = cols.map((col) => ({
+        "列名": col.name,
+        "类型": col.type,
+        "必填": col.required ? "是" : "否",
+        "只读": col.readonly ? "是" : "否",
+        "描述": col.description || "",
+        "选项": (col.options || []).join(", "),
+      }));
+      const worksheet = xlsxLib.utils.json_to_sheet(exportData);
+      const workbook = xlsxLib.utils.book_new();
+      xlsxLib.utils.book_append_sheet(workbook, worksheet, "列配置");
+      xlsxLib.writeFile(workbook, `${formData.table_name || "列配置"}_列配置.xlsx`);
+      toast.success(`导出成功，共 ${cols.length} 列`);
+    } catch (e) {
+      console.error("导出列配置失败:", e);
+      toast.error(`导出失败: ${(e as Error).message}`);
+    }
+  };
+
+  // 从 Excel 导入列配置
+  const handleImportColumns = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const XLSX = await import("xlsx");
+      const xlsxLib = (XLSX as any).default || XLSX;
+      const workbook = xlsxLib.read(arrayBuffer, { type: "array" });
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData: Record<string, unknown>[] = xlsxLib.utils.sheet_to_json(worksheet);
+
+      if (jsonData.length === 0) {
+        toast.warning("Excel 文件为空");
+        event.target.value = "";
+        return;
+      }
+
+      const typeMap: Record<string, string> = {
+        "文本": "text", "text": "text",
+        "数字": "number", "number": "number",
+        "日期": "date", "date": "date",
+        "单选": "select", "select": "select",
+        "多选": "multiple_select", "multiple_select": "multiple_select",
+        "多行文本": "textarea", "textarea": "textarea",
+        "产品模块": "procurement_module", "procurement_module": "procurement_module",
+        "Office 文件": "office", "office": "office",
+        "PDF 文件": "pdf", "pdf": "pdf",
+        "Markdown 文件": "md", "md": "md",
+        "图片": "image", "image": "image",
+        "压缩包": "archive", "archive": "archive",
+        "视频": "video", "video": "video",
+        "采购模块记录": "procurement_record", "procurement_record": "procurement_record",
+      };
+
+      const imported: ColumnConfig[] = jsonData.map((row) => {
+        const rawType = String(row["类型"] ?? row["type"] ?? "text");
+        const type = typeMap[rawType] || rawType;
+        const optionsStr = String(row["选项"] ?? row["options"] ?? "");
+        const options = optionsStr ? optionsStr.split(/[,，]/).map((s: string) => s.trim()).filter(Boolean) : [];
+
+        return {
+          name: String(row["列名"] ?? row["name"] ?? ""),
+          type,
+          required: String(row["必填"] ?? row["required"] ?? "") === "是",
+          readonly: String(row["只读"] ?? row["readonly"] ?? "") === "是",
+          description: String(row["描述"] ?? row["description"] ?? "") || undefined,
+          options: options.length > 0 ? options : undefined,
+        };
+      }).filter((col) => col.name);
+
+      if (imported.length === 0) {
+        toast.warning("未能解析到有效的列配置，请检查列名是否正确");
+        event.target.value = "";
+        return;
+      }
+
+      setFormData((prev) => ({ ...prev, columns_config: imported }));
+      toast.success(`成功导入 ${imported.length} 个列配置`);
+    } catch (e) {
+      console.error("导入列配置失败:", e);
+      toast.error(`导入失败: ${(e as Error).message}`);
+    }
+
+    event.target.value = "";
   };
 
   // 拖拽排序相关
@@ -1227,9 +1474,27 @@ export function StandardManagement({
                     badge={formData.columns_config?.length || null}
                   >
                     <div className="pt-3 space-y-3">
-                      <Button type="button" variant="outline" size="sm" onClick={addColumn} className="h-8 text-xs gap-1">
-                        <Plus className="h-3.5 w-3.5" /> 添加列
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={addColumn} className="h-8 text-xs gap-1">
+                          <Plus className="h-3.5 w-3.5" /> 添加列
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={handleExportColumns} className="h-8 text-xs gap-1" disabled={formData.columns_config?.length === 0}>
+                          <Download className="h-3.5 w-3.5" /> 导出列配置
+                        </Button>
+                        <label>
+                          <Button type="button" variant="outline" size="sm" asChild className="h-8 text-xs gap-1">
+                            <span>
+                              <Upload className="h-3.5 w-3.5" /> 导入列配置
+                            </span>
+                          </Button>
+                          <input
+                            type="file"
+                            accept=".xlsx,.xls"
+                            className="hidden"
+                            onChange={handleImportColumns}
+                          />
+                        </label>
+                      </div>
 
                       {formData.columns_config?.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
@@ -1539,6 +1804,55 @@ export function StandardManagement({
                               ))}
                             </TableBody>
                           </Table>
+                        </div>
+                      )}
+                    </div>
+                  </SectionPanel>
+
+                  {/* 引用关系 */}
+                  <SectionPanel
+                    title="引用关系"
+                    icon={LinkIcon}
+                    badge={formData.references_config?.length || null}
+                  >
+                    <div className="pt-3 space-y-3">
+                      <Button type="button" variant="outline" size="sm" onClick={openAddRefDialog} className="h-8 text-xs gap-1">
+                        <Plus className="h-3.5 w-3.5" /> 添加引用关系
+                      </Button>
+
+                      {formData.references_config?.length === 0 ? (
+                        <div className="text-center py-6 text-muted-foreground">
+                          <LinkIcon className="w-6 h-6 mx-auto mb-1.5 opacity-50" />
+                          <p className="text-sm">暂无引用关系</p>
+                          <p className="text-xs text-muted-foreground/60 mt-1">配置后可在项目中引用其他表的记录</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {formData.references_config?.map((ref) => {
+                            const sourceDef = definitions.find(d => d.table_code === ref.source_table_code);
+                            return (
+                              <div key={ref.id} className="rounded-md border p-3 space-y-1.5 text-xs">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium">{ref.name}</span>
+                                  <div className="flex gap-1">
+                                    <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => openEditRefDialog(ref)}>
+                                      <Edit className="h-3 w-3" />
+                                    </Button>
+                                    <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive" onClick={() => handleDeleteRef(ref.id)}>
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </div>
+                                <div className="text-muted-foreground space-y-0.5">
+                                  <p>源表: {sourceDef?.table_name || ref.source_table_code}</p>
+                                  <p>入口列: {ref.entry_column}</p>
+                                  <p>匹配: {ref.match_condition.target_column} = {sourceDef?.table_name || ref.source_table_code}.{ref.match_condition.source_column}</p>
+                                  <p>同步列: {ref.column_mapping.map(m => `${m.target_column}↔${m.source_column}`).join(", ")}</p>
+                                  <p>双向同步: {ref.bidirectional ? "是" : "否"}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -2199,6 +2513,223 @@ export function StandardManagement({
               disabled={selectedProjectIds.length === 0 || syncing}
             >
               {syncing ? "同步中..." : `同步到 ${selectedProjectIds.length} 个项目`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 引用关系编辑对话框 */}
+      <Dialog open={refDialogOpen} onOpenChange={setRefDialogOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{editingRef ? "编辑引用关系" : "添加引用关系"}</DialogTitle>
+            <DialogDescription>配置表之间的引用关系，实现数据自动填充和双向同步</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2 max-h-[65vh] overflow-y-auto">
+            {/* 引用名称 */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">引用名称</Label>
+              <Input
+                value={refForm.name}
+                onChange={(e) => setRefForm(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="如: 引用 A 表任务数据"
+                className="h-9"
+              />
+            </div>
+
+            {/* 源表 */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">源表</Label>
+              <Select
+                value={refForm.source_table_code}
+                onValueChange={(v) => setRefForm(prev => ({
+                  ...prev,
+                  source_table_code: v,
+                  match_condition: { ...prev.match_condition, source_column: "" },
+                  column_mapping: prev.column_mapping.map(m => ({ ...m, source_column: "" })),
+                }))}
+              >
+                <SelectTrigger className="h-9"><SelectValue placeholder="选择源表" /></SelectTrigger>
+                <SelectContent>
+                  {definitions.filter(d => d.table_code !== formData.table_code).map(def => (
+                    <SelectItem key={def.table_code} value={def.table_code}>{def.table_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 入口列 */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">入口列（选择源记录的列）</Label>
+              <Select
+                value={refForm.entry_column}
+                onValueChange={(v) => setRefForm(prev => ({ ...prev, entry_column: v }))}
+              >
+                <SelectTrigger className="h-9"><SelectValue placeholder="选择当前表的列" /></SelectTrigger>
+                <SelectContent>
+                  {formData.columns_config?.map(col => (
+                    <SelectItem key={col.name} value={col.name}>{col.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 匹配条件 */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">匹配条件</Label>
+              <div className="flex items-center gap-2">
+                <Select
+                  value={refForm.match_condition.target_column}
+                  onValueChange={(v) => setRefForm(prev => ({
+                    ...prev,
+                    match_condition: { ...prev.match_condition, target_column: v },
+                  }))}
+                >
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="当前表列" /></SelectTrigger>
+                  <SelectContent>
+                    {formData.columns_config?.map(col => (
+                      <SelectItem key={col.name} value={col.name}>{col.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-muted-foreground shrink-0">=</span>
+                <Select
+                  value={refForm.match_condition.source_column}
+                  onValueChange={(v) => setRefForm(prev => ({
+                    ...prev,
+                    match_condition: { ...prev.match_condition, source_column: v },
+                  }))}
+                >
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="源表列" /></SelectTrigger>
+                  <SelectContent>
+                    {definitions.find(d => d.table_code === refForm.source_table_code)?.columns_config?.map((col: ColumnConfig) => (
+                      <SelectItem key={col.name} value={col.name}>{col.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* 列映射 */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">列映射（双向同步的列）</Label>
+                <Button type="button" variant="outline" size="sm" className="h-6 text-xs" onClick={addRefColumnMapping}>
+                  <Plus className="h-3 w-3 mr-1" /> 添加
+                </Button>
+              </div>
+              {refForm.column_mapping.length === 0 ? (
+                <p className="text-xs text-muted-foreground">至少添加一个列映射</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {refForm.column_mapping.map((m, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <Select
+                        value={m.target_column}
+                        onValueChange={(v) => updateRefColumnMapping(i, 'target_column', v)}
+                      >
+                        <SelectTrigger className="h-7 text-xs flex-1"><SelectValue placeholder="当前表" /></SelectTrigger>
+                        <SelectContent>
+                          {formData.columns_config?.map(col => (
+                            <SelectItem key={col.name} value={col.name}>{col.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <ArrowLeftRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <Select
+                        value={m.source_column}
+                        onValueChange={(v) => updateRefColumnMapping(i, 'source_column', v)}
+                      >
+                        <SelectTrigger className="h-7 text-xs flex-1"><SelectValue placeholder="源表" /></SelectTrigger>
+                        <SelectContent>
+                          {definitions.find(d => d.table_code === refForm.source_table_code)?.columns_config?.map((col: ColumnConfig) => (
+                            <SelectItem key={col.name} value={col.name}>{col.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0" onClick={() => removeRefColumnMapping(i)}>
+                        <X className="h-3 w-3 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 过滤条件 */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">过滤条件（可选）</Label>
+                <Button type="button" variant="outline" size="sm" className="h-6 text-xs" onClick={addRefFilter}>
+                  <Plus className="h-3 w-3 mr-1" /> 添加
+                </Button>
+              </div>
+              {refForm.filter_condition && refForm.filter_condition.length > 0 && (
+                <div className="space-y-1.5">
+                  {refForm.filter_condition.map((f, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <Select
+                        value={f.column}
+                        onValueChange={(v) => updateRefFilter(i, 'column', v)}
+                      >
+                        <SelectTrigger className="h-7 text-xs flex-1"><SelectValue placeholder="源表列" /></SelectTrigger>
+                        <SelectContent>
+                          {definitions.find(d => d.table_code === refForm.source_table_code)?.columns_config?.map((col: ColumnConfig) => (
+                            <SelectItem key={col.name} value={col.name}>{col.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={f.operator}
+                        onValueChange={(v) => updateRefFilter(i, 'operator', v)}
+                      >
+                        <SelectTrigger className="h-7 text-xs w-20"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="=">=</SelectItem>
+                          <SelectItem value="!=">≠</SelectItem>
+                          <SelectItem value=">">&gt;</SelectItem>
+                          <SelectItem value="<">&lt;</SelectItem>
+                          <SelectItem value="contains">包含</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        value={f.value}
+                        onChange={(e) => updateRefFilter(i, 'value', e.target.value)}
+                        placeholder="值"
+                        className="h-7 text-xs flex-1"
+                      />
+                      <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0" onClick={() => removeRefFilter(i)}>
+                        <X className="h-3 w-3 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 同步方向 */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">同步方向</Label>
+              <RadioGroup
+                value={refForm.bidirectional ? "bidirectional" : "one-way"}
+                onValueChange={(v) => setRefForm(prev => ({ ...prev, bidirectional: v === "bidirectional" }))}
+                className="flex gap-4"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="bidirectional" id="ref-bidirectional" />
+                  <Label htmlFor="ref-bidirectional" className="text-sm cursor-pointer">双向同步</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="one-way" id="ref-oneway" />
+                  <Label htmlFor="ref-oneway" className="text-sm cursor-pointer">仅源→目标</Label>
+                </div>
+              </RadioGroup>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRefDialogOpen(false)}>取消</Button>
+            <Button onClick={handleSaveRef} disabled={!refForm.name || !refForm.source_table_code || !refForm.entry_column || !refForm.match_condition.target_column || !refForm.match_condition.source_column || refForm.column_mapping.length === 0}>
+              保存
             </Button>
           </DialogFooter>
         </DialogContent>

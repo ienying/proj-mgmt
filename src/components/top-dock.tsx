@@ -186,17 +186,20 @@ export function TopDock({
                   isActive ? "scale-110" : "scale-100"
                 )}>
                   {item.icon}
-                  {/* 角标 - 定位在图标右上角 */}
+                  {/* 角标 - 类似微信：0不显示，1显示红点无数字，>1显示数字，>99显示99+ */}
                   {item.badge && item.badge > 0 && (
                     <span className={cn(
-                      "absolute -top-1.5 -right-1.5 min-w-[16px] h-[16px] px-1",
+                      "absolute -top-1.5 -right-1.5",
+                      item.badge === 1
+                        ? "w-[10px] h-[10px]"
+                        : "min-w-[16px] h-[16px] px-1",
                       "flex items-center justify-center",
                       "rounded-full text-[9px] font-bold leading-none text-white",
                       "bg-red-500",
                       "ring-[2px] ring-white",
                       "animate-in fade-in zoom-in duration-200"
                     )}>
-                      {item.badge > 99 ? '99+' : item.badge}
+                      {item.badge === 1 ? '' : item.badge > 99 ? '99+' : item.badge}
                     </span>
                   )}
                 </span>
