@@ -727,7 +727,7 @@ export default function HomePage() {
   // Show loading state
   if (isLoading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#e8eef6]">
+      <div className="h-screen flex items-center justify-center bg-background">
         <div className="flex items-center gap-3 text-muted-foreground">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-current" />
           <span>加载中...</span>
@@ -742,7 +742,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-[#e8eef6]">
+    <div className="h-screen flex flex-col bg-background">
       <TopDock
         items={dockItems}
         activeItem={activeItem}
@@ -752,7 +752,7 @@ export default function HomePage() {
         onChangePassword={() => setShowChangePassword(true)}
       />
 
-      <main className="flex-1 overflow-y-auto pt-14">{renderContent()}</main>
+      <main className="flex-1 overflow-y-auto">{renderContent()}</main>
 
       <TodoDialog
         open={showTodoDialog}

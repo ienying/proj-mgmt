@@ -719,7 +719,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-8">
           <TabsTrigger value="project-types" className="gap-1.5 text-xs">
             <Briefcase className="w-3.5 h-3.5" />
             项目类型
@@ -728,22 +728,6 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
             <Layers className="w-3.5 h-3.5" />
             项目阶段
           </TabsTrigger>
-          <TabsTrigger value="product-modules" className="gap-1.5 text-xs">
-            <Package className="w-3.5 h-3.5" />
-            产品模块
-          </TabsTrigger>
-          <TabsTrigger value="member-roles" className="gap-1.5 text-xs">
-            <Users className="w-3.5 h-3.5" />
-            成员角色
-          </TabsTrigger>
-          <TabsTrigger value="customer-types" className="gap-1.5 text-xs">
-            <Building2 className="w-3.5 h-3.5" />
-            客户类型
-          </TabsTrigger>
-          <TabsTrigger value="deployment-modes" className="gap-1.5 text-xs">
-            <Server className="w-3.5 h-3.5" />
-            部署模式
-          </TabsTrigger>
           <TabsTrigger value="project-statuses" className="gap-1.5 text-xs">
             <Flag className="w-3.5 h-3.5" />
             项目状态
@@ -751,6 +735,22 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           <TabsTrigger value="todo-statuses" className="gap-1.5 text-xs">
             <ClipboardList className="w-3.5 h-3.5" />
             事项状态
+          </TabsTrigger>
+          <TabsTrigger value="customer-types" className="gap-1.5 text-xs">
+            <Building2 className="w-3.5 h-3.5" />
+            客户类型
+          </TabsTrigger>
+          <TabsTrigger value="member-roles" className="gap-1.5 text-xs">
+            <Users className="w-3.5 h-3.5" />
+            成员角色
+          </TabsTrigger>
+          <TabsTrigger value="product-modules" className="gap-1.5 text-xs">
+            <Package className="w-3.5 h-3.5" />
+            产品模块
+          </TabsTrigger>
+          <TabsTrigger value="deployment-modes" className="gap-1.5 text-xs">
+            <Server className="w-3.5 h-3.5" />
+            部署模式
           </TabsTrigger>
         </TabsList>
 
@@ -778,6 +778,86 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
         <TabsContent value="project-stages" className="mt-4">
           <DataTable
             data={projectStages}
+            onEdit={openEditDialog}
+            onDelete={handleDelete}
+            onReorder={handleReorder}
+            onToggleActive={handleToggleActive}
+            onCreate={openCreateDialog}
+            dialogOpen={dialogOpen}
+            setDialogOpen={setDialogOpen}
+            editingId={editingId}
+            editingData={editingData}
+            setEditingData={setEditingData}
+            handleSubmit={handleSubmit}
+            activeTab={activeTab}
+            productCategories={productCategories}
+          />
+        </TabsContent>
+
+        {/* 项目状态 */}
+        <TabsContent value="project-statuses" className="mt-4">
+          <DataTable
+            data={projectStatuses}
+            onEdit={openEditDialog}
+            onDelete={handleDelete}
+            onReorder={handleReorder}
+            onToggleActive={handleToggleActive}
+            onCreate={openCreateDialog}
+            dialogOpen={dialogOpen}
+            setDialogOpen={setDialogOpen}
+            editingId={editingId}
+            editingData={editingData}
+            setEditingData={setEditingData}
+            handleSubmit={handleSubmit}
+            activeTab={activeTab}
+            productCategories={productCategories}
+          />
+        </TabsContent>
+
+        {/* 事项状态 */}
+        <TabsContent value="todo-statuses" className="mt-4">
+          <DataTable
+            data={todoStatuses}
+            onEdit={openEditDialog}
+            onDelete={handleDelete}
+            onReorder={handleReorder}
+            onToggleActive={handleToggleActive}
+            onCreate={openCreateDialog}
+            dialogOpen={dialogOpen}
+            setDialogOpen={setDialogOpen}
+            editingId={editingId}
+            editingData={editingData}
+            setEditingData={setEditingData}
+            handleSubmit={handleSubmit}
+            activeTab={activeTab}
+            productCategories={productCategories}
+          />
+        </TabsContent>
+
+        {/* 客户类型 */}
+        <TabsContent value="customer-types" className="mt-4">
+          <DataTable
+            data={customerTypes}
+            onEdit={openEditDialog}
+            onDelete={handleDelete}
+            onReorder={handleReorder}
+            onToggleActive={handleToggleActive}
+            onCreate={openCreateDialog}
+            dialogOpen={dialogOpen}
+            setDialogOpen={setDialogOpen}
+            editingId={editingId}
+            editingData={editingData}
+            setEditingData={setEditingData}
+            handleSubmit={handleSubmit}
+            activeTab={activeTab}
+            productCategories={productCategories}
+          />
+        </TabsContent>
+
+        {/* 成员角色 */}
+        <TabsContent value="member-roles" className="mt-4">
+          <DataTable
+            data={memberRoles}
             onEdit={openEditDialog}
             onDelete={handleDelete}
             onReorder={handleReorder}
@@ -860,90 +940,10 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           />
         </TabsContent>
 
-        {/* 成员角色 */}
-        <TabsContent value="member-roles" className="mt-4">
-          <DataTable
-            data={memberRoles}
-            onEdit={openEditDialog}
-            onDelete={handleDelete}
-            onReorder={handleReorder}
-            onToggleActive={handleToggleActive}
-            onCreate={openCreateDialog}
-            dialogOpen={dialogOpen}
-            setDialogOpen={setDialogOpen}
-            editingId={editingId}
-            editingData={editingData}
-            setEditingData={setEditingData}
-            handleSubmit={handleSubmit}
-            activeTab={activeTab}
-            productCategories={productCategories}
-          />
-        </TabsContent>
-
-        {/* 客户类型 */}
-        <TabsContent value="customer-types" className="mt-4">
-          <DataTable
-            data={customerTypes}
-            onEdit={openEditDialog}
-            onDelete={handleDelete}
-            onReorder={handleReorder}
-            onToggleActive={handleToggleActive}
-            onCreate={openCreateDialog}
-            dialogOpen={dialogOpen}
-            setDialogOpen={setDialogOpen}
-            editingId={editingId}
-            editingData={editingData}
-            setEditingData={setEditingData}
-            handleSubmit={handleSubmit}
-            activeTab={activeTab}
-            productCategories={productCategories}
-          />
-        </TabsContent>
-
         {/* 部署模式 */}
         <TabsContent value="deployment-modes" className="mt-4">
           <DataTable
             data={deploymentModes}
-            onEdit={openEditDialog}
-            onDelete={handleDelete}
-            onReorder={handleReorder}
-            onToggleActive={handleToggleActive}
-            onCreate={openCreateDialog}
-            dialogOpen={dialogOpen}
-            setDialogOpen={setDialogOpen}
-            editingId={editingId}
-            editingData={editingData}
-            setEditingData={setEditingData}
-            handleSubmit={handleSubmit}
-            activeTab={activeTab}
-            productCategories={productCategories}
-          />
-        </TabsContent>
-
-        {/* 项目状态 */}
-        <TabsContent value="project-statuses" className="mt-4">
-          <DataTable
-            data={projectStatuses}
-            onEdit={openEditDialog}
-            onDelete={handleDelete}
-            onReorder={handleReorder}
-            onToggleActive={handleToggleActive}
-            onCreate={openCreateDialog}
-            dialogOpen={dialogOpen}
-            setDialogOpen={setDialogOpen}
-            editingId={editingId}
-            editingData={editingData}
-            setEditingData={setEditingData}
-            handleSubmit={handleSubmit}
-            activeTab={activeTab}
-            productCategories={productCategories}
-          />
-        </TabsContent>
-
-        {/* 事项状态 */}
-        <TabsContent value="todo-statuses" className="mt-4">
-          <DataTable
-            data={todoStatuses}
             onEdit={openEditDialog}
             onDelete={handleDelete}
             onReorder={handleReorder}
@@ -1760,6 +1760,8 @@ function DataTable({
   const [statusFilter, setStatusFilter] = useState<"all" | "enabled" | "disabled">("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [vendorFilter, setVendorFilter] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
 
   // 根据筛选条件过滤数据
   const filteredData = data.filter((item: any) => {
@@ -1803,9 +1805,15 @@ function DataTable({
     setStatusFilter("all");
     setCategoryFilter("");
     setVendorFilter("");
+    setCurrentPage(1);
   };
 
   const hasActiveFilters = searchKeyword || statusFilter !== "all" || categoryFilter || vendorFilter;
+
+  // 分页数据
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedData = filteredData.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   return (
     <Card>
@@ -1843,7 +1851,7 @@ function DataTable({
               <Input
                 placeholder="搜索名称或编码..."
                 value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
+                onChange={(e) => { setSearchKeyword(e.target.value); setCurrentPage(1); }}
                 className="pl-9 h-8"
               />
             </div>
@@ -1851,7 +1859,7 @@ function DataTable({
             {/* 状态筛选 */}
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as "all" | "enabled" | "disabled")}
+              onChange={(e) => { setStatusFilter(e.target.value as "all" | "enabled" | "disabled"); setCurrentPage(1); }}
               className="h-8 px-3 rounded-md border border-input bg-background text-sm"
             >
               <option value="all">全部状态</option>
@@ -1863,7 +1871,7 @@ function DataTable({
             {activeTab === "product-modules" && (
               <select
                 value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
+                onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
                 className="h-8 px-3 rounded-md border border-input bg-background text-sm"
               >
                 <option value="">全部类别</option>
@@ -1877,7 +1885,7 @@ function DataTable({
             {activeTab === "product-modules" && (
               <select
                 value={vendorFilter}
-                onChange={(e) => setVendorFilter(e.target.value)}
+                onChange={(e) => { setVendorFilter(e.target.value); setCurrentPage(1); }}
                 className="h-8 px-3 rounded-md border border-input bg-background text-sm"
               >
                 <option value="">全部厂商</option>
@@ -1897,7 +1905,7 @@ function DataTable({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="p-0 max-h-[calc(100vh-480px)] overflow-y-auto">
+      <CardContent className="p-0">
         {filteredData.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <Database className="w-12 h-12 mx-auto mb-4 opacity-50" />
@@ -1916,17 +1924,17 @@ function DataTable({
             onDragEnd={(event) => {
               const { active, over } = event;
               if (over && active.id !== over.id) {
-                const oldIndex = filteredData.findIndex(i => i.id === active.id);
-                const newIndex = filteredData.findIndex(i => i.id === over.id);
+                const oldIndex = paginatedData.findIndex(i => i.id === active.id);
+                const newIndex = paginatedData.findIndex(i => i.id === over.id);
                 if (oldIndex !== -1 && newIndex !== -1) {
-                  const newData = arrayMove(filteredData, oldIndex, newIndex);
+                  const newData = arrayMove(paginatedData, oldIndex, newIndex);
                   const reordered = newData.map((item, idx) => ({ ...item, sort_order: idx + 1 }));
                   if (onReorder) onReorder(reordered);
                 }
               }
             }}
           >
-            <SortableContext items={filteredData.map(i => i.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={paginatedData.map(i => i.id)} strategy={verticalListSortingStrategy}>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1959,7 +1967,7 @@ function DataTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredData.map((item, index) => (
+              {paginatedData.map((item, index) => (
                 <SortableRow key={item.id} id={item.id}>
                   {activeTab === "product-modules" ? (
                     <>
@@ -2047,6 +2055,71 @@ function DataTable({
       </DndContext>
         )}
       </CardContent>
+
+      {/* 分页栏 */}
+      {filteredData.length > pageSize && (
+        <div className="px-4 py-3 flex items-center justify-between border-t">
+          <span className="text-sm text-muted-foreground">
+            共 {filteredData.length} 条数据，第 {safePage} / {totalPages} 页
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={safePage === 1}
+              onClick={() => setCurrentPage(1)}
+              className="h-7 px-2 text-xs"
+            >
+              首页
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={safePage === 1}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              className="h-7 px-2 text-xs"
+            >
+              上一页
+            </Button>
+            {/* 页码按钮 */}
+            {(() => {
+              const pages: number[] = [];
+              const start = Math.max(1, safePage - 2);
+              const end = Math.min(totalPages, safePage + 2);
+              for (let i = start; i <= end; i++) pages.push(i);
+              return pages.map(p => (
+                <Button
+                  key={p}
+                  variant={p === safePage ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCurrentPage(p)}
+                  className="h-7 w-7 p-0 text-xs"
+                >
+                  {p}
+                </Button>
+              ));
+            })()}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={safePage === totalPages}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              className="h-7 px-2 text-xs"
+            >
+              下一页
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={safePage === totalPages}
+              onClick={() => setCurrentPage(totalPages)}
+              className="h-7 px-2 text-xs"
+            >
+              末页
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* 编辑对话框 */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

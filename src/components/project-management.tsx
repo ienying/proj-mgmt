@@ -28,14 +28,6 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 
-// 背景主题配置
-const bgThemes = [
-  { key: "warm", label: "暖灰米色", className: "bg-[#f5f3f0]", dot: "bg-[#d4cfc9]" },
-  { key: "gradient", label: "靛蓝渐变", className: "bg-gradient-to-br from-[#eef2ff] to-[#e8eef6]", dot: "bg-gradient-to-br from-indigo-300 to-blue-300" },
-  { key: "minimal", label: "极浅灰", className: "bg-[#f8f9fa]", dot: "bg-[#dde0e4]" },
-  { key: "slate", label: "蓝灰磨砂", className: "bg-[#e2e8f0]", dot: "bg-[#b8c2ce]" },
-];
-
 interface Project {
   id: string;
   project_name: string;
@@ -166,19 +158,6 @@ export function ProjectManagement({
   const [projectStages, setProjectStages] = useState<ProjectStage[]>([]);
   const [projectStatuses, setProjectStatuses] = useState<{name: string; code: string}[]>([]);
   const [procurementModules, setProcurementModules] = useState<ProcurementModule[]>([]);
-  const [bgTheme, setBgTheme] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("project_bg_theme") || "gradient";
-    }
-    return "gradient";
-  });
-  const currentBg = bgThemes.find(t => t.key === bgTheme) || bgThemes[1];
-
-  const handleBgThemeChange = (key: string) => {
-    setBgTheme(key);
-    localStorage.setItem("project_bg_theme", key);
-  };
-
   const [memberRoles, setMemberRoles] = useState<MemberRole[]>([]);
 
   // 成员与权限管理
@@ -961,10 +940,10 @@ export function ProjectManagement({
             key={project.id}
             onClick={() => setSelectedProject(selectedProject?.id === project.id ? null : project)}
             className={cn(
-              "bg-white border rounded-lg p-4 transition-colors cursor-pointer",
-              selectedProject?.id === project.id 
-                ? "border-blue-500 bg-blue-50" 
-                : "border-slate-200 hover:border-slate-300"
+              "bg-white border rounded-lg p-4 transition-colors cursor-pointer shadow-sm",
+              selectedProject?.id === project.id
+                ? "border-blue-500 bg-blue-50"
+                : "border-slate-200 hover:border-slate-300 hover:shadow-md"
             )}
           >
             <div className="flex items-start justify-between">
@@ -1046,10 +1025,10 @@ export function ProjectManagement({
             key={project.id}
             onClick={() => setSelectedProject(selectedProject?.id === project.id ? null : project)}
             className={cn(
-              "bg-white border rounded-xl transition-all cursor-pointer group",
-              selectedProject?.id === project.id 
-                ? "border-slate-800 shadow-md" 
-                : "border-slate-200 hover:border-slate-300 hover:shadow-sm"
+              "bg-white border rounded-xl transition-all cursor-pointer group shadow-sm",
+              selectedProject?.id === project.id
+                ? "border-slate-800 shadow-lg"
+                : "border-slate-200 hover:border-slate-300 hover:shadow-md"
             )}
           >
             <div className="p-5">
@@ -1137,7 +1116,7 @@ export function ProjectManagement({
   );
 
   return (
-    <div className={cn("h-full flex", currentBg.className)}>
+    <div className="h-full flex bg-gray-50">
       {/* 浮动阶段导航 */}
       <div ref={stageNavRef} className="relative z-30 flex flex-shrink-0">
         {/* 触发粗线按钮 - 使用 sticky 保持垂直居中 */}
@@ -1233,9 +1212,18 @@ export function ProjectManagement({
       </div>
 
       <div className="flex-1 flex flex-col min-w-0">
-        {/* 筛选工具栏 - 长条样式 */}
+        {/* 页面标题 */}
+        <div className="p-6">
+          <h2 className="text-2xl font-semibold flex items-center gap-2">
+            <FolderKanban className="w-6 h-6" />
+            项目管理
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">管理项目信息、跟踪进度、协调资源</p>
+        </div>
+
+        {/* 筛选工具栏 */}
         <div className="p-6 pb-0">
-          <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+          <div className="border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm">
             {/* 第一行：搜索 + 基本筛选 + 操作按钮 */}
             <div className="flex items-center gap-3 flex-wrap">
               <div className="relative flex-1 min-w-[200px] max-w-[320px]">

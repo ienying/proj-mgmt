@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { X } from "lucide-react";
+import { X, HelpCircle } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -25,6 +25,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -51,6 +56,7 @@ interface SchemaRule {
   rule_type: 'type_stage' | 'module';
   project_type: string | null;
   project_stage: string | null;
+  project_status: string | null;
   module_codes: string[];
   table_definitions: string[];
   is_enabled: boolean;
@@ -76,6 +82,12 @@ interface ProjectStage {
   name: string;
 }
 
+interface ProjectStatus {
+  code: string;
+  name: string;
+  color: string;
+}
+
 interface ProductModule {
   code: string;
   module_name: string;
@@ -91,6 +103,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
   const [rules, setRules] = useState<SchemaRule[]>([]);
   const [tableDefinitions, setTableDefinitions] = useState<TableDefinition[]>([]);
   const [productModules, setProductModules] = useState<ProductModule[]>([]);
+  const [projectStatuses, setLocalProjectStatuses] = useState<ProjectStatus[]>([]);
   const [moduleSearch, setModuleSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -146,10 +159,24 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
     }
   };
 
+  // 加载项目状态
+  const loadProjectStatuses = async () => {
+    try {
+      const response = await fetch("/api/dicts?type=project_statuses");
+      if (response.ok) {
+        const data = await response.json();
+        setLocalProjectStatuses(data.data || []);
+      }
+    } catch (error) {
+      console.error("加载项目状态失败:", error);
+    }
+  };
+
   useEffect(() => {
     loadRules();
     loadTableDefinitions();
     loadProductModules();
+    loadProjectStatuses();
   }, []);
 
   const openCreateDialog = () => {
@@ -159,6 +186,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
       rule_type: "type_stage",
       project_type: null,
       project_stage: null,
+      project_status: null,
       module_codes: [],
       table_definitions: [],
       is_enabled: true,
@@ -259,16 +287,27 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
 
   const getRuleConditionDisplay = (rule: SchemaRule) => {
     if (rule.rule_type === 'module') {
-      if (!rule.module_codes || rule.module_codes.length === 0) {
-        return "未配置模块";
+      const parts: string[] = [];
+      if (rule.module_codes && rule.module_codes.length > 0) {
+        const moduleNames = rule.module_codes.map(code => {
+          const productModule = productModules.find(m => m.code === code);
+          return productModule?.module_name || code;
+        });
+        parts.push(moduleNames.join("、"));
+      } else {
+        parts.push("未配置模块");
       }
-      const moduleNames = rule.module_codes.map(code => {
-        const productModule = productModules.find(m => m.code === code);
-        return productModule?.module_name || code;
-      });
-      return moduleNames.join("、");
+      if (rule.project_stage) {
+        const stage = projectStages.find((s) => s.code === rule.project_stage);
+        parts.push(`阶段: ${stage?.name || rule.project_stage}`);
+      }
+      if (rule.project_status) {
+        const status = projectStatuses.find((s) => s.code === rule.project_status);
+        parts.push(`状态: ${status?.name || rule.project_status}`);
+      }
+      return parts.join(" / ");
     }
-    
+
     const parts: string[] = [];
     if (rule.project_type) {
       const type = projectTypes.find((t) => t.code === rule.project_type);
@@ -278,11 +317,15 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
       const stage = projectStages.find((s) => s.code === rule.project_stage);
       parts.push(stage?.name || rule.project_stage);
     }
+    if (rule.project_status) {
+      const status = projectStatuses.find((s) => s.code === rule.project_status);
+      parts.push(status?.name || rule.project_status);
+    }
     return parts.length > 0 ? parts.join(" / ") : "全部项目";
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-muted">
       {/* 头部 */}
       <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
         <div>
@@ -303,10 +346,45 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
               className="!max-w-[900px] !w-[90vw] flex flex-col max-h-[85vh] p-0"
             >
               <DialogHeader className="px-6 pt-6 pb-3 shrink-0 border-b">
-                <DialogTitle>{editingId ? "编辑规则" : "新建规则"}</DialogTitle>
-                <DialogDescription>
-                  配置规则条件和要复制的规范表
-                </DialogDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <DialogTitle>{editingId ? "编辑规则" : "新建规则"}</DialogTitle>
+                    <DialogDescription>
+                      配置规则条件和要复制的规范表
+                    </DialogDescription>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground">
+                        <HelpCircle className="h-4 w-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[420px] p-4" side="left" align="start">
+                      <p className="text-sm font-semibold mb-3">规则匹配关系说明</p>
+                      <div className="space-y-3 text-xs text-muted-foreground">
+                        <div>
+                          <p className="text-sm font-medium text-foreground mb-1">类型阶段规则</p>
+                          <ul className="list-disc list-inside space-y-0.5">
+                            <li>三个条件（类型/阶段/状态）都是可选的，留空 = 不限</li>
+                            <li>非空条件之间是 <strong className="text-foreground">AND</strong> 关系，必须全部匹配</li>
+                            <li>多规则命中时，按匹配条件数排序（精确匹配 &gt; 部分匹配 &gt; 通用规则）</li>
+                          </ul>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-foreground mb-1">产品规则</p>
+                          <ul className="list-disc list-inside space-y-0.5">
+                            <li>模块必须有交集（<strong className="text-foreground">AND</strong>，硬性条件）</li>
+                            <li>模块命中后再过滤阶段和状态（可选，留空不限）</li>
+                            <li>阶段/状态过滤是 <strong className="text-foreground">AND</strong> 关系</li>
+                          </ul>
+                        </div>
+                        <div className="border-t pt-2">
+                          <p className="text-foreground">两类规则之间：各自独立计算，表定义结果合并</p>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </DialogHeader>
 
               <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
@@ -332,9 +410,9 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                           setFormData((prev) => ({
                             ...prev,
                             rule_type: value as 'type_stage' | 'module',
-                            // 切换类型时清空对应条件
                             project_type: value === 'module' ? null : prev.project_type,
                             project_stage: value === 'module' ? null : prev.project_stage,
+                            project_status: null,
                             module_codes: value === 'type_stage' ? [] : prev.module_codes,
                           }))
                         }
@@ -363,6 +441,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                           <p className="text-xs text-muted-foreground">
                             选择产品模块后，当新建项目采购了这些模块时，会自动复制对应的规范表
                           </p>
+                          {/* 产品模块选择 */}
                           <Input
                             placeholder="搜索产品模块..."
                             className="h-8 text-xs"
@@ -408,10 +487,61 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                               </p>
                             )}
                           </div>
+                          {/* 附加过滤条件：项目阶段 + 项目状态 */}
+                          <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+                            <div className="space-y-2">
+                              <Label className="text-xs">项目阶段（可选）</Label>
+                              <Select
+                                value={formData.project_stage || "all"}
+                                onValueChange={(value) =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    project_stage: value === "all" ? null : value,
+                                  }))
+                                }
+                              >
+                                <SelectTrigger className="h-9">
+                                  <SelectValue placeholder="全部阶段" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">全部阶段</SelectItem>
+                                  {projectStages.map((stage) => (
+                                    <SelectItem key={stage.code} value={stage.code}>
+                                      {stage.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs">项目状态（可选）</Label>
+                              <Select
+                                value={formData.project_status || "all"}
+                                onValueChange={(value) =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    project_status: value === "all" ? null : value,
+                                  }))
+                                }
+                              >
+                                <SelectTrigger className="h-9">
+                                  <SelectValue placeholder="全部状态" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">全部状态</SelectItem>
+                                  {(projectStatuses.length > 0 ? projectStatuses : []).map((status) => (
+                                    <SelectItem key={status.code} value={status.code}>
+                                      {status.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
                         </>
                       ) : (
                         <>
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className="grid grid-cols-3 gap-4">
                             <div className="space-y-2">
                               <Label className="text-xs">项目类型</Label>
                               <Select
@@ -460,9 +590,33 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                                 </SelectContent>
                               </Select>
                             </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs">项目状态</Label>
+                              <Select
+                                value={formData.project_status || "all"}
+                                onValueChange={(value) =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    project_status: value === "all" ? null : value,
+                                  }))
+                                }
+                              >
+                                <SelectTrigger className="h-9">
+                                  <SelectValue placeholder="全部状态" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">全部状态</SelectItem>
+                                  {projectStatuses.map((status) => (
+                                    <SelectItem key={status.code} value={status.code}>
+                                      {status.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            留空表示匹配所有。规则优先级：精确匹配（类型+阶段） &gt; 类型匹配 &gt; 阶段匹配 &gt; 通用规则
+                            留空表示不限制该项。规则优先级：精确匹配（类型+阶段+状态） &gt; 类型+阶段 &gt; 类型+状态 &gt; 阶段+状态 &gt; 单条件匹配 &gt; 通用规则
                           </p>
                         </>
                       )}

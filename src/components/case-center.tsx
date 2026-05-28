@@ -954,10 +954,10 @@ export function CaseCenter({ currentUser }: { currentUser?: CurrentUser }) {
     };
 
     return (
-      <div className="h-full flex flex-col bg-gradient-to-br from-slate-50 to-blue-50/30">
-        {/* Header */}
-        <div className="bg-white/80 backdrop-blur border-b border-slate-100 shrink-0">
-          <div className="p-4 flex items-center gap-4">
+      <div className="h-full flex flex-col bg-gray-50">
+        {/* 页面标题 */}
+        <div className="p-6">
+          <div className="flex items-center gap-2 mb-1">
             <button
               onClick={() => {
                 setViewMode("profile");
@@ -965,20 +965,19 @@ export function CaseCenter({ currentUser }: { currentUser?: CurrentUser }) {
                 setProfileModuleData({});
                 setProfileMetrics({});
               }}
-              className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors text-slate-500 hover:text-blue-600"
+              className="p-1 rounded-lg hover:bg-gray-100 transition-colors text-slate-500"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
-            <div className="flex items-center gap-2">
-              <School className="w-5 h-5 text-blue-500" />
-              <h1 className="text-lg font-semibold text-slate-800">{schoolName}</h1>
-            </div>
+            <h2 className="text-2xl font-semibold flex items-center gap-2">
+              <School className="w-6 h-6" />
+              {schoolName}
+            </h2>
             {selectedProfileProject?._project_code && (
               <span className="text-xs text-slate-400">
                 {selectedProfileProject._project_code as string}
               </span>
             )}
-            {/* Layout badge */}
             <Badge
               variant="secondary"
               className={cn(
@@ -990,15 +989,15 @@ export function CaseCenter({ currentUser }: { currentUser?: CurrentUser }) {
             >
               {layout === "system" ? "系统定义" : "项目维护"}
             </Badge>
-            {/* Settings button */}
             <button
               onClick={() => openConfigDialog(projectId)}
-              className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors text-slate-400 hover:text-blue-500"
+              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-slate-400 hover:text-blue-500"
               title="配置用户画像"
             >
               <Settings className="w-4 h-4" />
             </button>
           </div>
+          <p className="text-sm text-muted-foreground mt-1">查看学校详细信息与各模块信息</p>
         </div>
 
         {/* Overview Metrics Bar */}
@@ -1163,15 +1162,16 @@ export function CaseCenter({ currentUser }: { currentUser?: CurrentUser }) {
   // ============= HOME VIEW =============
   if (viewMode === "home") {
     return (
-      <div className="h-full bg-gradient-to-br from-slate-50 to-blue-50/30">
+      <div className="h-full bg-gray-50">
+        {/* 页面标题 */}
+        <div className="p-6">
+          <h2 className="text-2xl font-semibold flex items-center gap-2">
+            <Package className="w-6 h-6" />
+            案例中心
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">查看产品案例与用户画像</p>
+        </div>
         <div className="p-6 max-w-4xl mx-auto">
-          <div className="flex items-center gap-3 mb-10">
-            <div className="p-2.5 bg-blue-500 rounded-xl shadow-sm">
-              <Package className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-xl font-semibold text-slate-800">案例中心</h1>
-          </div>
-
           <div className="grid grid-cols-2 gap-6">
             <button
               onClick={() => enterSection("product")}
@@ -1244,63 +1244,68 @@ export function CaseCenter({ currentUser }: { currentUser?: CurrentUser }) {
   const filteredCards = filterCards(cards, config);
 
   return (
-    <div className="h-full bg-gradient-to-br from-slate-50 to-blue-50/30">
-      {/* Header */}
-      <div className="bg-white/80 backdrop-blur border-b border-slate-100 sticky top-0 z-10">
-        <div className="p-4 flex items-center gap-4">
+    <div className="h-full bg-gray-50">
+      {/* 页面标题 */}
+      <div className="p-6">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setViewMode("home")}
-            className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors text-slate-500 hover:text-blue-600"
+            className="p-1 rounded-lg hover:bg-gray-100 transition-colors text-slate-500"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <h1 className="text-lg font-semibold text-slate-800">{title}</h1>
-
-          <div className="flex-1 max-w-md ml-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-              <Input
-                value={search}
-                onChange={(e) => handleSearch(e.target.value)}
-                placeholder="搜索案例..."
-                className="pl-9 h-9 bg-slate-50/80 border-slate-100 focus:border-blue-200 focus:bg-white"
-              />
-            </div>
-          </div>
-
-          {isProduct && (
-            <Button
-              variant={showStats ? "default" : "outline"}
-              size="sm"
-              onClick={() => setShowStats(!showStats)}
-              className={cn(
-                "ml-2",
-                showStats
-                  ? "bg-blue-500 hover:bg-blue-600 text-white"
-                  : "border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200"
-              )}
-            >
-              <BarChart3 className="w-3.5 h-3.5 mr-1.5" />
-              {showStats ? "隐藏统计" : "数据统计"}
-            </Button>
-          )}
+          <h2 className="text-2xl font-semibold flex items-center gap-2">
+            {isProduct ? <Package className="w-6 h-6" /> : <Users className="w-6 h-6" />}
+            {title}
+          </h2>
         </div>
+        <p className="text-sm text-muted-foreground mt-1">{isProduct ? "跨项目查看产品使用案例，统计分析产品使用情况" : "查看学校用户画像，10大模块全方位展示学校全貌"}</p>
+      </div>
 
-        {drillDown && (
-          <div className="px-4 pb-3 flex items-center gap-2">
-            <span className="text-xs text-slate-400">筛选:</span>
-            <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100">
-              {drillDown.field} = {drillDown.value}
-              <button onClick={clearDrillDown} className="ml-1 hover:text-red-500">
-                <X className="w-3 h-3" />
-              </button>
-            </Badge>
+      {/* 搜索栏 */}
+      <div className="px-6 pb-3 flex items-center gap-3">
+        <div className="flex-1 max-w-md">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+            <Input
+              value={search}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder="搜索案例..."
+              className="pl-9 h-9 bg-white border-slate-200 focus:border-blue-200"
+            />
           </div>
+        </div>
+        {isProduct && (
+          <Button
+            variant={showStats ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowStats(!showStats)}
+            className={cn(
+              showStats
+                ? "bg-blue-500 hover:bg-blue-600 text-white"
+                : "border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200"
+            )}
+          >
+            <BarChart3 className="w-3.5 h-3.5 mr-1.5" />
+            {showStats ? "隐藏统计" : "数据统计"}
+          </Button>
         )}
       </div>
 
-      {/* Content */}
-      <div className="p-6">
+      {drillDown && (
+        <div className="px-6 pb-2 flex items-center gap-2">
+          <span className="text-xs text-slate-400">筛选:</span>
+          <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100">
+            {drillDown.field} = {drillDown.value}
+            <button onClick={clearDrillDown} className="ml-1 hover:text-red-500">
+              <X className="w-3 h-3" />
+            </button>
+          </Badge>
+        </div>
+      )}
+
+      {/* 内容 */}
+      <div className="px-6 pb-6">
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <Loader2 className="w-6 h-6 animate-spin text-blue-400" />

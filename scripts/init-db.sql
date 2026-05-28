@@ -131,7 +131,24 @@ CREATE INDEX IF NOT EXISTS integration_info_project_idx ON integration_info(proj
 -- Reference Data: Project Types & Stages
 -- ============================================
 
-CREATE TABLE IF NOT EXISTS project_types (
+-- ============================================
+-- Reference Data: Departments
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS departments (
+  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
+  code VARCHAR(50) NOT NULL UNIQUE,
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  sort_order INTEGER DEFAULT 0 NOT NULL,
+  is_enabled BOOLEAN DEFAULT true NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS departments_code_idx ON departments(code);
+
+-- ============================================
+-- Reference Data: Project Types & Stages
+-- ============================================
   id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
   code VARCHAR(50) NOT NULL UNIQUE,
   name VARCHAR(100) NOT NULL,

@@ -271,24 +271,14 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
   }, [allInstances, searchQuery, filterStatus, filterType]);
 
   return (
-    <div className="h-full flex flex-col bg-gray-50/80">
-      {/* 标题栏 */}
-      <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-indigo-600 to-purple-500 shadow-sm">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-            <ListTodo className="w-4.5 h-4.5 text-white" />
-          </div>
-          <h2 className="text-base font-semibold text-white tracking-wide">待办任务</h2>
-        </div>
-        <div className="flex items-center gap-3">
-          {statsData && (
-            <div className="flex items-center gap-3 text-white/80 text-xs">
-              <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{statsData.pending} 待完成</span>
-              <span className="flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" />{statsData.overdue} 逾期</span>
-              <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" />{statsData.completed} 已完成</span>
-            </div>
-          )}
-        </div>
+    <div className="h-full flex flex-col bg-gray-50">
+      {/* 页面标题 */}
+      <div className="p-6">
+        <h2 className="text-2xl font-semibold flex items-center gap-2">
+          <ListTodo className="w-6 h-6" />
+          待办任务
+        </h2>
+        <p className="text-sm text-muted-foreground mt-1">查看个人待办、任务进度、统计分析</p>
       </div>
 
       {/* Tab 栏 */}

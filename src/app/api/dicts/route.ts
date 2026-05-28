@@ -40,6 +40,9 @@ export async function GET(request: Request) {
       case "project_statuses":
         tableName = "project_statuses";
         break;
+      case "departments":
+        tableName = "departments";
+        break;
       case "todo_statuses":
         tableName = "todo_statuses";
         break;

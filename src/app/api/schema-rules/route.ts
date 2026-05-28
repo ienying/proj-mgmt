@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
       rule_type = 'type_stage',
       project_type,
       project_stage,
+      project_status,
       module_codes,
       table_definitions,
       is_enabled = true,
@@ -48,7 +49,8 @@ export async function POST(request: NextRequest) {
       rule_name,
       rule_type,
       project_type: rule_type === 'type_stage' ? (project_type || null) : null,
-      project_stage: rule_type === 'type_stage' ? (project_stage || null) : null,
+      project_stage: project_stage || null, // both rule types support stage filter
+      project_status: project_status || null, // both rule types support status filter
       module_codes: rule_type === 'module' ? (module_codes || []) : [],
       table_definitions: table_definitions || [],
       is_enabled,

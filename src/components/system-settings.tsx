@@ -122,6 +122,15 @@ export default function SystemSettings({
   // 记录已访问过的菜单，避免组件重复挂载
   const [visitedMenus, setVisitedMenus] = useState<Set<string>>(new Set(["users"]));
   const [searchQuery, setSearchQuery] = useState("");
+  // 用户管理子 Tab
+  const [userSubTab, setUserSubTab] = useState<"users" | "departments">("users");
+  const [departments, setDepartments] = useState<{ id: string; code: string; name: string; description?: string; sort_order: number; is_enabled: boolean }[]>([]);
+  const [deptDialogOpen, setDeptDialogOpen] = useState(false);
+  const [editingDeptId, setEditingDeptId] = useState<string | null>(null);
+  const [deptFormData, setDeptFormData] = useState({ code: "", name: "", description: "", sort_order: 0, is_enabled: true });
+  const deptFileInputRef = useRef<HTMLInputElement>(null);
+  const [deptImporting, setDeptImporting] = useState(false);
+  const [deptImportResult, setDeptImportResult] = useState<{ created: number; skipped: number; failed: number; total: number; results: { row: number; name: string; status: string; error?: string }[] } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -301,6 +310,65 @@ export default function SystemSettings({
   };
 
   // 统计数据
+  const [departmentLoading, setDepartmentLoading] = useState(false);
+
+  const loadDepartments = () => {
+    fetch("/api/dicts?type=departments")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.data) {
+          setDepartments(data.data.map((d: Record<string, unknown>) => ({
+            id: d.id as string,
+            code: d.code as string,
+            name: d.name as string,
+            description: d.description as string | undefined,
+            sort_order: d.sort_order as number,
+            is_enabled: d.is_enabled as boolean,
+          })));
+        }
+      })
+      .catch(() => {});
+  };
+
+  const handleDeptSubmit = async () => {
+    if (!deptFormData.code.trim() || !deptFormData.name.trim()) return;
+    setDepartmentLoading(true);
+    try {
+      const url = editingDeptId ? `/api/dicts/${editingDeptId}` : "/api/dicts/create";
+      const method = editingDeptId ? "PUT" : "POST";
+      const body = editingDeptId
+        ? { type: "departments", id: editingDeptId, name: deptFormData.name, description: deptFormData.description, sort_order: deptFormData.sort_order, is_enabled: deptFormData.is_enabled }
+        : { type: "departments", code: deptFormData.code, name: deptFormData.name, description: deptFormData.description, sort_order: deptFormData.sort_order, is_enabled: deptFormData.is_enabled };
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || "操作失败");
+        return;
+      }
+      loadDepartments();
+      setDeptDialogOpen(false);
+    } catch {
+      alert("操作失败");
+    } finally {
+      setDepartmentLoading(false);
+    }
+  };
+
+  const handleDeptDelete = async (id: string) => {
+    if (!confirm("确定删除该部门吗？")) return;
+    const res = await fetch(`/api/dicts/${id}?type=departments`, { method: "DELETE" });
+    if (res.ok) {
+      loadDepartments();
+    } else {
+      alert("删除失败");
+    }
+  };
+
+  // 统计数据
   const [productModuleCount, setProductModuleCount] = useState(0);
   
   useEffect(() => {
@@ -310,6 +378,25 @@ export default function SystemSettings({
       .then((data) => {
         if (Array.isArray(data)) {
           setProductModuleCount(data.length);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // 加载部门列表
+  useEffect(() => {
+    fetch("/api/dicts?type=departments")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.data) {
+          setDepartments(data.data.map((d: Record<string, unknown>) => ({
+            id: d.id as string,
+            code: d.code as string,
+            name: d.name as string,
+            description: d.description as string | undefined,
+            sort_order: d.sort_order as number,
+            is_enabled: d.is_enabled as boolean,
+          })));
         }
       })
       .catch(() => {});
@@ -327,23 +414,20 @@ export default function SystemSettings({
 
   // 统计卡片配置 - 扁平风格
   return (
-    <div className="h-full bg-slate-50">
+    <div className="h-full bg-muted">
       {/* 顶部标题栏 */}
-      <div className="bg-white border-b border-slate-200">
-        <div className="p-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-slate-100 rounded-lg">
-              <Settings className="w-5 h-5 text-slate-600" />
-            </div>
-            <h1 className="text-xl font-semibold text-slate-900">系统设置</h1>
-          </div>
-        </div>
+      <div className="p-6">
+        <h2 className="text-2xl font-semibold flex items-center gap-2">
+          <Settings className="w-6 h-6" />
+          系统设置
+        </h2>
+        <p className="text-sm text-muted-foreground mt-1">用户管理、角色权限、基础数据等系统配置</p>
       </div>
 
       {/* 主内容区 - 双栏布局 */}
       <div className="flex h-[calc(100vh-220px)]">
         {/* 左侧导航 - 固定不滚动 */}
-        <div className="w-48 bg-white border-r border-slate-200 p-4 flex-shrink-0">
+        <div className="w-48 bg-card border-r border-border p-4 flex-shrink-0">
           <nav className="space-y-1">
             {menuItems.map((item) => (
               <button
@@ -356,7 +440,7 @@ export default function SystemSettings({
                   "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors",
                   activeMenu === item.id
                     ? "bg-blue-500 text-white"
-                    : "text-slate-600 hover:bg-slate-100"
+                    : "text-slate-600 hover:bg-accent"
                 )}
               >
                 <item.icon className="w-4 h-4" />
@@ -370,6 +454,38 @@ export default function SystemSettings({
         <div className="flex-1 p-6 overflow-y-auto">
           {/* 用户管理 */}
           <div className={activeMenu === "users" ? "" : "hidden"}>
+            {/* 子 Tab 切换 */}
+            <div className="flex gap-2 mb-4">
+              <button
+                type="button"
+                onClick={() => setUserSubTab("users")}
+                className={cn(
+                  "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                  userSubTab === "users"
+                    ? "bg-blue-500 text-white"
+                    : "bg-white text-slate-600 hover:bg-accent border border-border"
+                )}
+              >
+                <Users className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+                用户列表
+              </button>
+              <button
+                type="button"
+                onClick={() => setUserSubTab("departments")}
+                className={cn(
+                  "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                  userSubTab === "departments"
+                    ? "bg-blue-500 text-white"
+                    : "bg-white text-slate-600 hover:bg-accent border border-border"
+                )}
+              >
+                <Database className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+                部门管理
+              </button>
+            </div>
+
+            {/* 用户列表 */}
+            {userSubTab === "users" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="relative flex-1 max-w-sm">
@@ -379,7 +495,7 @@ export default function SystemSettings({
                     placeholder="搜索用户..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-9 pr-4 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -482,13 +598,21 @@ export default function SystemSettings({
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label>部门</Label>
-                          <Input
+                          <Select
                             value={formData.department || ""}
-                            onChange={(e) =>
-                              setFormData((prev) => ({ ...prev, department: e.target.value }))
+                            onValueChange={(value) =>
+                              setFormData((prev) => ({ ...prev, department: value }))
                             }
-                            placeholder="部门"
-                          />
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="选择部门" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {departments.filter(d => d.is_enabled).map((dept) => (
+                                <SelectItem key={dept.code} value={dept.name}>{dept.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div className="space-y-2">
                           <Label>职位</Label>
@@ -556,17 +680,17 @@ export default function SystemSettings({
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
-              </div>
+                </div>
               </div>
 
               {filteredUsers.length === 0 ? (
-                <div className="bg-white border border-slate-200 rounded-lg p-8 text-center">
+                <div className="bg-card border border-border rounded-lg p-8 text-center">
                   <Users className="w-10 h-10 mx-auto mb-3 text-slate-300" />
                   <p className="text-slate-500 font-medium">暂无用户</p>
                   <p className="text-sm text-slate-400 mt-1">点击"添加用户"创建第一个用户</p>
                 </div>
               ) : (
-                <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                <div className="bg-card border border-border rounded-lg overflow-hidden">
                   {/* 批量操作栏 */}
                   {selectedIds.size > 0 && (
                     <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 border-b border-blue-200">
@@ -606,7 +730,7 @@ export default function SystemSettings({
                   )}
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-slate-50 border-b border-slate-200">
+                      <TableRow className="bg-muted border-b border-border">
                         <TableHead className="w-10 text-slate-600">
                           <Checkbox
                             checked={selectedIds.size === filteredUsers.length && filteredUsers.length > 0}
@@ -624,7 +748,7 @@ export default function SystemSettings({
                     </TableHeader>
                     <TableBody>
                       {filteredUsers.map((user) => (
-                        <TableRow key={user.id} className="border-b border-slate-100">
+                        <TableRow key={user.id} className="border-b border-border">
                           <TableCell>
                             <Checkbox
                               checked={selectedIds.has(user.id)}
@@ -656,7 +780,7 @@ export default function SystemSettings({
                               "text-xs font-medium",
                               user.role === "super_admin" ? "border-red-200 bg-red-50 text-red-700" :
                               user.role === "sub_admin" ? "border-blue-200 bg-blue-50 text-blue-700" :
-                              "border-slate-200 bg-slate-50 text-slate-600"
+                              "border-border bg-muted text-slate-600"
                             )}>
                               {user.role === "super_admin" ? "超级管理员" :
                                user.role === "sub_admin" ? "子管理员" : "普通用户"}
@@ -683,7 +807,7 @@ export default function SystemSettings({
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 hover:bg-slate-100"
+                                className="h-8 w-8 hover:bg-accent"
                                 onClick={() => openEditDialog(user)}
                                 title="编辑"
                               >
@@ -734,6 +858,246 @@ export default function SystemSettings({
                 </div>
               )}
             </div>
+            )}
+
+            {/* 部门管理 */}
+            {userSubTab === "departments" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900">部门列表</h2>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={deptFileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setDeptImporting(true);
+                      setDeptImportResult(null);
+                      try {
+                        const fd = new FormData();
+                        fd.append("file", file);
+                        const res = await fetch("/api/departments/import", {
+                          method: "POST",
+                          body: fd,
+                        });
+                        const json = await res.json();
+                        if (!res.ok) { alert(json.error || "导入失败"); return; }
+                        setDeptImportResult(json.data);
+                        loadDepartments();
+                      } catch (err) {
+                        alert(err instanceof Error ? err.message : "导入失败");
+                      } finally {
+                        setDeptImporting(false);
+                        if (deptFileInputRef.current) deptFileInputRef.current.value = "";
+                      }
+                    }}
+                    className="hidden"
+                  />
+                  <Dialog open={!!deptImportResult} onOpenChange={(open) => { if (!open) setDeptImportResult(null); }}>
+                    <DialogContent className="max-w-lg">
+                      <DialogHeader>
+                        <DialogTitle>导入结果</DialogTitle>
+                        <DialogDescription>
+                          共 {deptImportResult?.total} 行，成功 {deptImportResult?.created} 行，跳过 {deptImportResult?.skipped} 行，失败 {deptImportResult?.failed} 行
+                        </DialogDescription>
+                      </DialogHeader>
+                      {deptImportResult && (
+                        <div className="max-h-80 overflow-y-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>行号</TableHead>
+                                <TableHead>部门名称</TableHead>
+                                <TableHead>状态</TableHead>
+                                <TableHead>原因</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {deptImportResult.results.map((r, i) => (
+                                <TableRow key={i}>
+                                  <TableCell className="text-sm">{r.row}</TableCell>
+                                  <TableCell className="text-sm font-medium">{r.name}</TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline" className={cn(
+                                      "text-xs",
+                                      r.status === "成功" ? "border-emerald-200 bg-emerald-50 text-emerald-700" :
+                                      r.status === "跳过" ? "border-amber-200 bg-amber-50 text-amber-700" :
+                                      "border-red-200 bg-red-50 text-red-700"
+                                    )}>{r.status}</Badge>
+                                  </TableCell>
+                                  <TableCell className="text-sm text-slate-500">{r.error || "-"}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                      <DialogFooter>
+                        <Button onClick={() => setDeptImportResult(null)}>关闭</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      fetch("/api/departments/template").then(res => res.blob()).then(blob => {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = "部门导入模板.xlsx";
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      });
+                    }}
+                  >
+                    下载模板
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => deptFileInputRef.current?.click()}
+                    disabled={deptImporting}
+                  >
+                    {deptImporting ? "导入中..." : "Excel导入"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      fetch("/api/departments/export").then(res => res.blob()).then(blob => {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = "部门数据导出.xlsx";
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      });
+                    }}
+                  >
+                    导出
+                  </Button>
+                  <Dialog open={deptDialogOpen} onOpenChange={setDeptDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button onClick={() => {
+                      setEditingDeptId(null);
+                      setDeptFormData({ code: "", name: "", description: "", sort_order: 0, is_enabled: true });
+                    }} className="bg-blue-500 hover:bg-blue-600 text-white">
+                      <Plus className="w-4 h-4 mr-2" />
+                      添加部门
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>{editingDeptId ? "编辑部门" : "添加部门"}</DialogTitle>
+                      <DialogDescription>填写部门基本信息</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label>部门编码 <span className="text-red-500">*</span></Label>
+                        <Input
+                          value={deptFormData.code}
+                          onChange={(e) => setDeptFormData(prev => ({ ...prev, code: e.target.value }))}
+                          placeholder="如：tech_dept"
+                          disabled={!!editingDeptId}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>部门名称 <span className="text-red-500">*</span></Label>
+                        <Input
+                          value={deptFormData.name}
+                          onChange={(e) => setDeptFormData(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="如：技术部"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>描述</Label>
+                        <Input
+                          value={deptFormData.description}
+                          onChange={(e) => setDeptFormData(prev => ({ ...prev, description: e.target.value }))}
+                          placeholder="部门描述"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setDeptDialogOpen(false)}>取消</Button>
+                      <Button onClick={handleDeptSubmit} disabled={departmentLoading} className="bg-blue-500 hover:bg-blue-600">
+                        {editingDeptId ? "保存" : "创建"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                </div>
+              </div>
+
+              {departments.length === 0 ? (
+                <div className="bg-card border border-border rounded-lg p-8 text-center">
+                  <Database className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+                  <p className="text-slate-500 font-medium">暂无部门</p>
+                  <p className="text-sm text-slate-400 mt-1">点击"添加部门"创建第一个部门</p>
+                </div>
+              ) : (
+                <div className="bg-card border border-border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted border-b border-border">
+                        <TableHead className="text-slate-600">部门编码</TableHead>
+                        <TableHead className="text-slate-600">部门名称</TableHead>
+                        <TableHead className="text-slate-600">描述</TableHead>
+                        <TableHead className="text-slate-600">状态</TableHead>
+                        <TableHead className="w-32 text-slate-600">操作</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {departments.map((dept) => (
+                        <TableRow key={dept.id} className="border-b border-border">
+                          <TableCell className="font-mono text-sm text-slate-600">{dept.code}</TableCell>
+                          <TableCell className="font-medium text-slate-900">{dept.name}</TableCell>
+                          <TableCell className="text-slate-500">{dept.description || "-"}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={cn(
+                              "text-xs font-medium",
+                              dept.is_enabled ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-border bg-muted text-slate-400"
+                            )}>
+                              {dept.is_enabled ? "启用" : "禁用"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 hover:bg-accent"
+                                onClick={() => {
+                                  setEditingDeptId(dept.id);
+                                  setDeptFormData({ code: dept.code, name: dept.name, description: dept.description || "", sort_order: dept.sort_order, is_enabled: dept.is_enabled });
+                                  setDeptDialogOpen(true);
+                                }}
+                                title="编辑"
+                              >
+                                <Edit className="w-4 h-4 text-slate-500" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 hover:bg-red-50"
+                                onClick={() => handleDeptDelete(dept.id)}
+                                title="删除"
+                              >
+                                <Trash2 className="w-4 h-4 text-red-500" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+            )}
           </div>
 
           {/* 角色权限 */}
@@ -1102,7 +1466,7 @@ function RolePermissionPanel({ users, onUserUpdate }: { users: User[]; onUserUpd
   const roleGroups = [
     { role: "super_admin", label: "超级管理员", color: "bg-red-50 border-red-200", badgeColor: "border-red-200 bg-red-50 text-red-700" },
     { role: "sub_admin", label: "子管理员", color: "bg-blue-50 border-blue-200", badgeColor: "border-blue-200 bg-blue-50 text-blue-700" },
-    { role: "user", label: "普通用户", color: "bg-slate-50 border-slate-200", badgeColor: "border-slate-200 bg-slate-50 text-slate-600" },
+    { role: "user", label: "普通用户", color: "bg-muted border-border", badgeColor: "border-border bg-muted text-slate-600" },
   ];
 
   return (

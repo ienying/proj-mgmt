@@ -1440,23 +1440,18 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
   }), [myReports, issues, myHandleIssues, notifications]);
 
   return (
-    <div className="h-full flex flex-col bg-gray-50/80">
-      {/* 标题栏 */}
-      <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-blue-600 to-blue-500 shadow-sm">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-            <AlertCircle className="w-4.5 h-4.5 text-white" />
-          </div>
-          <h2 className="text-base font-semibold text-white tracking-wide">问题上报</h2>
-        </div>
-        <Button size="sm" className="bg-white/90 text-blue-600 hover:bg-white shadow-sm border-0"
-          onClick={() => { resetForm(); setShowCreateDialog(true); }}>
-          <Plus className="w-4 h-4 mr-1" />发起问题
-        </Button>
+    <div className="h-full flex flex-col bg-gray-50">
+      {/* 页面标题 */}
+      <div className="p-6">
+        <h2 className="text-2xl font-semibold flex items-center gap-2">
+          <AlertCircle className="w-6 h-6" />
+          问题上报
+        </h2>
+        <p className="text-sm text-muted-foreground mt-1">上报问题、跟踪处理、统计分析</p>
       </div>
 
       {/* Tab 栏 — 胶囊式 */}
-      <div className="flex items-center gap-1.5 px-4 py-2 bg-white border-b">
+      <div className="flex items-center gap-1.5 px-4 py-2 bg-gray-50 border-b">
         {tabs.map(tab => {
           const count = tabCounts[tab.key as keyof typeof tabCounts] || 0;
           const isActive = activeTab === tab.key;

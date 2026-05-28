@@ -246,7 +246,7 @@ export default function IssueConfigPanel() {
   return (
     <div className="space-y-4">
       {/* 问题类别 */}
-      <div className="bg-white border border-slate-200 rounded-lg p-4">
+      <div className="bg-card border border-border rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-500" />
@@ -270,13 +270,13 @@ export default function IssueConfigPanel() {
             ) : (
               categories.map((category) => (
                 <React.Fragment key={category.id}>
-                  <TableRow className="bg-slate-50/50">
+                  <TableRow className="bg-muted/50">
                     <TableCell className="font-medium">
                       <div className="flex items-center">
                         {category.children && category.children.length > 0 ? (
                           <button
                             onClick={() => toggleExpand(category.id)}
-                            className="mr-1.5 p-0.5 hover:bg-slate-200 rounded"
+                            className="mr-1.5 p-0.5 hover:bg-accent rounded"
                           >
                             {expandedCategories.has(category.id) ? (
                               <ChevronDown className="h-4 w-4 text-slate-500" />
@@ -338,7 +338,7 @@ export default function IssueConfigPanel() {
       {/* 紧急程度 + 保修情况 并排 */}
       <div className="grid grid-cols-2 gap-4">
         {/* 紧急程度 */}
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
+        <div className="bg-card border border-border rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-red-500" />
@@ -378,7 +378,7 @@ export default function IssueConfigPanel() {
         </div>
 
         {/* 保修情况 */}
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
+        <div className="bg-card border border-border rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-green-500" />

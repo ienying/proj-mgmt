@@ -96,6 +96,19 @@ export const project_type_stage_modules = pgTable("project_type_stage_modules", 
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
+// 部门表
+export const departments = pgTable("departments", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  sort_order: integer("sort_order").default(0).notNull(),
+  is_enabled: boolean("is_enabled").default(true).notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("departments_code_idx").on(table.code),
+]);
+
 // 项目类型表
 export const project_types = pgTable("project_types", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
@@ -343,6 +356,7 @@ export const project_schema_rules = pgTable("project_schema_rules", {
   rule_type: varchar("rule_type", { length: 20 }).default('type_stage').notNull(), // type_stage | module
   project_type: varchar("project_type", { length: 50 }),
   project_stage: varchar("project_stage", { length: 50 }),
+  project_status: varchar("project_status", { length: 20 }), // nullable filter
   module_codes: jsonb("module_codes").notNull().$type<string[]>().default(sql`'[]'::jsonb`), // 模块代码列表
   table_definitions: jsonb("table_definitions").notNull().$type<string[]>().default(sql`'[]'::jsonb`),
   is_enabled: boolean("is_enabled").default(true).notNull(),
@@ -353,4 +367,5 @@ export const project_schema_rules = pgTable("project_schema_rules", {
 }, (table) => [
   index("project_schema_rules_type_idx").on(table.project_type),
   index("project_schema_rules_stage_idx").on(table.project_stage),
+  index("project_schema_rules_status_idx").on(table.project_status),
 ]);

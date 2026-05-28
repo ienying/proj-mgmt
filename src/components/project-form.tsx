@@ -292,6 +292,7 @@ export function ProjectForm({
   const [customerTypes, setCustomerTypes] = useState<{ code: string; name: string }[]>([]);
   const [deploymentModes, setDeploymentModes] = useState<{ code: string; name: string }[]>([]);
   const [projectStatuses, setProjectStatuses] = useState<{ code: string; name: string }[]>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<{ code: string; name: string }[]>([]);
 
   // 渠道信息
   const [channelCompanies, setChannelCompanies] = useState<ChannelCompany[]>([]);
@@ -437,6 +438,15 @@ export function ProjectForm({
         .then((data) => {
           if (data.data) {
             setProjectStatuses(data.data.filter((item: { is_enabled: boolean }) => item.is_enabled !== false).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
+          }
+        })
+        .catch(() => {});
+
+      fetch("/api/dicts?type=departments")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.data) {
+            setDepartmentOptions(data.data.filter((item: { is_enabled: boolean }) => item.is_enabled !== false).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
           }
         })
         .catch(() => {});
@@ -920,11 +930,16 @@ export function ProjectForm({
                 </div>
                 <div className="space-y-1.5">
                   <Label>部门</Label>
-                  <Input
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                    placeholder="请输入部门"
-                  />
+                  <Select value={department} onValueChange={setDepartment}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="请选择部门" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departmentOptions.map((dept) => (
+                        <SelectItem key={dept.code} value={dept.name}>{dept.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               <div className="grid grid-cols-4 gap-4">

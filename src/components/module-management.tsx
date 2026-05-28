@@ -304,7 +304,7 @@ export default function ModuleManagement() {
               const IconComp = ICON_MAP[mod.icon] || Target;
               const colorInfo = COLOR_MAP[mod.color] || COLOR_MAP.blue;
               return (
-                <div key={mod.id} className={`flex items-center gap-3 p-3 rounded-lg border ${mod.is_enabled ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
+                <div key={mod.id} className={`flex items-center gap-3 p-3 rounded-lg border ${mod.is_enabled ? 'bg-card' : 'bg-muted opacity-60'}`}>
                   <GripVertical className="h-4 w-4 text-gray-300" />
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${colorInfo.light}`}>
                     <IconComp className={`h-4 w-4 ${colorInfo.text}`} />

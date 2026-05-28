@@ -151,11 +151,12 @@ export async function POST(request: NextRequest) {
 
     // 5. 根据规则复制规范表到项目 Schema
     await copyTableDefinitionsToSchema(
-      client, 
-      project_type, 
-      project_stage, 
+      client,
+      project_type,
+      project_stage,
       projectSchema,
-      procurement_modules as string[] || []
+      procurement_modules as string[] || [],
+      project_status || null
     );
 
     // 5. 保存对接信息
@@ -178,14 +179,15 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * 根据项目类型、阶段和模块查找匹配的规则，复制规范表到项目 Schema
+ * 根据项目类型、阶段、状态和模块查找匹配的规则，复制规范表到项目 Schema
  */
 async function copyTableDefinitionsToSchema(
   client: Awaited<ReturnType<typeof createServerClient>>,
   projectType: string,
   projectStage: string,
   projectSchema: string,
-  procurementModules: string[] = []
+  procurementModules: string[] = [],
+  projectStatus: string | null = null
 ) {
   try {
     // 查询所有启用的规则
@@ -206,47 +208,62 @@ async function copyTableDefinitionsToSchema(
     // 收集所有匹配规则的表定义
     const allTableDefinitions = new Set<string>();
 
-    // 1. 匹配类型阶段规则
-    // 先找精确匹配（类型+阶段都匹配）
-    const exactMatch = enabledRules.find(
-      (r) => r.rule_type !== 'module' && r.project_type === projectType && r.project_stage === projectStage
-    );
-    if (exactMatch?.table_definitions) {
-      (exactMatch.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
+    // 1. 匹配类型阶段规则（type_stage）
+    // 规则中为 null 的字段表示"不限"，项目值必须匹配规则的非 null 字段
+    const typeStageRules = enabledRules.filter((r) => r.rule_type !== 'module');
+
+    // 按精确度分组：统计每个规则匹配的条件数（type/stage/status）
+    const typeStageMatches: { rule: Record<string, unknown>; matchCount: number }[] = [];
+    for (const rule of typeStageRules) {
+      const ruleType = rule.project_type as string | null;
+      const ruleStage = rule.project_stage as string | null;
+      const ruleStatus = (rule as Record<string, unknown>).project_status as string | null;
+
+      let matchCount = 0;
+      // type: 规则有限制时，项目值必须匹配
+      if (ruleType !== null && ruleType !== projectType) continue;
+      if (ruleType !== null) matchCount++;
+
+      // stage: 规则有限制时，项目值必须匹配
+      if (ruleStage !== null && ruleStage !== projectStage) continue;
+      if (ruleStage !== null) matchCount++;
+
+      // status: 规则有限制时，项目值必须匹配
+      if (ruleStatus !== null && ruleStatus !== projectStatus) continue;
+      if (ruleStatus !== null) matchCount++;
+
+      typeStageMatches.push({ rule, matchCount });
     }
 
-    // 找类型匹配
-    const typeMatch = enabledRules.find(
-      (r) => r.rule_type !== 'module' && r.project_type === projectType && r.project_stage === null
-    );
-    if (typeMatch?.table_definitions) {
-      (typeMatch.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
+    // 按匹配度降序排序（精确匹配的优先）
+    typeStageMatches.sort((a, b) => b.matchCount - a.matchCount);
+
+    // 收集所有匹配的类型阶段规则的表定义（高精确度的先加入）
+    for (const { rule } of typeStageMatches) {
+      if (rule.table_definitions) {
+        (rule.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
+      }
     }
 
-    // 找阶段匹配
-    const stageMatch = enabledRules.find(
-      (r) => r.rule_type !== 'module' && r.project_type === null && r.project_stage === projectStage
-    );
-    if (stageMatch?.table_definitions) {
-      (stageMatch.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
-    }
-
-    // 找通用规则
-    const genericMatch = enabledRules.find(
-      (r) => r.rule_type !== 'module' && r.project_type === null && r.project_stage === null
-    );
-    if (genericMatch?.table_definitions) {
-      (genericMatch.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
-    }
-
-    // 2. 匹配模块规则
+    // 2. 匹配模块规则（module）
+    // 模块必须有交集（AND），阶段和状态作为可选过滤（null = 不限）
     if (procurementModules && procurementModules.length > 0) {
       for (const rule of enabledRules) {
         if (rule.rule_type === 'module' && rule.module_codes) {
           const moduleCodes = rule.module_codes as string[];
-          // 检查是否有交集
-          const hasMatch = moduleCodes.some((code) => procurementModules.includes(code));
-          if (hasMatch && rule.table_definitions) {
+          // 模块必须有交集
+          const hasModuleMatch = moduleCodes.some((code) => procurementModules.includes(code));
+          if (!hasModuleMatch) continue;
+
+          // 阶段过滤：规则有限制时，项目阶段必须匹配
+          const ruleStage = rule.project_stage as string | null;
+          if (ruleStage !== null && ruleStage !== projectStage) continue;
+
+          // 状态过滤：规则有限制时，项目状态必须匹配
+          const ruleStatus = (rule as Record<string, unknown>).project_status as string | null;
+          if (ruleStatus !== null && ruleStatus !== projectStatus) continue;
+
+          if (rule.table_definitions) {
             (rule.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
           }
         }

@@ -83,6 +83,9 @@ export async function POST(request: NextRequest) {
           description: body.description || null,
         };
         break;
+      case "departments":
+        tableName = "departments";
+        break;
       case "todo_statuses":
         tableName = "todo_statuses";
         insertData = {

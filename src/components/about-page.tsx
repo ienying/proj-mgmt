@@ -40,6 +40,7 @@ const NAV_SECTIONS = [
   { id: "auth", label: "认证与权限", icon: <Shield className="w-3.5 h-3.5" /> },
   { id: "flow", label: "核心流程", icon: <GitBranch className="w-3.5 h-3.5" /> },
   { id: "project-flow", label: "创建项目", icon: <FolderPlus className="w-3.5 h-3.5" /> },
+  { id: "schema-rules", label: "Schema 规则", icon: <FileText className="w-3.5 h-3.5" /> },
 ];
 
 const FEATURE_MODULES = [
@@ -1206,6 +1207,151 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
                     <span className="text-xs">同步后项目详情页可按模块查看和编辑该表数据</span>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Schema 规则匹配关系 */}
+        <section id="schema-rules" className="scroll-mt-4">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-teal-600 flex items-center justify-center">
+              <FileText className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Schema 规则匹配</h2>
+              <p className="text-sm text-gray-500">项目 Schema 规则配置 · 匹配关系说明</p>
+            </div>
+          </div>
+
+          {/* 概述 */}
+          <div className="bg-gradient-to-br from-teal-600 to-cyan-700 rounded-2xl p-8 text-white mb-6">
+            <h3 className="text-xl font-bold mb-2">新建项目时自动复制规范表</h3>
+            <p className="text-teal-100 text-sm leading-relaxed">
+              系统通过「项目 Schema 规则配置」定义匹配规则，当新建项目时，
+              根据项目类型、阶段、状态和采购模块自动匹配规则，将对应的规范表结构（含初始数据）复制到项目 Schema 中。
+            </p>
+          </div>
+
+          {/* 类型阶段规则 */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
+            <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-teal-500" />
+              类型阶段规则（type_stage）
+            </h4>
+            <p className="text-sm text-gray-500 mb-4">
+              三个条件（类型、阶段、状态）都是<strong className="text-gray-700">可选的</strong>（null = 不限）。规则中某个字段非 null，项目对应值必须匹配上才算命中。
+            </p>
+
+            <div className="bg-teal-50 rounded-lg p-3 mb-4">
+              <p className="text-xs font-medium text-teal-700 mb-1">关系：规则内的条件是 AND，规则之间是"谁匹配更多谁优先"</p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-2 pr-3 text-gray-500 font-medium text-xs">类型</th>
+                    <th className="text-left py-2 pr-3 text-gray-500 font-medium text-xs">阶段</th>
+                    <th className="text-left py-2 pr-3 text-gray-500 font-medium text-xs">状态</th>
+                    <th className="text-left py-2 text-gray-500 font-medium text-xs">匹配含义</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  <tr>
+                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">A</td>
+                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">B</td>
+                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">C</td>
+                    <td className="py-1.5 text-gray-700">三者全中才命中（最精确，优先级最高）</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">A</td>
+                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">B</td>
+                    <td className="py-1.5 pr-3 text-gray-400 text-xs">不限</td>
+                    <td className="py-1.5 text-gray-700">type 和 stage 必须匹配，不限状态</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">A</td>
+                    <td className="py-1.5 pr-3 text-gray-400 text-xs">不限</td>
+                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">C</td>
+                    <td className="py-1.5 text-gray-700">type 和 status 必须匹配，不限阶段</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1.5 pr-3 text-gray-400 text-xs">不限</td>
+                    <td className="py-1.5 pr-3 text-gray-400 text-xs">不限</td>
+                    <td className="py-1.5 pr-3 text-gray-400 text-xs">不限</td>
+                    <td className="py-1.5 text-gray-700">通用规则，不限任何条件（最低优先级）</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-3 bg-gray-50 rounded-lg p-3">
+              <p className="text-xs text-gray-600">
+                <strong>多规则命中：</strong>按匹配的条件数量排序（3个 &gt; 2个 &gt; 1个 &gt; 0个），所有匹配规则的表定义会<strong>合并收集</strong>（Set 去重）。
+              </p>
+            </div>
+          </div>
+
+          {/* 产品规则 */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
+            <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-cyan-500" />
+              产品规则（module）
+            </h4>
+            <p className="text-sm text-gray-500 mb-4">
+              根据项目采购的产品模块匹配规则，同时支持按项目阶段和状态进一步过滤。
+            </p>
+
+            <div className="bg-cyan-50 rounded-lg p-3 mb-4">
+              <p className="text-xs font-medium text-cyan-700 mb-1">关系：模块命中是硬性条件（AND），阶段和状态是可选过滤</p>
+            </div>
+
+            <div className="space-y-2 text-sm text-gray-600">
+              <div className="flex items-start gap-2">
+                <div className="w-5 h-5 rounded-full bg-cyan-100 text-cyan-700 flex items-center justify-center text-xs shrink-0">1</div>
+                <span><code className="bg-gray-100 px-1 rounded text-xs">module_codes</code> 与项目 <code className="bg-gray-100 px-1 rounded text-xs">procurement_modules</code> <strong className="text-gray-900">必须有交集</strong> → 没交集直接跳过</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-5 h-5 rounded-full bg-cyan-100 text-cyan-700 flex items-center justify-center text-xs shrink-0">2</div>
+                <span>模块有交集后，检查 <code className="bg-gray-100 px-1 rounded text-xs">project_stage</code>：规则为 null 不限制，有值则项目阶段必须相等</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-5 h-5 rounded-full bg-cyan-100 text-cyan-700 flex items-center justify-center text-xs shrink-0">3</div>
+                <span>再检查 <code className="bg-gray-100 px-1 rounded text-xs">project_status</code>：规则为 null 不限制，有值则项目状态必须相等</span>
+              </div>
+            </div>
+
+            <div className="mt-3 bg-gray-50 rounded-lg p-3">
+              <p className="text-xs text-gray-600">
+                阶段和状态条件是 <strong className="text-gray-900">AND</strong> 关系，全部通过才算最终命中。
+              </p>
+            </div>
+          </div>
+
+          {/* 两类规则之间 */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-violet-500" />
+              两类规则之间的关系
+            </h4>
+            <div className="flex items-start gap-3">
+              <div className="flex-1 grid grid-cols-2 gap-3">
+                <div className="bg-teal-50 rounded-lg p-3">
+                  <p className="text-xs font-medium text-teal-700 mb-1">类型阶段规则</p>
+                  <p className="text-xs text-teal-600">独立计算匹配表定义</p>
+                </div>
+                <div className="bg-cyan-50 rounded-lg p-3">
+                  <p className="text-xs font-medium text-cyan-700 mb-1">产品规则</p>
+                  <p className="text-xs text-cyan-600">独立计算匹配表定义</p>
+                </div>
+              </div>
+              <div className="flex items-center text-gray-400 text-lg">→</div>
+              <div className="flex-1 bg-violet-50 rounded-lg p-3 flex items-center">
+                <p className="text-xs text-violet-700 text-center w-full">
+                  <strong>合并去重</strong><br/>
+                  收集到一个 Set 中，无重复
+                </p>
               </div>
             </div>
           </div>

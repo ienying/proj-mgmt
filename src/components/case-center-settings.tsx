@@ -443,7 +443,7 @@ export function CaseCenterSettings() {
 
   // ============= PRODUCT CASE TAB =============
   const renderProductCaseTab = () => (
-    <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-6">
+    <div className="bg-card border border-border rounded-lg p-6 space-y-6">
       {/* Enable/Disable */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -503,7 +503,7 @@ export function CaseCenterSettings() {
 
       {/* Field Mappings */}
       {currentConfig.table_code && columnOptions.length > 0 && (
-        <div className="space-y-4 border-t border-slate-100 pt-4">
+        <div className="space-y-4 border-t border-border pt-4">
           <h3 className="text-sm font-medium text-slate-700">字段映射</h3>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -618,7 +618,7 @@ export function CaseCenterSettings() {
 
       {/* Stat Fields Config */}
       {currentConfig.table_code && (
-        <div className="space-y-4 border-t border-slate-100 pt-4">
+        <div className="space-y-4 border-t border-border pt-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-medium text-slate-700">统计字段配置</h3>
@@ -632,12 +632,12 @@ export function CaseCenterSettings() {
             </Button>
           </div>
           {(currentConfig.stat_fields || []).length === 0 && (
-            <div className="text-center py-6 text-sm text-slate-400 bg-slate-50 rounded-lg">
+            <div className="text-center py-6 text-sm text-slate-400 bg-muted rounded-lg">
               暂未配置统计字段，点击上方按钮添加
             </div>
           )}
           {(currentConfig.stat_fields || []).map((sf, index) => (
-            <div key={index} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+            <div key={index} className="flex items-center gap-3 p-3 bg-muted rounded-lg">
               <div className="flex-1 grid grid-cols-3 gap-3">
                 <Select value={sf.field || ""} onValueChange={(val) => updateStatField(index, "field", val)}>
                   <SelectTrigger><SelectValue placeholder="选择字段" /></SelectTrigger>
@@ -665,7 +665,7 @@ export function CaseCenterSettings() {
       )}
 
       {/* Save Button */}
-      <div className="flex justify-end pt-2 border-t border-slate-100">
+      <div className="flex justify-end pt-2 border-t border-border">
         <Button onClick={handleProductSave} disabled={saving}>
           {saving ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" />保存中...</>) : (<><Save className="w-4 h-4 mr-2" />保存配置</>)}
         </Button>
@@ -681,7 +681,7 @@ export function CaseCenterSettings() {
     return (
       <div className="space-y-6">
         {/* Enable/Disable */}
-        <div className="bg-white border border-slate-200 rounded-lg p-6">
+        <div className="bg-card border border-border rounded-lg p-6">
           <div className="flex items-center justify-between">
             <div>
               <Label className="text-sm font-medium">启用用户画像</Label>
@@ -695,7 +695,7 @@ export function CaseCenterSettings() {
         </div>
 
         {/* Overview Metrics */}
-        <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+        <div className="bg-card border border-border rounded-lg p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-medium text-slate-700">概览指标配置</h3>
@@ -709,12 +709,12 @@ export function CaseCenterSettings() {
             </Button>
           </div>
           {(currentConfig.overview_metrics || []).length === 0 && (
-            <div className="text-center py-4 text-sm text-slate-400 bg-slate-50 rounded-lg">
+            <div className="text-center py-4 text-sm text-slate-400 bg-muted rounded-lg">
               暂未配置概览指标
             </div>
           )}
           {(currentConfig.overview_metrics || []).map((metric, index) => (
-            <div key={index} className="p-3 bg-slate-50 rounded-lg space-y-3">
+            <div key={index} className="p-3 bg-muted rounded-lg space-y-3">
               <div className="flex items-center gap-3">
                 <div className="flex-1 grid grid-cols-2 gap-3">
                   <Input
@@ -780,7 +780,7 @@ export function CaseCenterSettings() {
         </div>
 
         {/* Modules Config */}
-        <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+        <div className="bg-card border border-border rounded-lg p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-medium text-slate-700">模块配置</h3>
@@ -811,7 +811,7 @@ export function CaseCenterSettings() {
           </div>
 
           {(currentConfig.modules || []).length === 0 && (
-            <div className="text-center py-8 text-slate-400 bg-slate-50 rounded-lg">
+            <div className="text-center py-8 text-slate-400 bg-muted rounded-lg">
               <LayoutGrid className="w-10 h-10 mx-auto mb-3 text-slate-300" />
               <p className="text-sm font-medium">暂未配置模块</p>
               <p className="text-xs mt-1">从上方下拉中选择预设模块添加</p>
@@ -823,9 +823,9 @@ export function CaseCenterSettings() {
             const modColumns = getColumnOptions(mod.table_code);
 
             return (
-              <div key={mod.id} className="border border-slate-200 rounded-lg overflow-hidden">
+              <div key={mod.id} className="border border-border rounded-lg overflow-hidden">
                 {/* Module Header */}
-                <div className="flex items-center gap-3 p-3 bg-slate-50 hover:bg-slate-100 transition-colors">
+                <div className="flex items-center gap-3 p-3 bg-muted hover:bg-accent transition-colors">
                   <GripVertical className="w-4 h-4 text-slate-300" />
                   <div className="flex items-center gap-2 text-blue-500">
                     {ICON_MAP[mod.icon] || <LayoutGrid className="w-4 h-4" />}
@@ -862,7 +862,7 @@ export function CaseCenterSettings() {
 
                 {/* Module Detail Config (expandable) */}
                 {isExpanded && (
-                  <div className="p-4 space-y-4 border-t border-slate-100">
+                  <div className="p-4 space-y-4 border-t border-border">
                     {/* Module Name */}
                     <div className="grid grid-cols-3 gap-4">
                       <div className="space-y-1.5">
@@ -907,7 +907,7 @@ export function CaseCenterSettings() {
 
                     {/* Field Mapping */}
                     {mod.table_code && modColumns.length > 0 && (
-                      <div className="space-y-3 border-t border-slate-100 pt-3">
+                      <div className="space-y-3 border-t border-border pt-3">
                         <div className="flex items-center justify-between">
                           <h4 className="text-xs font-medium text-slate-500">字段映射</h4>
                           <Button variant="ghost" size="sm" className="h-6 text-xs text-blue-500" onClick={() => addModuleField(mIndex)}>
@@ -916,7 +916,7 @@ export function CaseCenterSettings() {
                           </Button>
                         </div>
                         {(mod.fields || []).length === 0 && (
-                          <div className="text-center py-3 text-xs text-slate-400 bg-slate-50 rounded">
+                          <div className="text-center py-3 text-xs text-slate-400 bg-muted rounded">
                             暂未映射字段，点击添加
                           </div>
                         )}
@@ -985,7 +985,7 @@ export function CaseCenterSettings() {
   return (
     <div className="space-y-6">
       {/* Tab Switcher */}
-      <div className="flex gap-2 border-b border-slate-200 pb-3">
+      <div className="flex gap-2 border-b border-border pb-3">
         {(["product_case", "user_profile"] as const).map((type) => (
           <button
             key={type}
@@ -994,7 +994,7 @@ export function CaseCenterSettings() {
               "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
               activeTab === type
                 ? "bg-blue-500 text-white"
-                : "text-slate-600 hover:bg-slate-100"
+                : "text-slate-600 hover:bg-accent"
             )}
           >
             {TYPE_LABELS[type]}

@@ -196,11 +196,13 @@ function PreviewPanel({
   projectTypes,
   projectStages,
   moduleTypesList,
+  definitions = [],
 }: {
   formData: Partial<TableDefinition>;
   projectTypes: { code: string; name: string }[];
   projectStages: { code: string; name: string }[];
   moduleTypesList: { code: string; name: string }[];
+  definitions?: TableDefinition[];
 }) {
   const selectedModules = moduleTypesList.filter((m) =>
     formData.module_type?.includes(m.code)
@@ -1865,6 +1867,7 @@ export function StandardManagement({
                   projectTypes={projectTypes}
                   projectStages={projectStages}
                   moduleTypesList={moduleTypes}
+                  definitions={definitions}
                 />
               </div>
 
