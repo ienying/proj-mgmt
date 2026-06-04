@@ -26,6 +26,7 @@ interface TaskDef {
   title: string;
   description?: string;
   task_type: "periodic" | "regular";
+  task_mode?: "form" | "project" | "approval";
   assignee_ids: string[];
   project_ids: string[];
   form_source: string;
@@ -105,6 +106,12 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
 const TASK_TYPE_CONFIG = {
   periodic: { label: "周期任务", color: "text-purple-600", bg: "bg-purple-50" },
   regular: { label: "普通任务", color: "text-cyan-600", bg: "bg-cyan-50" },
+};
+
+const TASK_MODE_CONFIG: Record<string, { label: string; icon: string }> = {
+  form: { label: "表单", icon: "📝" },
+  project: { label: "项目", icon: "📋" },
+  approval: { label: "流程", icon: "🔀" },
 };
 
 function formatDate(dateStr?: string): string {
@@ -620,6 +627,11 @@ function PublishedTaskList({ defs, loading }: PublishedTaskListProps) {
                     <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium", typeCfg.bg, typeCfg.color)}>
                       {typeCfg.label}
                     </span>
+                    {def.task_mode && TASK_MODE_CONFIG[def.task_mode] && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
+                        {TASK_MODE_CONFIG[def.task_mode].icon} {TASK_MODE_CONFIG[def.task_mode].label}
+                      </span>
+                    )}
                     {!def.is_enabled && (
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500">已停用</span>
                     )}

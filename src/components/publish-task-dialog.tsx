@@ -85,7 +85,7 @@ export function PublishTaskDialog({
   // 第1步：基本信息
   const [title, setTitle] = useState("");
   const [taskType, setTaskType] = useState<"periodic" | "regular">("regular");
-  const [taskMode, setTaskMode] = useState<"form" | "approval">("form");
+  const [taskMode, setTaskMode] = useState<"form" | "project" | "approval">("form");
   const [description, setDescription] = useState("");
   const [workflowNodes, setWorkflowNodes] = useState<Array<{ order: number; name: string; assignee_id: string; assignee_name: string; due_days: number; remind_days: number }>>([{ order: 1, name: "", assignee_id: "", assignee_name: "", due_days: 3, remind_days: 1 }]);
 
@@ -439,61 +439,63 @@ export function PublishTaskDialog({
         {step === 1 && (
           <div className="space-y-4 w-full max-w-xl mx-auto">
             <div>
-              <Label>任务标题 <span className="text-red-500">*</span></Label>
-              <Input
-                value={title}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
-                placeholder="输入任务标题，如：智慧校园调研表"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label>任务类型</Label>
-              <RadioGroup
-                value={taskType}
-                onValueChange={(v: string) => setTaskType(v as "periodic" | "regular")}
-                className="flex gap-6 mt-2"
-              >
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="regular" id="regular" />
-                  <Label htmlFor="regular" className="cursor-pointer">普通任务</Label>
-                  <span className="text-xs text-gray-400">一次性任务，规定时间完成</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="periodic" id="periodic" />
-                  <Label htmlFor="periodic" className="cursor-pointer">周期任务</Label>
-                  <span className="text-xs text-gray-400">按周期自动生成新实例</span>
-                </div>
+              <Label className="text-base">任务周期</Label>
+              <RadioGroup value={taskType} onValueChange={(v: string) => setTaskType(v as "periodic" | "regular")}
+                className="flex gap-4 mt-2">
+                <label className={cn("flex-1 p-4 rounded-xl border-2 cursor-pointer transition-all",
+                  taskType === "regular" ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300")}>
+                  <RadioGroupItem value="regular" className="sr-only" />
+                  <div className="text-lg mb-1">📋</div>
+                  <div className="font-semibold text-sm">一次性任务</div>
+                  <div className="text-xs text-gray-500 mt-1">发起后执行一次，完成后结束</div>
+                </label>
+                <label className={cn("flex-1 p-4 rounded-xl border-2 cursor-pointer transition-all",
+                  taskType === "periodic" ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300")}>
+                  <RadioGroupItem value="periodic" className="sr-only" />
+                  <div className="text-lg mb-1">🔄</div>
+                  <div className="font-semibold text-sm">周期性任务</div>
+                  <div className="text-xs text-gray-500 mt-1">按周期自动重复，每次生成新实例</div>
+                </label>
               </RadioGroup>
+              {taskType === "periodic" && (
+                <div className="flex gap-3 mt-3 p-3 bg-gray-50 rounded-lg">
+                  <div className="flex-1"><Label className="text-xs">频率</Label>
+                    <Select value={periodicType} onValueChange={setPeriodicType}>
+                      <SelectTrigger className="h-8 text-sm mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="daily">每天</SelectItem><SelectItem value="weekly">每周</SelectItem><SelectItem value="monthly">每月</SelectItem></SelectContent></Select></div>
+                  <div className="w-24"><Label className="text-xs">截止(天)</Label><Input type="number" value={7} onChange={() => {}} className="h-8 mt-1" /></div>
+                  <div className="w-24"><Label className="text-xs">提醒(天)</Label><Input type="number" value={1} onChange={() => {}} className="h-8 mt-1" /></div>
+                </div>
+              )}
             </div>
-            <div>
-              <Label>任务描述</Label>
-              <Textarea
-                value={description}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
-                placeholder="描述任务内容和要求..."
-                className="mt-1"
-                rows={3}
-              />
-            </div>
+            <div><Label>任务标题 <span className="text-red-500">*</span></Label>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="输入任务标题" className="mt-1" /></div>
+            <div><Label>任务描述</Label>
+              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="描述任务内容和要求..." className="mt-1" rows={3} /></div>
           </div>
         )}
 
-        {/* 第2步：任务类型 */}
+        {/* 第2步：任务类型（卡片式） */}
         {step === 2 && (
-          <div className="space-y-4 w-full max-w-[75%] mx-auto">
-            <p className="text-xs text-indigo-500 bg-indigo-50 p-2 rounded">选择任务类型：表单填报适合收集信息、填写上报；流程审批适合多节点流转、逐级审批。</p>
-            <div className="grid grid-cols-2 gap-4">
-              <div onClick={() => setTaskMode("form")} className={cn("p-5 rounded-xl border-2 cursor-pointer transition-all text-center", taskMode === "form" ? "border-indigo-500 bg-indigo-50 shadow-sm" : "border-gray-200 hover:border-indigo-300 hover:bg-gray-50")}>
-                <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-indigo-100 flex items-center justify-center"><FileSpreadsheet className="w-6 h-6 text-indigo-600" /></div>
-                <p className="font-semibold text-gray-800">表单填报任务</p>
-                <p className="text-xs text-gray-400 mt-1.5">制作表单→指派人员/项目<br/>用户填写提交即完成</p>
-              </div>
-              <div onClick={() => setTaskMode("approval")} className={cn("p-5 rounded-xl border-2 cursor-pointer transition-all text-center", taskMode === "approval" ? "border-indigo-500 bg-indigo-50 shadow-sm" : "border-gray-200 hover:border-indigo-300 hover:bg-gray-50")}>
-                <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-amber-100 flex items-center justify-center"><Users className="w-6 h-6 text-amber-600" /></div>
-                <p className="font-semibold text-gray-800">流程审批任务</p>
-                <p className="text-xs text-gray-400 mt-1.5">设计审批表单→配置节点<br/>多级流转，逐级审批闭环</p>
-              </div>
+          <div className="space-y-4 w-full max-w-3xl mx-auto">
+            <p className="text-sm text-gray-500 text-center">选择适合的任务类型</p>
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { mode: "form" as const, icon: "📝", title: "普通表单任务", desc: "自定义表单字段\n指定人员填写提交", tags: ["日报/周报","调查/收集"], color: "border-blue-500 bg-blue-50" },
+                { mode: "project" as const, icon: "📋", title: "项目任务", desc: "关联多个项目\n拉取项目记录作为数据行", tags: ["巡检/验收","检查/评估"], color: "border-green-500 bg-green-50" },
+                { mode: "approval" as const, icon: "🔀", title: "流程型任务", desc: "表单+项目数据+写回\n多级审批流转", tags: ["需求评审","采购/变更审批"], color: "border-purple-500 bg-purple-50" },
+              ].map(card => (
+                <div key={card.mode} onClick={() => setTaskMode(card.mode)}
+                  className={cn("p-5 rounded-xl border-2 cursor-pointer transition-all text-center",
+                    taskMode === card.mode ? `${card.color} shadow-sm border-2` : "border-gray-200 hover:border-gray-300 hover:bg-gray-50")}>
+                  <div className="text-3xl mb-3">{card.icon}</div>
+                  <div className="font-semibold text-sm">{card.title}</div>
+                  <div className="text-xs text-gray-500 mt-2 whitespace-pre-line">{card.desc}</div>
+                  <div className="flex flex-wrap justify-center gap-1 mt-3">
+                    {card.tags.map(t => <span key={t} className="px-1.5 py-0.5 rounded bg-gray-100 text-[10px] text-gray-500">{t}</span>)}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
