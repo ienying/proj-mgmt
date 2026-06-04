@@ -41,6 +41,7 @@ const NAV_SECTIONS = [
   { id: "flow", label: "核心流程", icon: <GitBranch className="w-3.5 h-3.5" /> },
   { id: "project-flow", label: "创建项目", icon: <FolderPlus className="w-3.5 h-3.5" /> },
   { id: "schema-rules", label: "Schema 规则", icon: <FileText className="w-3.5 h-3.5" /> },
+  { id: "permissions", label: "数据权限", icon: <Shield className="w-3.5 h-3.5" /> },
 ];
 
 const FEATURE_MODULES = [
@@ -1353,6 +1354,110 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
                   收集到一个 Set 中，无重复
                 </p>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 数据权限控制 */}
+        <section id="permissions" className="scroll-mt-4">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-amber-600 flex items-center justify-center">
+              <Shield className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">数据权限控制</h2>
+              <p className="text-sm text-gray-500">行列权限 · 可删除 · 只读控制</p>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-amber-600 to-orange-700 rounded-2xl p-8 text-white mb-6">
+            <h3 className="text-xl font-bold mb-2">行列矩阵权限模型</h3>
+            <p className="text-amber-100 text-sm leading-relaxed">
+              规范管理定义的表数据可精细控制到每一行、每一列的删除和编辑权限。
+              通过「列只读 × 行只读 → AND/OR 组合」实现灵活的单元格级权限控制。
+            </p>
+          </div>
+
+          {/* 权限层次 */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
+            <h4 className="font-semibold text-gray-900 mb-3">三层权限控制</h4>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-blue-50 rounded-lg p-3">
+                <p className="text-xs font-medium text-blue-700 mb-1">表级（默认）</p>
+                <p className="text-xs text-blue-600">编辑表 → 数据权限区域<br/>allow_add：能否新增<br/>allow_delete：默认能否删除<br/>AND/OR：只读模式</p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-3">
+                <p className="text-xs font-medium text-green-700 mb-1">行级（覆盖）</p>
+                <p className="text-xs text-green-600">操作数据 → 每行删除/只读开关<br/>逐行覆盖表级默认值<br/>开关即时生效</p>
+              </div>
+              <div className="bg-purple-50 rounded-lg p-3">
+                <p className="text-xs font-medium text-purple-700 mb-1">列级（覆盖）</p>
+                <p className="text-xs text-purple-600">操作数据 → 点击表头 🔒<br/>或列配置中勾选"只读"<br/>列只读标记影响所有行</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 权限生效规则 */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
+            <h4 className="font-semibold text-gray-900 mb-3">权限生效规则</h4>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-2 pr-3 text-gray-500 font-medium text-xs">data_source</th>
+                    <th className="text-left py-2 pr-3 text-gray-500 font-medium text-xs">含义</th>
+                    <th className="text-left py-2 pr-3 text-gray-500 font-medium text-xs">可删除</th>
+                    <th className="text-left py-2 text-gray-500 font-medium text-xs">可编辑只读列</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  <tr><td className="py-2 pr-3 font-mono text-xs text-green-700">manual</td><td className="py-2 pr-3 text-xs text-gray-600">项目中直接添加</td><td className="py-2 pr-3 text-xs text-green-600">始终可删</td><td className="py-2 text-xs text-green-600">不受限制</td></tr>
+                  <tr><td className="py-2 pr-3 font-mono text-xs text-gray-700">null / 空</td><td className="py-2 pr-3 text-xs text-gray-600">旧数据（兼容）</td><td className="py-2 pr-3 text-xs text-green-600">始终可删</td><td className="py-2 text-xs text-green-600">不受限制</td></tr>
+                  <tr><td className="py-2 pr-3 font-mono text-xs text-amber-700">import / standard</td><td className="py-2 pr-3 text-xs text-gray-600">导入或同步的数据</td><td className="py-2 pr-3 text-xs text-amber-600">allow_delete 控制</td><td className="py-2 text-xs text-amber-600">readonly 控制</td></tr>
+                  <tr><td className="py-2 pr-3 font-mono text-xs text-blue-700">reference</td><td className="py-2 pr-3 text-xs text-gray-600">引用关系自动创建</td><td className="py-2 pr-3 text-xs text-amber-600">allow_delete 控制</td><td className="py-2 text-xs text-amber-600">readonly 控制</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* AND/OR 模式 */}
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <h4 className="font-semibold text-gray-900 mb-2 text-sm">AND 模式（默认）</h4>
+              <p className="text-xs text-gray-500 mb-2">列只读 AND 行只读 → 单元格锁定</p>
+              <div className="bg-gray-50 rounded p-2 text-xs font-mono space-y-0.5">
+                <p>列只读=是 + 行只读=是 → <span className="text-red-500">锁定 ✓</span></p>
+                <p>列只读=是 + 行只读=否 → <span className="text-green-500">可编辑</span></p>
+                <p>列只读=否 + 行只读=是 → <span className="text-green-500">可编辑</span></p>
+              </div>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <h4 className="font-semibold text-gray-900 mb-2 text-sm">OR 模式</h4>
+              <p className="text-xs text-gray-500 mb-2">列只读 OR 行只读 → 单元格锁定</p>
+              <div className="bg-gray-50 rounded p-2 text-xs font-mono space-y-0.5">
+                <p>列只读=是 + 行只读=是 → <span className="text-red-500">锁定 ✓</span></p>
+                <p>列只读=是 + 行只读=否 → <span className="text-red-500">锁定 ✓</span></p>
+                <p>列只读=否 + 行只读=是 → <span className="text-red-500">锁定 ✓</span></p>
+              </div>
+            </div>
+          </div>
+
+          {/* 操作指南 */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <h4 className="font-semibold text-gray-900 mb-3">操作方式</h4>
+            <div className="space-y-2 text-sm text-gray-600">
+              {[
+                "1. 进入规范管理 → 点击表 → 操作数据",
+                "2. 每行左侧「删除 | 只读」开关：删/× 控制可删除，锁/编 控制行只读",
+                "3. 列头点击 🔒 图标切换列只读（红色=已只读，悬停显示黑色=可切换）",
+                "4. 顶部「权限」按钮：表级 allow_add / allow_delete / AND-OR 模式",
+                "5. 编辑表 → 数据权限区域：同样可调整表级设置",
+              ].map((step, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs shrink-0">{i + 1}</div>
+                  <span className="text-gray-600 text-xs pt-0.5">{step}</span>
+                </div>
+              ))}
             </div>
           </div>
         </section>

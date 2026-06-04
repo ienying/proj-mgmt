@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Upload, FileSpreadsheet, ChevronRight, ChevronLeft, Check,
   Calendar, Users, Building2, Clock, AlertCircle, Loader2,
-  Table, Edit3,
+  Table, Edit3, ListTodo, Trash2, Plus, ChevronDown, X, Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +33,8 @@ interface ParsedColumn {
   required: boolean;
   description: string;
   sample_data: string[];
+  linked_source_field?: string;
+  linked_configs?: Array<{ project_id: string; module_code: string; table_code: string; column_name: string; record_ids: string[] }>;
 }
 
 interface StandardTable {
@@ -62,6 +64,13 @@ const TYPE_LABELS: Record<string, string> = {
   select: "单选",
   textarea: "多行文本",
   checkbox: "多选",
+  linked_select: "关联选择",
+  linked_text: "关联文本",
+  image: "图片",
+  office: "Office文件",
+  pdf: "PDF文件",
+  md: "Markdown文件",
+  user: "用户",
 };
 
 export function PublishTaskDialog({
@@ -76,7 +85,9 @@ export function PublishTaskDialog({
   // 第1步：基本信息
   const [title, setTitle] = useState("");
   const [taskType, setTaskType] = useState<"periodic" | "regular">("regular");
+  const [taskMode, setTaskMode] = useState<"form" | "approval">("form");
   const [description, setDescription] = useState("");
+  const [workflowNodes, setWorkflowNodes] = useState<Array<{ order: number; name: string; assignee_id: string; assignee_name: string; due_days: number; remind_days: number }>>([{ order: 1, name: "", assignee_id: "", assignee_name: "", due_days: 3, remind_days: 1 }]);
 
   // 第2步：表单来源
   const [formSource, setFormSource] = useState<"standards" | "excel_import">("standards");
@@ -105,6 +116,14 @@ export function PublishTaskDialog({
   const [reminderEnabled, setReminderEnabled] = useState(true);
   const [reminderBeforeDays, setReminderBeforeDays] = useState(3);
   const [allowLateComplete, setAllowLateComplete] = useState(true);
+  const [showEditor, setShowEditor] = useState(true);
+  const [loadingLinkedRecords, setLoadingLinkedRecords] = useState<Record<string, boolean>>({});
+  const [expandedTreeNodes, setExpandedTreeNodes] = useState<Record<string, boolean>>({});
+  const [treeRecords, setTreeRecords] = useState<Record<string, Array<{ id: string; value: string }>>>({});
+  const [projectTableDefs, setProjectTableDefs] = useState<Array<{ table_code: string; table_name: string; module_codes: string[]; columns_config: ParsedColumn[] }>>([]);
+  const [moduleTypes, setModuleTypes] = useState<Array<{ code: string; name: string }>>([]);
+  const [stageModuleMap, setStageModuleMap] = useState<Array<{ project_type_code: string; project_stage_code: string; module_code: string; is_enabled: boolean }>>([]);
+  const [dictData, setDictData] = useState<Record<string, Array<{ code: string; name: string }>>>({});
 
   // 加载基础数据
   useEffect(() => {
@@ -146,6 +165,10 @@ export function PublishTaskDialog({
           }
         })
         .catch(() => {});
+      fetch("/api/dicts/batch?types=product_module_types,product_categories,product_vendors,product_scopes,member_role_types,departments").then((r) => r.json()).then((d) => { if (d.data) setDictData(d.data); }).catch(() => {});
+      fetch("/api/module-types").then((r) => r.json()).then((d) => { if (d.data) setModuleTypes(d.data); }).catch(() => {});
+      fetch("/api/module-config").then((r) => r.json()).then((d) => { if (d.data) setStageModuleMap(d.data); }).catch(() => {});
+      fetch("/api/standards").then((r) => r.json()).then((d) => { if (d.data) setProjectTableDefs((d.data as any[]).map((t: any) => ({ table_code: String(t.table_code||""), table_name: String(t.table_name||""), module_codes: (t.module_type as string[])||[], columns_config: Array.isArray(t.columns_config)?t.columns_config:[] }))); }).catch(() => {});
     }
   }, [open]);
 
@@ -179,6 +202,21 @@ export function PublishTaskDialog({
       setParsing(false);
     }
   }, []);
+
+  const addColumn = () => { setParsedColumns((p) => [...p, { name: "", type: "text", required: false, description: "", options: [], sample_data: [] }]); setShowEditor(true); };
+  const removeColumn = (i) => { setParsedColumns((p) => p.filter((_, j) => j !== i)); };
+  const updateColumn = (i, f, v) => { setParsedColumns((p) => p.map((c, j) => j === i ? { ...c, [f]: v } : c)); };
+  const addLinkedTarget = (ci) => { setParsedColumns((p) => p.map((c, i) => i === ci ? { ...c, linked_configs: [...(c.linked_configs || []), { project_id: "", module_code: "", table_code: "", column_name: "", record_ids: [] }] } : c)); };
+  const removeLinkedTarget = (ci, ti) => { setParsedColumns((p) => p.map((c, i) => { if (i !== ci) return c; const cf = [...(c.linked_configs || [])]; cf.splice(ti, 1); return { ...c, linked_configs: cf }; })); };
+  const updateLinkedTarget = (ci, ti, f, v) => { setParsedColumns((p) => p.map((c, i) => { if (i !== ci) return c; return { ...c, linked_configs: (c.linked_configs || []).map((t, j) => j === ti ? { ...t, [f]: v } : t) }; })); };
+  const toggleTreeNode = (k) => { setExpandedTreeNodes((p) => ({ ...p, [k]: !p[k] })); };
+  const loadTreeRecordsForSource = async (ci, si, pid, tc, cn) => { const k = ci + "_" + si; if (treeRecords[k]) { toggleTreeNode(k); return; } setLoadingLinkedRecords((p) => ({ ...p, [k]: true })); try { const proj = projects.find((p) => p.id === pid); if (!proj) return; const r = await fetch("/api/project-data?projectSchema=yuansu_" + proj.project_code + "&tableCode=" + tc); const j = await r.json(); const rows = (j.data || []); const ck = cn.toLowerCase().replace(/\s+/g, "_"); const recs = rows.map((r) => ({ id: String(r.id||""), value: String(r[ck]||r[cn]||"") })).filter((x) => x.id&&x.value); setTreeRecords((p) => ({ ...p, [k]: recs })); toggleTreeNode(k); } catch(e){} finally { setLoadingLinkedRecords((p) => ({ ...p, [k]: false })); } };
+  const addWorkflowNode = () => { setWorkflowNodes((p) => [...p, { order: p.length + 1, name: "", assignee_id: "", assignee_name: "", due_days: 3, remind_days: 1 }]); };
+  const removeWorkflowNode = (o) => { setWorkflowNodes((p) => p.filter((n) => n.order !== o).map((n, i) => ({ ...n, order: i + 1 }))); };
+  const updateWorkflowNode = (o, f, v) => { setWorkflowNodes((p) => p.map((n) => n.order === o ? { ...n, [f]: v } : n)); };
+  const addColumnOption = (ci, opt) => { setParsedColumns((p) => p.map((c, i) => { if (i !== ci) return c; const existing = c.options || []; if (existing.includes(opt)) return c; return { ...c, options: [...existing, opt] }; })); };
+  const removeColumnOption = (ci, oi) => { setParsedColumns((p) => p.map((c, i) => { if (i !== ci) return c; return { ...c, options: (c.options || []).filter((_, j) => j !== oi) }; })); };
+  const importOptionsFromDict = (ci, dt) => { const items = dictData[dt]; if (!items || items.length === 0) return; setParsedColumns((p) => p.map((c, i) => { if (i !== ci) return c; const existing = c.options || []; const newOpts = items.map((it) => it.name || it.code).filter((n) => !existing.includes(n)); return { ...c, options: [...existing, ...newOpts] }; })); };
 
   // 提交
   const handleSubmit = async () => {
@@ -270,6 +308,9 @@ export function PublishTaskDialog({
         title: title.trim(),
         description,
         task_type: taskType,
+        task_mode: taskMode,
+        workflow_nodes: taskMode === "approval" ? workflowNodes.filter((n) => n.name.trim()) : null,
+        form_fields_config: taskMode === "approval" ? parsedColumns : null,
         assignee_ids: assignMode === "person" ? selectedAssigneeIds : [],
         project_ids: assignMode === "project"
           ? selectedProjectIds
@@ -336,28 +377,30 @@ export function PublishTaskDialog({
 
   const canNext = () => {
     if (step === 1) return title.trim().length > 0;
-    if (step === 2) {
-      if (formSource === "standards") return !!selectedTableCode;
-      if (formSource === "excel_import") return parsedColumns.length > 0;
-      return true;
-    }
-    if (step === 3) {
+    if (step === 2) return true;
+    if (step === 3) return parsedColumns.length > 0;
+    if (step === 4) {
       if (assignMode === "project") return selectedProjectIds.length > 0;
       return selectedAssigneeIds.length > 0;
+    }
+    if (step === 5) {
+      if (taskType === "regular") return !!specificDate;
+      return true;
     }
     return true;
   };
 
   const steps = [
     { num: 1, label: "基本信息", icon: Edit3 },
-    { num: 2, label: "选择任务表单", icon: Table },
-    { num: 3, label: "指派实施人员", icon: Users },
-    { num: 4, label: "截止提醒", icon: Clock },
+    { num: 2, label: "任务类型", icon: ListTodo },
+    { num: 3, label: "制作任务表单", icon: Table },
+    { num: 4, label: "指派实施人员", icon: Users },
+    { num: 5, label: "截止提醒", icon: Clock },
   ];
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleReset(); onOpenChange(v); }}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto flex flex-col items-center">
+      <DialogContent className="sm:max-w-[90%] sm:max-h-[90vh] sm:h-[90vh] overflow-hidden flex flex-col items-center">
         <DialogHeader>
           <DialogTitle>发布任务</DialogTitle>
           <DialogDescription>创建新任务并指派给指定人员或项目</DialogDescription>
@@ -436,44 +479,31 @@ export function PublishTaskDialog({
           </div>
         )}
 
-        {/* 第2步：选择表单 */}
+        {/* 第2步：任务类型 */}
         {step === 2 && (
-          <div className="space-y-4 w-full max-w-xl mx-auto">
-            <RadioGroup
-              value={formSource}
-              onValueChange={(v: string) => setFormSource(v as typeof formSource)}
-              className="space-y-3"
-            >
-              <div className="flex items-start gap-2 p-3 border rounded-lg hover:bg-gray-50">
-                <RadioGroupItem value="standards" id="standards" className="mt-1" />
-                <div className="flex-1">
-                  <Label htmlFor="standards" className="cursor-pointer font-medium">关联规范表</Label>
-                  <p className="text-xs text-gray-400">从规范管理已有表中选择，指派项目后自动在项目里建表</p>
-                  {formSource === "standards" && (
-                    <div className="mt-2">
-                    <Select value={selectedTableCode} onValueChange={(v: string) => {
-                      setSelectedTableCode(v);
-                      const t = standardTables.find((st) => st.table_code === v);
-                      setSelectedTableName(t?.table_name || "");
-                    }}>
-                      <SelectTrigger><SelectValue placeholder="选择规范表" /></SelectTrigger>
-                      <SelectContent>
-                        {standardTables.map((t) => (
-                          <SelectItem key={t.table_code} value={t.table_code}>{t.table_name} ({t.table_code})</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    </div>
-                  )}
-                </div>
+          <div className="space-y-4 w-full max-w-[75%] mx-auto">
+            <p className="text-xs text-indigo-500 bg-indigo-50 p-2 rounded">选择任务类型：表单填报适合收集信息、填写上报；流程审批适合多节点流转、逐级审批。</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div onClick={() => setTaskMode("form")} className={cn("p-5 rounded-xl border-2 cursor-pointer transition-all text-center", taskMode === "form" ? "border-indigo-500 bg-indigo-50 shadow-sm" : "border-gray-200 hover:border-indigo-300 hover:bg-gray-50")}>
+                <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-indigo-100 flex items-center justify-center"><FileSpreadsheet className="w-6 h-6 text-indigo-600" /></div>
+                <p className="font-semibold text-gray-800">表单填报任务</p>
+                <p className="text-xs text-gray-400 mt-1.5">制作表单→指派人员/项目<br/>用户填写提交即完成</p>
               </div>
+              <div onClick={() => setTaskMode("approval")} className={cn("p-5 rounded-xl border-2 cursor-pointer transition-all text-center", taskMode === "approval" ? "border-indigo-500 bg-indigo-50 shadow-sm" : "border-gray-200 hover:border-indigo-300 hover:bg-gray-50")}>
+                <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-amber-100 flex items-center justify-center"><Users className="w-6 h-6 text-amber-600" /></div>
+                <p className="font-semibold text-gray-800">流程审批任务</p>
+                <p className="text-xs text-gray-400 mt-1.5">设计审批表单→配置节点<br/>多级流转，逐级审批闭环</p>
+              </div>
+            </div>
+          </div>
+        )}
 
-              <div className="flex items-start gap-2 p-3 border rounded-lg hover:bg-gray-50">
-                <RadioGroupItem value="excel_import" id="excel_import" className="mt-1" />
-                <div className="flex-1">
-                  <Label htmlFor="excel_import" className="cursor-pointer font-medium">导入Excel建表</Label>
-                  <p className="text-xs text-gray-400">上传Excel文件，自动解析表格结构生成规范表，指派项目后自动在项目里建表</p>
-                  {formSource === "excel_import" && (
+        {/* 第3步：制作任务表单 */}
+        {step === 3 && taskMode === "form" && (
+          <div className="space-y-4 w-full max-w-xl mx-auto">
+            <div className="p-3 border rounded-lg">
+              <p className="text-xs text-gray-400 mb-3">制作任务表单：上传Excel自动解析字段，或手动添加。指派项目后自动建表。</p>
+              <div className="space-y-3">
                     <div className="mt-3 space-y-3">
                       {!excelFile ? (
                         <label className="flex items-center justify-center gap-2 p-6 border-2 border-dashed border-gray-200 rounded-lg cursor-pointer hover:border-indigo-300 hover:bg-indigo-50/50 transition-colors">
@@ -570,16 +600,27 @@ export function PublishTaskDialog({
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
               </div>
-
-            </RadioGroup>
+            </div>
           </div>
         )}
 
-        {/* 第3步：指派 */}
-        {step === 3 && (
+        {/* 第3步：审批流程设计 */}
+        {step === 3 && taskMode === "approval" && (
+          <div className="space-y-4 w-full max-w-[75%] mx-auto">
+            <div className="p-3 border rounded-lg bg-amber-50/50"><p className="text-sm font-medium text-amber-800 mb-2">审批表单设计</p><p className="text-xs text-amber-600">流程审批支持多节点流转，配置节点后发布即可。</p></div>
+            <div className="border-t pt-4"><p className="text-sm font-medium text-amber-800 mb-3">流程节点配置</p><div className="space-y-3">
+                {workflowNodes.map((node) => (
+                  <div key={node.order} className="bg-white border rounded-lg p-3 space-y-2"><div className="flex items-center gap-2"><span className="text-xs font-bold text-amber-700 bg-amber-100 rounded-full w-5 h-5 flex items-center justify-center">{node.order}</span><Input value={node.name} onChange={(e) => updateWorkflowNode(node.order, "name", e.target.value)} placeholder={`节点${node.order}名称`} className="h-7 text-xs flex-1" />{workflowNodes.length > 1 && <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeWorkflowNode(node.order)}><Trash2 className="w-3.5 h-3.5 text-red-400" /></Button>}</div>
+                    <div className="flex items-center gap-3"><div className="flex-1"><Select value={node.assignee_id} onValueChange={(v) => { const u = users.find((ur) => ur.id === v); updateWorkflowNode(node.order, "assignee_id", v); updateWorkflowNode(node.order, "assignee_name", u?.name || ""); }}><SelectTrigger className="h-7 text-xs"><SelectValue placeholder="选择处理人" /></SelectTrigger><SelectContent>{users.map((u) => (<SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>))}</SelectContent></Select></div><div className="w-20"><Input type="number" min={1} max={30} value={node.due_days} onChange={(e) => updateWorkflowNode(node.order, "due_days", Number(e.target.value))} className="h-7 text-xs" placeholder="天" /></div><div className="w-20"><Input type="number" min={0} max={14} value={node.remind_days} onChange={(e) => updateWorkflowNode(node.order, "remind_days", Number(e.target.value))} className="h-7 text-xs" placeholder="提醒" /></div></div></div>
+                ))}
+                <Button variant="outline" size="sm" className="text-xs h-7" onClick={addWorkflowNode}><Plus className="w-3.5 h-3.5 mr-1" />添加节点</Button>
+              </div></div>
+          </div>
+        )}
+
+        {/* 第4步：指派 */}
+        {step === 4 && (
           <div className="space-y-4 w-full max-w-xl mx-auto">
             <p className="text-xs text-indigo-500 bg-indigo-50 p-2 rounded">选择项目后，任务表单将自动在对应项目里建表；仅选择人员则不在项目里建表</p>
             <RadioGroup
@@ -718,8 +759,8 @@ export function PublishTaskDialog({
           </div>
         )}
 
-        {/* 第4步：截止与提醒 */}
-        {step === 4 && (
+        {/* 第5步：截止与提醒 */}
+        {step === 5 && (
           <div className="space-y-4 w-full max-w-xl mx-auto">
             {taskType === "periodic" && (
               <>
@@ -836,7 +877,7 @@ export function PublishTaskDialog({
             {step > 1 ? "上一步" : "取消"}
           </Button>
           <div className="flex gap-2">
-            {step < 4 ? (
+            {step < 5 ? (
               <Button
                 onClick={() => setStep(step + 1)}
                 disabled={!canNext()}

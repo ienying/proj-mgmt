@@ -70,6 +70,7 @@ import {
   HelpCircle,
   Link as LinkIcon,
   ArrowLeftRight,
+  Lock,
 } from "lucide-react";
 import { FileUploadField, renderFileCellDisplay } from "@/components/file-upload-field";
 import type { ReferenceConfig } from "@/storage/database/shared/schema";
@@ -1132,24 +1133,18 @@ export function StandardManagement({
     }
   };
 
-  // 切换记录的可删除状态
-  const handleToggleAllowDelete = async (recordId: string, checked: boolean) => {
+  // 切换记录的权限状态（可删除 / 行只读）
+  const handleToggleAllowDelete = async (recordId: string, checked: boolean, field = "allow_delete") => {
     if (!currentTableDef) return;
     try {
       const res = await fetch(`/api/standards-data/${currentTableDef.table_code}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: recordId, data: { allow_delete: checked } }),
+        body: JSON.stringify({ id: recordId, data: { [field]: checked } }),
       });
-
-      if (res.ok) {
-        await loadTableData(currentTableDef.table_code);
-      } else {
-        const error = await res.json();
-        console.error("更新可删除状态失败:", error);
-      }
+      if (res.ok) await loadTableData(currentTableDef.table_code);
     } catch (error) {
-      console.error("更新可删除状态失败:", error);
+      console.error("更新状态失败:", error);
     }
   };
 
@@ -1220,7 +1215,7 @@ export function StandardManagement({
     }
   };
 
-  // 调整记录顺序
+  // 调整记录顺序（拖拽）
   const handleMoveRecord = async (fromIndex: number, toIndex: number) => {
     if (!currentTableDef) return;
     try {
@@ -1235,6 +1230,24 @@ export function StandardManagement({
       }
     } catch (error) {
       console.error("调整顺序失败:", error);
+    }
+  };
+
+  // 调整记录顺序（上下移动按钮）
+  const handleMoveRecordDirection = async (id: string, direction: "up" | "down") => {
+    if (!currentTableDef) return;
+    try {
+      const res = await fetch(`/api/standards-data/${currentTableDef.table_code}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, direction }),
+      });
+
+      if (res.ok) {
+        await loadTableData(currentTableDef.table_code);
+      }
+    } catch (error) {
+      console.error("移动记录失败:", error);
     }
   };
 
@@ -2090,6 +2103,30 @@ export function StandardManagement({
                     onChange={handleImportData}
                   />
                 </label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button size="sm" variant="outline" className="h-8 text-xs gap-1"><Settings className="w-3.5 h-3.5" />权限</Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-72 p-3 text-sm" align="end">
+                    <div className="space-y-3">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">数据权限</p>
+                      <div className="flex items-center justify-between"><span className="text-xs">允许添加记录</span>
+                        <Switch checked={currentTableDef?.allow_add !== false} onCheckedChange={async (checked: boolean) => { setCurrentTableDef(prev => prev ? { ...prev, allow_add: checked } : prev); if (currentTableDef) await onUpdate(currentTableDef.id, { allow_add: checked }); }} />
+                      </div>
+                      <div className="flex items-center justify-between"><span className="text-xs">允许删除规范数据</span>
+                        <Switch checked={currentTableDef?.allow_delete !== false} onCheckedChange={async (checked: boolean) => { setCurrentTableDef(prev => prev ? { ...prev, allow_delete: checked } : prev); if (currentTableDef) await onUpdate(currentTableDef.id, { allow_delete: checked }); }} />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs">只读模式</span>
+                        <div className="flex items-center gap-0.5 bg-gray-100 rounded p-0.5">
+                          <button className={`px-2 py-0.5 text-[10px] rounded ${currentTableDef?.readonly_mode !== "or" ? "bg-white shadow-sm" : "text-gray-500"}`} onClick={async () => { setCurrentTableDef(prev => prev ? { ...prev, readonly_mode: "and" as const } : prev); if (currentTableDef) await onUpdate(currentTableDef.id, { readonly_mode: "and" }); }}>AND</button>
+                          <button className={`px-2 py-0.5 text-[10px] rounded ${currentTableDef?.readonly_mode === "or" ? "bg-white shadow-sm" : "text-gray-500"}`} onClick={async () => { setCurrentTableDef(prev => prev ? { ...prev, readonly_mode: "or" as const } : prev); if (currentTableDef) await onUpdate(currentTableDef.id, { readonly_mode: "or" }); }}>OR</button>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">列只读点击表头🔒切换，行只读/删除逐行开关</p>
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 <Button size="sm" variant="outline" className="text-blue-600 hover:text-blue-700" onClick={() => { if (currentTableDef) openSyncDialog(currentTableDef, 'data'); }}>
                   <RefreshCw className="w-4 h-4 mr-2" />
                   同步数据
@@ -2143,24 +2180,27 @@ export function StandardManagement({
                     </TableHead>
                     <TableHead className="w-10"></TableHead>
 
-                    {currentTableDef?.columns_config?.map((col) => (
-                      <TableHead key={col.name}>{col.name}</TableHead>
-                    ))}
-                    <TableHead className="w-28 text-center sticky right-0 bg-background z-10">
-                      <div className="flex items-center justify-center gap-1">
-                        可删除
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <HelpCircle className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="max-w-[240px]">
-                              <p>关闭后，项目模块管理中该行不显示删除按钮</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                    <TableHead className="text-center">
+                      <div className="flex items-center justify-center gap-2 text-xs font-medium text-gray-500">
+                        <span>删除</span><span className="text-gray-300">|</span><span>只读</span>
                       </div>
                     </TableHead>
+                    {currentTableDef?.columns_config?.map((col) => (
+                      <TableHead key={col.name}>
+                        <div className="flex items-center gap-1 cursor-pointer group" title="点击切换只读" onClick={async () => {
+                          const newCols = [...(currentTableDef.columns_config || [])];
+                          const idx = newCols.indexOf(col);
+                          if (idx >= 0) {
+                            newCols[idx] = { ...newCols[idx], readonly: !col.readonly };
+                            setCurrentTableDef(prev => prev ? { ...prev, columns_config: newCols } : prev);
+                            await fetch(`/api/standards/${currentTableDef.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: currentTableDef.id, columns_config: newCols }) });
+                          }
+                        }}>
+                          <span>{col.name}</span>
+                          {col.readonly ? <Lock className="w-3 h-3 text-red-500" /> : <Lock className="w-3 h-3 text-gray-700 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                        </div>
+                      </TableHead>
+                    ))}
                     <TableHead className="w-24 sticky right-0 bg-background z-20">操作</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -2190,6 +2230,19 @@ export function StandardManagement({
                       <TableCell>
                         <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab active:cursor-grabbing" />
                       </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-0.5">
+                            <Switch className="scale-75" checked={record.allow_delete !== false} onCheckedChange={(checked: boolean) => handleToggleAllowDelete(record.id as string, checked)} />
+                            <span className={`text-[9px] ${record.allow_delete !== false ? "text-green-600" : "text-red-400"}`}>{record.allow_delete !== false ? "删" : "×"}</span>
+                          </div>
+                          <span className="text-gray-200">|</span>
+                          <div className="flex items-center gap-0.5">
+                            <Switch className="scale-75" checked={record._readonly === true} onCheckedChange={(checked: boolean) => handleToggleAllowDelete(record.id as string, checked, "_readonly")} />
+                            <span className={`text-[9px] ${record._readonly ? "text-orange-500" : "text-gray-400"}`}>{record._readonly ? "锁" : "编"}</span>
+                          </div>
+                        </div>
+                      </TableCell>
                       {currentTableDef?.columns_config?.map((col) => (
                         <TableCell key={col.name}>
                           {col.type === "boolean"
@@ -2199,14 +2252,26 @@ export function StandardManagement({
                             : String(record[col.name] ?? "-")}
                         </TableCell>
                       ))}
-                      <TableCell className="text-center sticky right-0 bg-background z-10">
-                        <Switch
-                          checked={record.allow_delete !== false}
-                          onCheckedChange={(checked: boolean) => handleToggleAllowDelete(record.id as string, checked)}
-                        />
-                      </TableCell>
                       <TableCell className="sticky right-0 bg-background z-20">
                         <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            title="上移"
+                            onClick={() => handleMoveRecordDirection(record.id as string, "up")}
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            title="下移"
+                            onClick={() => handleMoveRecordDirection(record.id as string, "down")}
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"

@@ -138,7 +138,22 @@ class PgRpcClient {
   }
 
   private async queryToJsonb(sql: string): Promise<RpcResult<Record<string, unknown>[]>> {
-    return query<Record<string, unknown>>(sql);
+    const result = await query<Record<string, unknown>>(sql);
+    if (result.error || !result.data || result.data.length === 0) {
+      return { data: [], error: result.error };
+    }
+    // The original Supabase query_to_jsonb RPC executed the SQL and returned the
+    // resulting JSONB value directly. We emulate that by extracting the first
+    // column's value from the first row.
+    const row = result.data[0] as Record<string, unknown>;
+    const firstKey = Object.keys(row)[0];
+    if (!firstKey) return { data: [], error: null };
+    const value = row[firstKey];
+    // jsonb_agg returns an array; jsonb_object_agg returns an object
+    if (Array.isArray(value)) {
+      return { data: value as Record<string, unknown>[], error: null };
+    }
+    return { data: value as unknown as Record<string, unknown>[], error: null };
   }
 
   private async dpInsertGeneric(schema: string, table: string, data: Record<string, unknown>): Promise<RpcResult<Record<string, unknown>>> {

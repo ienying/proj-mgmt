@@ -62,10 +62,11 @@ export async function POST(
     }
 
     // 获取当前最大 sort_order
-    const { data: maxOrderData } = await client.rpc("query_to_jsonb", {
+    const { data: maxOrderResult } = await client.rpc("execute_sql", {
       p_sql: `SELECT COALESCE(MAX(sort_order), 0) as max_order FROM design_public.${tableName}`,
     });
-    let currentOrder = (maxOrderData as { max_order: number })?.max_order || 0;
+    const maxOrderRows = maxOrderResult as Array<{ max_order: number }>;
+    let currentOrder = maxOrderRows?.[0]?.max_order || 0;
 
     // 获取表的列类型信息（用于空字符串转 NULL）
     const { data: colTypeInfo } = await client.rpc("query_to_jsonb", {

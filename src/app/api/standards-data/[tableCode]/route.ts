@@ -60,10 +60,11 @@ export async function POST(
     }
 
     // 获取当前最大 sort_order
-    const { data: maxOrderData } = await client.rpc("query_to_jsonb", {
+    const { data: maxOrderResult } = await client.rpc("execute_sql", {
       p_sql: `SELECT COALESCE(MAX(sort_order), 0) as max_order FROM design_public.${tableName}`,
     });
-    const maxOrder = (maxOrderData as { max_order: number })?.max_order || 0;
+    const rows = maxOrderResult as Array<{ max_order: number }>;
+    const maxOrder = rows?.[0]?.max_order || 0;
 
     // 添加 sort_order 和 data_source
     const dataWithOrder = { ...cleanedBody, sort_order: maxOrder + 1, data_source: cleanedBody.data_source || "standard" };
