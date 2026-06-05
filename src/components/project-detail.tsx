@@ -258,8 +258,10 @@ function ProcurementModuleSelect({
       {dropdownOpen && typeof document !== "undefined" && createPortal(
         <div
           ref={dropdownRef}
+          data-procurement-dropdown-menu
           className="fixed z-[99999] w-[280px] rounded-md border bg-popover shadow-lg"
           style={{ top: dropdownPos.top, left: dropdownPos.left }}
+          onPointerDown={(e) => e.stopPropagation()}
         >
           <div className="p-2 border-b">
             <Input
@@ -4214,19 +4216,36 @@ export function ProjectDetail({
       </div>
 
       {/* 新增记录对话框 */}
-      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[65vh] overflow-hidden flex flex-col">
-          <DialogHeader className="shrink-0">
-            <DialogTitle>新增记录 - {currentTableForAdd?.table_name}</DialogTitle>
-            <DialogDescription />
-          </DialogHeader>
-          <div className="space-y-2 py-1.5 overflow-y-auto flex-1 min-h-0">
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen} modal={false}>
+        <DialogContent className="sm:max-w-[1100px] max-h-[72vh] overflow-hidden flex flex-col p-0 gap-0 border-0 shadow-2xl shadow-slate-900/10 rounded-xl" showCloseButton={false}>
+          {/* 渐变标题栏 */}
+          <div className="shrink-0 px-6 pt-5 pb-4 bg-gradient-to-r from-indigo-600 to-violet-500 rounded-t-xl relative">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="text-lg font-semibold text-white flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
+                    <Plus className="w-4 h-4 text-white" />
+                  </div>
+                  新增记录
+                </DialogTitle>
+                <p className="text-indigo-100 text-sm mt-1 ml-9">{currentTableForAdd?.table_name}</p>
+              </div>
+              <button
+                onClick={() => setAddDialogOpen(false)}
+                className="rounded-lg p-1.5 text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          {/* 表单区域 */}
+          <div className="space-y-3 px-6 py-5 overflow-y-auto flex-1 min-h-0 bg-slate-50/30">
             {currentTableForAdd?.columns_config.map((col) => (
-              <div key={col.name} className="space-y-1">
+              <div key={col.name} className="space-y-1.5 bg-white rounded-lg p-3 border border-slate-100 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-slate-700">
+                  <label className="text-[13px] font-semibold text-slate-700 flex items-center gap-1.5">
                     {col.label || col.name}
-                    {col.required && <span className="text-red-500 ml-1">*</span>}
+                    {col.required && <span className="text-red-400 text-xs">*</span>}
                   </label>
                   {/* 引用选择器按钮 */}
                   {currentTableForAdd?.references_config?.filter(ref => ref.entry_column === col.name).map(ref => {
@@ -4338,7 +4357,7 @@ export function ProjectDetail({
                     onChange={(e) => setNewRowData(prev => ({ ...prev, [col.name]: e.target.value }))}
                     placeholder={`请输入${col.label || col.name}`}
                     
-                    className="w-full min-h-[60px] px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    className="w-full min-h-[72px] px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-shadow resize-none"
                     rows={3}
                   />
                 ) : col.type === "date" ? (
@@ -4367,10 +4386,11 @@ export function ProjectDetail({
               </div>
             ))}
           </div>
-          <DialogFooter className="shrink-0">
-            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>取消</Button>
-            <Button onClick={handleAddRow}>保存</Button>
-          </DialogFooter>
+          {/* 底部操作栏 */}
+          <div className="shrink-0 flex items-center justify-end gap-3 px-6 py-3.5 border-t border-slate-100 bg-white/80 backdrop-blur-sm">
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)} className="h-9 px-5 rounded-lg">取消</Button>
+            <Button onClick={handleAddRow} className="h-9 px-6 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-500 hover:from-indigo-700 hover:to-violet-600 shadow-sm">保存</Button>
+          </div>
         </DialogContent>
       </Dialog>
 
