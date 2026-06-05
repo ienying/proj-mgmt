@@ -4061,7 +4061,7 @@ export function ProjectDetail({
     }
 
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 max-w-6xl mx-auto">
         {tables.map((table) => (
           <div key={table.id}>
             {renderDataTable(table)}
@@ -4144,7 +4144,7 @@ export function ProjectDetail({
         {/* 左侧统计 + 中间数据区 + 右侧概览 */}
         <div className="flex-1 flex min-h-0">
           {/* 左侧统计面板 */}
-          <div className="w-56 bg-white border-r border-slate-200/80 p-4 overflow-y-auto space-y-5">
+          <div className="w-72 bg-white border-r border-slate-200/80 p-4 overflow-y-auto space-y-5">
             {/* 数据统计 */}
             <div>
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">数据统计</h3>
