@@ -990,6 +990,12 @@ export function ProjectDetail({
         </span>
       );
     }
+    if (col.type === "date") {
+      if (!value) return <span className="text-slate-400">-</span>;
+      const d = new Date(String(value));
+      if (isNaN(d.getTime())) return <span className="text-slate-400">-</span>;
+      return d.toISOString().slice(0, 10);
+    }
     return strValue;
   };
 
@@ -4209,14 +4215,14 @@ export function ProjectDetail({
 
       {/* 新增记录对话框 */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[65vh] overflow-hidden flex flex-col">
+          <DialogHeader className="shrink-0">
             <DialogTitle>新增记录 - {currentTableForAdd?.table_name}</DialogTitle>
             <DialogDescription />
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-2 py-1.5 overflow-y-auto flex-1 min-h-0">
             {currentTableForAdd?.columns_config.map((col) => (
-              <div key={col.name} className="space-y-2">
+              <div key={col.name} className="space-y-1">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium text-slate-700">
                     {col.label || col.name}
@@ -4288,7 +4294,7 @@ export function ProjectDetail({
                         onValueChange={(value) => setNewRowData(prev => ({ ...prev, [col.name]: value }))}
                         
                       >
-                        <SelectTrigger className="h-9 w-full min-w-[120px]">
+                        <SelectTrigger className="h-8 w-full min-w-[120px]">
                           <SelectValue placeholder={`请选择${col.label || col.name}`} />
                         </SelectTrigger>
                         <SelectContent>
@@ -4332,7 +4338,7 @@ export function ProjectDetail({
                     onChange={(e) => setNewRowData(prev => ({ ...prev, [col.name]: e.target.value }))}
                     placeholder={`请输入${col.label || col.name}`}
                     
-                    className="w-full min-h-[80px] px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    className="w-full min-h-[60px] px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                     rows={3}
                   />
                 ) : col.type === "date" ? (
@@ -4361,7 +4367,7 @@ export function ProjectDetail({
               </div>
             ))}
           </div>
-          <DialogFooter>
+          <DialogFooter className="shrink-0">
             <Button variant="outline" onClick={() => setAddDialogOpen(false)}>取消</Button>
             <Button onClick={handleAddRow}>保存</Button>
           </DialogFooter>

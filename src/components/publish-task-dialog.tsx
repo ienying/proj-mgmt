@@ -18,6 +18,9 @@ import {
   Table, Edit3, ListTodo, Trash2, Plus, ChevronDown, X, Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TaskFormBuilder, type FormColumn } from "./task-form-builder";
+import { TaskBoardBuilder, type BoardRecord, type ExtraColumn } from "./task-board-builder";
+import { WorkflowDesigner, type WorkflowNode } from "./workflow-designer";
 
 interface PublishTaskDialogProps {
   open: boolean;
@@ -87,6 +90,16 @@ export function PublishTaskDialog({
   const [taskType, setTaskType] = useState<"periodic" | "regular">("regular");
   const [taskMode, setTaskMode] = useState<"form" | "project" | "approval">("form");
   const [description, setDescription] = useState("");
+  // 表单列
+  const [formColumns, setFormColumns] = useState<FormColumn[]>([]);
+  // 看板
+  const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
+  const [boardRecords, setBoardRecords] = useState<BoardRecord[]>([]);
+  const [extraColumns, setExtraColumns] = useState<ExtraColumn[]>([]);
+  // 工作流
+  const [wfNodes, setWfNodes] = useState<WorkflowNode[]>([]);
+  const [wfAllowForward, setWfAllowForward] = useState(true);
+  const [wfAllowReturn, setWfAllowReturn] = useState(true);
   const [workflowNodes, setWorkflowNodes] = useState<Array<{ order: number; name: string; assignee_id: string; assignee_name: string; due_days: number; remind_days: number }>>([{ order: 1, name: "", assignee_id: "", assignee_name: "", due_days: 3, remind_days: 1 }]);
 
   // 第2步：表单来源
@@ -378,11 +391,12 @@ export function PublishTaskDialog({
   const canNext = () => {
     if (step === 1) return title.trim().length > 0;
     if (step === 2) return true;
-    if (step === 3) return parsedColumns.length > 0;
-    if (step === 4) {
-      if (assignMode === "project") return selectedProjectIds.length > 0;
-      return selectedAssigneeIds.length > 0;
+    if (step === 3) {
+      if (taskMode === "form") return formColumns.length > 0 || parsedColumns.length > 0;
+      if (taskMode === "project") return boardRecords.length > 0;
+      return boardRecords.length > 0 || formColumns.length > 0;
     }
+    if (step === 4) return taskMode === "approval" ? wfNodes.length > 0 : true;
     if (step === 5) {
       if (taskType === "regular") return !!specificDate;
       return true;
@@ -500,129 +514,71 @@ export function PublishTaskDialog({
           </div>
         )}
 
-        {/* 第3步：制作任务表单 */}
-        {step === 3 && taskMode === "form" && (
-          <div className="space-y-4 w-full max-w-xl mx-auto">
-            <div className="p-3 border rounded-lg">
-              <p className="text-xs text-gray-400 mb-3">制作任务表单：上传Excel自动解析字段，或手动添加。指派项目后自动建表。</p>
-              <div className="space-y-3">
-                    <div className="mt-3 space-y-3">
-                      {!excelFile ? (
-                        <label className="flex items-center justify-center gap-2 p-6 border-2 border-dashed border-gray-200 rounded-lg cursor-pointer hover:border-indigo-300 hover:bg-indigo-50/50 transition-colors">
-                          <Upload className="w-5 h-5 text-gray-400" />
-                          <span className="text-sm text-gray-500">点击上传 Excel 文件 (.xlsx / .xls)</span>
-                          <input
-                            type="file"
-                            accept=".xlsx,.xls"
-                            className="hidden"
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                              const f = e.target.files?.[0];
-                              if (f) handleExcelUpload(f);
-                            }}
-                          />
-                        </label>
-                      ) : (
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2 p-2 bg-green-50 rounded-lg">
-                            <FileSpreadsheet className="w-4 h-4 text-green-600" />
-                            <span className="text-sm text-green-700 flex-1 truncate">{excelFile.name}</span>
-                            <button
-                              className="text-xs text-gray-400 hover:text-red-500"
-                              onClick={() => { setExcelFile(null); setParsedColumns([]); setExcelPreview([]); }}
-                            >
-                              重新上传
-                            </button>
-                          </div>
-
-                          {parsing && (
-                            <div className="flex items-center gap-2 text-sm text-gray-500">
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              正在解析...
-                            </div>
-                          )}
-
-                          {parsedColumns.length > 0 && !parsing && (
-                            <div className="space-y-3">
-                              <div className="text-sm font-medium text-gray-700">
-                                解析结果（{parsedColumns.length} 个字段）
-                              </div>
-                              <div className="max-h-60 overflow-y-auto border rounded-lg">
-                                <table className="w-full text-sm">
-                                  <thead className="bg-gray-50 sticky top-0">
-                                    <tr>
-                                      <th className="text-left p-2">字段名</th>
-                                      <th className="text-left p-2">类型</th>
-                                      <th className="text-left p-2">示例数据</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {parsedColumns.map((col, idx) => (
-                                      <tr key={idx} className="border-t">
-                                        <td className="p-2">{col.name}</td>
-                                        <td className="p-2">
-                                          <Select
-                                            value={col.type}
-                                            onValueChange={(v: string) => {
-                                              const newCols = [...parsedColumns];
-                                              newCols[idx] = { ...newCols[idx], type: v };
-                                              setParsedColumns(newCols);
-                                            }}
-                                          >
-                                            <SelectTrigger className="h-7 text-xs w-28">
-                                              <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              {Object.entries(TYPE_LABELS).map(([k, l]) => (
-                                                <SelectItem key={k} value={k}>{l}</SelectItem>
-                                              ))}
-                                            </SelectContent>
-                                          </Select>
-                                        </td>
-                                        <td className="p-2 text-xs text-gray-400 truncate max-w-[150px]">
-                                          {col.sample_data.join(", ")}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                <Checkbox
-                                  id="importData"
-                                  checked={importData}
-                                  onCheckedChange={(v: boolean | "indeterminate") => setImportData(v === true)}
-                                />
-                                <Label htmlFor="importData" className="text-sm">
-                                  同时导入Excel数据到表中
-                                </Label>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
+        {/* 第3步：构建内容 */}
+        {step === 3 && (
+          <div className="space-y-4 w-full">
+            {taskMode === "form" && (
+              <div>
+                <p className="text-sm text-gray-500 mb-3">自定义表单字段，指定人员按表单填写提交</p>
+                <TaskFormBuilder columns={formColumns} onChange={setFormColumns} />
+                <div className="mt-3 p-3 border rounded-lg">
+                  <p className="text-xs text-gray-400 mb-2">或上传 Excel 自动解析字段</p>
+                  {!excelFile ? (
+                    <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-200 rounded-lg cursor-pointer hover:border-indigo-300 text-xs">
+                      <Upload className="w-4 h-4 text-gray-400" />
+                      上传 Excel (.xlsx/.xls)
+                      <input type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleExcelUpload(f); }} />
+                    </label>
+                  ) : (
+                    <div className="flex items-center gap-2 text-xs">
+                      <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                      <span className="text-green-700 flex-1 truncate">{excelFile.name}</span>
+                      <button className="text-red-400" onClick={() => { setExcelFile(null); setParsedColumns([]); }}>×</button>
                     </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
+
+            {(taskMode === "project" || taskMode === "approval") && (
+              <div>
+                <p className="text-sm text-gray-500 mb-3">
+                  {taskMode === "approval" ? "拉取项目记录 + 自定义补充列 + 写回配置" : "选择项目拉取记录，添加补充列"}
+                </p>
+                <TaskBoardBuilder
+                  selectedProjects={selectedProjects}
+                  onProjectsChange={setSelectedProjects}
+                  records={boardRecords}
+                  onRecordsChange={setBoardRecords}
+                  extraColumns={extraColumns}
+                  onExtraColumnsChange={setExtraColumns}
+                />
+                {taskMode === "approval" && (
+                  <div className="mt-3">
+                    <p className="text-xs text-gray-400 mb-2">可选：添加自定义表单列</p>
+                    <TaskFormBuilder columns={formColumns} onChange={setFormColumns} compact />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
-        {/* 第3步：审批流程设计 */}
-        {step === 3 && taskMode === "approval" && (
-          <div className="space-y-4 w-full max-w-[75%] mx-auto">
-            <div className="p-3 border rounded-lg bg-amber-50/50"><p className="text-sm font-medium text-amber-800 mb-2">审批表单设计</p><p className="text-xs text-amber-600">流程审批支持多节点流转，配置节点后发布即可。</p></div>
-            <div className="border-t pt-4"><p className="text-sm font-medium text-amber-800 mb-3">流程节点配置</p><div className="space-y-3">
-                {workflowNodes.map((node) => (
-                  <div key={node.order} className="bg-white border rounded-lg p-3 space-y-2"><div className="flex items-center gap-2"><span className="text-xs font-bold text-amber-700 bg-amber-100 rounded-full w-5 h-5 flex items-center justify-center">{node.order}</span><Input value={node.name} onChange={(e) => updateWorkflowNode(node.order, "name", e.target.value)} placeholder={`节点${node.order}名称`} className="h-7 text-xs flex-1" />{workflowNodes.length > 1 && <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeWorkflowNode(node.order)}><Trash2 className="w-3.5 h-3.5 text-red-400" /></Button>}</div>
-                    <div className="flex items-center gap-3"><div className="flex-1"><Select value={node.assignee_id} onValueChange={(v) => { const u = users.find((ur) => ur.id === v); updateWorkflowNode(node.order, "assignee_id", v); updateWorkflowNode(node.order, "assignee_name", u?.name || ""); }}><SelectTrigger className="h-7 text-xs"><SelectValue placeholder="选择处理人" /></SelectTrigger><SelectContent>{users.map((u) => (<SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>))}</SelectContent></Select></div><div className="w-20"><Input type="number" min={1} max={30} value={node.due_days} onChange={(e) => updateWorkflowNode(node.order, "due_days", Number(e.target.value))} className="h-7 text-xs" placeholder="天" /></div><div className="w-20"><Input type="number" min={0} max={14} value={node.remind_days} onChange={(e) => updateWorkflowNode(node.order, "remind_days", Number(e.target.value))} className="h-7 text-xs" placeholder="提醒" /></div></div></div>
-                ))}
-                <Button variant="outline" size="sm" className="text-xs h-7" onClick={addWorkflowNode}><Plus className="w-3.5 h-3.5 mr-1" />添加节点</Button>
-              </div></div>
+        {/* 第4步：审批流程 */}
+        {step === 4 && taskMode === "approval" && (
+          <div className="space-y-4 w-full max-w-2xl mx-auto">
+            <WorkflowDesigner
+              nodes={wfNodes} onChange={setWfNodes}
+              allowForward={wfAllowForward} onAllowForwardChange={setWfAllowForward}
+              allowReturn={wfAllowReturn} onAllowReturnChange={setWfAllowReturn}
+              userList={users.map(u => ({ id: u.id, name: u.name }))}
+              formColumns={[...formColumns, ...extraColumns.map(c => ({ name: c.name, type: c.type }))]}
+            />
           </div>
         )}
 
-        {/* 第4步：指派 */}
-        {step === 4 && (
+        {/* 第5步：指派启动 */}
+        {step === 5 && (
           <div className="space-y-4 w-full max-w-xl mx-auto">
             <p className="text-xs text-indigo-500 bg-indigo-50 p-2 rounded">选择项目后，任务表单将自动在对应项目里建表；仅选择人员则不在项目里建表</p>
             <RadioGroup
@@ -871,7 +827,10 @@ export function PublishTaskDialog({
           <Button
             variant="outline"
             onClick={() => {
-              if (step > 1) setStep(step - 1);
+              if (step > 1) {
+                if (step === 5 && taskMode !== "approval") setStep(3);
+                else setStep(step - 1);
+              }
               else { handleReset(); onOpenChange(false); }
             }}
           >
@@ -881,7 +840,10 @@ export function PublishTaskDialog({
           <div className="flex gap-2">
             {step < 5 ? (
               <Button
-                onClick={() => setStep(step + 1)}
+                onClick={() => {
+                  if (step === 3 && taskMode !== "approval") setStep(5);
+                  else setStep(step + 1);
+                }}
                 disabled={!canNext()}
                 className="bg-indigo-600 hover:bg-indigo-700"
               >

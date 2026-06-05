@@ -75,7 +75,7 @@ export function TaskBoardBuilder({
       const tables: Array<{ code: string; name: string }> = [];
       for (const s of stds) {
         const modCodes = s.module_type || [];
-        if (browseModule && !modCodes.includes(browseModule)) continue;
+        if (browseModule && browseModule !== "__all__" && !modCodes.includes(browseModule)) continue;
         tables.push({ code: s.table_code, name: s.table_name || s.table_code });
       }
       setModuleTables(tables);
@@ -177,10 +177,10 @@ export function TaskBoardBuilder({
               {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={browseModule} onValueChange={v => { setBrowseModule(v); setBrowseTable(""); }}>
+          <Select value={browseModule || "__all__"} onValueChange={v => { setBrowseModule(v === "__all__" ? "" : v); setBrowseTable(""); }}>
             <SelectTrigger className="h-7 text-xs w-32"><SelectValue placeholder="选模块" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">全部模块</SelectItem>
+              <SelectItem value="__all__">全部模块</SelectItem>
               {["scope","schedule","quality","cost","collaboration","communication","risk","procurement","resource","document"].map(m =>
                 <SelectItem key={m} value={m}>{m}</SelectItem>
               )}
