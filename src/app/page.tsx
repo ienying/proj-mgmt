@@ -29,7 +29,7 @@ const ProjectManagement = dynamic(() => import("@/components/project-management"
 const StandardManagement = dynamic(() => import("@/components/standard-management").then(m => ({ default: m.StandardManagement })), { ssr: false, loading: () => <LoadingFallback /> });
 const SystemSettings = dynamic(() => import("@/components/system-settings"), { ssr: false, loading: () => <LoadingFallback /> });
 const IssueManagement = dynamic(() => import("@/components/issue-management"), { ssr: false, loading: () => <LoadingFallback /> });
-const TaskCenter = dynamic(() => import("@/components/task-center").then(m => ({ default: m.TaskCenter })), { ssr: false, loading: () => <LoadingFallback /> });
+const TaskManagement = dynamic(() => import("@/components/task-management").then(m => ({ default: m.TaskManagement })), { ssr: false, loading: () => <LoadingFallback /> });
 const KnowledgeCenter = dynamic(() => import("@/components/knowledge-center").then(m => ({ default: m.default })), { ssr: false, loading: () => <LoadingFallback /> });
 const CaseCenter = dynamic(() => import("@/components/case-center").then(m => ({ default: m.CaseCenter })), { ssr: false, loading: () => <LoadingFallback /> });
 const AboutPage = dynamic(() => import("@/components/about-page"), { ssr: false, loading: () => <LoadingFallback /> });
@@ -694,7 +694,7 @@ export default function HomePage() {
       case "todos":
         return (
           <ContentErrorBoundary>
-            <TaskCenter currentUser={currentUser} />
+            <TaskManagement currentUser={currentUser} />
           </ContentErrorBoundary>
         );
       case "case-center":
