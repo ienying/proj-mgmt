@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Search, Building2, Layers, Table as TableIcon, Link, FileText } from "lucide-react";
+import { Plus, Trash2, Search, Building2, Layers, Table as TableIcon, Link, FileText, HelpCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import type { FormColumn } from "./task-form-builder";
 import { TaskFormBuilder } from "./task-form-builder";
@@ -39,7 +40,7 @@ const SUPPLEMENT_TYPES = [
   { code: "text", name: "文本", icon: FileText },
   { code: "select", name: "单选", icon: FileText },
   { code: "user", name: "用户", icon: FileText },
-  { code: "linked_text", name: "关联文本(写回)", icon: Link },
+  { code: "linked_text", name: "写回文本", icon: Link },
 ];
 
 export function TaskBoardBuilder({
@@ -54,6 +55,7 @@ export function TaskBoardBuilder({
   const [browseCols, setBrowseCols] = useState<Array<{ name: string; type: string }>>([]);
   const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(new Set());
   const [moduleTables, setModuleTables] = useState<Array<{ code: string; name: string }>>([]);
+  const [sourceTableCols, setSourceTableCols] = useState<Record<string, Array<{ name: string; type: string }>>>({});
 
   useEffect(() => {
     fetch("/api/projects").then(r => r.json()).then(d => {
@@ -120,6 +122,15 @@ export function TaskBoardBuilder({
     if (newRecords.length === 0) { toast.warning("请先勾选记录"); return; }
     onRecordsChange([...records, ...newRecords]);
     setSelectedRecordIds(new Set());
+    // 加载该表的列信息，供写回列下拉使用
+    if (!sourceTableCols[browseTable]) {
+      fetch("/api/standards").then(r => r.json()).then(d => {
+        const def = (d.data || []).find((s: Record<string, unknown>) => s.table_code === browseTable);
+        if (def?.columns_config) {
+          setSourceTableCols(prev => ({ ...prev, [browseTable]: (def.columns_config as Array<{ name: string; type: string }>) }));
+        }
+      }).catch(() => {});
+    }
     toast.success(`已添加 ${newRecords.length} 条记录`);
   };
 
@@ -151,7 +162,17 @@ export function TaskBoardBuilder({
     <div className="space-y-4">
       {/* 选择项目 */}
       <div className="space-y-1.5">
-        <Label className="text-xs font-medium">选择项目（可多选）</Label>
+        <div className="flex items-center gap-1">
+          <Label className="text-xs font-medium">选择项目（可多选）</Label>
+          <TooltipProvider>
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild><HelpCircle className="w-3.5 h-3.5 text-gray-300 cursor-help hover:text-gray-500" /></TooltipTrigger>
+              <TooltipContent side="right" className="max-w-[220px] text-xs">
+                确定本次任务关联哪些项目，后续浏览拉记录时只在这些项目里选
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
         <div className="flex flex-wrap gap-2">
           {projects.map(p => (
             <label key={p.id} className="flex items-center gap-1.5 text-xs cursor-pointer px-2 py-1 rounded border hover:bg-gray-50">
@@ -171,10 +192,10 @@ export function TaskBoardBuilder({
       <div className="border rounded-lg p-3 space-y-2 bg-gray-50/30">
         <p className="text-xs font-medium text-gray-500">从项目拉取记录</p>
         <div className="flex items-center gap-2 flex-wrap">
-          <Select value={browseProjectId} onValueChange={v => { setBrowseProjectId(v); setBrowseModule(""); setBrowseTable(""); }}>
-            <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="选项目" /></SelectTrigger>
+          <Select value={browseProjectId} onValueChange={v => { setBrowseProjectId(v); setBrowseModule(""); setBrowseTable(""); }} disabled={selectedProjects.length === 0}>
+            <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder={selectedProjects.length === 0 ? "请先勾选项目" : "选项目"} /></SelectTrigger>
             <SelectContent>
-              {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+              {projects.filter(p => selectedProjects.includes(p.id)).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={browseModule || "__all__"} onValueChange={v => { setBrowseModule(v === "__all__" ? "" : v); setBrowseTable(""); }}>
@@ -259,29 +280,50 @@ export function TaskBoardBuilder({
       </div>
 
       {/* 补充列 */}
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <Label className="text-xs font-medium">补充列</Label>
-        <div className="flex flex-wrap gap-1.5 items-center">
-          {extraColumns.map((col, idx) => (
-            <div key={idx} className="flex items-center gap-1 px-2 py-0.5 rounded bg-gray-100 text-xs group">
-              <input value={col.name} onChange={(e) => updateExtraColumn(idx, "name", e.target.value)}
-                placeholder="列名" className="w-16 bg-transparent border-b border-dashed border-gray-300 outline-none text-xs" />
-              <span className="text-gray-400">({SUPPLEMENT_TYPES.find(t => t.code === col.type)?.name || col.type})</span>
-              {col.type === "linked_text" && (
-                <input value={col.writeback_column || ""} onChange={(e) => updateExtraColumn(idx, "writeback_column", e.target.value)}
-                  placeholder="写回到列" className="w-16 bg-transparent border-b border-dashed border-gray-300 outline-none text-xs text-blue-500" />
-              )}
-              <button onClick={() => removeExtraColumn(idx)} className="opacity-0 group-hover:opacity-100 text-red-400">×</button>
-            </div>
-          ))}
-          <div className="flex gap-1">
-            {SUPPLEMENT_TYPES.map(ft => (
-              <button key={ft.code} onClick={() => addExtraColumn(ft.code)}
-                className="flex items-center gap-1 px-2 py-0.5 rounded border border-dashed border-gray-300 text-xs text-gray-400 hover:border-gray-400">
-                <Plus className="w-3 h-3" /> {ft.name}
-              </button>
-            ))}
+        {extraColumns.map((col, idx) => (
+          <div key={idx} className="flex items-center gap-2 p-2 rounded-lg border bg-white text-xs">
+            <input value={col.name} onChange={(e) => updateExtraColumn(idx, "name", e.target.value)}
+              placeholder="列名" className="w-24 px-2 py-1 border rounded text-xs outline-none focus:border-blue-400" />
+            <span className="text-gray-400 text-[11px]">{SUPPLEMENT_TYPES.find(t => t.code === col.type)?.name || col.type}</span>
+            {col.type === "linked_text" && (
+              <>
+                <span className="text-gray-300">→</span>
+                <Select value={col.writeback_column || ""} onValueChange={(v) => updateExtraColumn(idx, "writeback_column", v)}>
+                  <SelectTrigger className="h-7 text-xs w-36">
+                    <SelectValue placeholder="选择写回目标列" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(() => {
+                      const allCols: Array<{ name: string; table: string }> = [];
+                      const seenTables = new Set(records.map(r => r.source_table_code));
+                      for (const tc of seenTables) {
+                        for (const c of (sourceTableCols[tc] || [])) {
+                          if (!["id","created_at","updated_at","sort_order","data_source","allow_delete","_readonly"].includes(c.name)) {
+                            allCols.push({ name: c.name, table: tc });
+                          }
+                        }
+                      }
+                      const uniqueCols = [...new Map(allCols.map(c => [c.name, c])).values()];
+                      return uniqueCols.map(c => (
+                        <SelectItem key={`${c.table}.${c.name}`} value={c.name}>{c.name}<span className="text-[10px] text-gray-400 ml-1">({c.table})</span></SelectItem>
+                      ));
+                    })()}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
+            <button onClick={() => removeExtraColumn(idx)} className="ml-auto text-red-400 hover:text-red-600 p-1">×</button>
           </div>
+        ))}
+        <div className="flex gap-1.5">
+          {SUPPLEMENT_TYPES.map(ft => (
+            <button key={ft.code} onClick={() => addExtraColumn(ft.code)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded border border-dashed border-gray-300 text-xs text-gray-500 hover:border-gray-400 hover:bg-gray-50 transition-colors">
+              <Plus className="w-3 h-3" /> {ft.name}
+            </button>
+          ))}
         </div>
       </div>
     </div>

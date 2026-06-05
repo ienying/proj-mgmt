@@ -68,7 +68,7 @@ const TYPE_LABELS: Record<string, string> = {
   textarea: "多行文本",
   checkbox: "多选",
   linked_select: "关联选择",
-  linked_text: "关联文本",
+  linked_text: "写回文本",
   image: "图片",
   office: "Office文件",
   pdf: "PDF文件",
