@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   CheckSquare, ClipboardList, Clock, Filter, Search, Loader2, Inbox,
-  Send, Calendar, User, Briefcase, ListTodo, Plus, BarChart3,
+  Send, Calendar, User, ListTodo, Plus, BarChart3,
   CheckCircle2, AlertTriangle, Circle, RotateCcw, Users, Building2,
-  ChevronDown, ChevronUp, TrendingUp,
+  TrendingUp, ArrowLeft, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 // TaskManagement - unified todo task component
@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { PublishTaskDialog } from "./publish-task-dialog";
+import { TaskFormDialog } from "./task-form-dialog";
 
 // ============================================
 // 类型
@@ -101,6 +102,10 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   in_progress: { label: "进行中", color: "text-blue-700", bg: "bg-blue-50" },
   completed: { label: "已完成", color: "text-green-700", bg: "bg-green-50" },
   overdue: { label: "已逾期", color: "text-red-700", bg: "bg-red-50" },
+  waiting: { label: "等待中", color: "text-gray-500", bg: "bg-gray-50" },
+  transferred: { label: "已转办", color: "text-purple-700", bg: "bg-purple-50" },
+  returned: { label: "已退回", color: "text-orange-700", bg: "bg-orange-50" },
+  rejected: { label: "已驳回", color: "text-red-700", bg: "bg-red-100" },
 };
 
 const TASK_TYPE_CONFIG = {
@@ -144,6 +149,13 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
   const [showPublishDialog, setShowPublishDialog] = useState(false);
+  const [formDialogOpen, setFormDialogOpen] = useState(false);
+  const [formDialogInfo, setFormDialogInfo] = useState<{
+    tableCode: string; tableName: string;
+    title?: string; desc?: string; dueDate?: string; status?: string; assignee?: string;
+    id?: string; projectName?: string; recordSource?: string;
+    nodeName?: string; nodeOrder?: number; totalNodes?: number;
+  } | null>(null);
 
   // 加载我的待办
   const loadMyInstances = useCallback(async () => {
@@ -234,22 +246,56 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
     else if (activeTab === "stats") loadStats();
   };
 
-  const handleInstanceAction = async (instanceId: string, action: "start" | "complete") => {
+  const handleInstanceAction = async (instanceId: string, action: "start" | "complete" | "reject" | "transfer" | "return") => {
     try {
-      const newStatus = action === "start" ? "in_progress" : "completed";
+      let body: Record<string, unknown> = {};
+      if (action === "start") body = { status: "in_progress" };
+      else if (action === "complete") body = { status: "completed" };
+      else if (action === "reject") { if (!confirm("确定驳回？任务将标记为驳回状态。")) return; body = { status: "rejected" }; }
+      else if (action === "transfer") {
+        const toName = prompt("转办给谁？（输入姓名）");
+        if (!toName?.trim()) return;
+        const target = users?.find((u: any) => u.name === toName.trim() || u.username === toName.trim());
+        if (!target) { alert("未找到该用户"); return; }
+        body = { status: "transferred", transferred_to: target.id, transferred_to_name: target.name };
+      }
+      else if (action === "return") { if (!confirm("确定退回上一节点？")) return; body = { status: "returned" }; }
       await fetch(`/api/todo-tasks/instances/${instanceId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
       handleRefresh();
+      window.dispatchEvent(new CustomEvent("refresh-badges"));
     } catch { /* ignore */ }
   };
+
+  const [users, setUsers] = useState<any[]>([]);
+  useEffect(() => { fetch("/api/users").then(r => r.json()).then(d => { if (d.data) setUsers(d.data); }).catch(() => {}); }, []);
 
   const handlePublishSuccess = () => {
     setShowPublishDialog(false);
     handleRefresh();
   };
+
+  // 打开表单填写弹窗
+  const handleOpenForm = useCallback((instance: TaskInstance) => {
+    const ftc = (instance as any).form_table_code || "";
+    const ftn = (instance as any).form_table_name || "";
+    if (!ftc) return;
+    if (instance.project_id) {
+      window.dispatchEvent(new CustomEvent("navigate-to-view", { detail: { projectId: instance.project_id, tableCode: ftc } }));
+      return;
+    }
+    setFormDialogInfo({
+      tableCode: ftc, tableName: ftn,
+      title: instance.title, desc: instance.description,
+      dueDate: instance.due_date, status: instance.status,
+      assignee: instance.assignee_name, id: instance.id,
+      nodeName: (instance as any).node_name,
+      nodeOrder: (instance as any).node_order,
+      totalNodes: undefined,
+    });
+    setFormDialogOpen(true);
+  }, []);
 
   // 上报问题：跳转到工单提交页面
   const handleReportIssue = (_instance: TaskInstance) => {
@@ -369,6 +415,7 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
             loading={loading}
             onAction={handleInstanceAction}
             onReportIssue={handleReportIssue}
+            onOpenForm={handleOpenForm}
           />
         )}
         {activeTab === "published" && (
@@ -398,6 +445,24 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
         currentUser={currentUser}
         onSuccess={handlePublishSuccess}
       />
+
+      <TaskFormDialog
+        open={formDialogOpen}
+        onOpenChange={setFormDialogOpen}
+        formTableCode={formDialogInfo?.tableCode || ""}
+        formTableName={formDialogInfo?.tableName}
+        instanceTitle={formDialogInfo?.title}
+        instanceDesc={formDialogInfo?.desc}
+        instanceDueDate={formDialogInfo?.dueDate}
+        instanceStatus={formDialogInfo?.status}
+        instanceAssignee={formDialogInfo?.assignee}
+        instanceId={formDialogInfo?.id}
+        projectName={formDialogInfo?.projectName}
+        recordSource={formDialogInfo?.recordSource}
+        nodeName={formDialogInfo?.nodeName}
+        nodeOrder={formDialogInfo?.nodeOrder}
+        totalNodes={formDialogInfo?.totalNodes}
+      />
     </div>
   );
 }
@@ -409,11 +474,12 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
 interface MyTaskListProps {
   instances: TaskInstance[];
   loading: boolean;
-  onAction: (id: string, action: "start" | "complete") => void;
+  onAction: (id: string, action: "start" | "complete" | "reject" | "transfer" | "return") => void;
   onReportIssue?: (instance: TaskInstance) => void;
+  onOpenForm?: (instance: TaskInstance) => void;
 }
 
-function MyTaskList({ instances, loading, onAction, onReportIssue }: MyTaskListProps) {
+function MyTaskList({ instances, loading, onAction, onReportIssue, onOpenForm }: MyTaskListProps) {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-gray-400">
@@ -450,7 +516,7 @@ function MyTaskList({ instances, loading, onAction, onReportIssue }: MyTaskListP
           </div>
           <div className="space-y-2">
             {overdueItems.map((item) => (
-              <TaskInstanceCard key={item.id} instance={item} variant="overdue" onAction={onAction} onReportIssue={onReportIssue} />
+              <TaskInstanceCard key={item.id} instance={item} variant="overdue" onAction={onAction} onReportIssue={onReportIssue} onOpenForm={onOpenForm} />
             ))}
           </div>
         </div>
@@ -466,7 +532,7 @@ function MyTaskList({ instances, loading, onAction, onReportIssue }: MyTaskListP
           )}
           <div className="space-y-2">
             {normalItems.map((item) => (
-              <TaskInstanceCard key={item.id} instance={item} variant="normal" onAction={onAction} onReportIssue={onReportIssue} />
+              <TaskInstanceCard key={item.id} instance={item} variant="normal" onAction={onAction} onReportIssue={onReportIssue} onOpenForm={onOpenForm} />
             ))}
           </div>
         </div>
@@ -482,19 +548,21 @@ function MyTaskList({ instances, loading, onAction, onReportIssue }: MyTaskListP
 interface TaskInstanceCardProps {
   instance: TaskInstance;
   variant: "normal" | "overdue";
-  onAction: (id: string, action: "start" | "complete") => void;
+  onAction: (id: string, action: "start" | "complete" | "reject" | "transfer" | "return") => void;
   onReportIssue?: (instance: TaskInstance) => void;
+  onOpenForm?: (instance: TaskInstance) => void;
 }
 
-function TaskInstanceCard({ instance, variant, onAction, onReportIssue }: TaskInstanceCardProps) {
+function TaskInstanceCard({ instance, variant, onAction, onReportIssue, onOpenForm }: TaskInstanceCardProps) {
   const statusCfg = STATUS_CONFIG[instance.status] || STATUS_CONFIG.pending;
   const typeCfg = instance._task_type ? TASK_TYPE_CONFIG[instance._task_type as keyof typeof TASK_TYPE_CONFIG] : null;
   const overdueDays = getOverdueDays(instance.due_date);
   const isOverdue = overdueDays > 0 && instance.status !== "completed";
 
   return (
-    <div className={cn(
-      "bg-white rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden",
+    <div onClick={() => onOpenForm?.(instance)}
+      className={cn(
+      "bg-white rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden cursor-pointer",
       isOverdue ? "border-red-200/80" : "border-gray-200/80",
       variant === "overdue" && "ring-1 ring-red-100"
     )}>
@@ -559,6 +627,24 @@ function TaskInstanceCard({ instance, variant, onAction, onReportIssue }: TaskIn
               <Button size="sm" className="h-7 text-xs bg-green-600 hover:bg-green-700" onClick={() => onAction(instance.id, "complete")}>
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                 完成
+              </Button>
+            )}
+            {/* 审批流：驳回 */}
+            {(instance as any).task_mode === "approval" && (instance.status === "pending" || instance.status === "in_progress") && (
+              <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => onAction(instance.id, "reject")}>
+                <AlertTriangle className="w-3.5 h-3.5 mr-1" />驳回
+              </Button>
+            )}
+            {/* 审批流：退回 */}
+            {(instance as any).task_mode === "approval" && (instance.status === "pending" || instance.status === "in_progress") && (instance as any).node_order > 1 && (
+              <Button size="sm" variant="ghost" className="h-7 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50" onClick={() => onAction(instance.id, "return")}>
+                <ArrowLeft className="w-3.5 h-3.5 mr-1" />退回
+              </Button>
+            )}
+            {/* 审批流：转办 */}
+            {(instance as any).task_mode === "approval" && (instance.status === "pending" || instance.status === "in_progress") && (
+              <Button size="sm" variant="ghost" className="h-7 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50" onClick={() => onAction(instance.id, "transfer")}>
+                <RotateCcw className="w-3.5 h-3.5 mr-1" />转办
               </Button>
             )}
             {(instance.status === "pending" || instance.status === "in_progress" || instance.status === "overdue") && onReportIssue && (
@@ -671,7 +757,7 @@ function PublishedTaskList({ defs, loading }: PublishedTaskListProps) {
 interface AllTaskListProps {
   instances: TaskInstance[];
   loading: boolean;
-  onAction: (id: string, action: "start" | "complete") => void;
+  onAction: (id: string, action: "start" | "complete" | "reject" | "transfer" | "return") => void;
   onReportIssue?: (instance: TaskInstance) => void;
 }
 
@@ -741,7 +827,7 @@ function AllTaskList({ instances, loading, onAction, onReportIssue }: AllTaskLis
       {/* 任务列表 */}
       <div className="space-y-2">
         {filtered.map((item) => (
-          <TaskInstanceCard key={item.id} instance={item} variant="normal" onAction={onAction} onReportIssue={onReportIssue} />
+          <TaskInstanceCard key={item.id} instance={item} variant="normal" onAction={onAction} onReportIssue={onReportIssue} onOpenForm={onOpenForm} />
         ))}
       </div>
     </div>

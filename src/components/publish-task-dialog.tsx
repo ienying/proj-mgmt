@@ -14,8 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import {
   Upload, FileSpreadsheet, ChevronRight, ChevronLeft, Check,
-  Calendar, Users, Building2, Clock, AlertCircle, Loader2,
-  Table, Edit3, ListTodo, Trash2, Plus, ChevronDown, X, Search,
+  Users, Building2, Loader2,
+  Edit3, ListTodo, Trash2, Plus, X, Table, Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TaskFormBuilder, type FormColumn } from "./task-form-builder";

@@ -149,6 +149,8 @@ CREATE INDEX IF NOT EXISTS departments_code_idx ON departments(code);
 -- ============================================
 -- Reference Data: Project Types & Stages
 -- ============================================
+
+CREATE TABLE IF NOT EXISTS project_types (
   id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
   code VARCHAR(50) NOT NULL UNIQUE,
   name VARCHAR(100) NOT NULL,
@@ -382,9 +384,6 @@ CREATE TABLE IF NOT EXISTS todo_task_defs (
   due_date VARCHAR(20),
   priority VARCHAR(20) DEFAULT 'medium',
   status VARCHAR(20) DEFAULT 'active',
-  template_fields JSONB DEFAULT '[]'::jsonb,
-  notify_on_create BOOLEAN DEFAULT false,
-  notify_before_due BOOLEAN DEFAULT false,
   created_by VARCHAR(36),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE
@@ -455,14 +454,6 @@ CREATE TABLE IF NOT EXISTS todo_center_cc (
 );
 CREATE INDEX IF NOT EXISTS todo_center_cc_user_idx ON todo_center_cc(user_id);
 
-CREATE TABLE IF NOT EXISTS todo_center_overdue_logs (
-  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
-  todo_id VARCHAR(36),
-  original_due_date VARCHAR(20),
-  overdue_days INTEGER DEFAULT 0,
-  reminder_sent BOOLEAN DEFAULT false,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
-);
 
 -- ============================================
 -- Knowledge Center
