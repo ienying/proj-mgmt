@@ -767,8 +767,9 @@ export function PublishTaskDialog({
         )}
 
         {/* 第5步：截止与提醒（流程型跳过） */}
-        {step === 5 && taskMode !== "approval" && (
+        {step === 5 && (
           <div className="space-y-4 w-full max-w-xl mx-auto">
+            {taskMode === "approval" && <p className="text-xs text-indigo-500 bg-indigo-50 p-2 rounded mb-2">设置审批流程的全局截止时间和提醒。节点处理人需在此截止前完成审批。</p>}
             {taskType === "periodic" && (
               <>
                 <div>
@@ -890,14 +891,13 @@ export function PublishTaskDialog({
             <ChevronLeft className="w-4 h-4 mr-1" />
             {step > 1 ? `上一步` : "取消"}
           </Button>
-          <div className="text-xs text-gray-400">{step} / {taskMode === "approval" ? 4 : 4}</div>
+          <div className="text-xs text-gray-400">{step} / 5</div>
           <div className="flex gap-2">
-            {(step < 5 && !(step === 4 && taskMode === "approval")) ? (
+            {step < 5 ? (
               <Button
                 size="sm"
                 onClick={() => {
                   if (step === 3 && taskMode !== "approval") setStep(5);
-                  else if (step === 4 && taskMode === "approval") handleSubmit();
                   else setStep(step + 1);
                 }}
                 disabled={!canNext()}
@@ -905,11 +905,6 @@ export function PublishTaskDialog({
               >
                 下一步
                 <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-            ) : (step === 4 && taskMode === "approval") ? (
-              <Button size="sm" onClick={handleSubmit} disabled={saving || !canNext()}
-                className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 shadow-md shadow-emerald-200">
-                {saving ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" />创建中...</> : <><Check className="w-4 h-4 mr-1" />确认发布</>}
               </Button>
             ) : (
               <Button

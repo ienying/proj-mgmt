@@ -9,6 +9,60 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2, ArrowDown, GitBranch, Users, Clock, Bell, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+function MultiUserSelect({ users, selectedIds, onChange }: { users: { id: string; name: string }[]; selectedIds: string[]; onChange: (ids: string[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  const filtered = users.filter(u => (u.name.includes(search) || u.id.includes(search)) && !selectedIds.includes(u.id)).slice(0, 20);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <div className="flex flex-wrap gap-1 min-h-[30px] p-1 border rounded-md bg-background cursor-pointer" onClick={() => { setOpen(!open); setSearch(""); }}>
+        {selectedIds.length === 0 && <span className="text-sm text-muted-foreground px-2 py-0.5">选择处理人</span>}
+        {selectedIds.map(id => {
+          const u = users.find(u => u.id === id);
+          return u ? (
+            <span key={id} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full">
+              {u.name}
+              <button type="button" onClick={(e) => { e.stopPropagation(); onChange(selectedIds.filter(i => i !== id)); }}
+                className="hover:text-destructive"><X className="w-3 h-3" /></button>
+            </span>
+          ) : null;
+        })}
+      </div>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 w-full bg-popover border rounded-md shadow-md">
+          <div className="flex items-center border-b px-2 py-1">
+            <Search className="w-3.5 h-3.5 text-muted-foreground mr-1.5" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜索姓名..." autoFocus
+              className="flex-1 text-sm bg-transparent outline-none py-1" />
+            {search && <button onClick={() => setSearch("")}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>}
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">无匹配用户</p>
+            ) : (
+              filtered.map(u => (
+                <button key={u.id} type="button"
+                  onClick={() => { onChange([...selectedIds, u.id]); setSearch(""); }}
+                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent">
+                  {u.name}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function UserSearchSelect({ users, value, onChange }: { users: { id: string; name: string }[]; value: string; onChange: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -145,9 +199,7 @@ export function WorkflowDesigner({
                   )}
                 </div>
                 <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
-                  <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{node.deadline_days}天</span>
-                  <span className="flex items-center gap-1"><Bell className="w-3 h-3" />提前{node.reminder_hours}h</span>
-                  {node.fillable_fields.length > 0 && (
+                    {node.fillable_fields.length > 0 && (
                     <span>可填: {node.fillable_fields.join(", ")}</span>
                   )}
                 </div>
@@ -180,39 +232,29 @@ export function WorkflowDesigner({
                 <Input value={node.name} onChange={(e) => updateNode(node.id, "name", e.target.value)}
                   placeholder="如: 产品经理审批" className="h-7 text-sm" />
               </div>
-              <div className="w-24 space-y-1">
-                <Label className="text-xs">截止天数</Label>
-                <Input type="number" value={node.deadline_days} min={1} max={30}
-                  onChange={(e) => updateNode(node.id, "deadline_days", parseInt(e.target.value) || 2)}
-                  className="h-7 text-sm" />
-              </div>
-              <div className="w-24 space-y-1">
-                <Label className="text-xs">提醒(h)</Label>
-                <Input type="number" value={node.reminder_hours} min={1} max={72}
-                  onChange={(e) => updateNode(node.id, "reminder_hours", parseInt(e.target.value) || 24)}
-                  className="h-7 text-sm" />
-              </div>
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs">处理人</Label>
-              <UserSearchSelect
+              <Label className="text-xs">处理人（可多选，支持搜索）</Label>
+              <MultiUserSelect
                 users={userList}
-                value={node.handler_ids[0] || ""}
-                onChange={(v) => updateNode(node.id, "handler_ids", [v])}
+                selectedIds={node.handler_ids}
+                onChange={(ids) => updateNode(node.id, "handler_ids", ids)}
               />
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs">处理方式</Label>
-              <Select value={node.handler_mode} onValueChange={(v) => updateNode(node.id, "handler_mode", v)}>
-                <SelectTrigger className="h-7 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any_one">任一人处理即可</SelectItem>
-                  <SelectItem value="all">全部人需处理</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {node.handler_ids.length > 1 && (
+              <div className="space-y-1">
+                <Label className="text-xs">处理方式</Label>
+                <Select value={node.handler_mode} onValueChange={(v) => updateNode(node.id, "handler_mode", v)}>
+                  <SelectTrigger className="h-7 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any_one">任一人处理即可</SelectItem>
+                    <SelectItem value="all">全部人需处理</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {formColumns.length > 0 && (
               <div className="space-y-1">
