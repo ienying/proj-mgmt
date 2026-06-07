@@ -554,25 +554,14 @@ export function PublishTaskDialog({
             )}
 
             {(taskMode === "project" || taskMode === "approval") && (
-              <div>
-                <p className="text-sm text-gray-500 mb-3">
-                  {taskMode === "approval" ? "拉取项目记录 + 自定义补充列 + 写回配置" : "选择项目拉取记录，添加补充列"}
-                </p>
-                <TaskBoardBuilder
-                  selectedProjects={selectedProjects}
-                  onProjectsChange={setSelectedProjects}
-                  records={boardRecords}
-                  onRecordsChange={setBoardRecords}
-                  extraColumns={extraColumns}
-                  onExtraColumnsChange={setExtraColumns}
-                />
-                {taskMode === "approval" && (
-                  <div className="mt-3">
-                    <p className="text-xs text-gray-400 mb-2">可选：添加自定义表单列</p>
-                    <TaskFormBuilder columns={formColumns} onChange={setFormColumns} compact />
-                  </div>
-                )}
-              </div>
+              <TaskBoardBuilder
+                selectedProjects={selectedProjects}
+                onProjectsChange={setSelectedProjects}
+                records={boardRecords}
+                onRecordsChange={setBoardRecords}
+                extraColumns={extraColumns}
+                onExtraColumnsChange={setExtraColumns}
+              />
             )}
           </div>
         )}
