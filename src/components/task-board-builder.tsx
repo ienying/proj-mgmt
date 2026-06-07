@@ -175,6 +175,17 @@ export function TaskBoardBuilder({
     onExtraColumnsChange(extraColumns.filter((_, i) => i !== idx));
   };
 
+  const formatCellValue = (val: unknown, type: string) => {
+    if (val == null || val === "") return "-";
+    if (type === "date") {
+      try {
+        const d = new Date(String(val));
+        if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+      } catch { /* fall through */ }
+    }
+    return String(val);
+  };
+
   return (
     <div className="space-y-4">
       {/* 选择项目 */}
@@ -271,8 +282,8 @@ export function TaskBoardBuilder({
                         }} />
                     </td>
                     {browseCols.filter(col => visibleCols.has(col.name)).map(col => (
-                      <td key={col.name} className="px-2 py-1.5 text-slate-600 truncate max-w-[200px]" title={String(rec[col.name] || "-")}>
-                        {String(rec[col.name] || "-")}
+                      <td key={col.name} className="px-2 py-1.5 text-slate-600 truncate max-w-[200px]" title={formatCellValue(rec[col.name], col.type)}>
+                        {formatCellValue(rec[col.name], col.type)}
                       </td>
                     ))}
                   </tr>
