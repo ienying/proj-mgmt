@@ -34,6 +34,8 @@ interface Props {
   onRecordsChange: (records: BoardRecord[]) => void;
   extraColumns: ExtraColumn[];
   onExtraColumnsChange: (cols: ExtraColumn[]) => void;
+  workflowNodes?: Array<{ order: number; name: string; assignee_id: string; assignee_name: string }>;
+  userList?: Array<{ id: string; name: string }>;
 }
 
 const SUPPLEMENT_TYPES = [
@@ -45,7 +47,7 @@ const SUPPLEMENT_TYPES = [
 
 export function TaskBoardBuilder({
   selectedProjects, onProjectsChange, records, onRecordsChange,
-  extraColumns, onExtraColumnsChange,
+  extraColumns, onExtraColumnsChange, workflowNodes, userList,
 }: Props) {
   const [projects, setProjects] = useState<Array<{ id: string; name: string; schema: string }>>([]);
   const [browseProjectId, setBrowseProjectId] = useState("");
@@ -57,6 +59,7 @@ export function TaskBoardBuilder({
   const [moduleTables, setModuleTables] = useState<Array<{ code: string; name: string }>>([]);
   const [moduleTypes, setModuleTypes] = useState<Array<{ code: string; name: string }>>([]);
   const [sourceTableCols, setSourceTableCols] = useState<Record<string, Array<{ name: string; type: string }>>>({});
+  const [recordAssignees, setRecordAssignees] = useState<Record<string, Record<number, string>>>({});
 
   useEffect(() => {
     fetch("/api/projects").then(r => r.json()).then(d => {
@@ -265,6 +268,11 @@ export function TaskBoardBuilder({
                       {col.type === "linked_text" && <Badge variant="outline" className="ml-1 text-[9px] px-1 py-0 h-4">写回</Badge>}
                     </th>
                   ))}
+                  {workflowNodes && workflowNodes.filter(n => n.name.trim()).map(node => (
+                    <th key={`wf-h-${node.order}`} className="text-left px-2 py-1.5 font-medium text-amber-700 bg-amber-50/50">
+                      {node.name}（审批人）
+                    </th>
+                  ))}
                   <th className="w-8"></th>
                 </tr>
               </thead>
@@ -274,6 +282,34 @@ export function TaskBoardBuilder({
                     <td className="px-3 py-2 text-slate-400 text-xs">{idx + 1}</td>
                     <td className="px-3 py-2 text-slate-700 truncate max-w-[250px]" title={rec.source_label}>{rec.source_label}</td>
                     {extraColumns.map((_, ci) => <td key={ci} className="px-2 py-1 text-gray-300">-</td>)}
+                    {workflowNodes && workflowNodes.filter(n => n.name.trim()).map(node => {
+                      return <td key={'wf-' + node.order} className="px-2 py-1" onClick={e => e.stopPropagation()}>
+                        <select defaultValue={node.assignee_id}
+                          className="text-xs border border-gray-200 rounded px-1 py-0.5 w-full bg-white hover:border-amber-300 focus:border-amber-400 outline-none">
+                          <option value={node.assignee_id}>{node.assignee_name || (userList?.find(u => u.id === node.assignee_id)?.name) || '未指定'}（默认）</option>
+                          {userList?.filter(u => u.id !== node.assignee_id).map(u => (
+                            <option key={u.id} value={u.id}>{u.name}</option>
+                          ))}
+                        </select>
+                      </td>;
+                    })}
+                    {workflowNodes && workflowNodes.filter(n => n.name.trim()).map(node => {
+                      const defaultName = node.assignee_name || (userList?.find(u => u.id === node.assignee_id)?.name) || "未指定";
+                      const overrideId = getRecordAssignee(rec.source_record_id, node.order);
+                      const displayName = overrideId ? (userList?.find(u => u.id === overrideId)?.name || defaultName) : defaultName;
+                      return (
+                        <td key={`wf-${node.order}`} className="px-2 py-1" onClick={e => e.stopPropagation()}>
+                          <select value={overrideId || node.assignee_id} onChange={e => setRecordAssignee(rec.source_record_id, node.order, e.target.value)}
+                            className="text-xs border border-gray-200 rounded px-1 py-0.5 w-full bg-white hover:border-amber-300 focus:border-amber-400 outline-none">
+                            <option value={node.assignee_id}>{defaultName}（默认）</option>
+                            {userList?.filter(u => u.id !== node.assignee_id).map(u => (
+                              <option key={u.id} value={u.id}>{u.name}</option>
+                            ))}
+                          </select>
+                        </td>
+                      );
+                    })}
+                    
                     <td className="px-1">
                       <button onClick={() => removeRecord(idx)} className="text-red-300 hover:text-red-500"><Trash2 className="w-3 h-3" /></button>
                     </td>

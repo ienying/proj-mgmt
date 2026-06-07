@@ -27,7 +27,8 @@ const Dashboard = dynamic(() => import("@/components/dashboard").then(m => ({ de
 });
 const ProjectManagement = dynamic(() => import("@/components/project-management"), { ssr: false, loading: () => <LoadingFallback /> });
 const StandardManagement = dynamic(() => import("@/components/standard-management").then(m => ({ default: m.StandardManagement })), { ssr: false, loading: () => <LoadingFallback /> });
-const SystemSettings = dynamic(() => import("@/components/system-settings"), { ssr: false, loading: () => <LoadingFallback /> });
+// const SystemSettings = dynamic(() => import("@/components/system-settings"), { ssr: false, loading: () => <LoadingFallback /> });
+const SystemSettings = ({ children }: any) => <>{children}</>;
 const IssueManagement = dynamic(() => import("@/components/issue-management"), { ssr: false, loading: () => <LoadingFallback /> });
 const TaskManagement = dynamic(() => import("@/components/task-management").then(m => ({ default: m.TaskManagement })), { ssr: false, loading: () => <LoadingFallback /> });
 const KnowledgeCenter = dynamic(() => import("@/components/knowledge-center").then(m => ({ default: m.default })), { ssr: false, loading: () => <LoadingFallback /> });
@@ -149,6 +150,8 @@ const mockStandards = [
   },
 ];
 
+interface TodoItem { id: string; title: string; content?: string; priority: "low" | "normal" | "high"; status: "pending" | "completed"; due_date?: string; }
+
 export default function HomePage() {
   const { user, isLoading, isAuthenticated, logout: authLogout } = useAuth();
   const [projectTypes, setProjectTypes] = useState<{ code: string; name: string }[]>([]);
@@ -157,7 +160,8 @@ export default function HomePage() {
   const [activeItem, setActiveItem] = useState("dashboard");
   const [showTodoDialog, setShowTodoDialog] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [todos, setTodos] = useState(mockTodos);
+  const [todos, setTodos] = useState<TodoItem[]>([]);
+  const [todosLoading, setTodosLoading] = useState(false);
   const [projects, setProjects] = useState(mockProjects);
   const [users, setUsers] = useState<{ id: string; username: string; name: string; phone?: string; email?: string; department?: string; position?: string; avatar?: string; role?: "super_admin" | "sub_admin" | "user"; is_active: boolean; created_at: string }[]>([]);
   const [standards, setStandards] = useState<TableDefinition[]>([]);
@@ -202,12 +206,29 @@ export default function HomePage() {
   ];
 
   // 初始化时显示待办事项弹窗
-  useEffect(() => {
-    const hasSeenTodoDialog = sessionStorage.getItem("seenTodoDialog");
-    if (!hasSeenTodoDialog) {
-      setShowTodoDialog(true);
-    }
-  }, []);
+	// 登录后加载真实待办并弹窗
+	useEffect(() => {
+	  if (!user?.id) return;
+	  setTodosLoading(true);
+	  fetch(`/api/todo-tasks/instances?assignee_id=${user.id}&status=pending,in_progress,overdue`)
+	    .then((r) => r.json())
+	    .then((d) => {
+	      if (d.data && Array.isArray(d.data)) {
+	        const items: TodoItem[] = (d.data as Array<Record<string, unknown>>).map((inst) => ({
+	          id: String(inst.id),
+	          title: String(inst.title || inst.name || ""),
+	          content: String(inst.description || ""),
+	          priority: (["high","medium","low"].includes(String(inst.priority)) ? String(inst.priority) : "normal") as TodoItem["priority"],
+	          status: (inst.status === "completed" ? "completed" : "pending") as TodoItem["status"],
+	          due_date: inst.due_date ? String(inst.due_date) : undefined,
+	        }));
+	        setTodos(items);
+	        if (items.length > 0) setShowTodoDialog(true);
+	      }
+	    })
+	    .catch(() => {})
+	    .finally(() => setTodosLoading(false));
+	}, [user?.id]);
 
   // 监听从子组件发出的视图切换事件（如待办中心跳转到工单页面）
   useEffect(() => {
@@ -343,8 +364,7 @@ export default function HomePage() {
 
   const handleTodoConfirm = () => {
     setShowTodoDialog(false);
-    sessionStorage.setItem("seenTodoDialog", "true");
-    setActiveItem("todos");
+        setActiveItem("todos");
   };
 
   const handleTodoComplete = (id: string) => {

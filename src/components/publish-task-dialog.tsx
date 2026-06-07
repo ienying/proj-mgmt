@@ -398,8 +398,9 @@ export function PublishTaskDialog({
     }
     if (step === 4) return taskMode === "approval" ? wfNodes.length > 0 : true;
     if (step === 5) {
-      if (taskType === "regular") return !!specificDate;
-      return true;
+      if (taskMode === "approval") return true;
+      if (assignMode === "project") return selectedProjectIds.length > 0;
+      return selectedAssigneeIds.length > 0;
     }
     return true;
   };
@@ -561,6 +562,8 @@ export function PublishTaskDialog({
                 onRecordsChange={setBoardRecords}
                 extraColumns={extraColumns}
                 onExtraColumnsChange={setExtraColumns}
+                workflowNodes={wfNodes.filter((n: WorkflowNode) => n.name.trim()).map((n: WorkflowNode, i: number) => ({ order: i + 1, name: n.name, assignee_id: n.handler_ids?.[0] || "", assignee_name: users.find((u: any) => u.id === n.handler_ids?.[0])?.name || "" }))}
+                userList={users.map((u: any) => ({ id: u.id, name: u.name }))}
               />
             )}
           </div>
@@ -568,7 +571,7 @@ export function PublishTaskDialog({
 
         {/* 第4步：审批流程 */}
         {step === 4 && taskMode === "approval" && (
-          <div className="space-y-4 w-full max-w-2xl mx-auto">
+          <div className="space-y-6 w-full max-w-3xl mx-auto">
             <WorkflowDesigner
               nodes={wfNodes} onChange={setWfNodes}
               allowForward={wfAllowForward} onAllowForwardChange={setWfAllowForward}
@@ -576,11 +579,55 @@ export function PublishTaskDialog({
               userList={users.map(u => ({ id: u.id, name: u.name }))}
               formColumns={[...formColumns, ...extraColumns.map(c => ({ name: c.name, type: c.type }))]}
             />
+
+            {/* 逐记录指派审批人 */}
+            {boardRecords.length > 0 && wfNodes.filter(n => n.name.trim()).length > 0 && (
+              <div className="border-t pt-4">
+                <p className="text-sm font-medium text-gray-700 mb-3">逐记录指派审批人</p>
+                <p className="text-xs text-gray-400 mb-3">默认使用节点配置的审批人，可逐行覆盖</p>
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-medium text-gray-500 w-8">#</th>
+                        <th className="text-left px-3 py-2 font-medium text-gray-500">记录</th>
+                        {wfNodes.filter(n => n.name.trim()).map((node, i) => (
+                          <th key={i} className="text-left px-2 py-1.5 font-medium text-amber-700 bg-amber-50/50">
+                            {node.name}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {boardRecords.map((rec, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 text-gray-400">{idx + 1}</td>
+                          <td className="px-3 py-2 text-gray-700 truncate max-w-[200px]" title={rec.source_label}>{rec.source_label}</td>
+                          {wfNodes.filter(n => n.name.trim()).map((node, ni) => (
+                            <td key={ni} className="px-1 py-1">
+                              <select defaultValue={node.handler_ids?.[0] || ""}
+                                className="text-xs border border-gray-200 rounded px-1 py-0.5 w-full bg-white hover:border-amber-300 focus:border-amber-400 outline-none">
+                                <option value={node.handler_ids?.[0] || ""}>
+                                  {users.find((u: any) => u.id === node.handler_ids?.[0])?.name || "未指定"}（默认）
+                                </option>
+                                {users.filter((u: any) => u.id !== node.handler_ids?.[0]).map((u: any) => (
+                                  <option key={u.id} value={u.id}>{u.name}</option>
+                                ))}
+                              </select>
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* 第5步：指派启动 */}
-        {step === 5 && (
+        {/* 第5步：指派启动（流程型任务跳过） */}
+        {step === 5 && taskMode !== "approval" && (
           <div className="space-y-4 w-full max-w-xl mx-auto">
             <p className="text-xs text-indigo-500 bg-indigo-50 p-2 rounded">选择项目后，任务表单将自动在对应项目里建表；仅选择人员则不在项目里建表</p>
             <RadioGroup
@@ -719,8 +766,8 @@ export function PublishTaskDialog({
           </div>
         )}
 
-        {/* 第5步：截止与提醒 */}
-        {step === 5 && (
+        {/* 第5步：截止与提醒（流程型跳过） */}
+        {step === 5 && taskMode !== "approval" && (
           <div className="space-y-4 w-full max-w-xl mx-auto">
             {taskType === "periodic" && (
               <>
@@ -843,13 +890,14 @@ export function PublishTaskDialog({
             <ChevronLeft className="w-4 h-4 mr-1" />
             {step > 1 ? `上一步` : "取消"}
           </Button>
-          <div className="text-xs text-gray-400">{step} / {taskMode === "approval" ? 5 : 4}</div>
+          <div className="text-xs text-gray-400">{step} / {taskMode === "approval" ? 4 : 4}</div>
           <div className="flex gap-2">
-            {step < 5 ? (
+            {(step < 5 && !(step === 4 && taskMode === "approval")) ? (
               <Button
                 size="sm"
                 onClick={() => {
                   if (step === 3 && taskMode !== "approval") setStep(5);
+                  else if (step === 4 && taskMode === "approval") handleSubmit();
                   else setStep(step + 1);
                 }}
                 disabled={!canNext()}
@@ -857,6 +905,11 @@ export function PublishTaskDialog({
               >
                 下一步
                 <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            ) : (step === 4 && taskMode === "approval") ? (
+              <Button size="sm" onClick={handleSubmit} disabled={saving || !canNext()}
+                className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 shadow-md shadow-emerald-200">
+                {saving ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" />创建中...</> : <><Check className="w-4 h-4 mr-1" />确认发布</>}
               </Button>
             ) : (
               <Button
