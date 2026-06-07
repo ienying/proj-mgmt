@@ -1,12 +1,65 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, ArrowDown, GitBranch, Users, Clock, Bell } from "lucide-react";
+import { Plus, Trash2, ArrowDown, GitBranch, Users, Clock, Bell, Search, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+function UserSearchSelect({ users, value, onChange }: { users: { id: string; name: string }[]; value: string; onChange: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = users.find(u => u.id === value);
+  const filtered = users.filter(u => u.name.includes(search) || u.id.includes(search)).slice(0, 20);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => { setOpen(!open); setSearch(""); }}
+        className="flex items-center justify-between w-full h-7 rounded-md border border-input bg-background px-3 text-sm hover:bg-accent hover:text-accent-foreground">
+        <span className={selected ? "text-foreground" : "text-muted-foreground"}>
+          {selected ? selected.name : "选择处理人"}
+        </span>
+        <Search className="w-3.5 h-3.5 text-muted-foreground" />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 w-full bg-popover border rounded-md shadow-md">
+          <div className="flex items-center border-b px-2 py-1">
+            <Search className="w-3.5 h-3.5 text-muted-foreground mr-1.5" />
+            <input
+              value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="搜索姓名..." autoFocus
+              className="flex-1 text-sm bg-transparent outline-none py-1"
+            />
+            {search && <button onClick={() => setSearch("")}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>}
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">无匹配用户</p>
+            ) : (
+              filtered.map(u => (
+                <button key={u.id} type="button"
+                  onClick={() => { onChange(u.id); setOpen(false); setSearch(""); }}
+                  className={cn("w-full text-left px-3 py-1.5 text-sm hover:bg-accent", u.id === value && "bg-accent font-medium")}>
+                  {u.name}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export interface WorkflowNode {
   id: string;
@@ -143,12 +196,11 @@ export function WorkflowDesigner({
 
             <div className="space-y-1">
               <Label className="text-xs">处理人</Label>
-              <Select value={node.handler_ids[0] || ""} onValueChange={(v) => updateNode(node.id, "handler_ids", [v])}>
-                <SelectTrigger className="h-7 text-sm"><SelectValue placeholder="选择处理人" /></SelectTrigger>
-                <SelectContent>
-                  {userList.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <UserSearchSelect
+                users={userList}
+                value={node.handler_ids[0] || ""}
+                onChange={(v) => updateNode(node.id, "handler_ids", [v])}
+              />
             </div>
 
             <div className="space-y-1">

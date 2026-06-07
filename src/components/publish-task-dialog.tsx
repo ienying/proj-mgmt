@@ -496,9 +496,9 @@ export function PublishTaskDialog({
               )}
             </div>
             <div><Label>任务标题 <span className="text-red-500">*</span></Label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="输入任务标题" className="mt-1" /></div>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="输入任务标题" className="mt-1 " /></div>
             <div><Label>任务描述</Label>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="描述任务内容和要求..." className="mt-1" rows={3} /></div>
+              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="描述任务内容和要求..." className="mt-1 min-h-[150px]" rows={6} /></div>
           </div>
         )}
 
@@ -694,7 +694,7 @@ export function PublishTaskDialog({
                     <Label>关联项目（可选）</Label>
                     <p className="text-xs text-gray-400 mb-1">以下为选中人员作为项目经理的项目</p>
                     <Select value={assigneeProjectId} onValueChange={setAssigneeProjectId}>
-                      <SelectTrigger className="mt-1">
+                      <SelectTrigger className="mt-1 min-h-[150px]">
                         <SelectValue placeholder="选择关联项目" />
                       </SelectTrigger>
                       <SelectContent>

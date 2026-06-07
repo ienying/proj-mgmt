@@ -100,6 +100,10 @@ export function TaskBoardBuilder({
       const stds = (await r2.json()).data || [];
       const def = stds.find((s: Record<string, unknown>) => s.table_code === browseTable);
       setBrowseCols((def?.columns_config as Array<{ name: string; type: string }>) || []);
+      // 缓存列信息供回写文本使用
+      if (def?.columns_config) {
+        setSourceTableCols(prev => { if (prev[browseTable]) return prev; return { ...prev, [browseTable]: def.columns_config as Array<{ name: string; type: string }> }; });
+      }
     } catch { setBrowseData([]); }
   }, [browseProjectId, browseTable, projects]);
 
@@ -291,6 +295,9 @@ export function TaskBoardBuilder({
             <span className="text-gray-400 text-[11px]">{SUPPLEMENT_TYPES.find(t => t.code === col.type)?.name || col.type}</span>
             {col.type === "linked_text" && (
               <>
+                <div className="text-[10px] text-amber-600 bg-amber-50 rounded px-2 py-1 -mt-1 mb-1">
+                  <TooltipProvider><Tooltip delayDuration={300}><TooltipTrigger asChild><span className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 cursor-help">回写文本 <HelpCircle className="w-3 h-3" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[300px] text-xs leading-relaxed"><p>回写文本允许审批人在表单中填写内容，提交后自动写入到关联项目表的对应记录字段。</p><p className="text-gray-400 mt-1">例如：审批人填写"审批意见"，提交后自动更新到需求表中对应记录的"审批意见"列。</p></TooltipContent></Tooltip></TooltipProvider>
+                </div>
                 <span className="text-gray-300">→</span>
                 <Select value={col.writeback_column || ""} onValueChange={(v) => updateExtraColumn(idx, "writeback_column", v)}>
                   <SelectTrigger className="h-7 text-xs w-36">
