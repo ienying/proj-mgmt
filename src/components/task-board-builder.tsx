@@ -60,6 +60,10 @@ export function TaskBoardBuilder({
   const [moduleTypes, setModuleTypes] = useState<Array<{ code: string; name: string }>>([]);
   const [sourceTableCols, setSourceTableCols] = useState<Record<string, Array<{ name: string; type: string }>>>({});
   const [recordAssignees, setRecordAssignees] = useState<Record<string, Record<number, string>>>({});
+  const getRecordAssignee = (recordId: string, nodeOrder: number) => recordAssignees[recordId]?.[nodeOrder] || "";
+  const setRecordAssignee = (recordId: string, nodeOrder: number, assigneeId: string) => {
+    setRecordAssignees(prev => ({ ...prev, [recordId]: { ...(prev[recordId] || {}), [nodeOrder]: assigneeId } }));
+  };
 
   useEffect(() => {
     fetch("/api/projects").then(r => r.json()).then(d => {
