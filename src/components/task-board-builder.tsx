@@ -55,6 +55,7 @@ export function TaskBoardBuilder({
   const [browseCols, setBrowseCols] = useState<Array<{ name: string; type: string }>>([]);
   const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(new Set());
   const [moduleTables, setModuleTables] = useState<Array<{ code: string; name: string }>>([]);
+  const [moduleTypes, setModuleTypes] = useState<Array<{ code: string; name: string }>>([]);
   const [sourceTableCols, setSourceTableCols] = useState<Record<string, Array<{ name: string; type: string }>>>({});
 
   useEffect(() => {
@@ -72,6 +73,7 @@ export function TaskBoardBuilder({
     try {
       const r1 = await fetch("/api/module-types");
       const allMods = (await r1.json()).data || [];
+      setModuleTypes(allMods);
       const r2 = await fetch("/api/standards");
       const stds = (await r2.json()).data || [];
       const tables: Array<{ code: string; name: string }> = [];
@@ -202,8 +204,8 @@ export function TaskBoardBuilder({
             <SelectTrigger className="h-7 text-xs w-32"><SelectValue placeholder="选模块" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">全部模块</SelectItem>
-              {["scope","schedule","quality","cost","collaboration","communication","risk","procurement","resource","document"].map(m =>
-                <SelectItem key={m} value={m}>{m}</SelectItem>
+              {moduleTypes.map(m =>
+                <SelectItem key={m.code} value={m.code}>{m.name}</SelectItem>
               )}
             </SelectContent>
           </Select>
