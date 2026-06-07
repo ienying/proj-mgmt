@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       items = items.filter((r) => String(r.assignee_id) === assigneeId);
     }
     if (definitionId) {
-      items = items.filter((r) => String(r.definition_id) === definitionId);
+      items = items.filter((r) => String(r.def_id) === definitionId);
     }
     if (status) {
       const statuses = status.split(",");
@@ -41,7 +41,14 @@ export async function GET(request: NextRequest) {
         new Date(String(a.created_at)).getTime()
     );
 
-    return NextResponse.json({ data: items });
+    // Map DB column names to frontend-expected field names
+    const mapped = items.map((r) => ({
+      ...r,
+      title: r.name,
+      definition_id: r.def_id,
+    }));
+
+    return NextResponse.json({ data: mapped });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch task instances";
     return NextResponse.json({ error: message }, { status: 500 });

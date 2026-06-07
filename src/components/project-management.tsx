@@ -637,7 +637,7 @@ export function ProjectManagement({
             <div className="space-y-2">
               {projectTasks.map((task) => {
                 const taskStatus = String(task.status || "pending");
-                const isLate = Boolean(task.is_late);
+                const isLate = String(task.status) === "overdue";
                 return (
                   <div
                     key={String(task.id)}
@@ -651,7 +651,7 @@ export function ProjectManagement({
                       {getStatusIcon(taskStatus)}
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-slate-800 truncate">
-                          {String(task.title || "未命名任务")}
+                          {String(task.title || task.name || "未命名任务")}
                         </div>
                         <div className="flex items-center gap-2 mt-1">
                           <span className={cn("text-xs px-1.5 py-0.5 rounded", getStatusBgColor(taskStatus))}>

@@ -196,12 +196,9 @@ export async function POST(request: NextRequest) {
         await client.rpc("dp_insert", {
           p_table: "todo_task_instances",
           p_data: {
-            definition_id: null,
-            title: title,
+            def_id: null,
+            name: title,
             description: description ? String(description).replace(/<[^>]*>/g, "").slice(0, 200) : "",
-            source_type: "issue",
-            source_id: issueId,
-            source_data: { issue_id: issueId, status: "pending", is_major: is_major || false },
             assignee_id: todoAssigneeId,
             assignee_name: todoAssigneeName,
             project_id: project_id || null,

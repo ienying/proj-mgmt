@@ -28,7 +28,7 @@ export async function PUT(
         const inst = instance as Record<string, unknown>;
         const dueDate = inst.due_date ? String(inst.due_date) : null;
         if (dueDate && new Date() > new Date(dueDate + "T23:59:59")) {
-          updateData.is_late = true;
+          updateData.status = "overdue";
         }
       }
     }

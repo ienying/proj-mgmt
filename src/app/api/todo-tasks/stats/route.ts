@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     const inProgress = items.filter((r) => String(r.status) === "in_progress").length;
     const overdue = items.filter((r) => String(r.status) === "overdue").length;
     const pending = items.filter((r) => String(r.status) === "pending").length;
-    const lateCompleted = items.filter((r) => String(r.status) === "completed" && r.is_late === true).length;
+    const lateCompleted = items.filter((r) => String(r.status) === "overdue").length;
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
 
     // 按人员统计
@@ -52,8 +52,7 @@ export async function GET(request: NextRequest) {
       }
       byAssignee[aid].total++;
       if (String(item.status) === "completed") byAssignee[aid].completed++;
-      if (String(item.status) === "overdue") byAssignee[aid].overdue++;
-      if (item.is_late === true) byAssignee[aid].late++;
+      if (String(item.status) === "overdue") { byAssignee[aid].overdue++; byAssignee[aid].late++; }
     }
     for (const key of Object.keys(byAssignee)) {
       const a = byAssignee[key];
@@ -89,13 +88,13 @@ export async function GET(request: NextRequest) {
     const defMap = new Map<string, string>();
     if (defs) {
       for (const d of defs as Record<string, unknown>[]) {
-        defMap.set(String(d.id), String(d.title));
+        defMap.set(String(d.id), String(d.name));
       }
     }
 
     const byTask: Record<string, { title: string; total: number; completed: number; overdue: number; rate: number }> = {};
     for (const item of items) {
-      const did = String(item.definition_id);
+      const did = String(item.def_id);
       if (!byTask[did]) {
         byTask[did] = {
           title: defMap.get(did) || "未知任务",

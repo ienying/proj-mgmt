@@ -44,7 +44,7 @@ export async function DELETE(
 
     if (instances) {
       for (const inst of instances as Record<string, unknown>[]) {
-        if (String(inst.definition_id) === id) {
+        if (String(inst.def_id) === id) {
           await client.rpc("dp_delete", {
             p_table: "todo_task_instances",
             p_id: String(inst.id),

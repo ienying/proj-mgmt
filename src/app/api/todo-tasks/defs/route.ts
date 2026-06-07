@@ -33,7 +33,13 @@ export async function GET(request: NextRequest) {
         new Date(String(a.created_at)).getTime()
     );
 
-    return NextResponse.json({ data: items });
+    // Map DB column names to frontend-expected field names
+    const mapped = items.map((r) => ({
+      ...r,
+      title: r.name,
+    }));
+
+    return NextResponse.json({ data: mapped });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch task definitions";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -49,12 +55,14 @@ export async function POST(request: NextRequest) {
     const {
       title,
       description,
-      task_type = "regular",
+      task_type = "one_time",
       assignee_ids = [],
       project_ids = [],
+      task_mode,
       form_source = "none",
       form_table_code,
       form_table_name,
+      form_fields_config,
       periodic_type,
       periodic_config,
       deadline_config,
@@ -63,31 +71,42 @@ export async function POST(request: NextRequest) {
       allow_late_complete = true,
       created_by,
       created_by_name,
+      workflow_nodes,
     } = body;
 
     if (!title) {
       return NextResponse.json({ error: "任务标题不能为空" }, { status: 400 });
     }
 
+    const extraConfig: Record<string, unknown> = {
+      form_source,
+      form_table_code: form_table_code || null,
+      form_table_name: form_table_name || null,
+      task_mode: task_mode || null,
+      form_fields_config: form_fields_config || null,
+      assignee_ids,
+      project_ids,
+      periodic_type: periodic_type || null,
+      deadline_config: deadline_config || null,
+      reminder_enabled,
+      reminder_before_days,
+      allow_late_complete,
+      created_by_name: created_by_name || null,
+      workflow_nodes: workflow_nodes || null,
+    };
+
     const { data, error } = await client.rpc("dp_insert", {
       p_table: "todo_task_defs",
       p_data: {
-        title,
+        name: title,
         description,
         task_type,
-        assignee_ids,
-        project_ids,
-        form_source,
-        form_table_code: form_table_code || null,
-        form_table_name: form_table_name || null,
-        periodic_type: periodic_type || null,
-        periodic_config: periodic_config || null,
-        deadline_config: deadline_config || null,
-        reminder_enabled,
-        reminder_before_days,
-        allow_late_complete,
+        assignee_id: assignee_ids.length > 0 ? assignee_ids[0] : null,
+        assignee_name: created_by_name || null,
+        project_id: project_ids.length > 0 ? project_ids[0] : null,
+        period_config: { ...(periodic_config || {}), ...extraConfig },
         created_by: created_by || null,
-        created_by_name: created_by_name || null,
+        status: "active",
       },
     });
 
@@ -195,8 +214,8 @@ async function generateInstances(
       const assigneeName = user ? String(user.name) : "";
 
       instances.push({
-        definition_id,
-        title: periodLabel ? `${periodLabel} ${title}` : title,
+        def_id: definition_id,
+        name: periodLabel ? `${periodLabel} ${title}` : title,
         assignee_id: assigneeId,
         assignee_name: assigneeName,
         project_id: projectId,
@@ -204,7 +223,6 @@ async function generateInstances(
         status: "pending",
         due_date: dueDate,
         period_label: periodLabel || null,
-        is_late: false,
       });
     }
   } else if (assignee_ids && assignee_ids.length > 0) {
@@ -214,8 +232,8 @@ async function generateInstances(
       const assigneeName = user ? String(user.name) : "";
 
       instances.push({
-        definition_id,
-        title: periodLabel ? `${periodLabel} ${title}` : title,
+        def_id: definition_id,
+        name: periodLabel ? `${periodLabel} ${title}` : title,
         assignee_id: assigneeId,
         assignee_name: assigneeName,
         project_id: null,
@@ -223,7 +241,6 @@ async function generateInstances(
         status: "pending",
         due_date: dueDate,
         period_label: periodLabel || null,
-        is_late: false,
       });
     }
   }

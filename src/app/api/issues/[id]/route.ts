@@ -95,18 +95,11 @@ export async function PUT(
           await client.rpc("dp_insert", {
             p_table: "todo_task_instances",
             p_data: {
-              definition_id: null,
-              title: issue?.title || "",
+              def_id: null,
+              name: issue?.title || "",
               description: issue?.description
                 ? String(issue.description).replace(/<[^>]*>/g, "").slice(0, 200)
                 : "",
-              source_type: "issue",
-              source_id: id,
-              source_data: {
-                issue_id: id,
-                status: status,
-                is_major: issue?.is_major || false,
-              },
               assignee_id: to_user_id,
               assignee_name: to_user_name || "",
               project_id: issue?.project_id || null,

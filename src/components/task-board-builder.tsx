@@ -378,7 +378,7 @@ export function TaskBoardBuilder({
         {extraColumns.map((col, idx) => (
           <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border bg-white text-xs">
             <input value={col.name} onChange={(e) => updateExtraColumn(idx, "name", e.target.value)}
-              placeholder="列名" className="w-24 px-2 py-1 border rounded text-xs outline-none focus:border-blue-400" />
+              placeholder="列名" className="w-48 px-2 py-1 border rounded text-xs outline-none focus:border-blue-400" />
             <span className="text-gray-400 text-[11px]">{SUPPLEMENT_TYPES.find(t => t.code === col.type)?.name || col.type}</span>
             {(col.type === "linked_text" || col.type === "linked_date") && (
               <>
@@ -387,7 +387,7 @@ export function TaskBoardBuilder({
                 </div>
                 <span className="text-gray-300">→</span>
                 <Select value={col.writeback_column || ""} onValueChange={(v) => updateExtraColumn(idx, "writeback_column", v)}>
-                  <SelectTrigger className="h-7 text-xs w-36">
+                  <SelectTrigger className="h-7 text-xs w-56">
                     <SelectValue placeholder="选择写回目标列" />
                   </SelectTrigger>
                   <SelectContent>

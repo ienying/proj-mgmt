@@ -572,7 +572,7 @@ function TaskInstanceCard({ instance, variant, onAction, onReportIssue, onOpenFo
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-sm font-medium text-gray-900 truncate">{instance.title}</span>
-              {instance.is_late && <Badge className="text-[10px] bg-orange-100 text-orange-700">迟交</Badge>}
+              {instance.status === "overdue" && <Badge className="text-[10px] bg-orange-100 text-orange-700">迟交</Badge>}
             </div>
             <div className="flex items-center gap-2 flex-wrap text-xs text-gray-400">
               {instance.source_type && instance.source_type !== "task" && (
