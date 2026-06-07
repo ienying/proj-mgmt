@@ -103,7 +103,7 @@ export function TaskFormDialog({
             setColumns(cols);
 
             // 加载关联字段运行时数据
-            const linkedCols = rawCols.filter((c) => c.type === "linked_select" || c.type === "linked_text");
+            const linkedCols = rawCols.filter((c) => c.type === "linked_select" || c.type === "linked_text" || c.type === "linked_date");
             if (linkedCols.length > 0) {
               const newLinkedOpts: Record<string, string[]> = {};
               const newLinkedRecs: Record<string, Array<{ id: string; label: string; pid: string }>> = {};
@@ -170,9 +170,9 @@ export function TaskFormDialog({
       const json = await res.json();
       if (json.error) { alert("提交失败：" + json.error); setSaving(false); return; }
 
-      // 关联文本回写
-      const linkedTextCols = columns.filter((c) => c.type === "linked_text");
-      for (const col of linkedTextCols) {
+      // 关联文本/日期回写
+      const linkedWritebackCols = columns.filter((c) => c.type === "linked_text" || c.type === "linked_date");
+      for (const col of linkedWritebackCols) {
         const key = col.name.toLowerCase().replace(/\s+/g, "_");
         const val = formData[key];
         if (!val) continue;
@@ -281,6 +281,32 @@ export function TaskFormDialog({
           </Select>
           <Input value={formData[key] || ""} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField(key, e.target.value)}
             placeholder={`输入回写内容${col.required ? " *" : ""}`} className={baseClass} />
+        </div>
+      );
+    }
+
+    // 关联日期
+    if (col.type === "linked_date") {
+      const recs = linkedRecords[col.name] || [];
+      const sourceFieldName = col.linked_source_field;
+      const sourceFieldKey = sourceFieldName ? sourceFieldName.toLowerCase().replace(/\s+/g, "_") + "_rids" : "";
+      const sourceRids = sourceFieldKey ? (formData[sourceFieldKey] || "").split(",").filter(Boolean) : [];
+      const sourceValues = sourceFieldName ? (formData[sourceFieldName.toLowerCase().replace(/\s+/g, "_")] || "").split(",").filter(Boolean) : [];
+      const currentTarget = linkedTextTargets[col.name] || sourceRids.join(",") || "";
+      return (
+        <div className="space-y-3">
+          {sourceFieldName && sourceRids.length > 0 && (
+            <div className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+              已关联「{sourceFieldName}」的 {sourceRids.length} 条记录
+              {sourceValues.length > 0 && <span className="ml-1 text-slate-500">（{sourceValues.join("、")}）</span>}
+            </div>
+          )}
+          <Select value={currentTarget} onValueChange={(v: string) => setLinkedTextTargets((prev) => ({ ...prev, [col.name]: v }))}>
+            <SelectTrigger className={baseClass}><SelectValue placeholder="选择目标记录" /></SelectTrigger>
+            <SelectContent>{recs.map((r) => (<SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>))}</SelectContent>
+          </Select>
+          <Input type="date" value={formData[key] || ""} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField(key, e.target.value)}
+            className={baseClass} />
         </div>
       );
     }

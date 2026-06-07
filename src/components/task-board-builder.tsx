@@ -43,6 +43,7 @@ const SUPPLEMENT_TYPES = [
   { code: "select", name: "单选", icon: FileText },
   { code: "user", name: "用户", icon: FileText },
   { code: "linked_text", name: "写回文本", icon: Link },
+  { code: "linked_date", name: "写回日期", icon: Link },
 ];
 
 export function TaskBoardBuilder({
@@ -59,6 +60,7 @@ export function TaskBoardBuilder({
   const [moduleTables, setModuleTables] = useState<Array<{ code: string; name: string }>>([]);
   const [moduleTypes, setModuleTypes] = useState<Array<{ code: string; name: string }>>([]);
   const [sourceTableCols, setSourceTableCols] = useState<Record<string, Array<{ name: string; type: string }>>>({});
+  const [visibleCols, setVisibleCols] = useState<Set<string>>(new Set());
   const [recordAssignees, setRecordAssignees] = useState<Record<string, Record<number, string>>>({});
   const getRecordAssignee = (recordId: string, nodeOrder: number) => recordAssignees[recordId]?.[nodeOrder] || "";
   const setRecordAssignee = (recordId: string, nodeOrder: number, assigneeId: string) => {
@@ -106,7 +108,9 @@ export function TaskBoardBuilder({
       const r2 = await fetch("/api/standards");
       const stds = (await r2.json()).data || [];
       const def = stds.find((s: Record<string, unknown>) => s.table_code === browseTable);
-      setBrowseCols((def?.columns_config as Array<{ name: string; type: string }>) || []);
+      const cols = (def?.columns_config as Array<{ name: string; type: string }>) || [];
+      setBrowseCols(cols);
+      setVisibleCols(new Set(cols.map(c => c.name)));
       // 缓存列信息供回写文本使用
       if (def?.columns_config) {
         setSourceTableCols(prev => { if (prev[browseTable]) return prev; return { ...prev, [browseTable]: def.columns_config as Array<{ name: string; type: string }> }; });
@@ -155,7 +159,7 @@ export function TaskBoardBuilder({
     const col: ExtraColumn = {
       name: "", type: typeCode, required: false, sort_order: extraColumns.length,
       options: typeCode === "select" ? [] : undefined,
-      writeback_column: typeCode === "linked_text" ? "" : undefined,
+      writeback_column: (typeCode === "linked_text" || typeCode === "linked_date") ? "" : undefined,
       fillable_by: "anyone",
     };
     onExtraColumnsChange([...extraColumns, col]);
@@ -230,19 +234,51 @@ export function TaskBoardBuilder({
             <Plus className="w-3 h-3 mr-1" /> 加入看板
           </Button>
         </div>
-        {browseTable && browseData.length > 0 && (
-          <div className="max-h-48 overflow-y-auto border rounded bg-white">
-            {browseData.map(rec => (
-              <label key={String(rec.id)} className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0 transition-colors">
-                <Checkbox checked={selectedRecordIds.has(String(rec.id))}
-                  onCheckedChange={(c) => {
-                    const next = new Set(selectedRecordIds);
-                    c ? next.add(String(rec.id)) : next.delete(String(rec.id));
-                    setSelectedRecordIds(next);
-                  }} />
-                <span className="truncate">{browseCols.length > 0 ? String(rec[browseCols[0].name] || rec.id) : String(rec.id)}</span>
+        {browseTable && browseCols.length > 0 && (
+          <div className="flex flex-wrap gap-1 px-1">
+            {browseCols.map(col => (
+              <label key={col.name} className="flex items-center gap-1 text-[10px] cursor-pointer px-1.5 py-0.5 rounded hover:bg-gray-100">
+                <Checkbox checked={visibleCols.has(col.name)} onCheckedChange={(c) => {
+                  const next = new Set(visibleCols);
+                  c ? next.add(col.name) : next.delete(col.name);
+                  setVisibleCols(next);
+                }} />
+                {col.name}
               </label>
             ))}
+          </div>
+        )}
+        {browseTable && browseData.length > 0 && (
+          <div className="max-h-64 overflow-auto border rounded bg-white">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 sticky top-0">
+                <tr>
+                  <th className="w-8 px-2 py-2"></th>
+                  {browseCols.filter(col => visibleCols.has(col.name)).map(col => (
+                    <th key={col.name} className="text-left px-2 py-2 font-medium text-slate-500 whitespace-nowrap">{col.name}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {browseData.map(rec => (
+                  <tr key={String(rec.id)} className="hover:bg-slate-50">
+                    <td className="px-2 py-1.5">
+                      <Checkbox checked={selectedRecordIds.has(String(rec.id))}
+                        onCheckedChange={(c) => {
+                          const next = new Set(selectedRecordIds);
+                          c ? next.add(String(rec.id)) : next.delete(String(rec.id));
+                          setSelectedRecordIds(next);
+                        }} />
+                    </td>
+                    {browseCols.filter(col => visibleCols.has(col.name)).map(col => (
+                      <td key={col.name} className="px-2 py-1.5 text-slate-600 truncate max-w-[200px]" title={String(rec[col.name] || "-")}>
+                        {String(rec[col.name] || "-")}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -269,7 +305,7 @@ export function TaskBoardBuilder({
                   {extraColumns.map((col, i) => (
                     <th key={i} className="text-left px-2 py-1.5 font-medium text-gray-500">
                       {col.name || `列${i + 1}`}
-                      {col.type === "linked_text" && <Badge variant="outline" className="ml-1 text-[9px] px-1 py-0 h-4">写回</Badge>}
+                      {(col.type === "linked_text" || col.type === "linked_date") && <Badge variant="outline" className="ml-1 text-[9px] px-1 py-0 h-4">写回</Badge>}
                     </th>
                   ))}
                   {workflowNodes && workflowNodes.filter(n => n.name.trim()).map(node => (
@@ -333,7 +369,7 @@ export function TaskBoardBuilder({
             <input value={col.name} onChange={(e) => updateExtraColumn(idx, "name", e.target.value)}
               placeholder="列名" className="w-24 px-2 py-1 border rounded text-xs outline-none focus:border-blue-400" />
             <span className="text-gray-400 text-[11px]">{SUPPLEMENT_TYPES.find(t => t.code === col.type)?.name || col.type}</span>
-            {col.type === "linked_text" && (
+            {(col.type === "linked_text" || col.type === "linked_date") && (
               <>
                 <div className="text-[10px] text-amber-600 bg-amber-50 rounded px-2 py-1 -mt-1 mb-1">
                   <TooltipProvider><Tooltip delayDuration={300}><TooltipTrigger asChild><span className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 cursor-help">回写文本 <HelpCircle className="w-3 h-3" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[300px] text-xs leading-relaxed"><p>回写文本允许审批人在表单中填写内容，提交后自动写入到关联项目表的对应记录字段。</p><p className="text-gray-400 mt-1">例如：审批人填写"审批意见"，提交后自动更新到需求表中对应记录的"审批意见"列。</p></TooltipContent></Tooltip></TooltipProvider>
