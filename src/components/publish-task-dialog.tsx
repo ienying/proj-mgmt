@@ -323,12 +323,17 @@ export function PublishTaskDialog({
         description,
         task_type: taskType,
         task_mode: taskMode,
-        workflow_nodes: taskMode === "approval" ? workflowNodes.filter((n) => n.name.trim()) : null,
+        workflow_nodes: taskMode === "approval" ? wfNodes.filter((n) => n.name.trim()) : null,
         form_fields_config: taskMode === "approval" ? parsedColumns : null,
-        assignee_ids: assignMode === "person" ? selectedAssigneeIds : [],
-        project_ids: assignMode === "project"
-          ? selectedProjectIds
-          : (assigneeProjectId && assigneeProjectId !== "none" ? [assigneeProjectId] : []),
+        assignee_ids: taskMode === "approval"
+          ? []
+          : assignMode === "person" ? selectedAssigneeIds : [],
+        project_ids: taskMode === "approval"
+          ? selectedProjects
+          : assignMode === "project"
+            ? selectedProjectIds
+            : (assigneeProjectId && assigneeProjectId !== "none" ? [assigneeProjectId] : []),
+        board_records: taskMode === "approval" ? boardRecords : null,
         form_source: formSource,
         form_table_code: formTableCode || null,
         form_table_name: formTableName || null,

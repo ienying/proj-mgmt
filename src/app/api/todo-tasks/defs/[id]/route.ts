@@ -28,7 +28,7 @@ export async function PUT(
   }
 }
 
-// DELETE /api/todo-tasks/defs/[id]
+// DELETE /api/todo-tasks/defs/[id]?user_id=xxx&user_role=xxx
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -36,6 +36,27 @@ export async function DELETE(
   try {
     const client = await createServerClient();
     const { id } = await params;
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get("user_id");
+    const userRole = searchParams.get("user_role");
+
+    // 权限检查：先查询任务定义
+    const { data: def } = await client.rpc("dp_get_by_id", {
+      p_table: "todo_task_defs",
+      p_id: id,
+    });
+
+    if (!def) {
+      return NextResponse.json({ error: "任务不存在" }, { status: 404 });
+    }
+
+    const taskDef = def as Record<string, unknown>;
+    const isCreator = userId && String(taskDef.created_by) === userId;
+    const isSuperAdmin = userRole === "super_admin";
+
+    if (!isCreator && !isSuperAdmin) {
+      return NextResponse.json({ error: "无权限删除此任务" }, { status: 403 });
+    }
 
     // 先删除关联的实例
     const { data: instances } = await client.rpc("dp_select", {

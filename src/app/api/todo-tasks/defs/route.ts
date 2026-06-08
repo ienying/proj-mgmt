@@ -34,10 +34,25 @@ export async function GET(request: NextRequest) {
     );
 
     // Map DB column names to frontend-expected field names
-    const mapped = items.map((r) => ({
-      ...r,
-      title: r.name,
-    }));
+    const mapped = items.map((r) => {
+      const periodConfig = (r.period_config || {}) as Record<string, unknown>;
+      return {
+        ...r,
+        title: r.name,
+        // Extract nested fields from period_config JSONB
+        task_mode: periodConfig.task_mode || r.task_mode,
+        form_source: periodConfig.form_source || null,
+        form_table_code: periodConfig.form_table_code || null,
+        form_table_name: periodConfig.form_table_name || null,
+        created_by_name: periodConfig.created_by_name || null,
+        assignee_ids: periodConfig.assignee_ids || [],
+        project_ids: periodConfig.project_ids || [],
+        deadline_config: periodConfig.deadline_config || null,
+        reminder_enabled: periodConfig.reminder_enabled ?? true,
+        reminder_before_days: periodConfig.reminder_before_days ?? 3,
+        allow_late_complete: periodConfig.allow_late_complete ?? true,
+      };
+    });
 
     return NextResponse.json({ data: mapped });
   } catch (error: unknown) {
@@ -124,8 +139,10 @@ export async function POST(request: NextRequest) {
         definition_id: String(defId),
         title,
         task_type,
+        task_mode: task_mode || null,
         assignee_ids,
         project_ids,
+        workflow_nodes: workflow_nodes || null,
         periodic_type,
         deadline_config,
       });
@@ -145,13 +162,15 @@ async function generateInstances(
     definition_id: string;
     title: string;
     task_type: string;
+    task_mode?: string | null;
     assignee_ids: string[];
     project_ids: string[];
+    workflow_nodes?: unknown[] | null;
     periodic_type?: string;
     deadline_config?: Record<string, unknown>;
   }
 ) {
-  const { definition_id, title, task_type, assignee_ids, project_ids, periodic_type, deadline_config } = params;
+  const { definition_id, title, task_type, task_mode, assignee_ids, project_ids, workflow_nodes, periodic_type, deadline_config } = params;
 
   // 计算周期标签和截止日期
   const now = new Date();
@@ -199,7 +218,35 @@ async function generateInstances(
 
   const instances: Array<Record<string, unknown>> = [];
 
-  if (project_ids && project_ids.length > 0) {
+  // 流程型任务：从工作流节点提取处理人
+  if (task_mode === "approval" && workflow_nodes && Array.isArray(workflow_nodes) && workflow_nodes.length > 0) {
+    const firstNode = workflow_nodes[0] as Record<string, unknown>;
+    const handlerIds: string[] = Array.isArray(firstNode.handler_ids) ? firstNode.handler_ids as string[] : [];
+    const projectId = project_ids.length > 0 ? project_ids[0] : null;
+    const project = projectId ? projectMap.get(projectId) : null;
+    const projectName = project ? String(project.project_name) : null;
+
+    for (const handlerId of handlerIds) {
+      const user = userMap.get(handlerId);
+      const assigneeName = user ? String(user.name) : "";
+      instances.push({
+        def_id: definition_id,
+        name: periodLabel ? `${periodLabel} ${title}` : title,
+        assignee_id: handlerId,
+        assignee_name: assigneeName,
+        project_id: projectId,
+        project_name: projectName,
+        status: "pending",
+        due_date: dueDate,
+        period_label: periodLabel || null,
+        current_node_id: firstNode.id ? String(firstNode.id) : null,
+        current_node_index: 0,
+      });
+    }
+
+    // 保存工作流模板和节点到专用表
+    await saveWorkflowTemplate(client, definition_id, workflow_nodes as Record<string, unknown>[]);
+  } else if (project_ids && project_ids.length > 0) {
     // 按项目指派
     for (const projectId of project_ids) {
       const project = projectMap.get(projectId);
@@ -250,6 +297,46 @@ async function generateInstances(
     await client.rpc("dp_insert", {
       p_table: "todo_task_instances",
       p_data: instance,
+    });
+  }
+}
+
+async function saveWorkflowTemplate(
+  client: Awaited<ReturnType<typeof createServerClient>>,
+  taskDefId: string,
+  nodes: Record<string, unknown>[],
+) {
+  // 删除旧模板
+  const { data: oldTmpls } = await client.rpc("dp_select", { p_table: "workflow_templates" });
+  const oldTmpl = (oldTmpls as Array<Record<string, unknown>>)?.find(t => t.task_def_id === taskDefId);
+  if (oldTmpl) {
+    await client.rpc("execute_sql", {
+      p_sql: `DELETE FROM design_public.workflow_nodes WHERE template_id = '${oldTmpl.id}'`,
+    });
+    await client.rpc("execute_sql", {
+      p_sql: `DELETE FROM design_public.workflow_templates WHERE id = '${oldTmpl.id}'`,
+    });
+  }
+
+  // 创建新模板
+  const tmplId = crypto.randomUUID();
+  await client.rpc("execute_sql", {
+    p_sql: `INSERT INTO design_public.workflow_templates (id, task_def_id, allow_forward, allow_return)
+            VALUES ('${tmplId}', '${taskDefId}', true, true)`,
+  });
+
+  // 创建节点
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    const nodeId = n.id || crypto.randomUUID();
+    const handlerIds = (n.handler_ids as string[]) || [];
+    const fillableFields = (n.fillable_fields as string[]) || [];
+    await client.rpc("execute_sql", {
+      p_sql: `INSERT INTO design_public.workflow_nodes (id, template_id, name, order_index, handler_ids, handler_mode, deadline_days, reminder_hours, fillable_fields)
+              VALUES ('${nodeId}', '${tmplId}', '${String(n.name || "").replace(/'/g, "''")}', ${i},
+                      ARRAY[${handlerIds.map((h: string) => "'" + h + "'").join(",")}],
+                      '${n.handler_mode || "any_one"}', ${n.deadline_days || 2}, ${n.reminder_hours || 24},
+                      ARRAY[${fillableFields.map((f: string) => "'" + f + "'").join(",")}])`,
     });
   }
 }

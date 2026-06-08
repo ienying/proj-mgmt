@@ -41,12 +41,45 @@ export async function GET(request: NextRequest) {
         new Date(String(a.created_at)).getTime()
     );
 
-    // Map DB column names to frontend-expected field names
-    const mapped = items.map((r) => ({
-      ...r,
-      title: r.name,
-      definition_id: r.def_id,
-    }));
+    // Fetch task definitions to join metadata
+    const { data: defs } = await client.rpc("dp_select", {
+      p_table: "todo_task_defs",
+    });
+    const defMap = new Map<string, Record<string, unknown>>();
+    if (defs) {
+      for (const d of defs as Record<string, unknown>[]) {
+        defMap.set(String(d.id), d);
+      }
+    }
+
+    // Map DB column names to frontend-expected field names and join definition metadata
+    const mapped = items.map((r) => {
+      const def = defMap.get(String(r.def_id || ""));
+      const periodConfig = (def?.period_config || {}) as Record<string, unknown>;
+      const wfNodes = (periodConfig.workflow_nodes || []) as Array<Record<string, unknown>>;
+      const currentIndex = typeof r.current_node_index === "number"
+        ? r.current_node_index
+        : Number(r.current_node_index || 0);
+      const currentNode = wfNodes[currentIndex] || null;
+
+      return {
+        ...r,
+        title: r.name,
+        definition_id: r.def_id,
+        // Join definition metadata for form/task_mode
+        _task_type: def?.task_type || null,
+        _task_mode: periodConfig.task_mode || null,
+        _form_source: periodConfig.form_source || null,
+        _form_table_code: periodConfig.form_table_code || null,
+        _form_table_name: periodConfig.form_table_name || null,
+        _workflow_nodes: wfNodes,
+        _current_node_name: currentNode ? currentNode.name : null,
+        _current_node_index: currentIndex,
+        _total_nodes: wfNodes.length,
+        _current_node_handler_mode: currentNode ? currentNode.handler_mode : null,
+        _current_node_fillable_fields: currentNode ? currentNode.fillable_fields : null,
+      };
+    });
 
     return NextResponse.json({ data: mapped });
   } catch (error: unknown) {

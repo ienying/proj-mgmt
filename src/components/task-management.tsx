@@ -5,7 +5,7 @@ import {
   CheckSquare, ClipboardList, Clock, Filter, Search, Loader2, Inbox,
   Send, Calendar, User, ListTodo, Plus, BarChart3,
   CheckCircle2, AlertTriangle, Circle, RotateCcw, Users, Building2,
-  TrendingUp, ArrowLeft, Trash2,
+  TrendingUp, ArrowLeft, Trash2, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 // TaskManagement - unified todo task component
@@ -60,7 +60,7 @@ interface TaskInstance {
   assignee_name?: string;
   project_id?: string;
   project_name?: string;
-  status: "pending" | "in_progress" | "completed" | "overdue" | "cancelled";
+  status: "pending" | "in_progress" | "completed" | "overdue" | "cancelled" | "rejected" | "returned" | "waiting" | "transferred";
   due_date?: string;
   completed_at?: string;
   form_record_id?: string;
@@ -72,11 +72,20 @@ interface TaskInstance {
   description?: string;
   priority?: string;
   is_read?: boolean;
+  current_node_id?: string;
+  current_node_index?: number;
   // join fields
   _task_type?: string;
+  _task_mode?: string;
   _form_source?: string;
   _form_table_code?: string;
   _form_table_name?: string;
+  _workflow_nodes?: Array<Record<string, unknown>>;
+  _current_node_name?: string;
+  _current_node_index?: number;
+  _total_nodes?: number;
+  _current_node_handler_mode?: string;
+  _current_node_fillable_fields?: string[];
 }
 
 interface TaskStats {
@@ -92,7 +101,7 @@ interface TaskStats {
 }
 
 interface TaskManagementProps {
-  currentUser?: { id: string; name: string; department?: string } | null;
+  currentUser?: { id: string; name: string; department?: string; role?: string } | null;
 }
 
 type TabKey = "my" | "published" | "all" | "stats";
@@ -155,6 +164,8 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
     title?: string; desc?: string; dueDate?: string; status?: string; assignee?: string;
     id?: string; projectName?: string; recordSource?: string;
     nodeName?: string; nodeOrder?: number; totalNodes?: number;
+    fillableFields?: string[];
+    isApproval?: boolean;
   } | null>(null);
 
   // 加载我的待办
@@ -246,12 +257,34 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
     else if (activeTab === "stats") loadStats();
   };
 
-  const handleInstanceAction = async (instanceId: string, action: "start" | "complete" | "reject" | "transfer" | "return") => {
+  const handleInstanceAction = async (instanceId: string, action: "start" | "complete" | "reject" | "transfer" | "return" | "advance") => {
     try {
+      // 工作流推进（审批流）
+      if (action === "advance" || action === "return" || action === "reject") {
+        const endpoint = `/api/todo-tasks/instances/${instanceId}/advance`;
+        const body: Record<string, unknown> = {
+          action: action === "advance" ? "advance" : action,
+          handler_id: currentUser?.id,
+          handler_name: currentUser?.name,
+        };
+        if (action === "reject" && !confirm("确定驳回？任务将标记为驳回状态。")) return;
+        if (action === "return" && !confirm("确定退回上一节点？")) return;
+        const res = await fetch(endpoint, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+        });
+        const json = await res.json();
+        if (json.error) { alert(json.error); return; }
+        if (json.data?.message) {
+          // 可以用 toast，这里简单处理
+        }
+        handleRefresh();
+        window.dispatchEvent(new CustomEvent("refresh-badges"));
+        return;
+      }
+
       let body: Record<string, unknown> = {};
       if (action === "start") body = { status: "in_progress" };
       else if (action === "complete") body = { status: "completed" };
-      else if (action === "reject") { if (!confirm("确定驳回？任务将标记为驳回状态。")) return; body = { status: "rejected" }; }
       else if (action === "transfer") {
         const toName = prompt("转办给谁？（输入姓名）");
         if (!toName?.trim()) return;
@@ -259,7 +292,6 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
         if (!target) { alert("未找到该用户"); return; }
         body = { status: "transferred", transferred_to: target.id, transferred_to_name: target.name };
       }
-      else if (action === "return") { if (!confirm("确定退回上一节点？")) return; body = { status: "returned" }; }
       await fetch(`/api/todo-tasks/instances/${instanceId}`, {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
@@ -278,10 +310,12 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
 
   // 打开表单填写弹窗
   const handleOpenForm = useCallback((instance: TaskInstance) => {
-    const ftc = (instance as any).form_table_code || "";
-    const ftn = (instance as any).form_table_name || "";
+    const ftc = (instance as any)._form_table_code || (instance as any).form_table_code || "";
+    const ftn = (instance as any)._form_table_name || (instance as any).form_table_name || "";
     if (!ftc) return;
-    if (instance.project_id) {
+    const isApproval = (instance as any)._task_mode === "approval";
+    // 流程型任务始终打开表单弹窗，其他任务有项目则导航到项目视图
+    if (!isApproval && instance.project_id) {
       window.dispatchEvent(new CustomEvent("navigate-to-view", { detail: { projectId: instance.project_id, tableCode: ftc } }));
       return;
     }
@@ -290,9 +324,12 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
       title: instance.title, desc: instance.description,
       dueDate: instance.due_date, status: instance.status,
       assignee: instance.assignee_name, id: instance.id,
-      nodeName: (instance as any).node_name,
-      nodeOrder: (instance as any).node_order,
-      totalNodes: undefined,
+      projectName: instance.project_name,
+      nodeName: instance._current_node_name,
+      nodeOrder: instance._current_node_index != null ? instance._current_node_index + 1 : undefined,
+      totalNodes: instance._total_nodes,
+      fillableFields: instance._current_node_fillable_fields,
+      isApproval,
     });
     setFormDialogOpen(true);
   }, []);
@@ -423,6 +460,7 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
             defs={publishedDefs}
             loading={loading}
             onRefresh={handleRefresh}
+            currentUser={currentUser}
           />
         )}
         {activeTab === "all" && (
@@ -431,6 +469,7 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
             loading={loading}
             onAction={handleInstanceAction}
             onReportIssue={handleReportIssue}
+            onOpenForm={handleOpenForm}
           />
         )}
         {activeTab === "stats" && (
@@ -462,6 +501,10 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
         nodeName={formDialogInfo?.nodeName}
         nodeOrder={formDialogInfo?.nodeOrder}
         totalNodes={formDialogInfo?.totalNodes}
+        fillableFields={formDialogInfo?.fillableFields}
+        isApproval={formDialogInfo?.isApproval}
+        currentUserId={currentUser?.id}
+        currentUserName={currentUser?.name}
       />
     </div>
   );
@@ -558,6 +601,11 @@ function TaskInstanceCard({ instance, variant, onAction, onReportIssue, onOpenFo
   const typeCfg = instance._task_type ? TASK_TYPE_CONFIG[instance._task_type as keyof typeof TASK_TYPE_CONFIG] : null;
   const overdueDays = getOverdueDays(instance.due_date);
   const isOverdue = overdueDays > 0 && instance.status !== "completed";
+  const isApproval = instance._task_mode === "approval";
+  const hasWorkflow = isApproval && (instance._total_nodes || 0) > 0;
+  const nodeName = instance._current_node_name;
+  const nodeIndex = instance._current_node_index ?? 0;
+  const totalNodes = instance._total_nodes ?? 0;
 
   return (
     <div onClick={() => onOpenForm?.(instance)}
@@ -595,6 +643,11 @@ function TaskInstanceCard({ instance, variant, onAction, onReportIssue, onOpenFo
               <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium", statusCfg.bg, statusCfg.color)}>
                 {statusCfg.label}
               </span>
+              {hasWorkflow && nodeName && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-50 text-indigo-600">
+                  节点{nodeIndex + 1}/{totalNodes} {nodeName}
+                </span>
+              )}
               {instance.project_name && (
                 <span className="inline-flex items-center gap-1">
                   <Building2 className="w-3 h-3" />
@@ -618,31 +671,39 @@ function TaskInstanceCard({ instance, variant, onAction, onReportIssue, onOpenFo
 
           {/* 操作按钮 */}
           <div className="flex items-center gap-1 shrink-0">
-            {instance.status === "pending" && (
+            {instance.status === "pending" && !isApproval && (
               <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onAction(instance.id, "start")}>
                 开始
               </Button>
             )}
-            {(instance.status === "pending" || instance.status === "in_progress" || instance.status === "overdue") && (
+            {/* 流程型任务：推进按钮 */}
+            {isApproval && (instance.status === "pending" || instance.status === "in_progress" || instance.status === "overdue") && (
+              <Button size="sm" className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700" onClick={() => onAction(instance.id, "advance")}>
+                <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                提交
+              </Button>
+            )}
+            {/* 非流程型任务：完成按钮 */}
+            {!isApproval && (instance.status === "pending" || instance.status === "in_progress" || instance.status === "overdue") && (
               <Button size="sm" className="h-7 text-xs bg-green-600 hover:bg-green-700" onClick={() => onAction(instance.id, "complete")}>
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                 完成
               </Button>
             )}
             {/* 审批流：驳回 */}
-            {(instance as any).task_mode === "approval" && (instance.status === "pending" || instance.status === "in_progress") && (
+            {isApproval && (instance.status === "pending" || instance.status === "in_progress") && (
               <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => onAction(instance.id, "reject")}>
                 <AlertTriangle className="w-3.5 h-3.5 mr-1" />驳回
               </Button>
             )}
             {/* 审批流：退回 */}
-            {(instance as any).task_mode === "approval" && (instance.status === "pending" || instance.status === "in_progress") && (instance as any).node_order > 1 && (
+            {isApproval && (instance.status === "pending" || instance.status === "in_progress") && nodeIndex > 0 && (
               <Button size="sm" variant="ghost" className="h-7 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50" onClick={() => onAction(instance.id, "return")}>
                 <ArrowLeft className="w-3.5 h-3.5 mr-1" />退回
               </Button>
             )}
             {/* 审批流：转办 */}
-            {(instance as any).task_mode === "approval" && (instance.status === "pending" || instance.status === "in_progress") && (
+            {isApproval && (instance.status === "pending" || instance.status === "in_progress") && (
               <Button size="sm" variant="ghost" className="h-7 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50" onClick={() => onAction(instance.id, "transfer")}>
                 <RotateCcw className="w-3.5 h-3.5 mr-1" />转办
               </Button>
@@ -668,9 +729,33 @@ interface PublishedTaskListProps {
   defs: TaskDef[];
   loading: boolean;
   onRefresh: () => void;
+  currentUser?: { id: string; name: string; department?: string; role?: string } | null;
 }
 
-function PublishedTaskList({ defs, loading }: PublishedTaskListProps) {
+function PublishedTaskList({ defs, loading, onRefresh, currentUser }: PublishedTaskListProps) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const canDelete = (def: TaskDef) => {
+    if (!currentUser) return false;
+    if (currentUser.role === "super_admin") return true;
+    if (def.created_by === currentUser.id) return true;
+    return false;
+  };
+
+  const handleDelete = async (def: TaskDef) => {
+    if (!confirm(`确定要删除任务「${def.title}」及其所有实例吗？此操作不可恢复。`)) return;
+    setDeleting(def.id);
+    try {
+      const params = new URLSearchParams({ user_id: currentUser?.id || "", user_role: currentUser?.role || "" });
+      const res = await fetch(`/api/todo-tasks/defs/${def.id}?${params}`, { method: "DELETE" });
+      const json = await res.json();
+      if (json.error) { alert("删除失败：" + json.error); return; }
+      onRefresh();
+    } catch { alert("删除失败"); }
+    finally { setDeleting(null); }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-gray-400">
@@ -702,10 +787,11 @@ function PublishedTaskList({ defs, loading }: PublishedTaskListProps) {
         const overdue = def._overdue_count || 0;
         const pending = def._pending_count || 0;
 
+        const isExpanded = expandedId === def.id;
         return (
           <div key={def.id} className="bg-white rounded-xl border border-gray-200/80 shadow-sm hover:shadow-md transition-all overflow-hidden">
             <div className={cn("h-1", def.task_type === "periodic" ? "bg-gradient-to-r from-purple-500 to-purple-400" : "bg-gradient-to-r from-cyan-500 to-cyan-400")} />
-            <div className="p-4">
+            <div className="p-4 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : def.id)}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -738,11 +824,64 @@ function PublishedTaskList({ defs, loading }: PublishedTaskListProps) {
                     </div>
                   )}
                 </div>
-                <div className="text-xs text-gray-400 shrink-0">
-                  {formatDate(def.created_at)}
+                <div className="flex items-center gap-2 shrink-0">
+                  {canDelete(def) && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDelete(def); }}
+                      disabled={deleting === def.id}
+                      className="p-1 text-gray-300 hover:text-red-500 transition-colors"
+                      title="删除任务"
+                    >
+                      {deleting === def.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    </button>
+                  )}
+                  <div className="text-xs text-gray-400">
+                    {formatDate(def.created_at)}
+                  </div>
+                  {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                 </div>
               </div>
             </div>
+            {isExpanded && (
+              <div className="px-4 pb-4 border-t border-gray-100 pt-3">
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-gray-400">任务模式：</span>
+                    <span className="text-gray-700">{def.task_mode ? TASK_MODE_CONFIG[def.task_mode]?.label || def.task_mode : "-"}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">表单来源：</span>
+                    <span className="text-gray-700">{def.form_source === "standards" ? "规范表" : def.form_source === "excel_import" ? "Excel导入" : def.form_source || "-"}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">关联表：</span>
+                    <span className="text-gray-700">{def.form_table_name || def.form_table_code || "-"}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">创建时间：</span>
+                    <span className="text-gray-700">{formatDate(def.created_at)}</span>
+                  </div>
+                  {def.periodic_type && (
+                    <div>
+                      <span className="text-gray-400">周期类型：</span>
+                      <span className="text-gray-700">{{ daily: "每天", weekly: "每周", monthly: "每月", yearly: "每年" }[def.periodic_type] || def.periodic_type}</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-gray-400">提醒设置：</span>
+                    <span className="text-gray-700">{def.reminder_enabled ? `提前 ${def.reminder_before_days} 天` : "未开启"}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">超时补交：</span>
+                    <span className="text-gray-700">{def.allow_late_complete ? "允许" : "不允许"}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">创建者：</span>
+                    <span className="text-gray-700">{def.created_by_name || def.created_by || "-"}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       })}
@@ -759,9 +898,10 @@ interface AllTaskListProps {
   loading: boolean;
   onAction: (id: string, action: "start" | "complete" | "reject" | "transfer" | "return") => void;
   onReportIssue?: (instance: TaskInstance) => void;
+  onOpenForm?: (instance: TaskInstance) => void;
 }
 
-function AllTaskList({ instances, loading, onAction, onReportIssue }: AllTaskListProps) {
+function AllTaskList({ instances, loading, onAction, onReportIssue, onOpenForm }: AllTaskListProps) {
   const [filterAssignee, setFilterAssignee] = useState("all");
 
   const assignees = useMemo(() => {

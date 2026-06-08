@@ -31,6 +31,10 @@ interface TaskFormDialogProps {
   nodeName?: string;
   nodeOrder?: number;
   totalNodes?: number;
+  fillableFields?: string[];
+  isApproval?: boolean;
+  currentUserId?: string;
+  currentUserName?: string;
 }
 
 interface ColumnDef {
@@ -65,6 +69,7 @@ export function TaskFormDialog({
   open, onOpenChange, formTableCode, formTableName,
   instanceTitle, instanceDesc, instanceDueDate, instanceStatus, instanceAssignee,
   instanceId, projectName, recordSource, nodeName, nodeOrder, totalNodes,
+  fillableFields, isApproval, currentUserId, currentUserName,
 }: TaskFormDialogProps) {
   const statusCfg = instanceStatus ? STATUS_MAP[instanceStatus] || STATUS_MAP.pending : null;
   const [columns, setColumns] = useState<ColumnDef[]>([]);
@@ -162,13 +167,23 @@ export function TaskFormDialog({
   const handleSubmit = async () => {
     setSaving(true);
     try {
-      const res = await fetch("/api/form-data", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ table_code: formTableCode, record: formData }),
-      });
-      const json = await res.json();
-      if (json.error) { alert("提交失败：" + json.error); setSaving(false); return; }
+      let formRecordId = "";
+
+      // 如果有表单字段，先提交表单数据
+      const visibleColumns = fillableFields
+        ? columns.filter((c) => fillableFields.includes(c.name) || fillableFields.includes(c.name.toLowerCase().replace(/\s+/g, "_")))
+        : columns;
+
+      if (visibleColumns.length > 0) {
+        const res = await fetch("/api/form-data", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ table_code: formTableCode, record: formData }),
+        });
+        const json = await res.json();
+        if (json.error) { alert("提交失败：" + json.error); setSaving(false); return; }
+        if (json.data?.id) formRecordId = json.data.id;
+      }
 
       // 关联文本/日期回写
       const linkedWritebackCols = columns.filter((c) => c.type === "linked_text" || c.type === "linked_date");
@@ -206,10 +221,29 @@ export function TaskFormDialog({
         }
       }
 
-      // 自动完成任务实例
+      // 处理任务实例
       if (instanceId) {
         try {
-          await fetch(`/api/todo-tasks/instances/${instanceId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "completed" }) });
+          if (isApproval) {
+            // 流程型任务：推进工作流
+            await fetch(`/api/todo-tasks/instances/${instanceId}/advance`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "advance",
+                handler_id: currentUserId,
+                handler_name: currentUserName,
+                form_record_id: formRecordId || undefined,
+              }),
+            });
+          } else {
+            // 非流程型任务：直接完成
+            await fetch(`/api/todo-tasks/instances/${instanceId}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status: "completed", form_record_id: formRecordId || undefined }),
+            });
+          }
           window.dispatchEvent(new CustomEvent("refresh-badges"));
           window.dispatchEvent(new CustomEvent("refresh-tasks"));
         } catch { /* skip */ }
@@ -480,15 +514,25 @@ export function TaskFormDialog({
                       <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">表单填写</span>
                       <div className="flex-1 h-px bg-slate-200" />
                     </div>
-                    {columns.map((col) => (
-                      <div key={col.name} className="space-y-2">
-                        <Label className="text-sm font-semibold text-slate-700">
-                          {col.name}
-                          {col.required && <span className="text-red-400 ml-1">*</span>}
-                        </Label>
-                        {renderField(col)}
-                      </div>
-                    ))}
+                    {columns.map((col) => {
+                      const isFillable = !fillableFields || fillableFields.length === 0 ||
+                        fillableFields.includes(col.name) ||
+                        fillableFields.includes(col.name.toLowerCase().replace(/\s+/g, "_"));
+                      return (
+                        <div key={col.name} className={`space-y-2 ${!isFillable ? "opacity-60" : ""}`}>
+                          <Label className={`text-sm font-semibold ${isFillable ? "text-slate-700" : "text-slate-400"}`}>
+                            {col.name}
+                            {col.required && <span className="text-red-400 ml-1">*</span>}
+                            {!isFillable && <span className="text-xs text-slate-400 ml-2 font-normal">(只读)</span>}
+                          </Label>
+                          {isFillable ? renderField(col) : (
+                            <div className="w-full rounded-lg border-slate-200 bg-slate-50 text-sm px-3 py-2.5 text-slate-400">
+                              {formData[col.name.toLowerCase().replace(/\s+/g, "_")] || "—"}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

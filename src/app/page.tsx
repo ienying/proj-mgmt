@@ -167,7 +167,7 @@ export default function HomePage() {
   const [standards, setStandards] = useState<TableDefinition[]>([]);
   const [badges, setBadges] = useState<{ todos: number; issues: number; messages: number }>({ todos: 0, issues: 0, messages: 0 });
   const userName = user?.name || "";
-  const currentUser = user ? { id: user.id, name: user.name, department: user.department || "", phone: user.phone || "" } : { id: "default_user", name: "", department: "", phone: "" };
+  const currentUser = user ? { id: user.id, name: user.name, department: user.department || "", phone: user.phone || "", role: user.role } : { id: "default_user", name: "", department: "", phone: "", role: "user" as const };
   const [viewingProject, setViewingProject] = useState<{
     id: string;
     project_name: string;

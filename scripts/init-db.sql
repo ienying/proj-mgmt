@@ -405,12 +405,92 @@ CREATE TABLE IF NOT EXISTS todo_task_instances (
   due_date VARCHAR(20),
   period_label VARCHAR(100),
   is_read BOOLEAN DEFAULT false,
+  form_record_id VARCHAR(36),
+  current_node_id VARCHAR(36),
+  current_node_index INTEGER DEFAULT 0,
   completed_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE
 );
 CREATE INDEX IF NOT EXISTS todo_task_instances_assignee_idx ON todo_task_instances(assignee_id);
 CREATE INDEX IF NOT EXISTS todo_task_instances_status_idx ON todo_task_instances(status);
+
+-- 工作流模板表
+CREATE TABLE IF NOT EXISTS workflow_templates (
+  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_def_id VARCHAR(36) NOT NULL,
+  allow_forward BOOLEAN DEFAULT true,
+  allow_return BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+-- 工作流节点表
+CREATE TABLE IF NOT EXISTS workflow_nodes (
+  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
+  template_id VARCHAR(36) NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  order_index INTEGER DEFAULT 0,
+  handler_ids TEXT[] DEFAULT '{}',
+  handler_mode VARCHAR(20) DEFAULT 'any_one',
+  deadline_days INTEGER DEFAULT 2,
+  reminder_hours INTEGER DEFAULT 24,
+  fillable_fields TEXT[] DEFAULT '{}',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS workflow_nodes_template_idx ON workflow_nodes(template_id);
+
+-- 工作流节点完成记录（用于 all 模式追踪各处理人完成状态）
+CREATE TABLE IF NOT EXISTS workflow_node_completions (
+  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
+  instance_id VARCHAR(36) NOT NULL,
+  node_id VARCHAR(36) NOT NULL,
+  handler_id VARCHAR(36) NOT NULL,
+  handler_name VARCHAR(100),
+  action VARCHAR(20) DEFAULT 'complete',
+  comment TEXT,
+  form_record_id VARCHAR(36),
+  completed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS wnc_instance_idx ON workflow_node_completions(instance_id);
+CREATE INDEX IF NOT EXISTS wnc_node_idx ON workflow_node_completions(node_id);
+
+-- 任务看板额外列定义
+CREATE TABLE IF NOT EXISTS task_extra_columns (
+  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_def_id VARCHAR(36) NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  type VARCHAR(20) DEFAULT 'text',
+  options TEXT[] DEFAULT '{}',
+  writeback_column VARCHAR(100),
+  fillable_by TEXT[] DEFAULT '{}',
+  sort_order INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS tec_task_def_idx ON task_extra_columns(task_def_id);
+
+-- 任务看板记录
+CREATE TABLE IF NOT EXISTS task_board_records (
+  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_instance_id VARCHAR(36),
+  sort_order INTEGER DEFAULT 0,
+  source_project_schema VARCHAR(100),
+  source_table_code VARCHAR(100),
+  source_record_id VARCHAR(36),
+  source_label TEXT,
+  source_data JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS tbr_instance_idx ON task_board_records(task_instance_id);
+
+-- 任务看板额外数据
+CREATE TABLE IF NOT EXISTS task_extra_data (
+  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
+  board_record_id VARCHAR(36) NOT NULL,
+  column_id VARCHAR(36) NOT NULL,
+  value TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ted_record_idx ON task_extra_data(board_record_id);
 
 CREATE TABLE IF NOT EXISTS todo_center_items (
   id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
