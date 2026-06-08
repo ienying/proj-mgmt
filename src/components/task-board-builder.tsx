@@ -307,52 +307,41 @@ export function TaskBoardBuilder({
             还没有记录，请从上方项目中选择记录加入看板
           </div>
         ) : (
-          <div className="border border-slate-200 rounded-lg overflow-x-auto">
-            <table className="text-xs table-auto" style={{ minWidth: Math.max(400, 100 + extraColumns.length * 140 + (workflowNodes?.filter(n => n.name.trim()).length || 0) * 160) }}>
+          <div className="border border-slate-200 rounded-lg overflow-x-auto max-w-full">
+            <table className="text-xs w-max border-collapse">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="text-left px-2 py-1.5 text-xs font-medium text-slate-500 w-6">#</th>
-                  <th className="text-left px-2 py-1.5 text-xs font-medium text-slate-500 min-w-[120px]">记录</th>
+                  <th className="sticky left-0 z-10 bg-slate-50 text-left px-2 py-1.5 text-xs font-medium text-slate-500 w-6">#</th>
+                  <th className="sticky left-6 z-10 bg-slate-50 text-left px-2 py-1.5 text-xs font-medium text-slate-500 w-[140px]">记录</th>
                   {extraColumns.map((col, i) => (
-                    <th key={i} className="text-left px-2 py-1.5 font-medium text-gray-500 whitespace-nowrap">
+                    <th key={i} className="text-left px-2 py-1.5 font-medium text-gray-500 whitespace-nowrap w-[100px]">
                       {col.name || `列${i + 1}`}
                       {(col.type === "linked_text" || col.type === "linked_date") && <Badge variant="outline" className="ml-1 text-[9px] px-1 py-0 h-4">写回</Badge>}
                     </th>
                   ))}
                   {workflowNodes && workflowNodes.filter(n => n.name.trim()).map(node => (
-                    <th key={`wf-h-${node.order}`} className="text-left px-2 py-1.5 font-medium text-amber-700 bg-amber-50/50 whitespace-nowrap">
-                      {node.name}（审批人）
+                    <th key={`wf-h-${node.order}`} className="text-left px-2 py-1.5 font-medium text-amber-700 bg-amber-50/50 whitespace-nowrap w-[130px]">
+                      {node.name}
                     </th>
                   ))}
-                  <th className="w-6"></th>
+                  <th className="w-8"></th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {records.map((rec, idx) => (
                   <tr key={idx} className="hover:bg-gray-50">
-                    <td className="px-2 py-1.5 text-slate-400 text-xs">{idx + 1}</td>
-                    <td className="px-2 py-1.5 text-slate-700 truncate max-w-[200px]" title={rec.source_label}>{rec.source_label}</td>
-                    {extraColumns.map((_, ci) => <td key={ci} className="px-2 py-1 text-gray-300">-</td>)}
-                    {workflowNodes && workflowNodes.filter(n => n.name.trim()).map(node => {
-                      return <td key={'wf-' + node.order} className="px-2 py-1" onClick={e => e.stopPropagation()}>
-                        <select defaultValue={node.assignee_id}
-                          className="text-xs border border-gray-200 rounded px-1 py-0.5 w-full bg-white hover:border-amber-300 focus:border-amber-400 outline-none">
-                          <option value={node.assignee_id}>{node.assignee_name || (userList?.find(u => u.id === node.assignee_id)?.name) || '未指定'}（默认）</option>
-                          {userList?.filter(u => u.id !== node.assignee_id).map(u => (
-                            <option key={u.id} value={u.id}>{u.name}</option>
-                          ))}
-                        </select>
-                      </td>;
-                    })}
+                    <td className="sticky left-0 z-10 bg-white px-2 py-1.5 text-slate-400 text-xs">{idx + 1}</td>
+                    <td className="sticky left-6 z-10 bg-white px-2 py-1.5 text-slate-700 truncate" title={rec.source_label}>{rec.source_label}</td>
+                    {extraColumns.map((_, ci) => <td key={ci} className="px-2 py-1 text-gray-300 text-center">-</td>)}
                     {workflowNodes && workflowNodes.filter(n => n.name.trim()).map(node => {
                       const defaultName = node.assignee_name || (userList?.find(u => u.id === node.assignee_id)?.name) || "未指定";
                       const overrideId = getRecordAssignee(rec.source_record_id, node.order);
                       const displayName = overrideId ? (userList?.find(u => u.id === overrideId)?.name || defaultName) : defaultName;
                       return (
-                        <td key={`wf-${node.order}`} className="px-2 py-1" onClick={e => e.stopPropagation()}>
+                        <td key={`wf-${node.order}`} className="px-1 py-1" onClick={e => e.stopPropagation()}>
                           <select value={overrideId || node.assignee_id} onChange={e => setRecordAssignee(rec.source_record_id, node.order, e.target.value)}
-                            className="text-xs border border-gray-200 rounded px-1 py-0.5 w-full bg-white hover:border-amber-300 focus:border-amber-400 outline-none">
-                            <option value={node.assignee_id}>{defaultName}（默认）</option>
+                            className="text-[11px] border border-gray-200 rounded px-1 py-0.5 w-[120px] bg-white hover:border-amber-300 focus:border-amber-400 outline-none truncate">
+                            <option value={node.assignee_id}>{defaultName}</option>
                             {userList?.filter(u => u.id !== node.assignee_id).map(u => (
                               <option key={u.id} value={u.id}>{u.name}</option>
                             ))}
@@ -360,7 +349,7 @@ export function TaskBoardBuilder({
                         </td>
                       );
                     })}
-                    
+
                     <td className="px-1">
                       <button onClick={() => removeRecord(idx)} className="text-red-300 hover:text-red-500"><Trash2 className="w-3 h-3" /></button>
                     </td>

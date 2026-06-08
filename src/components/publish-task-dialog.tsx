@@ -416,7 +416,7 @@ export function PublishTaskDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleReset(); onOpenChange(v); }}>
-      <DialogContent className="sm:max-w-[1100px] max-h-[90vh] h-[90vh] overflow-hidden flex flex-col !p-0 !gap-0 rounded-2xl border-0 shadow-2xl">
+      <DialogContent className="sm:max-w-[95vw] max-h-[90vh] h-[90vh] overflow-hidden flex flex-col !p-0 !gap-0 rounded-2xl border-0 shadow-2xl">
         {/* 顶部标题栏 */}
         <div className="w-full shrink-0 bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 px-6 py-4 rounded-t-2xl">
           <div className="flex items-center gap-3">
@@ -463,7 +463,7 @@ export function PublishTaskDialog({
           </div>
         </div>
 
-        <div className="overflow-y-auto flex-1 w-full px-6 py-4 scrollbar-thin">
+        <div className="overflow-auto flex-1 w-full min-w-0 px-6 py-4 scrollbar-thin">
         {/* 第1步：基本信息 */}
         {step === 1 && (
           <div className="space-y-4 w-full max-w-xl mx-auto">
