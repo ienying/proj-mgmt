@@ -645,60 +645,105 @@ export function TaskFormDialog({
                   </div>
                 )}
               </div>
-              {/* 看板记录表格 */}
+              {/* 看板记录卡片视图 */}
               {boardRecords.length > 0 && (
                 <div className="mt-6 pt-6 border-t border-slate-200">
                   <div className="flex items-center gap-3 mb-4">
                     <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">项目看板记录</span>
+                    <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{boardRecords.length} 条</span>
                     <div className="flex-1 h-px bg-slate-200" />
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm border border-slate-200 rounded-lg">
-                      <thead className="bg-slate-50">
-                        <tr>
-                          <th className="text-left px-3 py-2 font-medium text-slate-500 text-xs w-48">记录</th>
-                          {extraCols.map((ec) => (
-                            <th key={ec.id} className="text-left px-3 py-2 font-medium text-slate-500 text-xs">
-                              {ec.name}
-                              {ec.type === "linked_text" && <span className="text-[10px] text-sky-500 ml-1">写回</span>}
-                              {ec.type === "linked_date" && <span className="text-[10px] text-orange-500 ml-1">写回</span>}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {boardRecords.map((br) => (
-                          <tr key={br.id} className="hover:bg-slate-50/50">
-                            <td className="px-3 py-2 text-xs text-slate-600 truncate max-w-[200px]" title={br.source_label}>
+                  <div className="grid gap-3">
+                    {boardRecords.map((br, idx) => {
+                      const sourceFields = br.source_data && typeof br.source_data === "object"
+                        ? Object.entries(br.source_data as Record<string, unknown>)
+                            .filter(([k]) => !["id", "created_at", "updated_at", "sort_order", "data_source", "allow_delete", "_readonly"].includes(k))
+                            .slice(0, 8)
+                        : [];
+                      return (
+                        <div key={br.id} className="rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                          {/* 卡片头部 */}
+                          <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-50/70 border-b border-slate-100">
+                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 text-xs font-bold flex items-center justify-center">
+                              {idx + 1}
+                            </span>
+                            <span className="text-sm font-semibold text-slate-800 truncate flex-1" title={br.source_label}>
                               {br.source_label}
-                            </td>
-                            {extraCols.map((ec) => {
-                              const dataKey = `${br.id}_${ec.id}`;
-                              const val = extraData[dataKey] || "";
-                              const cellClass = "w-full text-xs border border-slate-200 rounded px-2 py-1 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 outline-none";
-                              if (ec.type === "select" && ec.options?.length) {
-                                return (
-                                  <td key={ec.id} className="px-2 py-1">
-                                    <select value={val} onChange={(e) => setExtraData((prev) => ({ ...prev, [dataKey]: e.target.value }))}
-                                      className={cellClass}>
-                                      <option value="">—</option>
-                                      {ec.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                                    </select>
-                                  </td>
-                                );
-                              }
-                              return (
-                                <td key={ec.id} className="px-2 py-1">
-                                  <input type="text" value={val}
-                                    onChange={(e) => setExtraData((prev) => ({ ...prev, [dataKey]: e.target.value }))}
-                                    placeholder={ec.name} className={cellClass} />
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                            </span>
+                            {br.source_table_code && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-slate-400 border-slate-200 shrink-0">
+                                {br.source_table_code}
+                              </Badge>
+                            )}
+                          </div>
+                          {/* 卡片内容：源数据字段 */}
+                          <div className="px-4 py-2.5">
+                            {sourceFields.length > 0 && (
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1.5 mb-3">
+                                {sourceFields.map(([key, value]) => {
+                                  const displayValue = value === null || value === undefined || value === ""
+                                    ? "—"
+                                    : typeof value === "object"
+                                      ? JSON.stringify(value)
+                                      : String(value);
+                                  return (
+                                    <div key={key} className="min-w-0">
+                                      <span className="text-[10px] text-slate-400 block truncate">{key}</span>
+                                      <span className="text-xs text-slate-700 block truncate" title={displayValue}>
+                                        {displayValue.length > 40 ? displayValue.slice(0, 40) + "…" : displayValue}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {/* 补充列字段 */}
+                            {extraCols.length > 0 && (
+                              <div className="border-t border-slate-100 pt-2.5 mt-1">
+                                <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-2">补充字段</span>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                  {extraCols.map((ec) => {
+                                    const dataKey = `${br.id}_${ec.id}`;
+                                    const val = extraData[dataKey] || "";
+                                    const inputBaseClass = "w-full text-xs border rounded-md px-2 py-1.5 outline-none transition-colors focus:ring-1";
+                                    const isWriteback = ec.type === "linked_text" || ec.type === "linked_date";
+                                    return (
+                                      <div key={ec.id} className="space-y-0.5">
+                                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                          {ec.name}
+                                          {isWriteback && (
+                                            <span className={`text-[9px] px-1 rounded ${ec.type === "linked_text" ? "bg-sky-50 text-sky-500" : "bg-orange-50 text-orange-500"}`}>
+                                              写回→{ec.writeback_column || "?"}
+                                            </span>
+                                          )}
+                                        </span>
+                                        {ec.type === "select" && ec.options?.length ? (
+                                          <select value={val}
+                                            onChange={(e) => setExtraData((prev) => ({ ...prev, [dataKey]: e.target.value }))}
+                                            className={`${inputBaseClass} bg-white border-slate-200 focus:border-indigo-400 focus:ring-indigo-200`}>
+                                            <option value="">—</option>
+                                            {ec.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                                          </select>
+                                        ) : ec.type === "date" || ec.type === "linked_date" ? (
+                                          <input type="date" value={val}
+                                            onChange={(e) => setExtraData((prev) => ({ ...prev, [dataKey]: e.target.value }))}
+                                            className={`${inputBaseClass} bg-white border-slate-200 focus:border-indigo-400 focus:ring-indigo-200`} />
+                                        ) : (
+                                          <input type="text" value={val}
+                                            onChange={(e) => setExtraData((prev) => ({ ...prev, [dataKey]: e.target.value }))}
+                                            placeholder={ec.name}
+                                            className={`${inputBaseClass} bg-white border-slate-200 focus:border-indigo-400 focus:ring-indigo-200`} />
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
