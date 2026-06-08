@@ -655,10 +655,15 @@ export function TaskFormDialog({
                   </div>
                   <div className="grid gap-3">
                     {boardRecords.map((br, idx) => {
+                      const SYSTEM_FIELDS = new Set([
+                        "id", "created_at", "updated_at", "sort_order", "data_source",
+                        "allow_delete", "_readonly", "_label", "project_id", "project_name",
+                        "table_code", "table_name", "module_type", "module_code",
+                        "schema_name", "record_id", "created_by", "updated_by",
+                      ]);
                       const sourceFields = br.source_data && typeof br.source_data === "object"
                         ? Object.entries(br.source_data as Record<string, unknown>)
-                            .filter(([k]) => !["id", "created_at", "updated_at", "sort_order", "data_source", "allow_delete", "_readonly"].includes(k))
-                            .slice(0, 8)
+                            .filter(([k, v]) => !SYSTEM_FIELDS.has(k) && v != null && v !== "")
                         : [];
                       return (
                         <div key={br.id} className="rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden">
@@ -679,18 +684,16 @@ export function TaskFormDialog({
                           {/* 卡片内容：源数据字段 */}
                           <div className="px-4 py-2.5">
                             {sourceFields.length > 0 && (
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1.5 mb-3">
+                              <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
                                 {sourceFields.map(([key, value]) => {
-                                  const displayValue = value === null || value === undefined || value === ""
-                                    ? "—"
-                                    : typeof value === "object"
-                                      ? JSON.stringify(value)
-                                      : String(value);
+                                  const displayValue = typeof value === "object"
+                                    ? JSON.stringify(value)
+                                    : String(value);
                                   return (
-                                    <div key={key} className="min-w-0">
+                                    <div key={key} className="min-w-0 max-w-[220px]">
                                       <span className="text-[10px] text-slate-400 block truncate">{key}</span>
                                       <span className="text-xs text-slate-700 block truncate" title={displayValue}>
-                                        {displayValue.length > 40 ? displayValue.slice(0, 40) + "…" : displayValue}
+                                        {displayValue.length > 60 ? displayValue.slice(0, 60) + "…" : displayValue}
                                       </span>
                                     </div>
                                   );
