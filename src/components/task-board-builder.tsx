@@ -307,31 +307,31 @@ export function TaskBoardBuilder({
             还没有记录，请从上方项目中选择记录加入看板
           </div>
         ) : (
-          <div className="border border-slate-200 rounded-lg overflow-hidden">
-            <table className="w-full text-xs">
+          <div className="border border-slate-200 rounded-lg overflow-x-auto">
+            <table className="text-xs table-auto" style={{ minWidth: Math.max(400, 100 + extraColumns.length * 140 + (workflowNodes?.filter(n => n.name.trim()).length || 0) * 160) }}>
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="text-left px-3 py-2 text-xs font-medium text-slate-500 w-8">#</th>
-                  <th className="text-left px-3 py-2 text-xs font-medium text-slate-500">记录</th>
+                  <th className="text-left px-2 py-1.5 text-xs font-medium text-slate-500 w-6">#</th>
+                  <th className="text-left px-2 py-1.5 text-xs font-medium text-slate-500 min-w-[120px]">记录</th>
                   {extraColumns.map((col, i) => (
-                    <th key={i} className="text-left px-2 py-1.5 font-medium text-gray-500">
+                    <th key={i} className="text-left px-2 py-1.5 font-medium text-gray-500 whitespace-nowrap">
                       {col.name || `列${i + 1}`}
                       {(col.type === "linked_text" || col.type === "linked_date") && <Badge variant="outline" className="ml-1 text-[9px] px-1 py-0 h-4">写回</Badge>}
                     </th>
                   ))}
                   {workflowNodes && workflowNodes.filter(n => n.name.trim()).map(node => (
-                    <th key={`wf-h-${node.order}`} className="text-left px-2 py-1.5 font-medium text-amber-700 bg-amber-50/50">
+                    <th key={`wf-h-${node.order}`} className="text-left px-2 py-1.5 font-medium text-amber-700 bg-amber-50/50 whitespace-nowrap">
                       {node.name}（审批人）
                     </th>
                   ))}
-                  <th className="w-8"></th>
+                  <th className="w-6"></th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {records.map((rec, idx) => (
                   <tr key={idx} className="hover:bg-gray-50">
-                    <td className="px-3 py-2 text-slate-400 text-xs">{idx + 1}</td>
-                    <td className="px-3 py-2 text-slate-700 truncate max-w-[250px]" title={rec.source_label}>{rec.source_label}</td>
+                    <td className="px-2 py-1.5 text-slate-400 text-xs">{idx + 1}</td>
+                    <td className="px-2 py-1.5 text-slate-700 truncate max-w-[200px]" title={rec.source_label}>{rec.source_label}</td>
                     {extraColumns.map((_, ci) => <td key={ci} className="px-2 py-1 text-gray-300">-</td>)}
                     {workflowNodes && workflowNodes.filter(n => n.name.trim()).map(node => {
                       return <td key={'wf-' + node.order} className="px-2 py-1" onClick={e => e.stopPropagation()}>
