@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, CheckCircle2, Calendar, User, FileText, Send, Clock } from "lucide-react";
+import { Loader2, CheckCircle2, Calendar, User, FileText, Send, Clock, ChevronDown } from "lucide-react";
 
 interface TaskFormDialogProps {
   open: boolean;
@@ -105,6 +105,7 @@ export function TaskFormDialog({
   const [boardRecords, setBoardRecords] = useState<BoardRecord[]>([]);
   const [extraCols, setExtraCols] = useState<ExtraColumnDef[]>([]);
   const [extraData, setExtraData] = useState<Record<string, string>>({}); // key: "brId_colId"
+  const [expandedRecords, setExpandedRecords] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!open || !formTableCode) return;
@@ -497,6 +498,14 @@ export function TaskFormDialog({
     }
   };
 
+  const formatDisplayValue = (value: unknown): string => {
+    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
+      return value.slice(0, 10);
+    }
+    if (typeof value === "object" && value !== null) return JSON.stringify(value);
+    return String(value ?? "");
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[85%] sm:max-h-[90vh] sm:h-[85vh] overflow-hidden flex flex-col p-0 gap-0 bg-white shadow-2xl border-0">
@@ -645,7 +654,7 @@ export function TaskFormDialog({
                   </div>
                 )}
               </div>
-              {/* 看板记录 — 横向卡片滚动 */}
+              {/* 看板记录 — 纵向堆叠列表 + 可折叠展开 */}
               {boardRecords.length > 0 && (
                 <div className="mt-6 pt-6 border-t border-slate-200">
                   <div className="flex items-center gap-3 mb-4 px-1">
@@ -653,8 +662,9 @@ export function TaskFormDialog({
                     <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{boardRecords.length} 条</span>
                     <div className="flex-1 h-px bg-slate-200" />
                   </div>
-                  <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+                  <div className="space-y-2">
                     {boardRecords.map((br, idx) => {
+                      const isExpanded = expandedRecords.has(br.id);
                       const SYSTEM_FIELDS = new Set([
                         "id", "created_at", "updated_at", "sort_order", "data_source",
                         "allow_delete", "_readonly", "_label", "project_id", "project_name",
@@ -665,85 +675,109 @@ export function TaskFormDialog({
                         ? Object.entries(br.source_data as Record<string, unknown>)
                             .filter(([k, v]) => !SYSTEM_FIELDS.has(k) && v != null && v !== "")
                         : [];
+
+                      const toggleExpand = () => {
+                        setExpandedRecords((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(br.id)) next.delete(br.id);
+                          else next.add(br.id);
+                          return next;
+                        });
+                      };
+
                       return (
-                        <div key={br.id} className="flex-shrink-0 w-[260px] rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
-                          {/* 卡片头部 */}
-                          <div className="flex items-center gap-2 px-3 py-2 bg-slate-50/70 border-b border-slate-100 shrink-0">
+                        <div key={br.id} className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
+                          {/* 折叠头部 */}
+                          <button
+                            type="button"
+                            onClick={toggleExpand}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50/70 transition-colors text-left"
+                          >
                             <span className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 text-[11px] font-bold flex items-center justify-center">
                               {idx + 1}
                             </span>
-                            <span className="text-xs font-semibold text-slate-800 truncate flex-1" title={br.source_label}>
+                            <span className="text-sm font-medium text-slate-800 truncate flex-1" title={br.source_label}>
                               {br.source_label}
                             </span>
                             {br.source_table_code && (
-                              <Badge variant="outline" className="text-[9px] px-1 py-0 text-slate-400 border-slate-200 shrink-0">
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-slate-400 border-slate-200 shrink-0">
                                 {br.source_table_code}
                               </Badge>
                             )}
-                          </div>
-                          {/* 卡片内容：源数据字段纵向排列 */}
-                          <div className="px-3 py-2 flex-1 overflow-y-auto space-y-1.5">
-                            {sourceFields.length > 0 ? (
-                              sourceFields.map(([key, value]) => {
-                                const displayValue = typeof value === "object"
-                                  ? JSON.stringify(value)
-                                  : String(value);
-                                return (
-                                  <div key={key} className="text-xs">
-                                    <span className="text-[10px] text-slate-400 block leading-tight">{key}</span>
-                                    <span className="text-slate-700 block leading-tight break-all" title={displayValue}>
-                                      {displayValue.length > 80 ? displayValue.slice(0, 80) + "…" : displayValue}
-                                    </span>
+                            <span className="text-xs text-slate-400 shrink-0">
+                              {sourceFields.length} 字段
+                            </span>
+                            <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                          </button>
+
+                          {/* 展开内容 */}
+                          {isExpanded && (
+                            <div className="border-t border-slate-100 bg-slate-50/30">
+                              <div className="px-4 py-3">
+                                {sourceFields.length > 0 ? (
+                                  <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                                    {sourceFields.map(([key, value]) => {
+                                      const displayValue = formatDisplayValue(value);
+                                      return (
+                                        <div key={key} className="flex items-start gap-2 text-xs min-w-0">
+                                          <span className="text-[11px] text-slate-400 shrink-0 max-w-[40%] truncate" title={key}>{key}</span>
+                                          <span className="text-slate-700 break-all min-w-0 flex-1" title={displayValue}>
+                                            {displayValue.length > 100 ? displayValue.slice(0, 100) + "…" : displayValue}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
-                                );
-                              })
-                            ) : (
-                              <p className="text-xs text-slate-300 text-center py-3">无数据字段</p>
-                            )}
-                            {/* 补充列字段 */}
-                            {extraCols.length > 0 && (
-                              <div className="border-t border-slate-100 pt-2 mt-1">
-                                <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1.5">补充字段</span>
-                                <div className="space-y-1.5">
-                                  {extraCols.map((ec) => {
-                                    const dataKey = `${br.id}_${ec.id}`;
-                                    const val = extraData[dataKey] || "";
-                                    const inputBaseClass = "w-full text-[11px] border rounded px-2 py-1 outline-none transition-colors";
-                                    const isWriteback = ec.type === "linked_text" || ec.type === "linked_date";
-                                    return (
-                                      <div key={ec.id}>
-                                        <span className="text-[10px] text-slate-400 flex items-center gap-1 mb-0.5">
-                                          {ec.name}
-                                          {isWriteback && (
-                                            <span className={`text-[9px] px-1 rounded ${ec.type === "linked_text" ? "bg-sky-50 text-sky-500" : "bg-orange-50 text-orange-500"}`}>
-                                              →{ec.writeback_column || "?"}
+                                ) : (
+                                  <p className="text-xs text-slate-300 text-center py-2">无数据字段</p>
+                                )}
+
+                                {/* 补充列字段 */}
+                                {extraCols.length > 0 && (
+                                  <div className="border-t border-slate-200 pt-3 mt-3">
+                                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-2">补充字段</span>
+                                    <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                                      {extraCols.map((ec) => {
+                                        const dataKey = `${br.id}_${ec.id}`;
+                                        const val = extraData[dataKey] || "";
+                                        const inputBaseClass = "w-full text-[11px] border rounded px-2 py-1 outline-none transition-colors";
+                                        const isWriteback = ec.type === "linked_text" || ec.type === "linked_date";
+                                        return (
+                                          <div key={ec.id}>
+                                            <span className="text-[10px] text-slate-400 flex items-center gap-1 mb-0.5">
+                                              {ec.name}
+                                              {isWriteback && (
+                                                <span className={`text-[9px] px-1 rounded ${ec.type === "linked_text" ? "bg-sky-50 text-sky-500" : "bg-orange-50 text-orange-500"}`}>
+                                                  →{ec.writeback_column || "?"}
+                                                </span>
+                                              )}
                                             </span>
-                                          )}
-                                        </span>
-                                        {ec.type === "select" && ec.options?.length ? (
-                                          <select value={val}
-                                            onChange={(e) => setExtraData((prev) => ({ ...prev, [dataKey]: e.target.value }))}
-                                            className={`${inputBaseClass} bg-white border-slate-200 focus:border-indigo-400 focus:ring-indigo-200`}>
-                                            <option value="">—</option>
-                                            {ec.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                                          </select>
-                                        ) : ec.type === "date" || ec.type === "linked_date" ? (
-                                          <input type="date" value={val}
-                                            onChange={(e) => setExtraData((prev) => ({ ...prev, [dataKey]: e.target.value }))}
-                                            className={`${inputBaseClass} bg-white border-slate-200 focus:border-indigo-400 focus:ring-indigo-200`} />
-                                        ) : (
-                                          <input type="text" value={val}
-                                            onChange={(e) => setExtraData((prev) => ({ ...prev, [dataKey]: e.target.value }))}
-                                            placeholder={ec.name}
-                                            className={`${inputBaseClass} bg-white border-slate-200 focus:border-indigo-400 focus:ring-indigo-200`} />
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
+                                            {ec.type === "select" && ec.options?.length ? (
+                                              <select value={val}
+                                                onChange={(e) => setExtraData((prev) => ({ ...prev, [dataKey]: e.target.value }))}
+                                                className={`${inputBaseClass} bg-white border-slate-200 focus:border-indigo-400 focus:ring-indigo-200`}>
+                                                <option value="">—</option>
+                                                {ec.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                                              </select>
+                                            ) : ec.type === "date" || ec.type === "linked_date" ? (
+                                              <input type="date" value={val}
+                                                onChange={(e) => setExtraData((prev) => ({ ...prev, [dataKey]: e.target.value }))}
+                                                className={`${inputBaseClass} bg-white border-slate-200 focus:border-indigo-400 focus:ring-indigo-200`} />
+                                            ) : (
+                                              <input type="text" value={val}
+                                                onChange={(e) => setExtraData((prev) => ({ ...prev, [dataKey]: e.target.value }))}
+                                                placeholder={ec.name}
+                                                className={`${inputBaseClass} bg-white border-slate-200 focus:border-indigo-400 focus:ring-indigo-200`} />
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
