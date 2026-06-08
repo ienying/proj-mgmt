@@ -87,6 +87,8 @@ export async function POST(request: NextRequest) {
       created_by,
       created_by_name,
       workflow_nodes,
+      board_records,
+      extra_columns,
     } = body;
 
     if (!title) {
@@ -108,6 +110,8 @@ export async function POST(request: NextRequest) {
       allow_late_complete,
       created_by_name: created_by_name || null,
       workflow_nodes: workflow_nodes || null,
+      board_records: board_records || null,
+      extra_columns: extra_columns || null,
     };
 
     const { data, error } = await client.rpc("dp_insert", {
@@ -145,6 +149,8 @@ export async function POST(request: NextRequest) {
         workflow_nodes: workflow_nodes || null,
         periodic_type,
         deadline_config,
+        board_records: board_records || null,
+        extra_columns: extra_columns || null,
       });
     }
 
@@ -168,9 +174,11 @@ async function generateInstances(
     workflow_nodes?: unknown[] | null;
     periodic_type?: string;
     deadline_config?: Record<string, unknown>;
+    board_records?: unknown[] | null;
+    extra_columns?: unknown[] | null;
   }
 ) {
-  const { definition_id, title, task_type, task_mode, assignee_ids, project_ids, workflow_nodes, periodic_type, deadline_config } = params;
+  const { definition_id, title, task_type, task_mode, assignee_ids, project_ids, workflow_nodes, periodic_type, deadline_config, board_records, extra_columns } = params;
 
   // 计算周期标签和截止日期
   const now = new Date();
@@ -294,10 +302,52 @@ async function generateInstances(
 
   // 批量写入实例
   for (const instance of instances) {
-    await client.rpc("dp_insert", {
+    const { data: newInst } = await client.rpc("dp_insert", {
       p_table: "todo_task_instances",
       p_data: instance,
     });
+    const instId = newInst && typeof newInst === "object" && "id" in (newInst as Record<string, unknown>)
+      ? (newInst as Record<string, unknown>).id
+      : null;
+
+    // 为每个实例保存看板记录
+    if (instId && board_records && Array.isArray(board_records) && board_records.length > 0) {
+      for (let j = 0; j < board_records.length; j++) {
+        const br = board_records[j] as Record<string, unknown>;
+        const brId = crypto.randomUUID();
+        await client.rpc("execute_sql", {
+          p_sql: `INSERT INTO design_public.task_board_records (id, task_instance_id, sort_order, source_project_schema, source_table_code, source_record_id, source_label, source_data)
+                  VALUES ('${brId}', '${instId}', ${j},
+                          '${String(br.source_project_schema || "").replace(/'/g, "''")}',
+                          '${String(br.source_table_code || "").replace(/'/g, "''")}',
+                          '${String(br.source_record_id || "").replace(/'/g, "''")}',
+                          '${String(br.source_label || "").replace(/'/g, "''")}',
+                          '${JSON.stringify(br.source_data || {}).replace(/'/g, "''")}'::jsonb)`,
+        });
+      }
+    }
+  }
+
+  // 保存补充列定义
+  if (extra_columns && Array.isArray(extra_columns) && extra_columns.length > 0) {
+    // 删除旧定义
+    await client.rpc("execute_sql", {
+      p_sql: `DELETE FROM design_public.task_extra_columns WHERE task_def_id = '${definition_id}'`,
+    });
+    for (let k = 0; k < extra_columns.length; k++) {
+      const ec = extra_columns[k] as Record<string, unknown>;
+      const ecId = crypto.randomUUID();
+      await client.rpc("execute_sql", {
+        p_sql: `INSERT INTO design_public.task_extra_columns (id, task_def_id, name, type, options, writeback_column, fillable_by, sort_order)
+                VALUES ('${ecId}', '${definition_id}',
+                        '${String(ec.name || "").replace(/'/g, "''")}',
+                        '${String(ec.type || "text").replace(/'/g, "''")}',
+                        ARRAY[${(Array.isArray(ec.options) ? ec.options as string[] : []).map((o: string) => `'${o}'`).join(",")}],
+                        '${String(ec.writeback_column || "").replace(/'/g, "''")}',
+                        '${String(ec.fillable_by || "anyone").replace(/'/g, "''")}',
+                        ${k})`,
+      });
+    }
   }
 }
 

@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
 
     const schema = `yuansu_${String(projectCode).toLowerCase()}`;
     const safeVal = String(value || "").replace(/'/g, "''");
-    const safeCol = String(columnName).toLowerCase().replace(/\s+/g, "_");
+    const safeCol = String(columnName).replace(/'/g, "''");
 
     const { error } = await client.rpc("execute_sql", {
       p_sql: `UPDATE ${schema}."${tableCode}" SET "${safeCol}" = '${safeVal}' WHERE id = '${String(recordId)}'`,

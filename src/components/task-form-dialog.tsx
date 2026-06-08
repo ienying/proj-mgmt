@@ -26,6 +26,7 @@ interface TaskFormDialogProps {
   instanceStatus?: string;
   instanceAssignee?: string;
   instanceId?: string;
+  definitionId?: string;
   projectName?: string;
   projectId?: string;
   recordSource?: string;
@@ -36,6 +37,25 @@ interface TaskFormDialogProps {
   isApproval?: boolean;
   currentUserId?: string;
   currentUserName?: string;
+}
+
+interface BoardRecord {
+  id: string;
+  source_label: string;
+  source_project_schema: string;
+  source_table_code: string;
+  source_record_id: string;
+  source_data: Record<string, unknown>;
+  extra?: Array<{ id: string; board_record_id: string; column_id: string; value: string }>;
+}
+
+interface ExtraColumnDef {
+  id: string;
+  name: string;
+  type: string;
+  options?: string[];
+  writeback_column?: string;
+  fillable_by?: string;
 }
 
 interface ColumnDef {
@@ -69,7 +89,7 @@ const STATUS_MAP: Record<string, { label: string; color: string; dot: string }> 
 export function TaskFormDialog({
   open, onOpenChange, formTableCode, formTableName,
   instanceTitle, instanceDesc, instanceDueDate, instanceStatus, instanceAssignee,
-  instanceId, projectName, projectId, recordSource, nodeName, nodeOrder, totalNodes,
+  instanceId, definitionId, projectName, projectId, recordSource, nodeName, nodeOrder, totalNodes,
   fillableFields, isApproval, currentUserId, currentUserName,
 }: TaskFormDialogProps) {
   const statusCfg = instanceStatus ? STATUS_MAP[instanceStatus] || STATUS_MAP.pending : null;
@@ -81,6 +101,10 @@ export function TaskFormDialog({
   const [linkedOptions, setLinkedOptions] = useState<Record<string, string[]>>({});
   const [linkedRecords, setLinkedRecords] = useState<Record<string, Array<{ id: string; label: string; pid?: string }>>>({});
   const [linkedTextTargets, setLinkedTextTargets] = useState<Record<string, string>>({});
+  // 看板记录 + 补充列
+  const [boardRecords, setBoardRecords] = useState<BoardRecord[]>([]);
+  const [extraCols, setExtraCols] = useState<ExtraColumnDef[]>([]);
+  const [extraData, setExtraData] = useState<Record<string, string>>({}); // key: "brId_colId"
 
   useEffect(() => {
     if (!open || !formTableCode) return;
@@ -121,37 +145,26 @@ export function TaskFormDialog({
                   for (const cfg of lc.linked_configs)
                     if (cfg.project_id && cfg.table_code && cfg.column_name)
                       targets.push({ pid: cfg.project_id, tcode: cfg.table_code, cname: cfg.column_name, rids: cfg.record_ids || [] });
-                // 无显式目标时，尝试从实例所属项目自动发现记录
+                // 无显式目标时，从实例所属项目自动加载记录
                 if (targets.length === 0 && projectId) {
                   try {
-                    const projRes = await fetch("/api/projects");
-                    const projJson = await projRes.json();
-                    const proj = (projJson.data || []).find((p: Record<string, unknown>) => p.id === projectId);
-                    if (proj) {
-                      const schema = `yuansu_${proj.project_code}`;
-                      const rulesRes = await fetch(`/api/schema-rules?project_id=${projectId}`);
-                      const rulesJson = await rulesRes.json();
-                      const rules = (rulesJson.data || []) as Array<Record<string, unknown>>;
-                      for (const rule of rules) {
-                        const tcode = String(rule.table_code || "");
-                        if (!tcode) continue;
-                        try {
-                          const dataRes = await fetch(`/api/project-data?projectSchema=${schema}&tableCode=${tcode}`);
-                          const dataJson = await dataRes.json();
-                          const rows = (dataJson.data || []) as Array<Record<string, unknown>>;
-                          if (rows.length === 0) continue;
-                          const skipCols = new Set(["id", "project_id", "sort_order", "created_at", "updated_at", "created_by", "allow_delete", "data_source"]);
-                          let labelCol = "";
-                          if (rows[0]) {
-                            for (const k of Object.keys(rows[0] as Record<string, unknown>)) {
-                              if (!skipCols.has(k)) { labelCol = k; break; }
-                            }
-                          }
-                          if (!labelCol) continue;
-                          const labelPrefix = rules.length > 1 ? `[${proj.project_name}] ` : "";
-                          targets.push({ pid: projectId, tcode, cname: labelCol, rids: [] });
-                        } catch { /* skip */ }
-                      }
+                    const recsRes = await fetch(`/api/project-data/records?projectId=${projectId}`);
+                    const recsJson = await recsRes.json();
+                    const projectRecords = (recsJson.data || []) as Array<{ id: string; label: string; table_code: string; project_id: string; project_name: string }>;
+                    if (projectRecords.length > 0) {
+                      newLinkedOpts[String(lc.name)] = projectRecords.map((r) => r.label);
+                      newLinkedRecs[String(lc.name)] = projectRecords.map((r) => ({
+                        id: r.id,
+                        label: r.label,
+                        pid: r.project_id,
+                      }));
+                      setLinkedOptions((prev) => ({ ...prev, [String(lc.name)]: projectRecords.map((r) => r.label) }));
+                      setLinkedRecords((prev) => ({ ...prev, [String(lc.name)]: projectRecords.map((r) => ({
+                        id: r.id,
+                        label: r.label,
+                        pid: r.project_id,
+                      })) }));
+                      continue; // 跳过主循环，因为已经直接设置好了
                     }
                   } catch { /* skip */ }
                 }
@@ -198,6 +211,40 @@ export function TaskFormDialog({
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [open, formTableCode]);
+
+  // 加载看板记录和补充列
+  useEffect(() => {
+    if (!open || !instanceId) return;
+    (async () => {
+      try {
+        // 加载看板记录
+        const brRes = await fetch(`/api/task-board?task_instance_id=${instanceId}`);
+        const brJson = await brRes.json();
+        if (brJson.data) {
+          setBoardRecords(brJson.data);
+          // 从已保存的补充数据初始化 extraData
+          const savedExtra: Record<string, string> = {};
+          for (const br of brJson.data) {
+            const extras = br.extra || [];
+            for (const ex of extras) {
+              if (ex.column_id && ex.value != null) {
+                savedExtra[`${br.id}_${ex.column_id}`] = String(ex.value);
+              }
+            }
+          }
+          setExtraData(savedExtra);
+        }
+      } catch { /* skip */ }
+      try {
+        // 加载补充列定义
+        if (definitionId) {
+          const ecRes = await fetch(`/api/task-board?task_def_id=${definitionId}`);
+          const ecJson = await ecRes.json();
+          if (ecJson.data?.columns) setExtraCols(ecJson.data.columns);
+        }
+      } catch { /* skip */ }
+    })();
+  }, [open, instanceId, definitionId]);
 
   const handleSubmit = async () => {
     setSaving(true);
@@ -253,6 +300,56 @@ export function TaskFormDialog({
               });
             }
           } catch { /* skip */ }
+        }
+      }
+
+      // 保存看板记录的补充列数据
+      if (instanceId && Object.keys(extraData).length > 0) {
+        try {
+          const allExtraData: Array<{ board_record_id: string; column_id: string; value: string }> = [];
+          for (const br of boardRecords) {
+            for (const ec of extraCols) {
+              const val = extraData[`${br.id}_${ec.id}`] || "";
+              allExtraData.push({ board_record_id: br.id, column_id: ec.id, value: val });
+            }
+          }
+          if (allExtraData.length > 0) {
+            await fetch("/api/task-board", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ extra_data: allExtraData }),
+            });
+          }
+        } catch { /* skip */ }
+
+        // 补充列写回：linked_text/linked_date 类型回写到源项目记录
+        for (const ec of extraCols) {
+          if (ec.type !== "linked_text" && ec.type !== "linked_date") continue;
+          if (!ec.writeback_column) continue;
+          for (const br of boardRecords) {
+            const val = extraData[`${br.id}_${ec.id}`] || "";
+            if (!val) continue;
+            try {
+              const projRes = await fetch("/api/projects");
+              const projJson = await projRes.json();
+              const proj = (projJson.data || []).find((p: Record<string, unknown>) =>
+                `yuansu_${String(p.project_code || "").toLowerCase()}` === String(br.source_project_schema || "").toLowerCase()
+              );
+              if (proj) {
+                await fetch("/api/project-data/write", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    projectCode: proj.project_code,
+                    tableCode: br.source_table_code,
+                    recordId: br.source_record_id,
+                    columnName: ec.writeback_column,
+                    value: val,
+                  }),
+                });
+              }
+            } catch { /* skip */ }
+          }
         }
       }
 
@@ -548,6 +645,63 @@ export function TaskFormDialog({
                   </div>
                 )}
               </div>
+              {/* 看板记录表格 */}
+              {boardRecords.length > 0 && (
+                <div className="mt-6 pt-6 border-t border-slate-200">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">项目看板记录</span>
+                    <div className="flex-1 h-px bg-slate-200" />
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border border-slate-200 rounded-lg">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-medium text-slate-500 text-xs w-48">记录</th>
+                          {extraCols.map((ec) => (
+                            <th key={ec.id} className="text-left px-3 py-2 font-medium text-slate-500 text-xs">
+                              {ec.name}
+                              {ec.type === "linked_text" && <span className="text-[10px] text-sky-500 ml-1">写回</span>}
+                              {ec.type === "linked_date" && <span className="text-[10px] text-orange-500 ml-1">写回</span>}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {boardRecords.map((br) => (
+                          <tr key={br.id} className="hover:bg-slate-50/50">
+                            <td className="px-3 py-2 text-xs text-slate-600 truncate max-w-[200px]" title={br.source_label}>
+                              {br.source_label}
+                            </td>
+                            {extraCols.map((ec) => {
+                              const dataKey = `${br.id}_${ec.id}`;
+                              const val = extraData[dataKey] || "";
+                              const cellClass = "w-full text-xs border border-slate-200 rounded px-2 py-1 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 outline-none";
+                              if (ec.type === "select" && ec.options?.length) {
+                                return (
+                                  <td key={ec.id} className="px-2 py-1">
+                                    <select value={val} onChange={(e) => setExtraData((prev) => ({ ...prev, [dataKey]: e.target.value }))}
+                                      className={cellClass}>
+                                      <option value="">—</option>
+                                      {ec.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                                    </select>
+                                  </td>
+                                );
+                              }
+                              return (
+                                <td key={ec.id} className="px-2 py-1">
+                                  <input type="text" value={val}
+                                    onChange={(e) => setExtraData((prev) => ({ ...prev, [dataKey]: e.target.value }))}
+                                    placeholder={ec.name} className={cellClass} />
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </ScrollArea>
 
             {/* 底部操作栏 */}

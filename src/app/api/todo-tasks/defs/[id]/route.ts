@@ -65,17 +65,20 @@ export async function DELETE(
     if (allTemplates) {
       for (const tmpl of allTemplates as Record<string, unknown>[]) {
         if (String(tmpl.task_def_id) === id) {
-          // 先删节点
           await client.rpc("execute_sql", {
             p_sql: `DELETE FROM design_public.workflow_nodes WHERE template_id = '${tmpl.id}'`,
           });
-          // 再删模板
           await client.rpc("execute_sql", {
             p_sql: `DELETE FROM design_public.workflow_templates WHERE id = '${tmpl.id}'`,
           });
         }
       }
     }
+
+    // 清理补充列定义
+    await client.rpc("execute_sql", {
+      p_sql: `DELETE FROM design_public.task_extra_columns WHERE task_def_id = '${id}'`,
+    });
 
     // 1. 先查询所有关联实例
     const { data: instances } = await client.rpc("dp_select", {
@@ -91,8 +94,15 @@ export async function DELETE(
           await client.rpc("execute_sql", {
             p_sql: `DELETE FROM design_public.workflow_node_completions WHERE instance_id = '${instanceId}'`,
           });
+          // 1b. 清理看板记录和额外数据
+          await client.rpc("execute_sql", {
+            p_sql: `DELETE FROM design_public.task_extra_data WHERE board_record_id IN (SELECT id FROM design_public.task_board_records WHERE task_instance_id = '${instanceId}')`,
+          });
+          await client.rpc("execute_sql", {
+            p_sql: `DELETE FROM design_public.task_board_records WHERE task_instance_id = '${instanceId}'`,
+          });
 
-          // 1b. 删除实例
+          // 1c. 删除实例
           await client.rpc("dp_delete", {
             p_table: "todo_task_instances",
             p_id: instanceId,

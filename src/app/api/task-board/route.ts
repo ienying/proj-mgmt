@@ -41,30 +41,51 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: 保存看板记录
+// POST: 保存看板记录 或 保存补充列数据
 export async function POST(request: NextRequest) {
   try {
     const client = await createServerClient();
     const body = await request.json();
-    const { task_instance_id, records } = body;
+    const { task_instance_id, records, extra_data } = body;
 
-    // 删除旧的
-    await client.rpc("execute_sql", {
-      p_sql: `DELETE FROM design_public.task_board_records WHERE task_instance_id = '${task_instance_id}'`,
-    });
+    // 保存补充列数据
+    if (extra_data && Array.isArray(extra_data)) {
+      for (const item of extra_data) {
+        const { board_record_id, column_id, value } = item;
+        if (!board_record_id || !column_id) continue;
+        // 删除旧值
+        await client.rpc("execute_sql", {
+          p_sql: `DELETE FROM design_public.task_extra_data WHERE board_record_id = '${board_record_id}' AND column_id = '${column_id}'`,
+        });
+        // 插入新值
+        const edId = crypto.randomUUID();
+        await client.rpc("execute_sql", {
+          p_sql: `INSERT INTO design_public.task_extra_data (id, board_record_id, column_id, value)
+                  VALUES ('${edId}', '${board_record_id}', '${column_id}', '${String(value || "").replace(/'/g, "''")}')`,
+        });
+      }
+      return NextResponse.json({ success: true });
+    }
 
-    for (let i = 0; i < (records || []).length; i++) {
-      const r = records[i];
-      const id = crypto.randomUUID();
+    // 保存看板记录
+    if (task_instance_id) {
       await client.rpc("execute_sql", {
-        p_sql: `INSERT INTO design_public.task_board_records (id, task_instance_id, sort_order, source_project_schema, source_table_code, source_record_id, source_label, source_data)
-                VALUES ('${id}', '${task_instance_id}', ${i},
-                        '${String(r.source_project_schema || "").replace(/'/g, "''")}',
-                        '${String(r.source_table_code || "").replace(/'/g, "''")}',
-                        '${String(r.source_record_id || "").replace(/'/g, "''")}',
-                        '${String(r.source_label || "").replace(/'/g, "''")}',
-                        '${JSON.stringify(r.source_data || {}).replace(/'/g, "''")}'::jsonb)`,
+        p_sql: `DELETE FROM design_public.task_board_records WHERE task_instance_id = '${task_instance_id}'`,
       });
+
+      for (let i = 0; i < (records || []).length; i++) {
+        const r = records[i];
+        const id = crypto.randomUUID();
+        await client.rpc("execute_sql", {
+          p_sql: `INSERT INTO design_public.task_board_records (id, task_instance_id, sort_order, source_project_schema, source_table_code, source_record_id, source_label, source_data)
+                  VALUES ('${id}', '${task_instance_id}', ${i},
+                          '${String(r.source_project_schema || "").replace(/'/g, "''")}',
+                          '${String(r.source_table_code || "").replace(/'/g, "''")}',
+                          '${String(r.source_record_id || "").replace(/'/g, "''")}',
+                          '${String(r.source_label || "").replace(/'/g, "''")}',
+                          '${JSON.stringify(r.source_data || {}).replace(/'/g, "''")}'::jsonb)`,
+        });
+      }
     }
 
     return NextResponse.json({ success: true });

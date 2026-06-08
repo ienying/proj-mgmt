@@ -244,31 +244,18 @@ export function PublishTaskDialog({
       let formTableCode = selectedTableCode;
       let formTableName = selectedTableName;
 
-      // 构建表单字段配置（审批模式从 workflow nodes 的 fillable_fields 和 formColumns 收集）
+      // 构建表单字段配置（审批模式从 workflow fillable_fields 收集，默认 text 类型）
       let formFieldsConfig: Array<Record<string, unknown>> = [];
       if (taskMode === "approval") {
-        const activeNodes = wfNodes.filter((n: WorkflowNode) => n.name.trim());
-        // 从 workflow nodes 收集所有 fillable_fields
         const fillableFieldsSet = new Set<string>();
-        for (const node of activeNodes) {
+        for (const node of wfNodes.filter((n: WorkflowNode) => n.name.trim())) {
           for (const f of node.fillable_fields || []) {
             if (f.trim()) fillableFieldsSet.add(f.trim());
           }
         }
-        // 合并 formColumns + extraColumns + workflow fillable fields
-        const knownNames = new Set<string>();
-        for (const col of formColumns) knownNames.add(col.name);
-        for (const col of extraColumns) knownNames.add(col.name);
-        formFieldsConfig = [
-          ...formColumns.map((c) => ({ name: c.name, type: c.type, required: c.required, description: c.description, options: c.options })),
-          ...extraColumns.map((c) => ({ name: c.name, type: c.type, required: false, description: "", options: c.options || [] })),
-        ];
-        // 添加仅在 fillable_fields 中定义但不在 formColumns/extraColumns 中的字段
-        for (const f of fillableFieldsSet) {
-          if (!knownNames.has(f)) {
-            formFieldsConfig.push({ name: f, type: "text", required: false, description: "", options: [] });
-          }
-        }
+        formFieldsConfig = Array.from(fillableFieldsSet).map((f) => ({
+          name: f, type: "text", required: false, description: "", options: [],
+        }));
       }
 
       // 审批模式下，如果没有选中规范表但有表单字段，自动创建规范表
@@ -400,6 +387,7 @@ export function PublishTaskDialog({
             ? selectedProjectIds
             : (assigneeProjectId && assigneeProjectId !== "none" ? [assigneeProjectId] : []),
         board_records: taskMode === "approval" ? boardRecords : null,
+        extra_columns: taskMode === "approval" ? extraColumns : null,
         form_source: formSource,
         form_table_code: formTableCode || null,
         form_table_name: formTableName || null,
@@ -465,8 +453,7 @@ export function PublishTaskDialog({
     if (step === 2) return true;
     if (step === 3) {
       if (taskMode === "form") return formColumns.length > 0 || parsedColumns.length > 0;
-      if (taskMode === "project") return boardRecords.length > 0;
-      return boardRecords.length > 0 || formColumns.length > 0;
+      return true; // project/approval: 看板和补充列是可选的
     }
     if (step === 4) return taskMode === "approval" ? wfNodes.length > 0 : true;
     if (step === 5) {
@@ -602,7 +589,7 @@ export function PublishTaskDialog({
 
         {/* 第3步：构建内容 */}
         {step === 3 && (
-          <div className="space-y-4 w-full">
+          <div className="space-y-4 w-full h-full flex flex-col overflow-hidden">
             {taskMode === "form" && (
               <div>
                 <p className="text-sm text-gray-500 mb-3">自定义表单字段，指定人员按表单填写提交</p>
@@ -627,16 +614,23 @@ export function PublishTaskDialog({
             )}
 
             {(taskMode === "project" || taskMode === "approval") && (
-              <TaskBoardBuilder
-                selectedProjects={selectedProjects}
-                onProjectsChange={setSelectedProjects}
-                records={boardRecords}
-                onRecordsChange={setBoardRecords}
-                extraColumns={extraColumns}
-                onExtraColumnsChange={setExtraColumns}
-                workflowNodes={wfNodes.filter((n: WorkflowNode) => n.name.trim()).map((n: WorkflowNode, i: number) => ({ order: i + 1, name: n.name, assignee_id: n.handler_ids?.[0] || "", assignee_name: users.find((u: any) => u.id === n.handler_ids?.[0])?.name || "" }))}
-                userList={users.map((u: any) => ({ id: u.id, name: u.name }))}
-              />
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                {taskMode === "approval" && (
+                  <p className="text-sm text-gray-500 mb-3">
+                    选择项目并拉取数据记录作为看板行，添加补充列（文本/写回等）用于实施时填写
+                  </p>
+                )}
+                <TaskBoardBuilder
+                  selectedProjects={selectedProjects}
+                  onProjectsChange={setSelectedProjects}
+                  records={boardRecords}
+                  onRecordsChange={setBoardRecords}
+                  extraColumns={extraColumns}
+                  onExtraColumnsChange={setExtraColumns}
+                  workflowNodes={wfNodes.filter((n: WorkflowNode) => n.name.trim()).map((n: WorkflowNode, i: number) => ({ order: i + 1, name: n.name, assignee_id: n.handler_ids?.[0] || "", assignee_name: users.find((u: any) => u.id === n.handler_ids?.[0])?.name || "" }))}
+                  userList={users.map((u: any) => ({ id: u.id, name: u.name }))}
+                />
+              </div>
             )}
           </div>
         )}

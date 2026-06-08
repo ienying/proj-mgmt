@@ -33,6 +33,9 @@ const FIELD_TYPES: FieldType[] = [
   { code: "select", name: "单选", icon: CheckSquare, desc: "下拉单选", color: "bg-violet-100 text-violet-700 border-violet-200" },
   { code: "multiple_select", name: "多选", icon: List, desc: "多选", color: "bg-purple-100 text-purple-700 border-purple-200" },
   { code: "file", name: "文件", icon: Upload, desc: "文件上传", color: "bg-rose-100 text-rose-700 border-rose-200" },
+  { code: "linked_select", name: "关联选择", icon: CheckSquare, desc: "选择项目记录(多选)", color: "bg-teal-100 text-teal-700 border-teal-200" },
+  { code: "linked_text", name: "关联文本", icon: FileText, desc: "选记录+回写文本", color: "bg-sky-100 text-sky-700 border-sky-200" },
+  { code: "linked_date", name: "关联日期", icon: Calendar, desc: "选记录+回写日期", color: "bg-orange-100 text-orange-700 border-orange-200" },
 ];
 
 interface Props {

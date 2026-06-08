@@ -162,7 +162,7 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
   const [formDialogInfo, setFormDialogInfo] = useState<{
     tableCode: string; tableName: string;
     title?: string; desc?: string; dueDate?: string; status?: string; assignee?: string;
-    id?: string; projectName?: string; projectId?: string; recordSource?: string;
+    id?: string; definitionId?: string; projectName?: string; projectId?: string; recordSource?: string;
     nodeName?: string; nodeOrder?: number; totalNodes?: number;
     fillableFields?: string[];
     isApproval?: boolean;
@@ -324,6 +324,7 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
       title: instance.title, desc: instance.description,
       dueDate: instance.due_date, status: instance.status,
       assignee: instance.assignee_name, id: instance.id,
+      definitionId: instance.definition_id,
       projectName: instance.project_name,
       projectId: instance.project_id,
       nodeName: instance._current_node_name,
@@ -497,6 +498,7 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
         instanceStatus={formDialogInfo?.status}
         instanceAssignee={formDialogInfo?.assignee}
         instanceId={formDialogInfo?.id}
+        definitionId={formDialogInfo?.definitionId}
         projectName={formDialogInfo?.projectName}
         projectId={formDialogInfo?.projectId}
         recordSource={formDialogInfo?.recordSource}
