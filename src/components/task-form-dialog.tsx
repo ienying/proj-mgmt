@@ -645,15 +645,15 @@ export function TaskFormDialog({
                   </div>
                 )}
               </div>
-              {/* 看板记录卡片视图 */}
+              {/* 看板记录 — 横向卡片滚动 */}
               {boardRecords.length > 0 && (
                 <div className="mt-6 pt-6 border-t border-slate-200">
-                  <div className="flex items-center gap-3 mb-4">
+                  <div className="flex items-center gap-3 mb-4 px-1">
                     <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">项目看板记录</span>
                     <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{boardRecords.length} 条</span>
                     <div className="flex-1 h-px bg-slate-200" />
                   </div>
-                  <div className="grid gap-3">
+                  <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
                     {boardRecords.map((br, idx) => {
                       const SYSTEM_FIELDS = new Set([
                         "id", "created_at", "updated_at", "sort_order", "data_source",
@@ -666,57 +666,57 @@ export function TaskFormDialog({
                             .filter(([k, v]) => !SYSTEM_FIELDS.has(k) && v != null && v !== "")
                         : [];
                       return (
-                        <div key={br.id} className="rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                        <div key={br.id} className="flex-shrink-0 w-[260px] rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
                           {/* 卡片头部 */}
-                          <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-50/70 border-b border-slate-100">
-                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 text-xs font-bold flex items-center justify-center">
+                          <div className="flex items-center gap-2 px-3 py-2 bg-slate-50/70 border-b border-slate-100 shrink-0">
+                            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 text-[11px] font-bold flex items-center justify-center">
                               {idx + 1}
                             </span>
-                            <span className="text-sm font-semibold text-slate-800 truncate flex-1" title={br.source_label}>
+                            <span className="text-xs font-semibold text-slate-800 truncate flex-1" title={br.source_label}>
                               {br.source_label}
                             </span>
                             {br.source_table_code && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-slate-400 border-slate-200 shrink-0">
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 text-slate-400 border-slate-200 shrink-0">
                                 {br.source_table_code}
                               </Badge>
                             )}
                           </div>
-                          {/* 卡片内容：源数据字段 */}
-                          <div className="px-4 py-2.5">
-                            {sourceFields.length > 0 && (
-                              <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
-                                {sourceFields.map(([key, value]) => {
-                                  const displayValue = typeof value === "object"
-                                    ? JSON.stringify(value)
-                                    : String(value);
-                                  return (
-                                    <div key={key} className="min-w-0 max-w-[220px]">
-                                      <span className="text-[10px] text-slate-400 block truncate">{key}</span>
-                                      <span className="text-xs text-slate-700 block truncate" title={displayValue}>
-                                        {displayValue.length > 60 ? displayValue.slice(0, 60) + "…" : displayValue}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
+                          {/* 卡片内容：源数据字段纵向排列 */}
+                          <div className="px-3 py-2 flex-1 overflow-y-auto space-y-1.5">
+                            {sourceFields.length > 0 ? (
+                              sourceFields.map(([key, value]) => {
+                                const displayValue = typeof value === "object"
+                                  ? JSON.stringify(value)
+                                  : String(value);
+                                return (
+                                  <div key={key} className="text-xs">
+                                    <span className="text-[10px] text-slate-400 block leading-tight">{key}</span>
+                                    <span className="text-slate-700 block leading-tight break-all" title={displayValue}>
+                                      {displayValue.length > 80 ? displayValue.slice(0, 80) + "…" : displayValue}
+                                    </span>
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <p className="text-xs text-slate-300 text-center py-3">无数据字段</p>
                             )}
                             {/* 补充列字段 */}
                             {extraCols.length > 0 && (
-                              <div className="border-t border-slate-100 pt-2.5 mt-1">
-                                <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-2">补充字段</span>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                              <div className="border-t border-slate-100 pt-2 mt-1">
+                                <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1.5">补充字段</span>
+                                <div className="space-y-1.5">
                                   {extraCols.map((ec) => {
                                     const dataKey = `${br.id}_${ec.id}`;
                                     const val = extraData[dataKey] || "";
-                                    const inputBaseClass = "w-full text-xs border rounded-md px-2 py-1.5 outline-none transition-colors focus:ring-1";
+                                    const inputBaseClass = "w-full text-[11px] border rounded px-2 py-1 outline-none transition-colors";
                                     const isWriteback = ec.type === "linked_text" || ec.type === "linked_date";
                                     return (
-                                      <div key={ec.id} className="space-y-0.5">
-                                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                      <div key={ec.id}>
+                                        <span className="text-[10px] text-slate-400 flex items-center gap-1 mb-0.5">
                                           {ec.name}
                                           {isWriteback && (
                                             <span className={`text-[9px] px-1 rounded ${ec.type === "linked_text" ? "bg-sky-50 text-sky-500" : "bg-orange-50 text-orange-500"}`}>
-                                              写回→{ec.writeback_column || "?"}
+                                              →{ec.writeback_column || "?"}
                                             </span>
                                           )}
                                         </span>
