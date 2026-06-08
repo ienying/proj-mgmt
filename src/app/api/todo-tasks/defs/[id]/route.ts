@@ -58,7 +58,26 @@ export async function DELETE(
       return NextResponse.json({ error: "无权限删除此任务" }, { status: 403 });
     }
 
-    // 先删除关联的实例
+    // 0. 清理工作流模板和节点
+    const { data: allTemplates } = await client.rpc("dp_select", {
+      p_table: "workflow_templates",
+    });
+    if (allTemplates) {
+      for (const tmpl of allTemplates as Record<string, unknown>[]) {
+        if (String(tmpl.task_def_id) === id) {
+          // 先删节点
+          await client.rpc("execute_sql", {
+            p_sql: `DELETE FROM design_public.workflow_nodes WHERE template_id = '${tmpl.id}'`,
+          });
+          // 再删模板
+          await client.rpc("execute_sql", {
+            p_sql: `DELETE FROM design_public.workflow_templates WHERE id = '${tmpl.id}'`,
+          });
+        }
+      }
+    }
+
+    // 1. 先查询所有关联实例
     const { data: instances } = await client.rpc("dp_select", {
       p_table: "todo_task_instances",
     });
@@ -66,15 +85,23 @@ export async function DELETE(
     if (instances) {
       for (const inst of instances as Record<string, unknown>[]) {
         if (String(inst.def_id) === id) {
+          const instanceId = String(inst.id);
+
+          // 1a. 清理工作流节点完成记录
+          await client.rpc("execute_sql", {
+            p_sql: `DELETE FROM design_public.workflow_node_completions WHERE instance_id = '${instanceId}'`,
+          });
+
+          // 1b. 删除实例
           await client.rpc("dp_delete", {
             p_table: "todo_task_instances",
-            p_id: String(inst.id),
+            p_id: instanceId,
           });
         }
       }
     }
 
-    // 再删除定义
+    // 2. 删除定义
     const { error } = await client.rpc("dp_delete", {
       p_table: "todo_task_defs",
       p_id: id,

@@ -154,16 +154,31 @@ export async function POST(
       await recordNodeCompletion(client, id, currentNodeId, handler_id, handler_name || "", "complete", comment, form_record_id);
     }
 
-    // 5b. 推进到下一节点
-    const nextIndex = currentIndex + 1;
-    const isLastNode = nextIndex >= workflowNodes.length;
+    // 5b. 找到下一个有效的节点（跳过无处理人的节点）
+    let nextIndex = currentIndex + 1;
+    let nextNode: Record<string, unknown> | null = null;
+    let nextHandlerIds: string[] = [];
 
-    if (isLastNode) {
-      // 所有节点完成
+    while (nextIndex < workflowNodes.length) {
+      const candidate = workflowNodes[nextIndex];
+      const candidateHandlers: string[] = Array.isArray(candidate.handler_ids)
+        ? candidate.handler_ids as string[]
+        : [];
+      if (candidateHandlers.length > 0) {
+        nextNode = candidate;
+        nextHandlerIds = candidateHandlers;
+        break;
+      }
+      // 当前节点无处理人，跳过
+      nextIndex++;
+    }
+
+    // 如果后面没有有处理人的节点了，直接完成
+    if (!nextNode) {
       const completeData: Record<string, unknown> = {
         status: "completed",
         completed_at: new Date().toISOString(),
-        current_node_index: nextIndex,
+        current_node_index: workflowNodes.length,
         current_node_id: null,
         updated_at: new Date().toISOString(),
       };
@@ -183,12 +198,7 @@ export async function POST(
       });
     }
 
-    // 推进到下一节点
-    const nextNode = workflowNodes[nextIndex];
-    const nextHandlerIds: string[] = Array.isArray(nextNode.handler_ids)
-      ? nextNode.handler_ids as string[]
-      : [];
-    const nextAssigneeId = nextHandlerIds[0] || null;
+    const nextAssigneeId = nextHandlerIds[0];
 
     let nextAssigneeName = "";
     if (nextAssigneeId) {

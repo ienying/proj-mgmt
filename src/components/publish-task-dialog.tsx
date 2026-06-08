@@ -244,8 +244,74 @@ export function PublishTaskDialog({
       let formTableCode = selectedTableCode;
       let formTableName = selectedTableName;
 
+      // 构建表单字段配置（审批模式从 workflow nodes 的 fillable_fields 和 formColumns 收集）
+      let formFieldsConfig: Array<Record<string, unknown>> = [];
+      if (taskMode === "approval") {
+        const activeNodes = wfNodes.filter((n: WorkflowNode) => n.name.trim());
+        // 从 workflow nodes 收集所有 fillable_fields
+        const fillableFieldsSet = new Set<string>();
+        for (const node of activeNodes) {
+          for (const f of node.fillable_fields || []) {
+            if (f.trim()) fillableFieldsSet.add(f.trim());
+          }
+        }
+        // 合并 formColumns + extraColumns + workflow fillable fields
+        const knownNames = new Set<string>();
+        for (const col of formColumns) knownNames.add(col.name);
+        for (const col of extraColumns) knownNames.add(col.name);
+        formFieldsConfig = [
+          ...formColumns.map((c) => ({ name: c.name, type: c.type, required: c.required, description: c.description, options: c.options })),
+          ...extraColumns.map((c) => ({ name: c.name, type: c.type, required: false, description: "", options: c.options || [] })),
+        ];
+        // 添加仅在 fillable_fields 中定义但不在 formColumns/extraColumns 中的字段
+        for (const f of fillableFieldsSet) {
+          if (!knownNames.has(f)) {
+            formFieldsConfig.push({ name: f, type: "text", required: false, description: "", options: [] });
+          }
+        }
+      }
+
+      // 审批模式下，如果没有选中规范表但有表单字段，自动创建规范表
+      if (taskMode === "approval" && !formTableCode && formFieldsConfig.length > 0) {
+        const tableCode = `task_${Date.now()}`;
+        const createRes = await fetch("/api/standards", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            table_name: title + "表",
+            table_code: tableCode,
+            columns_config: formFieldsConfig,
+            is_enabled: true,
+          }),
+        });
+
+        const createData = await createRes.json();
+        if (createData.error) {
+          alert("创建规范表失败：" + createData.error);
+          setSaving(false);
+          return;
+        }
+        formTableCode = tableCode;
+        formTableName = title + "表";
+
+        // 同步到选中项目的 schema
+        if (selectedProjects.length > 0) {
+          for (const pid of selectedProjects) {
+            await fetch("/api/standards/sync", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                tableCode,
+                projectIds: [pid],
+                syncMode: "structure_data",
+              }),
+            });
+          }
+        }
+      }
+
       // 如果是关联规范表且有项目，同步到项目 schema
-      if (formSource === "standards" && selectedTableCode && selectedProjectIds.length > 0) {
+      if (formSource === "standards" && formTableCode && selectedProjectIds.length > 0) {
         for (const pid of selectedProjectIds) {
           await fetch("/api/standards/sync", {
             method: "POST",
@@ -324,7 +390,7 @@ export function PublishTaskDialog({
         task_type: taskType,
         task_mode: taskMode,
         workflow_nodes: taskMode === "approval" ? wfNodes.filter((n) => n.name.trim()) : null,
-        form_fields_config: taskMode === "approval" ? parsedColumns : null,
+        form_fields_config: taskMode === "approval" ? formFieldsConfig : null,
         assignee_ids: taskMode === "approval"
           ? []
           : assignMode === "person" ? selectedAssigneeIds : [],

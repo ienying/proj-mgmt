@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import {
-  Dialog, DialogContent,
+  Dialog, DialogContent, DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, CheckCircle2, Calendar, User, FileText, Send, Clock, Building2, ArrowLeftRight } from "lucide-react";
+import { Loader2, CheckCircle2, Calendar, User, FileText, Send, Clock } from "lucide-react";
 
 interface TaskFormDialogProps {
   open: boolean;
@@ -27,6 +27,7 @@ interface TaskFormDialogProps {
   instanceAssignee?: string;
   instanceId?: string;
   projectName?: string;
+  projectId?: string;
   recordSource?: string;
   nodeName?: string;
   nodeOrder?: number;
@@ -68,7 +69,7 @@ const STATUS_MAP: Record<string, { label: string; color: string; dot: string }> 
 export function TaskFormDialog({
   open, onOpenChange, formTableCode, formTableName,
   instanceTitle, instanceDesc, instanceDueDate, instanceStatus, instanceAssignee,
-  instanceId, projectName, recordSource, nodeName, nodeOrder, totalNodes,
+  instanceId, projectName, projectId, recordSource, nodeName, nodeOrder, totalNodes,
   fillableFields, isApproval, currentUserId, currentUserName,
 }: TaskFormDialogProps) {
   const statusCfg = instanceStatus ? STATUS_MAP[instanceStatus] || STATUS_MAP.pending : null;
@@ -120,6 +121,40 @@ export function TaskFormDialog({
                   for (const cfg of lc.linked_configs)
                     if (cfg.project_id && cfg.table_code && cfg.column_name)
                       targets.push({ pid: cfg.project_id, tcode: cfg.table_code, cname: cfg.column_name, rids: cfg.record_ids || [] });
+                // 无显式目标时，尝试从实例所属项目自动发现记录
+                if (targets.length === 0 && projectId) {
+                  try {
+                    const projRes = await fetch("/api/projects");
+                    const projJson = await projRes.json();
+                    const proj = (projJson.data || []).find((p: Record<string, unknown>) => p.id === projectId);
+                    if (proj) {
+                      const schema = `yuansu_${proj.project_code}`;
+                      const rulesRes = await fetch(`/api/schema-rules?project_id=${projectId}`);
+                      const rulesJson = await rulesRes.json();
+                      const rules = (rulesJson.data || []) as Array<Record<string, unknown>>;
+                      for (const rule of rules) {
+                        const tcode = String(rule.table_code || "");
+                        if (!tcode) continue;
+                        try {
+                          const dataRes = await fetch(`/api/project-data?projectSchema=${schema}&tableCode=${tcode}`);
+                          const dataJson = await dataRes.json();
+                          const rows = (dataJson.data || []) as Array<Record<string, unknown>>;
+                          if (rows.length === 0) continue;
+                          const skipCols = new Set(["id", "project_id", "sort_order", "created_at", "updated_at", "created_by", "allow_delete", "data_source"]);
+                          let labelCol = "";
+                          if (rows[0]) {
+                            for (const k of Object.keys(rows[0] as Record<string, unknown>)) {
+                              if (!skipCols.has(k)) { labelCol = k; break; }
+                            }
+                          }
+                          if (!labelCol) continue;
+                          const labelPrefix = rules.length > 1 ? `[${proj.project_name}] ` : "";
+                          targets.push({ pid: projectId, tcode, cname: labelCol, rids: [] });
+                        } catch { /* skip */ }
+                      }
+                    }
+                  } catch { /* skip */ }
+                }
                 if (targets.length === 0) continue;
                 const allValues: string[] = [];
                 const allRecs: Array<{ id: string; label: string; pid: string }> = [];
@@ -368,6 +403,7 @@ export function TaskFormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[85%] sm:max-h-[90vh] sm:h-[85vh] overflow-hidden flex flex-col p-0 gap-0 bg-white shadow-2xl border-0">
+        <DialogTitle className="sr-only">{instanceTitle || formTableName || "任务详情"}</DialogTitle>
         {/* 深色顶栏 */}
         <div className="shrink-0 bg-slate-800 text-white">
           <div className="flex items-center justify-between px-8 py-4">
@@ -445,30 +481,6 @@ export function TaskFormDialog({
                     <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">描述</p>
                     <p className="text-sm text-slate-600 leading-relaxed">{instanceDesc}</p>
                   </div>
-                )}
-
-                {/* 来源信息 */}
-                {(projectName || recordSource) && (
-                  <>
-                    <Separator />
-                    <div>
-                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">来源</p>
-                      <div className="space-y-2">
-                        {projectName && (
-                          <div className="flex items-center gap-2 text-sm text-slate-600">
-                            <Building2 className="w-4 h-4 text-slate-400" />
-                            {projectName}
-                          </div>
-                        )}
-                        {recordSource && (
-                          <div className="flex items-center gap-2 text-sm text-slate-600">
-                            <ArrowLeftRight className="w-4 h-4 text-slate-400" />
-                            {recordSource}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </>
                 )}
 
                 {/* 流程节点 */}

@@ -162,7 +162,7 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
   const [formDialogInfo, setFormDialogInfo] = useState<{
     tableCode: string; tableName: string;
     title?: string; desc?: string; dueDate?: string; status?: string; assignee?: string;
-    id?: string; projectName?: string; recordSource?: string;
+    id?: string; projectName?: string; projectId?: string; recordSource?: string;
     nodeName?: string; nodeOrder?: number; totalNodes?: number;
     fillableFields?: string[];
     isApproval?: boolean;
@@ -325,6 +325,7 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
       dueDate: instance.due_date, status: instance.status,
       assignee: instance.assignee_name, id: instance.id,
       projectName: instance.project_name,
+      projectId: instance.project_id,
       nodeName: instance._current_node_name,
       nodeOrder: instance._current_node_index != null ? instance._current_node_index + 1 : undefined,
       totalNodes: instance._total_nodes,
@@ -497,6 +498,7 @@ export function TaskManagement({ currentUser }: TaskManagementProps) {
         instanceAssignee={formDialogInfo?.assignee}
         instanceId={formDialogInfo?.id}
         projectName={formDialogInfo?.projectName}
+        projectId={formDialogInfo?.projectId}
         recordSource={formDialogInfo?.recordSource}
         nodeName={formDialogInfo?.nodeName}
         nodeOrder={formDialogInfo?.nodeOrder}
@@ -672,44 +674,44 @@ function TaskInstanceCard({ instance, variant, onAction, onReportIssue, onOpenFo
           {/* 操作按钮 */}
           <div className="flex items-center gap-1 shrink-0">
             {instance.status === "pending" && !isApproval && (
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onAction(instance.id, "start")}>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); onAction(instance.id, "start"); }}>
                 开始
               </Button>
             )}
             {/* 流程型任务：推进按钮 */}
             {isApproval && (instance.status === "pending" || instance.status === "in_progress" || instance.status === "overdue") && (
-              <Button size="sm" className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700" onClick={() => onAction(instance.id, "advance")}>
+              <Button size="sm" className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700" onClick={(e) => { e.stopPropagation(); onAction(instance.id, "advance"); }}>
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                 提交
               </Button>
             )}
             {/* 非流程型任务：完成按钮 */}
             {!isApproval && (instance.status === "pending" || instance.status === "in_progress" || instance.status === "overdue") && (
-              <Button size="sm" className="h-7 text-xs bg-green-600 hover:bg-green-700" onClick={() => onAction(instance.id, "complete")}>
+              <Button size="sm" className="h-7 text-xs bg-green-600 hover:bg-green-700" onClick={(e) => { e.stopPropagation(); onAction(instance.id, "complete"); }}>
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                 完成
               </Button>
             )}
             {/* 审批流：驳回 */}
             {isApproval && (instance.status === "pending" || instance.status === "in_progress") && (
-              <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => onAction(instance.id, "reject")}>
+              <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); onAction(instance.id, "reject"); }}>
                 <AlertTriangle className="w-3.5 h-3.5 mr-1" />驳回
               </Button>
             )}
             {/* 审批流：退回 */}
             {isApproval && (instance.status === "pending" || instance.status === "in_progress") && nodeIndex > 0 && (
-              <Button size="sm" variant="ghost" className="h-7 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50" onClick={() => onAction(instance.id, "return")}>
+              <Button size="sm" variant="ghost" className="h-7 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50" onClick={(e) => { e.stopPropagation(); onAction(instance.id, "return"); }}>
                 <ArrowLeft className="w-3.5 h-3.5 mr-1" />退回
               </Button>
             )}
             {/* 审批流：转办 */}
             {isApproval && (instance.status === "pending" || instance.status === "in_progress") && (
-              <Button size="sm" variant="ghost" className="h-7 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50" onClick={() => onAction(instance.id, "transfer")}>
+              <Button size="sm" variant="ghost" className="h-7 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50" onClick={(e) => { e.stopPropagation(); onAction(instance.id, "transfer"); }}>
                 <RotateCcw className="w-3.5 h-3.5 mr-1" />转办
               </Button>
             )}
             {(instance.status === "pending" || instance.status === "in_progress" || instance.status === "overdue") && onReportIssue && (
-              <Button size="sm" variant="ghost" className="h-7 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50" onClick={() => onReportIssue(instance)}>
+              <Button size="sm" variant="ghost" className="h-7 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50" onClick={(e) => { e.stopPropagation(); onReportIssue(instance); }}>
                 <AlertTriangle className="w-3.5 h-3.5 mr-1" />
                 上报问题
               </Button>
