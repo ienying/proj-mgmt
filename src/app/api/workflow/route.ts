@@ -9,11 +9,11 @@ export async function GET(request: NextRequest) {
     const taskDefId = searchParams.get("task_def_id");
 
     if (taskDefId) {
-      const { data: templates } = await client.rpc("dp_select", { p_table: "workflow_templates" });
+      const { data: templates } = await client.rpc("dp_select", { p_table: "design_public.workflow_templates" });
       const tmpl = (templates as Array<Record<string, unknown>>)?.find(t => t.task_def_id === taskDefId);
       if (!tmpl) return NextResponse.json({ data: null });
 
-      const { data: nodes } = await client.rpc("dp_select", { p_table: "workflow_nodes" });
+      const { data: nodes } = await client.rpc("dp_select", { p_table: "design_public.workflow_nodes" });
       const tmplNodes = (nodes as Array<Record<string, unknown>>)?.filter(n => n.template_id === tmpl.id)
         .sort((a, b) => Number(a.order_index) - Number(b.order_index));
 
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const { task_def_id, nodes, allow_forward, allow_return } = body;
 
     // 删除旧模板
-    const { data: oldTmpls } = await client.rpc("dp_select", { p_table: "workflow_templates" });
+    const { data: oldTmpls } = await client.rpc("dp_select", { p_table: "design_public.workflow_templates" });
     const oldTmpl = (oldTmpls as Array<Record<string, unknown>>)?.find(t => t.task_def_id === task_def_id);
     if (oldTmpl) {
       await client.rpc("execute_sql", { p_sql: `DELETE FROM design_public.workflow_nodes WHERE template_id = '${oldTmpl.id}'` });

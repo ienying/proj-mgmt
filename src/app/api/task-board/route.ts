@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
 
     if (taskDefId) {
       // 获取补充列定义
-      const { data: cols } = await client.rpc("dp_select", { p_table: "task_extra_columns" });
+      const { data: cols } = await client.rpc("dp_select", { p_table: "design_public.task_extra_columns" });
       const defCols = (cols as Array<Record<string, unknown>>)?.filter(c => c.task_def_id === taskDefId)
         .sort((a, b) => Number(a.sort_order) - Number(b.sort_order));
       return NextResponse.json({ data: { columns: defCols || [] } });
@@ -19,11 +19,11 @@ export async function GET(request: NextRequest) {
 
     if (taskInstanceId) {
       // 获取看板记录和补充列数据
-      const { data: records } = await client.rpc("dp_select", { p_table: "task_board_records" });
+      const { data: records } = await client.rpc("dp_select", { p_table: "design_public.task_board_records" });
       const boardRecords = (records as Array<Record<string, unknown>>)?.filter(r => r.task_instance_id === taskInstanceId)
         .sort((a, b) => Number(a.sort_order) - Number(b.sort_order));
 
-      const { data: extraData } = await client.rpc("dp_select", { p_table: "task_extra_data" });
+      const { data: extraData } = await client.rpc("dp_select", { p_table: "design_public.task_extra_data" });
       const allData = extraData as Array<Record<string, unknown>> || [];
 
       // 组装数据
