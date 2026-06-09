@@ -285,3 +285,53 @@ export const project_schema_rules = pgTable("project_schema_rules", {
   index("project_schema_rules_stage_idx").on(table.project_stage),
   index("project_schema_rules_status_idx").on(table.project_status),
 ]);
+
+// ============================================
+// 任务中心
+// ============================================
+
+// 任务定义表
+export const taskCenterDefs = pgTable("task_center_defs", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  task_name: varchar("task_name", { length: 255 }).notNull(),
+  time_type: varchar("time_type", { length: 20 }).notNull(),
+  task_mode: varchar("task_mode", { length: 20 }).notNull(),
+  periodic_config: jsonb("periodic_config"),
+  form_columns: jsonb("form_columns").notNull(),
+  workflow_nodes: jsonb("workflow_nodes"),
+  assignee_config: jsonb("assignee_config"),
+  board_records: jsonb("board_records"),
+  deadline_config: jsonb("deadline_config"),
+  schema_name: varchar("schema_name", { length: 100 }).notNull(),
+  table_name: varchar("table_name", { length: 200 }).notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("active"),
+  created_by: varchar("created_by", { length: 36 }).notNull(),
+  created_by_name: varchar("created_by_name", { length: 100 }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }),
+}, (table) => [
+  index("task_center_defs_status_idx").on(table.status),
+  index("task_center_defs_created_by_idx").on(table.created_by),
+]);
+
+// 任务实例表
+export const taskCenterInstances = pgTable("task_center_instances", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  def_id: varchar("def_id", { length: 36 }).notNull(),
+  period_label: varchar("period_label", { length: 50 }),
+  assignee_id: varchar("assignee_id", { length: 36 }),
+  assignee_name: varchar("assignee_name", { length: 100 }),
+  current_node_id: varchar("current_node_id", { length: 36 }),
+  current_node_index: integer("current_node_index").default(0),
+  node_history: jsonb("node_history").default(sql`'[]'::jsonb`),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
+  project_id: varchar("project_id", { length: 36 }),
+  project_name: varchar("project_name", { length: 255 }),
+  due_date: varchar("due_date", { length: 20 }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }),
+}, (table) => [
+  index("task_center_instances_def_id_idx").on(table.def_id),
+  index("task_center_instances_assignee_idx").on(table.assignee_id),
+  index("task_center_instances_status_idx").on(table.status),
+]);

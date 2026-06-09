@@ -31,6 +31,7 @@ const IssueManagement = dynamic(() => import("@/components/issue-management"), {
 const KnowledgeCenter = dynamic(() => import("@/components/knowledge-center").then(m => ({ default: m.default })), { ssr: false, loading: () => <LoadingFallback /> });
 const CaseCenter = dynamic(() => import("@/components/case-center").then(m => ({ default: m.CaseCenter })), { ssr: false, loading: () => <LoadingFallback /> });
 const AboutPage = dynamic(() => import("@/components/about-page"), { ssr: false, loading: () => <LoadingFallback /> });
+const TaskCenter = dynamic(() => import("@/components/task-center"), { ssr: false, loading: () => <LoadingFallback /> });
 
 import {
   FolderKanban,
@@ -42,6 +43,7 @@ import {
   Briefcase,
   Megaphone,
   Info,
+  CheckSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -114,7 +116,7 @@ export default function HomePage() {
   const [projects, setProjects] = useState(mockProjects);
   const [users, setUsers] = useState<{ id: string; username: string; name: string; phone?: string; email?: string; department?: string; position?: string; avatar?: string; role?: "super_admin" | "sub_admin" | "user"; is_active: boolean; created_at: string }[]>([]);
   const [standards, setStandards] = useState<TableDefinition[]>([]);
-  const [badges, setBadges] = useState<{ issues: number; messages: number }>({ issues: 0, messages: 0 });
+  const [badges, setBadges] = useState<{ issues: number; messages: number; tasks: number }>({ issues: 0, messages: 0, tasks: 0 });
   const userName = user?.name || "";
   const currentUser = user ? { id: user.id, name: user.name, department: user.department || "", phone: user.phone || "", role: user.role } : { id: "default_user", name: "", department: "", phone: "", role: "user" as const };
   const [viewingProject, setViewingProject] = useState<{
@@ -144,6 +146,7 @@ export default function HomePage() {
   const dockItems = [
     { id: "dashboard", label: "数据看板", icon: <FolderKanban className="w-5 h-5" />, color: "bg-emerald-500" },
     { id: "projects", label: "项目管理", icon: <FolderKanban className="w-5 h-5" />, color: "bg-blue-500" },
+    { id: "tasks", label: "任务中心", icon: <CheckSquare className="w-5 h-5" />, color: "bg-rose-500", badge: badges.tasks },
     { id: "issues", label: "工单提交", icon: <AlertTriangle className="w-5 h-5" />, color: "bg-blue-500", badge: badges.issues },
     { id: "learning", label: "学习中心", icon: <BookOpen className="w-5 h-5" />, color: "bg-cyan-500" },
     { id: "case-center", label: "案例中心", icon: <Briefcase className="w-5 h-5" />, color: "bg-violet-500" },
@@ -171,11 +174,17 @@ export default function HomePage() {
     if (!user?.id) return;
     const fetchBadges = async () => {
       try {
-        const res = await fetch(`/api/badges?user_id=${user.id}`);
-        if (res.ok) {
-          const data = await res.json();
-          setBadges(data.data || { issues: 0, messages: 0 });
-        }
+        const [badgesRes, tasksRes] = await Promise.all([
+          fetch(`/api/badges?user_id=${user.id}`),
+          fetch(`/api/tasks/stats?user_id=${user.id}`),
+        ]);
+        const badgesData = badgesRes.ok ? await badgesRes.json() : null;
+        const tasksData = tasksRes.ok ? await tasksRes.json() : null;
+        setBadges({
+          issues: badgesData?.data?.issues || 0,
+          messages: badgesData?.data?.messages || 0,
+          tasks: tasksData?.data?.tasks || 0,
+        });
       } catch {}
     };
     fetchBadges();
@@ -577,6 +586,12 @@ export default function HomePage() {
               onProjectDelete={handleProjectDelete}
               onViewProject={handleViewProject}
             />
+          </ContentErrorBoundary>
+        );
+      case "tasks":
+        return (
+          <ContentErrorBoundary>
+            <TaskCenter currentUser={currentUser} />
           </ContentErrorBoundary>
         );
       case "standards":
