@@ -235,15 +235,16 @@ export function TaskFormDialog({
           }
           setExtraData(savedExtra);
         }
-      } catch { /* skip */ }
+      } catch (err) { console.error("加载看板记录失败", err); }
       try {
         // 加载补充列定义
         if (definitionId) {
           const ecRes = await fetch(`/api/task-board?task_def_id=${definitionId}`);
           const ecJson = await ecRes.json();
+          console.log("补充列定义加载结果", { columns: ecJson.data?.columns });
           if (ecJson.data?.columns) setExtraCols(ecJson.data.columns);
         }
-      } catch { /* skip */ }
+      } catch (err) { console.error("加载补充列定义失败", err); }
     })();
   }, [open, instanceId, definitionId]);
 
@@ -300,7 +301,7 @@ export function TaskFormDialog({
                 body: JSON.stringify({ projectCode: proj.project_code, tableCode: tgt.tcode, recordId: rid, columnName: tgt.cname, value: val }),
               });
             }
-          } catch { /* skip */ }
+          } catch (err) { console.error("表单字段回写失败", { col: col.name, error: err }); }
         }
       }
 
@@ -321,7 +322,7 @@ export function TaskFormDialog({
               body: JSON.stringify({ extra_data: allExtraData }),
             });
           }
-        } catch { /* skip */ }
+        } catch (err) { console.error("保存看板补充列数据失败", { error: err }); }
 
         // 补充列写回：linked_text/linked_date 类型回写到源项目记录
         for (const ec of extraCols) {
@@ -349,7 +350,7 @@ export function TaskFormDialog({
                   }),
                 });
               }
-            } catch { /* skip */ }
+            } catch (err) { console.error("补充列回写失败", { ecName: ec.name, brLabel: br.source_label, error: err }); }
           }
         }
       }
@@ -472,7 +473,7 @@ export function TaskFormDialog({
             <SelectTrigger className={baseClass}><SelectValue placeholder="选择目标记录" /></SelectTrigger>
             <SelectContent>{recs.map((r) => (<SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>))}</SelectContent>
           </Select>
-          <Input type="date" value={formData[key] || ""} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField(key, e.target.value)}
+          <Input type="datetime-local" value={formData[key] || ""} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField(key, e.target.value)}
             className={baseClass} />
         </div>
       );
@@ -740,8 +741,10 @@ export function TaskFormDialog({
                                       {extraCols.map((ec) => {
                                         const dataKey = `${br.id}_${ec.id}`;
                                         const val = extraData[dataKey] || "";
-                                        const inputBaseClass = "w-full text-[11px] border rounded px-2 py-1 outline-none transition-colors";
+                                        const inputBaseClass = "w-full text-[11px] border border-slate-300 rounded px-2 py-1 outline-none transition-colors shadow-sm";
                                         const isWriteback = ec.type === "linked_text" || ec.type === "linked_date";
+                                        const isDatetimeType = ec.type === "linked_date";
+                                        const isDateOnlyType = ec.type === "date";
                                         return (
                                           <div key={ec.id}>
                                             <span className="text-[10px] text-slate-400 flex items-center gap-1 mb-0.5">
@@ -755,19 +758,23 @@ export function TaskFormDialog({
                                             {ec.type === "select" && ec.options?.length ? (
                                               <select value={val}
                                                 onChange={(e) => setExtraData((prev) => ({ ...prev, [dataKey]: e.target.value }))}
-                                                className={`${inputBaseClass} bg-white border-slate-200 focus:border-indigo-400 focus:ring-indigo-200`}>
+                                                className={`${inputBaseClass} bg-white focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200`}>
                                                 <option value="">—</option>
                                                 {ec.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                                               </select>
-                                            ) : ec.type === "date" || ec.type === "linked_date" ? (
+                                            ) : isDatetimeType ? (
+                                              <input type="datetime-local" value={val}
+                                                onChange={(e) => setExtraData((prev) => ({ ...prev, [dataKey]: e.target.value }))}
+                                                className={`${inputBaseClass} text-xs py-1.5 bg-white focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200`} />
+                                            ) : isDateOnlyType ? (
                                               <input type="date" value={val}
                                                 onChange={(e) => setExtraData((prev) => ({ ...prev, [dataKey]: e.target.value }))}
-                                                className={`${inputBaseClass} bg-white border-slate-200 focus:border-indigo-400 focus:ring-indigo-200`} />
+                                                className={`${inputBaseClass} text-xs py-1.5 bg-white focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200`} />
                                             ) : (
                                               <input type="text" value={val}
                                                 onChange={(e) => setExtraData((prev) => ({ ...prev, [dataKey]: e.target.value }))}
                                                 placeholder={ec.name}
-                                                className={`${inputBaseClass} bg-white border-slate-200 focus:border-indigo-400 focus:ring-indigo-200`} />
+                                                className={`${inputBaseClass} bg-white focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200`} />
                                             )}
                                           </div>
                                         );
