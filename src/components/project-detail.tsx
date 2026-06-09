@@ -510,14 +510,16 @@ export function ProjectDetail({
       const defData = await defResponse.json();
       
       if (defData.data) {
-        const definitions = defData.data.map((d: Record<string, unknown>) => ({
-          id: d.id as string,
-          table_code: d.table_code as string,
-          table_name: d.table_name as string,
-          module_codes: (d.module_type as string[]) || ["scope"],
-          allow_add: d.allow_add as boolean | undefined,
-          columns_config: (d.columns_config as ColumnConfig[]).map(col => ({ ...col, key: col.key || col.name })),
-        }));
+        const definitions = (defData.data as Record<string, unknown>[])
+          .filter((d) => !String(d.table_code || "").startsWith("task_"))
+          .map((d) => ({
+            id: d.id as string,
+            table_code: d.table_code as string,
+            table_name: d.table_name as string,
+            module_codes: (d.module_type as string[]) || ["scope"],
+            allow_add: d.allow_add as boolean | undefined,
+            columns_config: (d.columns_config as ColumnConfig[]).map(col => ({ ...col, key: col.key || col.name })),
+          }));
 
         // 检测含有采购模块记录类型列的表，自动设置 allow_add = false
         definitions.forEach((def: TableDefinition) => {

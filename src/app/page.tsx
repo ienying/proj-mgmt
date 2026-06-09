@@ -3,7 +3,6 @@
 import { useState, useEffect, Component, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { TopDock } from "@/components/top-dock";
-import { TodoDialog } from "@/components/todo-dialog";
 import { ProjectDetail } from "@/components/project-detail";
 import { ChunkErrorHandler } from "@/components/chunk-error-handler";
 import { LoginPage } from "@/components/login-page";
@@ -27,21 +26,16 @@ const Dashboard = dynamic(() => import("@/components/dashboard").then(m => ({ de
 });
 const ProjectManagement = dynamic(() => import("@/components/project-management"), { ssr: false, loading: () => <LoadingFallback /> });
 const StandardManagement = dynamic(() => import("@/components/standard-management").then(m => ({ default: m.StandardManagement })), { ssr: false, loading: () => <LoadingFallback /> });
-// const SystemSettings = dynamic(() => import("@/components/system-settings"), { ssr: false, loading: () => <LoadingFallback /> });
-const SystemSettings = ({ children }: any) => <>{children}</>;
+const SystemSettings = dynamic(() => import("@/components/system-settings"), { ssr: false, loading: () => <LoadingFallback /> });
 const IssueManagement = dynamic(() => import("@/components/issue-management"), { ssr: false, loading: () => <LoadingFallback /> });
-const TaskManagement = dynamic(() => import("@/components/task-management").then(m => ({ default: m.TaskManagement })), { ssr: false, loading: () => <LoadingFallback /> });
 const KnowledgeCenter = dynamic(() => import("@/components/knowledge-center").then(m => ({ default: m.default })), { ssr: false, loading: () => <LoadingFallback /> });
 const CaseCenter = dynamic(() => import("@/components/case-center").then(m => ({ default: m.CaseCenter })), { ssr: false, loading: () => <LoadingFallback /> });
 const AboutPage = dynamic(() => import("@/components/about-page"), { ssr: false, loading: () => <LoadingFallback /> });
 
 import {
   FolderKanban,
-  CheckSquare,
   AlertCircle,
   BookOpen,
-  Users,
-  Mail,
   Settings,
   Wrench,
   AlertTriangle,
@@ -74,46 +68,6 @@ class ContentErrorBoundary extends Component<{ children: ReactNode }, { hasError
     return this.props.children;
   }
 }
-
-// 模拟数据
-type TodoPriority = "high" | "normal" | "low";
-type TodoStatus = "pending" | "completed";
-
-interface MockTodo {
-  id: string;
-  title: string;
-  content: string;
-  priority: TodoPriority;
-  status: TodoStatus;
-  due_date: string;
-}
-
-const mockTodos: MockTodo[] = [
-  {
-    id: "1",
-    title: "完成项目需求文档",
-    content: "整理并完善项目管理系统的需求分析",
-    priority: "high",
-    status: "pending",
-    due_date: "2024-12-25",
-  },
-  {
-    id: "2",
-    title: "审核设计方案",
-    content: "检查UI/UX设计是否符合规范",
-    priority: "normal",
-    status: "pending",
-    due_date: "2024-12-26",
-  },
-  {
-    id: "3",
-    title: "准备周会汇报材料",
-    content: "整理本周项目进度和问题",
-    priority: "low",
-    status: "completed",
-    due_date: "2024-12-27",
-  },
-];
 
 const mockProjects: Array<{
   id: string;
@@ -150,22 +104,17 @@ const mockStandards = [
   },
 ];
 
-interface TodoItem { id: string; title: string; content?: string; priority: "low" | "normal" | "high"; status: "pending" | "completed"; due_date?: string; }
-
 export default function HomePage() {
   const { user, isLoading, isAuthenticated, logout: authLogout } = useAuth();
   const [projectTypes, setProjectTypes] = useState<{ code: string; name: string }[]>([]);
   const [projectStages, setProjectStages] = useState<{ code: string; name: string }[]>([]);
   const [procurementModules, setProcurementModules] = useState<{ code: string; name: string }[]>([]);
   const [activeItem, setActiveItem] = useState("dashboard");
-  const [showTodoDialog, setShowTodoDialog] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [todos, setTodos] = useState<TodoItem[]>([]);
-  const [todosLoading, setTodosLoading] = useState(false);
   const [projects, setProjects] = useState(mockProjects);
   const [users, setUsers] = useState<{ id: string; username: string; name: string; phone?: string; email?: string; department?: string; position?: string; avatar?: string; role?: "super_admin" | "sub_admin" | "user"; is_active: boolean; created_at: string }[]>([]);
   const [standards, setStandards] = useState<TableDefinition[]>([]);
-  const [badges, setBadges] = useState<{ todos: number; issues: number; messages: number }>({ todos: 0, issues: 0, messages: 0 });
+  const [badges, setBadges] = useState<{ issues: number; messages: number }>({ issues: 0, messages: 0 });
   const userName = user?.name || "";
   const currentUser = user ? { id: user.id, name: user.name, department: user.department || "", phone: user.phone || "", role: user.role } : { id: "default_user", name: "", department: "", phone: "", role: "user" as const };
   const [viewingProject, setViewingProject] = useState<{
@@ -195,7 +144,6 @@ export default function HomePage() {
   const dockItems = [
     { id: "dashboard", label: "数据看板", icon: <FolderKanban className="w-5 h-5" />, color: "bg-emerald-500" },
     { id: "projects", label: "项目管理", icon: <FolderKanban className="w-5 h-5" />, color: "bg-blue-500" },
-    { id: "todos", label: "待办任务", icon: <CheckSquare className="w-5 h-5" />, color: "bg-indigo-500", badge: badges.todos },
     { id: "issues", label: "工单提交", icon: <AlertTriangle className="w-5 h-5" />, color: "bg-blue-500", badge: badges.issues },
     { id: "learning", label: "学习中心", icon: <BookOpen className="w-5 h-5" />, color: "bg-cyan-500" },
     { id: "case-center", label: "案例中心", icon: <Briefcase className="w-5 h-5" />, color: "bg-violet-500" },
@@ -205,30 +153,6 @@ export default function HomePage() {
     { id: "about", label: "关于", icon: <Info className="w-5 h-5" />, color: "bg-indigo-500" },
   ];
 
-  // 初始化时显示待办事项弹窗
-	// 登录后加载真实待办并弹窗
-	useEffect(() => {
-	  if (!user?.id) return;
-	  setTodosLoading(true);
-	  fetch(`/api/todo-tasks/instances?assignee_id=${user.id}&status=pending,in_progress,overdue`)
-	    .then((r) => r.json())
-	    .then((d) => {
-	      if (d.data && Array.isArray(d.data)) {
-	        const items: TodoItem[] = (d.data as Array<Record<string, unknown>>).map((inst) => ({
-	          id: String(inst.id),
-	          title: String(inst.title || inst.name || ""),
-	          content: String(inst.description || ""),
-	          priority: (["high","medium","low"].includes(String(inst.priority)) ? String(inst.priority) : "normal") as TodoItem["priority"],
-	          status: (inst.status === "completed" ? "completed" : "pending") as TodoItem["status"],
-	          due_date: inst.due_date ? String(inst.due_date) : undefined,
-	        }));
-	        setTodos(items);
-	        if (items.length > 0) setShowTodoDialog(true);
-	      }
-	    })
-	    .catch(() => {})
-	    .finally(() => setTodosLoading(false));
-	}, [user?.id]);
 
   // 监听从子组件发出的视图切换事件（如待办中心跳转到工单页面）
   useEffect(() => {
@@ -250,7 +174,7 @@ export default function HomePage() {
         const res = await fetch(`/api/badges?user_id=${user.id}`);
         if (res.ok) {
           const data = await res.json();
-          setBadges(data.data || { todos: 0, issues: 0, messages: 0 });
+          setBadges(data.data || { issues: 0, messages: 0 });
         }
       } catch {}
     };
@@ -297,11 +221,13 @@ export default function HomePage() {
           setUsers(usersData.data || []);
         }
 
-        // 获取规范表定义
+        // 获取规范表定义（过滤掉任务表单自动生成的 task_ 临时表）
         const standardsRes = await fetch("/api/standards");
         if (standardsRes.ok) {
           const standardsData = await standardsRes.json();
-          setStandards(standardsData.data || []);
+          setStandards((standardsData.data || []).filter(
+            (d: Record<string, unknown>) => !String(d.table_code || "").startsWith("task_")
+          ));
         }
 
         // 获取项目列表
@@ -362,23 +288,6 @@ export default function HomePage() {
     }
   };
 
-  const handleTodoConfirm = () => {
-    setShowTodoDialog(false);
-        setActiveItem("todos");
-  };
-
-  const handleTodoComplete = (id: string) => {
-    setTodos((prev) =>
-      prev.map((todo) =>
-        todo.id === id
-          ? {
-              ...todo,
-              status: todo.status === "completed" ? "pending" : "completed",
-            }
-          : todo
-      )
-    );
-  };
 
   const handleProjectCreate = async (data: any) => {
     try {
@@ -627,9 +536,9 @@ export default function HomePage() {
                 totalProjects: projects.length,
                 activeProjects: projects.filter((p) => p.status === "active").length,
                 completedProjects: projects.filter((p) => p.status === "completed").length,
-                totalTasks: 42,
-                pendingTasks: todos.filter((t) => t.status === "pending").length,
-                completedTasks: todos.filter((t) => t.status === "completed").length,
+                totalTasks: 0,
+                pendingTasks: 0,
+                completedTasks: 0,
                 totalBudget: 500000,
                 usedBudget: 320000,
               }}
@@ -711,12 +620,6 @@ export default function HomePage() {
             <IssueManagement currentUser={currentUser} />
           </ContentErrorBoundary>
         );
-      case "todos":
-        return (
-          <ContentErrorBoundary>
-            <TaskManagement currentUser={currentUser} />
-          </ContentErrorBoundary>
-        );
       case "case-center":
         return (
           <ContentErrorBoundary>
@@ -773,14 +676,6 @@ export default function HomePage() {
       />
 
       <main className="flex-1 overflow-y-auto">{renderContent()}</main>
-
-      <TodoDialog
-        open={showTodoDialog}
-        onOpenChange={setShowTodoDialog}
-        todos={todos}
-        onComplete={handleTodoComplete}
-        onConfirm={handleTodoConfirm}
-      />
 
       <ChangePasswordDialog
         open={showChangePassword}

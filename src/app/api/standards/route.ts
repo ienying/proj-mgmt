@@ -16,9 +16,11 @@ function mapColumnType(type: string): string {
   return typeMap[type] || "TEXT";
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const client = await createServerClient();
+    const { searchParams } = new URL(request.url);
+    const includeTaskTables = searchParams.get("include_task_tables") === "true";
 
     const { data, error } = await client.rpc("dp_select", {
       p_table: "data_table_definitions",
@@ -28,8 +30,16 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // 默认过滤掉任务表单自动生成的 task_ 临时表
+    const rows = (data || []) as Array<Record<string, unknown>>;
+    const filtered = includeTaskTables
+      ? rows
+      : rows.filter(
+          (d) => !String(d.table_code || "").startsWith("task_")
+        );
+
     // 按 sort_order 排序
-    const sortedData = (data || []).sort(
+    const sortedData = filtered.sort(
       (a: Record<string, unknown>, b: Record<string, unknown>) =>
         ((a.sort_order as number) || 0) - ((b.sort_order as number) || 0)
     );

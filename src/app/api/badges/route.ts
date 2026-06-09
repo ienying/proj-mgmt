@@ -11,25 +11,8 @@ export async function GET(request: Request) {
 
     const supabase = await createServerClient();
 
-    // 并行查询各模块角标数据
-    const [
-      todoTaskResult,
-      issueResult,
-      knowledgeResult,
-    ] = await Promise.all([
-      // 待办任务：我的待办中未完成的实例数
-      supabase.rpc("dp_select", { p_table: "todo_task_instances" }),
-      // 工单：分配给我的待受理+处理中的工单数
-      supabase.rpc("dp_select", { p_table: "issue_mgmt_issues" }),
-      // 信息广场：未读帖子数
-      supabase.rpc("dp_select", { p_table: "knowledge_reads" }),
-    ]);
-
-    // 计算待办任务角标
-    const taskInstances: any[] = todoTaskResult.data || [];
-    const todoCount = taskInstances.filter(
-      (i: any) => i.assignee_id === userId && (i.status === "pending" || i.status === "in_progress" || i.status === "in_progress_late")
-    ).length;
+    const issueResult = await supabase.rpc("dp_select", { p_table: "issue_mgmt_issues" });
+    const knowledgeResult = await supabase.rpc("dp_select", { p_table: "knowledge_reads" });
 
     // 计算工单角标
     const issues: any[] = issueResult.data || [];
@@ -51,7 +34,6 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       data: {
-        todos: todoCount,
         issues: issueCount,
         messages: unreadCount,
       },
