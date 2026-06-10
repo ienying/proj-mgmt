@@ -84,18 +84,32 @@ export default function TaskCenterDetail({ open, onOpenChange, instance, def, cu
   const columnPermissions = useMemo(() => {
     const perms: Record<string, "editable" | "readonly" | "hidden"> = {};
 
-    // Form columns: based on workflow_nodes.editable_fields
+    // Form columns: based on workflow_nodes.editable_fields or assigned_node_id
     for (const col of formColumns) {
-      if (isProcess && currentNode) {
-        if (currentNode.editable_fields?.includes(col.name)) {
-          perms[col.name] = "editable";
+      if (!isProcess || isComplete) {
+        perms[col.name] = isComplete ? "readonly" : "editable";
+        continue;
+      }
+
+      // Determine which node this column belongs to
+      const assignedNodeId = col.assigned_node_id;
+      let isMyField = false;
+      if (assignedNodeId && currentNode) {
+        isMyField = assignedNodeId === currentNode.id;
+      } else if (currentNode?.editable_fields?.includes(col.name)) {
+        isMyField = true;
+      }
+
+      if (isMyField) {
+        perms[col.name] = "editable";
+      } else {
+        const wasFilled = physRow?.[col.name] != null;
+        if (isInitiator) {
+          // Initiator sees all fields (at least readonly)
+          perms[col.name] = wasFilled ? "readonly" : "readonly";
         } else {
-          // Check if any previous node filled this
-          const wasFilled = physRow?.[col.name] != null;
           perms[col.name] = wasFilled ? "readonly" : "hidden";
         }
-      } else {
-        perms[col.name] = isComplete ? "readonly" : "editable";
       }
     }
 
@@ -107,23 +121,28 @@ export default function TaskCenterDetail({ open, onOpenChange, instance, def, cu
       }
       // Feedback columns: check assigned_node_id
       for (const fc of ref.feedback_columns || []) {
-        if (isProcess && currentNode) {
-          if (fc.assigned_node_id === currentNode.id) {
-            perms[fc.target_col] = "editable";
+        if (!isProcess || isComplete) {
+          perms[fc.target_col] = isComplete ? "readonly" : "editable";
+          continue;
+        }
+
+        if (currentNode && fc.assigned_node_id === currentNode.id) {
+          perms[fc.target_col] = "editable";
+        } else {
+          const wasFilled = physRow?.[fc.target_col] != null;
+          const assignedNodeIndex = workflowNodes.findIndex((n: any) => n.id === fc.assigned_node_id);
+          if (isInitiator) {
+            // Initiator sees all fields
+            perms[fc.target_col] = "readonly";
           } else {
-            const wasFilled = physRow?.[fc.target_col] != null;
-            // Check if this column was filled by a previous node
-            const assignedNodeIndex = workflowNodes.findIndex((n: any) => n.id === fc.assigned_node_id);
             perms[fc.target_col] = (assignedNodeIndex < currentIndex || wasFilled) ? "readonly" : "hidden";
           }
-        } else {
-          perms[fc.target_col] = isComplete ? "readonly" : "editable";
         }
       }
     }
 
     return perms;
-  }, [formColumns, boardRecords, currentNode, physRow, isProcess, isComplete, currentIndex, workflowNodes]);
+  }, [formColumns, boardRecords, currentNode, physRow, isProcess, isComplete, isInitiator, currentIndex, workflowNodes]);
 
   /* ─── Save draft ─── */
   const handleSaveDraft = async () => {
@@ -187,17 +206,33 @@ export default function TaskCenterDetail({ open, onOpenChange, instance, def, cu
     }
   };
 
+  /* ─── Get which node a form column is assigned to ─── */
+  const getFieldNode = (colName: string) => {
+    const col = formColumns.find((c: any) => c.name === colName);
+    if (col?.assigned_node_id) {
+      return workflowNodes.find((n: any) => n.id === col.assigned_node_id);
+    }
+    return null;
+  };
+
   /* ─── Render form row ─── */
   const renderField = (name: string, label: string, type: string, options?: string[]) => {
     const perm = columnPermissions[name] || "editable";
     const value = formData[name] !== undefined ? formData[name] : (physRow?.[name] ?? "");
+    const fieldNode = isProcess ? getFieldNode(name) : null;
+    const nodeLabel = fieldNode ? `${fieldNode.name}(${fieldNode.handler_name})` : "";
 
     if (perm === "hidden") return null;
 
     if (perm === "readonly") {
       return (
         <div key={name} className="space-y-1">
-          <label className="text-xs text-gray-500">{label}</label>
+          <label className="text-xs text-gray-500">
+            {label}
+            {nodeLabel && <span className="text-gray-400 ml-1">— {nodeLabel}</span>}
+            {value && <span className="text-green-500 ml-1">✓已填写</span>}
+            {!value && isInitiator && <span className="text-orange-400 ml-1">○待填写</span>}
+          </label>
           <div className="text-sm bg-gray-100 rounded px-2 py-1.5 min-h-[2rem]">{value || "-"}</div>
         </div>
       );
@@ -260,12 +295,16 @@ export default function TaskCenterDetail({ open, onOpenChange, instance, def, cu
             const perm = columnPermissions[fc.target_col] || "hidden";
             if (perm === "hidden") return null;
             const value = formData[fc.target_col] !== undefined ? formData[fc.target_col] : (physRow?.[fc.target_col] ?? "");
+            const filled = value != null && value !== "";
 
             return (
               <div key={fc.target_col} className="space-y-1">
                 <label className="text-xs font-medium">
                   {fc.label}{fc.required && <span className="text-red-500 ml-0.5">*</span>}
                   <span className="text-gray-400 ml-1">({nodeName})</span>
+                  {perm === "readonly" && isInitiator && (
+                    filled ? <span className="text-green-500 ml-1">✓已填写</span> : <span className="text-orange-400 ml-1">○待填写</span>
+                  )}
                 </label>
                 {perm === "readonly" ? (
                   <div className="text-sm bg-gray-100 rounded px-2 py-1.5">{value || "-"}</div>
@@ -358,19 +397,31 @@ export default function TaskCenterDetail({ open, onOpenChange, instance, def, cu
 
         {/* Node history */}
         {nodeHistory.length > 0 && (
-          <details className="mt-4">
+          <details className="mt-4" open={isInitiator}>
             <summary className="text-sm font-medium cursor-pointer flex items-center gap-1">
               <History className="w-4 h-4" />操作记录 ({nodeHistory.length})
             </summary>
-            <div className="mt-2 space-y-1 max-h-40 overflow-auto">
-              {nodeHistory.map((h: any, i: number) => (
-                <div key={i} className="text-xs flex items-center gap-2 bg-gray-50 rounded px-2 py-1">
-                  <span className="font-medium">{h.action}</span>
-                  <span>{h.handler_name}</span>
-                  {h.reason && <span className="text-red-500">原因: {h.reason}</span>}
-                  <span className="text-gray-400 ml-auto">{new Date(h.submitted_at || h.reassigned_at).toLocaleString("zh-CN")}</span>
-                </div>
-              ))}
+            <div className="mt-2 space-y-1 max-h-60 overflow-auto">
+              {nodeHistory.map((h: any, i: number) => {
+                const actionLabels: Record<string, string> = { submit: "提交", reject: "驳回", skip: "跳过", reassign: "转办", withdraw: "撤回" };
+                const node = workflowNodes.find((n: any) => n.id === h.node_id);
+                const actionColor: Record<string, string> = {
+                  submit: "text-green-600", reject: "text-red-600", skip: "text-yellow-600",
+                  reassign: "text-blue-600", withdraw: "text-gray-600"
+                };
+                return (
+                  <div key={i} className="text-xs flex items-center gap-2 bg-gray-50 rounded px-2 py-1 flex-wrap">
+                    <span className={`font-medium ${actionColor[h.action] || ""}`}>
+                      {actionLabels[h.action] || h.action}
+                    </span>
+                    {node && <span className="text-gray-500">节点: {node.name}</span>}
+                    <span>{h.handler_name}</span>
+                    {h.reason && <span className="text-red-500">原因: {h.reason}</span>}
+                    {h.from_handler && <span className="text-gray-400">{h.from_handler} → {h.to_handler}</span>}
+                    <span className="text-gray-400 ml-auto">{new Date(h.submitted_at || h.reassigned_at).toLocaleString("zh-CN")}</span>
+                  </div>
+                );
+              })}
             </div>
           </details>
         )}

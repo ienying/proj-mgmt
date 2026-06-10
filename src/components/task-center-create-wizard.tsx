@@ -38,6 +38,7 @@ interface FormColumn {
   required: boolean;
   options?: string[];
   default_value?: string;
+  assigned_node_id?: string;
 }
 
 interface WorkflowNode {
@@ -152,6 +153,11 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
   const [tableDefsMap, setTableDefsMap] = useState<Record<string, string>>({});
   // User combobox open state (which node's combobox is open)
   const [userComboOpen, setUserComboOpen] = useState<string | null>(null);
+  // Column picker for board record references
+  const [columnPickerRecord, setColumnPickerRecord] = useState<any | null>(null);
+  const [columnPickerSelected, setColumnPickerSelected] = useState<Set<string>>(new Set());
+  // System columns to exclude from board record column picker
+  const SYSTEM_COLS = ["id", "created_at", "updated_at", "sort_order", "created_by", "allow_delete", "data_source", "_readonly"];
 
   /* ─── Helper: extract readable label from record ─── */
   const getRecordDisplayLabel = (record: any): string => {
@@ -277,21 +283,17 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
   };
 
   /* ─── 添加看板引用记录 ─── */
-  const addBoardRecord = (record: any) => {
+  const addBoardRecord = (record: any, selectedColumns?: string[]) => {
     const refId = `ref_${Date.now()}`;
     const sourceTable = boardSelectedTable;
-    // Find the project name for display
-    const proj = boardProjects.find((p: any) => p.project_schema === boardSelectedSchema);
+    const cols = selectedColumns || Object.keys(record).filter((k) => !["id", "created_at", "updated_at", "sort_order"].includes(k));
     const ref: BoardRecord = {
       ref_id: refId,
       label: getRecordDisplayLabel(record),
       source_schema: boardSelectedSchema,
       source_table: sourceTable,
       source_record_id: record.id,
-      copy_columns: Object.keys(record)
-        .filter((k) => !["id", "created_at", "updated_at", "sort_order"].includes(k))
-        .slice(0, 5)
-        .map((k) => ({ source_col: k, target_col: `${refId}_${k}` })),
+      copy_columns: cols.map((k) => ({ source_col: k, target_col: `${refId}_${k}` })),
       feedback_columns: [],
     };
     setBoardRecords([...boardRecords, ref]);
@@ -454,12 +456,32 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
 
         <div className="space-y-1">
           {formColumns.map((col, i) => (
-            <div key={i} className="flex items-center gap-2 text-sm bg-gray-50 rounded px-3 py-1.5">
+            <div key={i} className="flex items-center gap-2 text-sm bg-gray-50 rounded px-3 py-1.5 flex-wrap">
               <GripVertical className="w-3 h-3 text-gray-400" />
               <span className="font-mono text-xs bg-gray-200 px-1 rounded">{col.name}</span>
               <span>{col.label}</span>
               <Badge variant="outline" className="text-xs">{COLUMN_TYPES.find((t) => t.value === col.type)?.label}</Badge>
               {col.required && <Badge className="text-xs bg-red-100 text-red-600">必填</Badge>}
+              {taskMode === "process" && (
+                workflowNodes.length > 0 ? (
+                  <Select value={col.assigned_node_id || ""}
+                    onValueChange={(v) => {
+                      const cols = [...formColumns];
+                      cols[i].assigned_node_id = v || undefined;
+                      setFormColumns(cols);
+                    }}>
+                    <SelectTrigger className="h-6 text-xs w-28">
+                      <SelectValue placeholder="指派节点" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">全部节点可填</SelectItem>
+                      {workflowNodes.map((n) => (<SelectItem key={n.id} value={n.id}>{n.name}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span className="text-xs text-gray-400">先去 Step4 创建节点后再指派</span>
+                )
+              )}
               <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setFormColumns(formColumns.filter((_, j) => j !== i))}>
                 <Trash2 className="w-3 h-3 text-red-400" />
               </Button>
@@ -522,11 +544,55 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                   {boardRecords2.map((r: any) => (
                     <div key={r.id} className="flex items-center justify-between text-sm hover:bg-gray-50 rounded px-2 py-1">
                       <span className="truncate flex-1">{getRecordDisplayLabel(r)}</span>
-                      <Button size="sm" variant="ghost" onClick={() => addBoardRecord(r)}>
+                      <Button size="sm" variant="ghost" onClick={() => {
+                        setColumnPickerRecord(r);
+                        // Pre-select first 5 non-system columns
+                        const cols = Object.keys(r).filter((k) => !SYSTEM_COLS.includes(k)).slice(0, 5);
+                        setColumnPickerSelected(new Set(cols));
+                      }}>
                         <Plus className="w-3 h-3" />
                       </Button>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Column picker modal */}
+              {columnPickerRecord && (
+                <div className="border rounded p-3 bg-gray-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">选择要显示的列 — {getRecordDisplayLabel(columnPickerRecord)}</span>
+                    <Button variant="ghost" size="sm" onClick={() => { setColumnPickerRecord(null); setColumnPickerSelected(new Set()); }}>
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                  <div className="max-h-40 overflow-auto space-y-1 mb-2">
+                    {Object.keys(columnPickerRecord)
+                      .filter((k) => !SYSTEM_COLS.includes(k))
+                      .map((col) => (
+                        <label key={col} className="flex items-center gap-2 text-sm hover:bg-white rounded px-2 py-1 cursor-pointer">
+                          <input type="checkbox" checked={columnPickerSelected.has(col)}
+                            onChange={() => {
+                              const next = new Set(columnPickerSelected);
+                              if (next.has(col)) next.delete(col); else next.add(col);
+                              setColumnPickerSelected(next);
+                            }} />
+                          <span>{col}</span>
+                        </label>
+                      ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => {
+                      addBoardRecord(columnPickerRecord, Array.from(columnPickerSelected));
+                      setColumnPickerRecord(null);
+                      setColumnPickerSelected(new Set());
+                    }} disabled={columnPickerSelected.size === 0}>
+                      确认添加 ({columnPickerSelected.size}列)
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => { setColumnPickerRecord(null); setColumnPickerSelected(new Set()); }}>
+                      取消
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
