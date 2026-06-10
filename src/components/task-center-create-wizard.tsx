@@ -343,53 +343,69 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
   };
 
   /* ─── 渲染步骤指示器 ─── */
+  const stepIcons = [FileText, Clock, List, Users, Calendar];
   const steps = ["基本信息", "任务类型", "制作表单", "指派人员", "截止提醒"];
   const renderStepIndicator = () => (
-    <div className="flex items-center justify-center gap-2 mb-6">
-      {steps.map((label, i) => (
-        <React.Fragment key={i}>
-          <div className="flex items-center gap-1.5">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold
-              ${i < step ? "bg-green-500 text-white" : i === step ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-500"}`}>
-              {i < step ? <Check className="w-3 h-3" /> : i + 1}
+    <div className="flex items-center justify-center gap-0 mb-8">
+      {steps.map((label, i) => {
+        const Icon = stepIcons[i];
+        const done = i < step;
+        const active = i === step;
+        return (
+          <React.Fragment key={i}>
+            <div className="flex flex-col items-center">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold transition-all duration-300 shadow-sm
+                ${done ? "bg-emerald-500 text-white shadow-emerald-200" : active ? "bg-blue-500 text-white shadow-blue-200 scale-110" : "bg-gray-100 text-gray-400"}`}>
+                {done ? <Check className="w-5 h-5" /> : <Icon className="w-5 h-5" />}
+              </div>
+              <span className={`text-xs mt-1.5 font-medium transition-colors ${active ? "text-blue-600" : done ? "text-emerald-500" : "text-gray-400"}`}>
+                {label}
+              </span>
             </div>
-            <span className={`text-xs ${i === step ? "font-medium text-blue-600" : "text-gray-400"}`}>
-              {label}
-            </span>
-          </div>
-          {i < steps.length - 1 && <div className={`w-6 h-px ${i < step ? "bg-green-400" : "bg-gray-200"}`} />}
-        </React.Fragment>
-      ))}
+            {i < steps.length - 1 && (
+              <div className={`h-0.5 w-10 md:w-14 mb-5 rounded transition-colors duration-300 ${i < step ? "bg-emerald-400" : "bg-gray-200"}`} />
+            )}
+          </React.Fragment>
+        );
+      })}
     </div>
   );
 
   /* ─── Step 0: 基本信息 ─── */
   const renderStepBasicInfo = () => (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div>
-        <label className="text-sm font-medium mb-1 block">任务名称</label>
-        <Input placeholder="请输入任务名称" value={taskName} onChange={(e) => setTaskName(e.target.value)} />
+        <label className="text-sm font-semibold text-gray-700 mb-1.5 block">任务名称</label>
+        <Input placeholder="请输入任务名称" className="h-10" value={taskName} onChange={(e) => setTaskName(e.target.value)} />
       </div>
       <div>
-        <label className="text-sm font-medium mb-2 block">时间类型</label>
+        <label className="text-sm font-semibold text-gray-700 mb-3 block">时间类型</label>
         <div className="grid grid-cols-2 gap-3">
           {TIME_OPTIONS.map((opt) => (
             <Card key={opt.value}
-              className={`cursor-pointer hover:border-blue-400 transition-colors ${timeType === opt.value ? "border-blue-500 bg-blue-50" : ""}`}
+              className={`cursor-pointer border-2 transition-all duration-200 hover:shadow-md
+                ${timeType === opt.value ? "border-blue-400 bg-gradient-to-br from-blue-50 to-white shadow-sm" : "border-gray-100 hover:border-gray-300"}`}
               onClick={() => setTimeType(opt.value)}>
-              <CardContent className="p-4 text-center">
-                <div className="font-medium text-sm">{opt.label}</div>
-                <div className="text-xs text-gray-500 mt-1">{opt.desc}</div>
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${timeType === opt.value ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-400"}`}>
+                    {opt.value === "one_time" ? <FileText className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <div className="font-medium text-sm">{opt.label}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">{opt.desc}</div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
       </div>
       {timeType === "periodic" && (
-        <div>
-          <label className="text-sm font-medium mb-1 block">周期类型</label>
+        <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+          <label className="text-sm font-semibold text-gray-700 mb-1.5 block">周期类型</label>
           <Select value={periodType} onValueChange={setPeriodType}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
               {PERIOD_OPTIONS.map((o) => (
                 <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -406,12 +422,16 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
     <div className="grid grid-cols-2 gap-4">
       {MODE_OPTIONS.map((opt) => (
         <Card key={opt.value}
-          className={`cursor-pointer hover:border-blue-400 transition-colors ${taskMode === opt.value ? "border-blue-500 bg-blue-50" : ""}`}
+          className={`cursor-pointer border-2 transition-all duration-200 hover:shadow-lg hover:scale-[1.02]
+            ${taskMode === opt.value ? "border-blue-400 bg-gradient-to-br from-blue-50 to-white shadow-md" : "border-gray-100 hover:border-gray-300"}`}
           onClick={() => setTaskMode(opt.value)}>
-          <CardContent className="p-6 text-center">
-            <div className="text-3xl mb-2">{opt.icon}</div>
-            <div className="font-medium">{opt.label}</div>
-            <div className="text-xs text-gray-500 mt-1">{opt.desc}</div>
+          <CardContent className="p-6">
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl mb-4 mx-auto transition-colors
+              ${taskMode === opt.value ? "bg-blue-500 text-white" : "bg-gray-100"}`}>
+              {opt.icon}
+            </div>
+            <div className={`text-center font-semibold text-base ${taskMode === opt.value ? "text-blue-700" : ""}`}>{opt.label}</div>
+            <div className="text-center text-xs text-gray-500 mt-1.5 leading-relaxed">{opt.desc}</div>
           </CardContent>
         </Card>
       ))}
@@ -420,48 +440,52 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
 
   /* ─── Step 2: 制作表单 ─── */
   const renderStepForm = () => (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Sub-step A: Form columns */}
       <div>
-        <label className="text-sm font-medium mb-2 block">基础字段</label>
-        <div className="flex gap-2 mb-3">
-          <Input placeholder="列名 (英文)" className="w-1/4" value={newCol.name}
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-1 h-5 bg-blue-500 rounded-full" />
+          <label className="text-sm font-semibold text-gray-700">基础字段</label>
+          <Badge className="text-xs bg-blue-100 text-blue-600 hover:bg-blue-100">{formColumns.length}</Badge>
+        </div>
+        <div className="flex gap-2 mb-3 flex-wrap">
+          <Input placeholder="列名 (英文)" className="w-32 h-8 text-sm" value={newCol.name}
             onChange={(e) => setNewCol({ ...newCol, name: e.target.value })} />
-          <Input placeholder="显示标签" className="w-1/4" value={newCol.label}
+          <Input placeholder="显示标签" className="w-32 h-8 text-sm" value={newCol.label}
             onChange={(e) => setNewCol({ ...newCol, label: e.target.value })} />
           <Select value={newCol.type} onValueChange={(v) => setNewCol({ ...newCol, type: v })}>
-            <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-8 w-28 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
               {COLUMN_TYPES.map((t) => (
                 <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <label className="flex items-center gap-1 text-sm">
+          <label className="flex items-center gap-1.5 text-sm bg-gray-100 rounded-md px-2.5 h-8 cursor-pointer hover:bg-gray-200 transition-colors">
             <input type="checkbox" checked={newCol.required}
               onChange={(e) => setNewCol({ ...newCol, required: e.target.checked })} />
             必填
           </label>
-          <Button size="sm" onClick={addFormColumn} disabled={!newCol.name || !newCol.label}>
+          <Button size="sm" className="h-8" onClick={addFormColumn} disabled={!newCol.name || !newCol.label}>
             <Plus className="w-4 h-4" />添加
           </Button>
         </div>
 
         {newCol.type === "select" && (
-          <div className="flex gap-2 mb-3 ml-2">
-            <Input placeholder="选项 (逗号分隔)" className="w-64" value={colOptInput}
+          <div className="flex gap-2 mb-3">
+            <Input placeholder="选项 (逗号分隔)" className="h-8 text-sm w-56" value={colOptInput}
               onChange={(e) => { setColOptInput(e.target.value); setNewCol({ ...newCol, options: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) }); }} />
           </div>
         )}
 
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           {formColumns.map((col, i) => (
-            <div key={i} className="flex items-center gap-2 text-sm bg-gray-50 rounded px-3 py-1.5 flex-wrap">
-              <GripVertical className="w-3 h-3 text-gray-400" />
-              <span className="font-mono text-xs bg-gray-200 px-1 rounded">{col.name}</span>
-              <span>{col.label}</span>
-              <Badge variant="outline" className="text-xs">{COLUMN_TYPES.find((t) => t.value === col.type)?.label}</Badge>
-              {col.required && <Badge className="text-xs bg-red-100 text-red-600">必填</Badge>}
+            <div key={i} className="flex items-center gap-2 text-sm bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 hover:bg-white hover:border-gray-200 transition-colors">
+              <GripVertical className="w-3.5 h-3.5 text-gray-300" />
+              <span className="font-mono text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">{col.name}</span>
+              <span className="font-medium text-gray-700">{col.label}</span>
+              <Badge variant="outline" className="text-xs font-normal">{COLUMN_TYPES.find((t) => t.value === col.type)?.label}</Badge>
+              {col.required && <Badge className="text-xs bg-rose-50 text-rose-600 border-rose-200 font-normal">必填</Badge>}
               {taskMode === "process" && (
                 workflowNodes.length > 0 ? (
                   <Select value={col.assigned_node_id || ""}
@@ -470,7 +494,7 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                       cols[i].assigned_node_id = v || undefined;
                       setFormColumns(cols);
                     }}>
-                    <SelectTrigger className="h-6 text-xs w-28">
+                    <SelectTrigger className="h-6 text-xs w-28 border-dashed">
                       <SelectValue placeholder="指派节点" />
                     </SelectTrigger>
                     <SelectContent>
@@ -479,31 +503,43 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                     </SelectContent>
                   </Select>
                 ) : (
-                  <span className="text-xs text-gray-400">先去 Step4 创建节点后再指派</span>
+                  <span className="text-xs text-gray-400 italic">去 Step4 指派节点</span>
                 )
               )}
-              <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setFormColumns(formColumns.filter((_, j) => j !== i))}>
-                <Trash2 className="w-3 h-3 text-red-400" />
+              <Button variant="ghost" size="sm" className="ml-auto h-7 w-7 p-0" onClick={() => setFormColumns(formColumns.filter((_, j) => j !== i))}>
+                <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-500" />
               </Button>
             </div>
           ))}
+          {formColumns.length === 0 && (
+            <div className="text-center py-6 text-gray-400 text-sm border border-dashed rounded-lg">
+              暂无字段，在上方添加表单字段
+            </div>
+          )}
         </div>
       </div>
 
       {/* Sub-step B: Board records */}
-      <div className="border-t pt-4">
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-sm font-medium">引用看板记录（可选）</label>
-          <Button variant="outline" size="sm" onClick={() => setShowBoardSelector(!showBoardSelector)}>
-            <Link2 className="w-4 h-4 mr-1" />{showBoardSelector ? "关闭选择器" : "引用项目记录"}
+      <div className="border-t border-gray-200 pt-5">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-1 h-5 bg-purple-500 rounded-full" />
+          <label className="text-sm font-semibold text-gray-700">引用看板记录</label>
+          <Badge className="text-xs bg-purple-100 text-purple-600 hover:bg-purple-100">{boardRecords.length}</Badge>
+          <span className="text-xs text-gray-400">(可选)</span>
+        </div>
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs text-gray-400">从项目看板中引用记录，不同处理人可分别反馈</span>
+          <Button variant="outline" size="sm" onClick={() => setShowBoardSelector(!showBoardSelector)} className="border-dashed">
+            <Link2 className="w-3.5 h-3.5 mr-1" />{showBoardSelector ? "关闭选择器" : "引用项目记录"}
           </Button>
         </div>
 
         {showBoardSelector && (
-          <Card className="p-3 mb-3">
+          <Card className="p-4 mb-4 bg-gray-50/50 border-dashed">
             <div className="space-y-3">
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">选择项目</label>
+              <div className="flex gap-2 flex-wrap items-end">
+                <div className="flex-1 min-w-0">
+                  <label className="text-xs text-gray-500 mb-1 block">选择项目</label>
                 <Select value={boardSelectedProject} onValueChange={(v) => {
                   setBoardSelectedProject(v);
                   const proj = boardProjects.find((p: any) => p.id === v);
@@ -536,62 +572,69 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                   </Select>
                 </div>
               )}
+              </div>
 
-              {boardLoading && <div className="text-sm text-gray-400">加载中...</div>}
+              {boardLoading && <div className="text-sm text-gray-400 py-2">加载中...</div>}
 
               {boardRecords2.length > 0 && (
-                <div className="max-h-48 overflow-auto space-y-1">
-                  {boardRecords2.map((r: any) => (
-                    <div key={r.id} className="flex items-center justify-between text-sm hover:bg-gray-50 rounded px-2 py-1">
-                      <span className="truncate flex-1">{getRecordDisplayLabel(r)}</span>
-                      <Button size="sm" variant="ghost" onClick={() => {
-                        setColumnPickerRecord(r);
-                        // Pre-select first 5 non-system columns
-                        const cols = Object.keys(r).filter((k) => !SYSTEM_COLS.includes(k)).slice(0, 5);
-                        setColumnPickerSelected(new Set(cols));
-                      }}>
-                        <Plus className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  ))}
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">选择记录（点击 + 选择要显示的列）</label>
+                  <div className="max-h-48 overflow-auto space-y-1 border rounded-lg bg-white p-1">
+                    {boardRecords2.map((r: any) => (
+                      <div key={r.id} className="flex items-center justify-between text-sm hover:bg-blue-50 rounded-md px-3 py-2 transition-colors">
+                        <span className="truncate flex-1 font-medium text-gray-700">{getRecordDisplayLabel(r)}</span>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => {
+                          setColumnPickerRecord(r);
+                          const cols = Object.keys(r).filter((k) => !SYSTEM_COLS.includes(k)).slice(0, 5);
+                          setColumnPickerSelected(new Set(cols));
+                        }}>
+                          <Plus className="w-4 h-4 text-blue-500" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              {/* Column picker modal */}
+              {/* Column picker */}
               {columnPickerRecord && (
-                <div className="border rounded p-3 bg-gray-50">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">选择要显示的列 — {getRecordDisplayLabel(columnPickerRecord)}</span>
-                    <Button variant="ghost" size="sm" onClick={() => { setColumnPickerRecord(null); setColumnPickerSelected(new Set()); }}>
-                      <X className="w-3 h-3" />
+                <div className="border-2 border-blue-200 rounded-lg p-4 bg-white">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-semibold text-gray-700">
+                      选择要显示的列
+                      <span className="text-gray-400 font-normal ml-2">— {getRecordDisplayLabel(columnPickerRecord)}</span>
+                    </span>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setColumnPickerRecord(null); setColumnPickerSelected(new Set()); }}>
+                      <X className="w-4 h-4" />
                     </Button>
                   </div>
-                  <div className="max-h-40 overflow-auto space-y-1 mb-2">
+                  <div className="max-h-40 overflow-auto space-y-0.5 mb-3 border rounded-lg p-2">
                     {Object.keys(columnPickerRecord)
                       .filter((k) => !SYSTEM_COLS.includes(k))
                       .map((col) => (
-                        <label key={col} className="flex items-center gap-2 text-sm hover:bg-white rounded px-2 py-1 cursor-pointer">
-                          <input type="checkbox" checked={columnPickerSelected.has(col)}
+                        <label key={col} className="flex items-center gap-2.5 text-sm hover:bg-blue-50 rounded-md px-2.5 py-1.5 cursor-pointer transition-colors">
+                          <input type="checkbox" className="rounded" checked={columnPickerSelected.has(col)}
                             onChange={() => {
                               const next = new Set(columnPickerSelected);
                               if (next.has(col)) next.delete(col); else next.add(col);
                               setColumnPickerSelected(next);
                             }} />
-                          <span>{col}</span>
+                          <span className="font-mono text-xs text-gray-600">{col}</span>
                         </label>
                       ))}
                   </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={() => {
-                      addBoardRecord(columnPickerRecord, Array.from(columnPickerSelected));
-                      setColumnPickerRecord(null);
-                      setColumnPickerSelected(new Set());
-                    }} disabled={columnPickerSelected.size === 0}>
-                      确认添加 ({columnPickerSelected.size}列)
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => { setColumnPickerRecord(null); setColumnPickerSelected(new Set()); }}>
-                      取消
-                    </Button>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-400">已选 {columnPickerSelected.size} 列</span>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => { setColumnPickerRecord(null); setColumnPickerSelected(new Set()); }}>取消</Button>
+                      <Button size="sm" onClick={() => {
+                        addBoardRecord(columnPickerRecord, Array.from(columnPickerSelected));
+                        setColumnPickerRecord(null);
+                        setColumnPickerSelected(new Set());
+                      }} disabled={columnPickerSelected.size === 0}>
+                        <Plus className="w-3.5 h-3.5 mr-1" />确认添加
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -600,32 +643,33 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
         )}
 
         {/* Added board records */}
-        <div className="space-y-2">
-          {boardRecords.map((ref) => (
-            <Card key={ref.ref_id} className="p-3">
+        <div className="space-y-3">
+          {boardRecords.map((ref) => {
+            const proj = boardProjects.find((p: any) => p.project_schema === ref.source_schema);
+            const cnTable = tableDefsMap[ref.source_table];
+            return (
+            <Card key={ref.ref_id} className="p-4 border-l-4 border-l-purple-300 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">{ref.label}</span>
-                <Button variant="ghost" size="sm" onClick={() => setBoardRecords(boardRecords.filter((r) => r.ref_id !== ref.ref_id))}>
-                  <Trash2 className="w-3 h-3 text-red-400" />
+                <span className="text-sm font-semibold text-gray-700">{ref.label}</span>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setBoardRecords(boardRecords.filter((r) => r.ref_id !== ref.ref_id))}>
+                  <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-500" />
                 </Button>
               </div>
-              <div className="text-xs text-gray-500 mb-2">
-                {(() => {
-                  const proj = boardProjects.find((p: any) => p.project_schema === ref.source_schema);
-                  const cnTable = tableDefsMap[ref.source_table];
-                  return (
-                    <span>项目: {proj?.project_name || ref.source_schema} | 表: {cnTable ? `${cnTable}(${ref.source_table})` : ref.source_table} | 对照列: {ref.copy_columns.map((c) => c.source_col).join(", ")}</span>
-                  );
-                })()}
+              <div className="flex flex-wrap gap-1.5 text-xs mb-3">
+                <Badge variant="outline" className="text-xs font-normal">{proj?.project_name || ref.source_schema}</Badge>
+                <Badge variant="outline" className="text-xs font-normal">{cnTable || ref.source_table}</Badge>
+                {ref.copy_columns.map((c) => (
+                  <Badge key={c.source_col} variant="secondary" className="text-xs font-normal bg-gray-100">{c.source_col}</Badge>
+                ))}
               </div>
               {/* Feedback columns */}
-              <div className="space-y-1 mb-2">
+              <div className="space-y-1.5 mb-3">
                 {ref.feedback_columns.map((fc, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs bg-blue-50 rounded px-2 py-1">
-                    <span>{fc.label}</span>
-                    <Badge variant="outline" className="text-xs">{fc.type}</Badge>
-                    <span className="text-gray-400">→ {(workflowNodes.find((n) => n.id === fc.assigned_node_id)?.name) || fc.assigned_node_id || "未指定"}</span>
-                    <Button variant="ghost" size="sm" className="ml-auto" onClick={() => {
+                  <div key={i} className="flex items-center gap-2 text-xs bg-blue-50 border border-blue-100 rounded-md px-3 py-1.5">
+                    <span className="font-medium text-blue-700">{fc.label}</span>
+                    <Badge variant="outline" className="text-xs font-normal">{fc.type}</Badge>
+                    <span className="text-gray-400">→ {(workflowNodes.find((n) => n.id === fc.assigned_node_id)?.name) || "未指定"}</span>
+                    <Button variant="ghost" size="sm" className="ml-auto h-6 w-6 p-0" onClick={() => {
                       ref.feedback_columns.splice(i, 1);
                       setBoardRecords([...boardRecords]);
                     }}>
@@ -635,8 +679,8 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                 ))}
               </div>
               {/* Add feedback column */}
-              <div className="flex items-center gap-1 flex-wrap">
-                <Input placeholder="反馈列标签" className="h-7 text-xs w-28" value={editingRefId === ref.ref_id ? newFbCol.label : ""}
+              <div className="flex items-center gap-1.5 flex-wrap bg-gray-50 rounded-lg p-2">
+                <Input placeholder="反馈列标签" className="h-7 text-xs w-28 border-dashed" value={editingRefId === ref.ref_id ? newFbCol.label : ""}
                   onFocus={() => setEditingRefId(ref.ref_id)}
                   onChange={(e) => setNewFbCol({ ...newFbCol, label: e.target.value })} />
                 <Select value={editingRefId === ref.ref_id ? newFbCol.type : "text"}
@@ -655,7 +699,7 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                     </SelectContent>
                   </Select>
                 ) : (
-                  <span className="text-xs text-gray-400">先去 Step4 创建节点</span>
+                  <span className="text-xs text-gray-400 italic">去 Step4 创建节点</span>
                 )}
                 <Button size="sm" className="h-7 text-xs" disabled={!newFbCol.label}
                   onClick={() => {
@@ -675,7 +719,8 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                 </Button>
               </div>
             </Card>
-          ))}
+          );
+          })}
         </div>
       </div>
     </div>
@@ -686,83 +731,107 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
     <div className="space-y-4">
       {taskMode === "process" ? (
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium">工作流节点</label>
-            <Button size="sm" variant="outline" onClick={addWorkflowNode}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-1 h-5 bg-amber-500 rounded-full" />
+              <label className="text-sm font-semibold text-gray-700">工作流节点</label>
+              <Badge className="text-xs bg-amber-100 text-amber-600 hover:bg-amber-100">{workflowNodes.length}</Badge>
+            </div>
+            <Button size="sm" variant="outline" className="border-dashed" onClick={addWorkflowNode}>
               <Plus className="w-4 h-4 mr-1" />添加节点
             </Button>
           </div>
           <div className="space-y-3">
             {workflowNodes.map((node, i) => (
-              <Card key={node.id} className="p-3">
-                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <span className="text-xs font-bold bg-blue-100 text-blue-600 px-2 py-0.5 rounded">节点{i + 1}</span>
-                  <Input className="h-7 text-sm w-28" placeholder="节点名称" value={node.name}
-                    onChange={(e) => {
-                      const nodes = [...workflowNodes];
-                      nodes[i].name = e.target.value;
-                      setWorkflowNodes(nodes);
-                    }} />
-                  <Popover open={userComboOpen === node.id} onOpenChange={(open) => setUserComboOpen(open ? node.id : null)}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" role="combobox"
-                        className={`h-7 text-sm w-44 justify-between px-2 font-normal ${!node.handler_id ? "text-muted-foreground" : ""}`}>
-                        {node.handler_id
-                          ? (() => { const u = systemUsers.find((u: any) => u.id === node.handler_id); return u ? `${u.name}${u.department ? ` (${u.department})` : ""}` : (node.handler_name || "选择处理人"); })()
-                          : "选择处理人"}
-                        <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-56 p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="搜索人员..." />
-                        <CommandList>
-                          <CommandEmpty>未找到人员</CommandEmpty>
-                          <CommandGroup>
-                            {systemUsers.map((u: any) => (
-                              <CommandItem key={u.id} value={`${u.name} ${u.department || ""} ${u.username || ""}`}
-                                onSelect={() => {
-                                  const nodes = [...workflowNodes];
-                                  nodes[i].handler_id = u.id;
-                                  nodes[i].handler_name = u.name || "";
-                                  setWorkflowNodes(nodes);
-                                  setUserComboOpen(null);
-                                }}>
-                                <span>{u.name}</span>
-                                {u.department && <span className="text-xs text-gray-400 ml-1">({u.department})</span>}
-                                {u.position && <span className="text-xs text-gray-400 ml-1">{u.position}</span>}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  <Input className="h-7 text-sm w-14" type="number" placeholder="时限(h)" value={node.deadline_hours}
-                    onChange={(e) => {
-                      const nodes = [...workflowNodes];
-                      nodes[i].deadline_hours = Number(e.target.value);
-                      setWorkflowNodes(nodes);
-                    }} />
-                  <Button variant="ghost" size="sm" onClick={() => setWorkflowNodes(workflowNodes.filter((_, j) => j !== i))}>
-                    <Trash2 className="w-3 h-3 text-red-400" />
+              <Card key={node.id} className={`p-4 border-2 transition-all ${i === 0 ? "border-blue-200 bg-gradient-to-r from-blue-50/50 to-white" : "border-gray-100"}`}>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${i === 0 ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-600"}`}>
+                    {i + 1}
+                  </div>
+                  <div className="flex items-center gap-2 flex-1 flex-wrap">
+                    <Input className="h-8 text-sm w-28 font-medium" placeholder="节点名称" value={node.name}
+                      onChange={(e) => {
+                        const nodes = [...workflowNodes];
+                        nodes[i].name = e.target.value;
+                        setWorkflowNodes(nodes);
+                      }} />
+                    <Popover open={userComboOpen === node.id} onOpenChange={(open) => setUserComboOpen(open ? node.id : null)}>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" role="combobox"
+                          className={`h-8 text-sm w-48 justify-between px-3 font-normal ${!node.handler_id ? "text-muted-foreground border-dashed" : "border-blue-200"}`}>
+                          {node.handler_id
+                            ? (() => { const u = systemUsers.find((u: any) => u.id === node.handler_id); return u ? `${u.name}${u.department ? ` · ${u.department}` : ""}` : (node.handler_name || "选择处理人"); })()
+                            : "选择处理人"}
+                          <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-56 p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="搜索人员..." />
+                          <CommandList>
+                            <CommandEmpty>未找到人员</CommandEmpty>
+                            <CommandGroup>
+                              {systemUsers.map((u: any) => (
+                                <CommandItem key={u.id} value={`${u.name} ${u.department || ""} ${u.username || ""}`}
+                                  onSelect={() => {
+                                    const nodes = [...workflowNodes];
+                                    nodes[i].handler_id = u.id;
+                                    nodes[i].handler_name = u.name || "";
+                                    setWorkflowNodes(nodes);
+                                    setUserComboOpen(null);
+                                  }}>
+                                  <span>{u.name}</span>
+                                  {u.department && <span className="text-xs text-gray-400 ml-1">({u.department})</span>}
+                                  {u.position && <span className="text-xs text-gray-400 ml-1">{u.position}</span>}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    <div className="flex items-center gap-1.5 bg-gray-100 rounded-md px-2.5 h-8">
+                      <Clock className="w-3.5 h-3.5 text-gray-400" />
+                      <Input className="h-7 text-sm w-12 border-0 bg-transparent p-0" type="number" placeholder="48" value={node.deadline_hours || ""}
+                        onChange={(e) => {
+                          const nodes = [...workflowNodes];
+                          nodes[i].deadline_hours = Number(e.target.value);
+                          setWorkflowNodes(nodes);
+                        }} />
+                      <span className="text-xs text-gray-400">h</span>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setWorkflowNodes(workflowNodes.filter((_, j) => j !== i))}>
+                    <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-500" />
                   </Button>
                 </div>
+                {node.handler_id && (
+                  <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-2 text-xs text-gray-500">
+                    <span>可编辑字段：{node.editable_fields?.length || 0} 个</span>
+                    <span>·</span>
+                    <span>必填字段：{node.required_fields?.length || 0} 个</span>
+                  </div>
+                )}
               </Card>
             ))}
             {workflowNodes.length === 0 && (
-              <div className="text-center py-8 text-gray-400 text-sm">
-                点击"添加节点"创建工作流，至少需要一个节点
+              <div className="text-center py-10 text-gray-400 text-sm border-2 border-dashed rounded-xl">
+                <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                点击"添加节点"创建工作流，至少需要添加一个节点
               </div>
             )}
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div>
-            <label className="text-sm font-medium mb-1 block">选择项目</label>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-5 bg-amber-500 rounded-full" />
+              <label className="text-sm font-semibold text-gray-700">项目绑定</label>
+            </div>
+            <label className="text-xs text-gray-500 mb-1.5 block">选择项目</label>
             <Select value={projectId} onValueChange={setProjectId}>
-              <SelectTrigger><SelectValue placeholder="选择项目..." /></SelectTrigger>
+              <SelectTrigger className="h-9"><SelectValue placeholder="选择项目..." /></SelectTrigger>
               <SelectContent>
                 {projects.map((p: any) => (
                   <SelectItem key={p.id} value={p.id}>{p.project_name}</SelectItem>
@@ -771,8 +840,8 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
             </Select>
           </div>
           <div>
-            <label className="text-sm font-medium mb-1 block">模块代码</label>
-            <Input placeholder="例如: procurement" value={moduleCode} onChange={(e) => setModuleCode(e.target.value)} />
+            <label className="text-xs text-gray-500 mb-1.5 block">模块代码</label>
+            <Input className="h-9" placeholder="例如: procurement" value={moduleCode} onChange={(e) => setModuleCode(e.target.value)} />
           </div>
         </div>
       )}
@@ -781,15 +850,19 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
 
   /* ─── Step 4: 截止提醒 ─── */
   const renderStepDeadline = () => (
-    <div className="space-y-4">
-      <div>
-        <label className="text-sm font-medium mb-1 block">截止日期</label>
-        <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+    <div className="space-y-5">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-1 h-5 bg-emerald-500 rounded-full" />
+        <label className="text-sm font-semibold text-gray-700">时间与提醒</label>
       </div>
       <div>
-        <label className="text-sm font-medium mb-1 block">提前提醒（天）</label>
+        <label className="text-xs text-gray-500 mb-1.5 block">截止日期</label>
+        <Input type="date" className="h-9" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+      </div>
+      <div>
+        <label className="text-xs text-gray-500 mb-1.5 block">提前提醒</label>
         <Select value={remindDays} onValueChange={setRemindDays}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="0">不提醒</SelectItem>
             <SelectItem value="1">提前 1 天</SelectItem>
@@ -798,35 +871,55 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
           </SelectContent>
         </Select>
       </div>
+      {dueDate && remindDays !== "0" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">
+          <Clock className="w-4 h-4 inline mr-1" />
+          将在 {dueDate} 前 {remindDays} 天提醒处理人
+        </div>
+      )}
     </div>
   );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-auto">
-        <DialogHeader>
-          <DialogTitle>创建任务</DialogTitle>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-[720px] max-h-[88vh] overflow-auto p-0">
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b px-6 py-4 rounded-t-lg">
+          <DialogTitle className="text-lg">创建任务</DialogTitle>
+          <p className="text-xs text-gray-500 mt-1">
+            {step === 0 && "填写任务名称，选择时间类型"}
+            {step === 1 && "选择流程型或项目型任务模式"}
+            {step === 2 && "设计表单字段，可选引用看板记录"}
+            {step === 3 && "设置处理人或绑定项目"}
+            {step === 4 && "设置截止时间与提醒规则"}
+          </p>
+        </div>
 
-        {renderStepIndicator()}
+        <div className="px-6 pt-5 pb-2">
+          {renderStepIndicator()}
+        </div>
 
-        {step === 0 && renderStepBasicInfo()}
-        {step === 1 && renderStepTaskMode()}
-        {step === 2 && renderStepForm()}
-        {step === 3 && renderStepAssign()}
-        {step === 4 && renderStepDeadline()}
+        <div className="px-6 pb-4">
+          {step === 0 && renderStepBasicInfo()}
+          {step === 1 && renderStepTaskMode()}
+          {step === 2 && renderStepForm()}
+          {step === 3 && renderStepAssign()}
+          {step === 4 && renderStepDeadline()}
+        </div>
 
-        <div className="flex justify-between mt-6">
-          <Button variant="outline" onClick={() => step > 0 ? setStep(step - 1) : onOpenChange(false)}>
+        {/* Footer */}
+        <div className="sticky bottom-0 bg-gray-50/95 backdrop-blur border-t px-6 py-3 rounded-b-lg flex items-center justify-between">
+          <Button variant="ghost" size="sm" onClick={() => step > 0 ? setStep(step - 1) : onOpenChange(false)} className="text-gray-500">
             {step === 0 ? "取消" : <><ChevronLeft className="w-4 h-4 mr-1" />上一步</>}
           </Button>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-400">{step + 1} / {steps.length}</span>
             {step < 4 ? (
-              <Button onClick={() => setStep(step + 1)} disabled={!canNext()}>
+              <Button onClick={() => setStep(step + 1)} disabled={!canNext()} className="shadow-sm">
                 下一步<ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             ) : (
-              <Button onClick={handleSave} disabled={saving}>
+              <Button onClick={handleSave} disabled={saving} className="shadow-sm bg-emerald-600 hover:bg-emerald-700">
                 {saving ? "创建中..." : <><Check className="w-4 h-4 mr-1" />完成创建</>}
               </Button>
             )}
