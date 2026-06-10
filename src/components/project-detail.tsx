@@ -13,6 +13,7 @@ import {
   Settings2, Route, BarChart3, Trash2, Download, Upload, Filter,
   Link as LinkIcon, Search, Table as TableIcon,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -332,6 +333,10 @@ export function ProjectDetail({
   const [tableDefinitions, setTableDefinitions] = useState<TableDefinition[]>([]);
   const [tableDataMap, setTableDataMap] = useState<Record<string, TableData[]>>({});
   const [loading, setLoading] = useState(true);
+
+  // 关联的流程任务
+  const [linkedTasksMap, setLinkedTasksMap] = useState<Record<string, any[]>>({});
+  const [linkedTasksOpen, setLinkedTasksOpen] = useState<string | null>(null);
   
   // 编辑状态
   const [editingCell, setEditingCell] = useState<{ tableCode: string; rowId: string; column: string } | null>(null);
@@ -502,6 +507,33 @@ export function ProjectDetail({
     fetchModuleConfig();
   }, [project.project_type, project.project_stage]);
 
+  // Fetch task center workflows linked to records in the current project tables
+  const fetchLinkedTasks = async (definitions: TableDefinition[], dataMap: Record<string, TableData[]>) => {
+    try {
+      const schema = project.project_schema;
+      const newMap: Record<string, any[]> = {};
+
+      for (const def of definitions) {
+        const tableName = def.table_code;
+        if (!tableName) continue;
+        const res = await fetch(`/api/tasks/by-source-record?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(tableName)}`);
+        const json = await res.json();
+        if (!json.data || !Array.isArray(json.data) || json.data.length === 0) continue;
+
+        for (const defEntry of json.data) {
+          for (const recordId of defEntry.referenced_record_ids || []) {
+            if (!newMap[recordId]) newMap[recordId] = [];
+            newMap[recordId].push(defEntry);
+          }
+        }
+      }
+
+      setLinkedTasksMap(newMap);
+    } catch (err) {
+      console.error("加载关联流程失败:", err);
+    }
+  };
+
   const loadTableDefinitionsAndData = async () => {
     setLoading(true);
     try {
@@ -594,6 +626,9 @@ export function ProjectDetail({
         }
 
         setTableDataMap(dataMap);
+
+        // Fetch linked task center workflows for records in these tables
+        fetchLinkedTasks(definitions, dataMap);
       }
     } catch (error) {
       console.error("加载数据失败:", error);
@@ -2116,6 +2151,76 @@ export function ProjectDetail({
                     })}
                     <td className="px-2 py-1.5 text-right border-l border-slate-100 sticky right-0 z-10 bg-white">
                       <div className="flex items-center justify-end gap-1">
+                        {/* Task center workflow badge */}
+                        {linkedTasksMap[row.id as string] && linkedTasksMap[row.id as string].length > 0 && (
+                          <Popover open={linkedTasksOpen === `${table.table_code}:${row.id}`} onOpenChange={(o) => setLinkedTasksOpen(o ? `${table.table_code}:${row.id}` : null)}>
+                            <PopoverTrigger asChild>
+                              <Badge className="text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 cursor-pointer border-purple-300">
+                                <GitBranch className="w-3 h-3 mr-0.5" />
+                                流程 ({linkedTasksMap[row.id as string].length})
+                              </Badge>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80 p-0" align="end">
+                              <div className="p-3 border-b">
+                                <span className="text-sm font-semibold">关联流程任务</span>
+                              </div>
+                              <div className="max-h-64 overflow-auto">
+                                {linkedTasksMap[row.id as string].map((entry: any, ei: number) => {
+                                  const STATUS_LABELS: Record<string, string> = {
+                                    pending: "待处理", in_progress: "进行中", completed: "已完成",
+                                    returned: "已退回", cancelled: "已撤回", terminated: "已终止",
+                                  };
+                                  const STATUS_COLORS: Record<string, string> = {
+                                    pending: "bg-yellow-100 text-yellow-700",
+                                    in_progress: "bg-blue-100 text-blue-700",
+                                    completed: "bg-green-100 text-green-700",
+                                    returned: "bg-orange-100 text-orange-700",
+                                    cancelled: "bg-gray-100 text-gray-500",
+                                    terminated: "bg-red-100 text-red-700",
+                                  };
+                                  return (
+                                    <div key={ei} className="p-3 border-b last:border-b-0 hover:bg-gray-50">
+                                      <div className="flex items-center justify-between mb-1.5">
+                                        <span className="text-sm font-medium text-gray-800">{entry.task_name}</span>
+                                        <Badge className={`text-xs ${STATUS_COLORS[entry.instances?.[0]?.status] || "bg-gray-100"}`}>
+                                          {STATUS_LABELS[entry.instances?.[0]?.status] || "—"}
+                                        </Badge>
+                                      </div>
+                                      {entry.instances && entry.instances.length > 0 && (
+                                        <div className="space-y-1 mt-2">
+                                          {entry.instances.slice(0, 3).map((inst: any, ii: number) => {
+                                            const nodes = entry.workflow_nodes || [];
+                                            const ci = inst.current_node_index ?? 0;
+                                            return (
+                                              <div key={ii} className="text-xs text-gray-500">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                  <span className="text-gray-400">#{ii + 1}</span>
+                                                  {nodes.map((n: any, ni: number) => {
+                                                    const done = ni < ci || (inst.node_history || []).some((h: any) => h.node_id === n.id && h.action === "submit");
+                                                    const active = ni === ci && inst.status !== "completed";
+                                                    return (
+                                                      <span key={n.id} className={`inline-flex items-center gap-0.5 ${done ? "text-green-600" : active ? "text-blue-600 font-medium" : "text-gray-300"}`}>
+                                                        <span className={`w-1.5 h-1.5 rounded-full ${done ? "bg-green-400" : active ? "bg-blue-400" : "bg-gray-200"}`} />
+                                                        {n.name}
+                                                      </span>
+                                                    );
+                                                  })}
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                          {entry.instances.length > 3 && (
+                                            <div className="text-xs text-gray-400">...共 {entry.instances.length} 个实例</div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        )}
                         {!isRowReadonly(table.table_code, row.id as string) && (
                         <Button
                           size="sm"

@@ -402,30 +402,115 @@ export default function TaskCenterDetail({ open, onOpenChange, instance, def, cu
           </div>
         )}
 
-        {/* Form */}
-        <div className="space-y-4">
-          {/* Form columns */}
-          {formColumns.length > 0 && (
+        {/* Form / Completed Table */}
+        {isComplete && boardRecords.length > 0 ? (
+          <div className="space-y-4">
+            {/* Form columns summary */}
+            {formColumns.length > 0 && (
+              <div>
+                <label className="text-sm font-medium mb-2 block">表单字段</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {formColumns.map((col: any) => {
+                    const val = physRow?.[col.name];
+                    return (
+                      <div key={col.name} className="space-y-1">
+                        <label className="text-xs text-gray-500">{col.label || col.name}</label>
+                        <div className="text-sm bg-gray-50 rounded px-2 py-1.5">{val != null ? String(val) : "-"}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Table view for board records */}
             <div>
-              <label className="text-sm font-medium mb-2 block">表单字段</label>
-              <div className="grid grid-cols-2 gap-3">
-                {formColumns.map((col: any) => (
-                  renderField(col.name, col.label || col.name, col.type, col.options)
+              <label className="text-sm font-medium mb-2 block">引用记录反馈汇总</label>
+              <div className="overflow-x-auto border rounded-lg">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="text-left px-3 py-2 border-b font-medium text-gray-600 whitespace-nowrap sticky left-0 bg-gray-100 z-10">记录</th>
+                      {/* Gather all column headers from first record */}
+                      {(boardRecords[0]?.copy_columns || []).map((cc: any) => (
+                        <th key={cc.target_col} className="text-left px-3 py-2 border-b font-medium text-blue-600 whitespace-nowrap text-xs">{cc.source_col}</th>
+                      ))}
+                      {(boardRecords[0]?.feedback_columns || []).map((fc: any) => {
+                        const node = workflowNodes.find((n: any) => n.id === fc.assigned_node_id);
+                        return (
+                          <th key={fc.target_col} className="text-left px-3 py-2 border-b font-medium text-gray-600 whitespace-nowrap text-xs">
+                            {fc.label}{fc.required && <span className="text-red-400">*</span>}
+                            <div className="text-gray-400 font-normal">{node?.name || ""}</div>
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {boardRecords.map((ref: any, ri: number) => (
+                      <tr key={ref.ref_id} className={ri % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
+                        <td className="px-3 py-2 border-b font-medium text-gray-700 sticky left-0 bg-white whitespace-nowrap">{ref.label}</td>
+                        {(ref.copy_columns || []).map((cc: any) => (
+                          <td key={cc.target_col} className="px-3 py-2 border-b text-gray-600 text-xs">{physRow?.[cc.target_col] != null ? String(physRow[cc.target_col]) : "-"}</td>
+                        ))}
+                        {(ref.feedback_columns || []).map((fc: any) => {
+                          const val = physRow?.[fc.target_col];
+                          const filled = val != null && val !== "";
+                          return (
+                            <td key={fc.target_col} className="px-3 py-2 border-b text-xs">
+                              {filled ? (
+                                <span className="text-gray-800">{String(val)}</span>
+                              ) : (
+                                <span className="text-orange-400">未填写</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Board record labels as form-level fields */}
+            {boardRecords.length > 0 && (
+              <div className="space-y-1.5">
+                {boardRecords.map((ref: any) => (
+                  <div key={ref.ref_id} className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                    <Link2 className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                    <span className="text-sm font-medium text-gray-700">{ref.label}</span>
+                    <Badge variant="outline" className="text-xs font-normal">{ref.source_table}</Badge>
+                  </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Board record groups */}
-          {boardRecords.length > 0 && (
-            <div>
-              <label className="text-sm font-medium mb-2 block">引用记录</label>
-              <div className="space-y-2">
-                {boardRecords.map((ref: any) => renderBoardRecordGroup(ref))}
+            {/* Form columns */}
+            {formColumns.length > 0 && (
+              <div>
+                <label className="text-sm font-medium mb-2 block">表单字段</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {formColumns.map((col: any) => (
+                    renderField(col.name, col.label || col.name, col.type, col.options)
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+
+            {/* Board record groups */}
+            {boardRecords.length > 0 && (
+              <div>
+                <label className="text-sm font-medium mb-2 block">引用记录详情</label>
+                <div className="space-y-2">
+                  {boardRecords.map((ref: any) => renderBoardRecordGroup(ref))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Node history */}
         {nodeHistory.length > 0 && (
