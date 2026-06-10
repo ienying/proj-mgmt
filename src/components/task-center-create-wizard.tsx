@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ChevronLeft, ChevronRight, Check, FileText, Users, Clock,
   Plus, Trash2, GripVertical, ArrowUpDown, Calendar, Link2,
-  Search, X, List
+  Search, X, List, ChevronsUpDown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem,
+} from "@/components/ui/command";
 import { toast } from "sonner";
 
 /* ─── 类型 ─── */
@@ -133,6 +137,9 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
   const [moduleCode, setModuleCode] = useState("");
   const [projects, setProjects] = useState<any[]>([]);
 
+  // System users for assignee selection
+  const [systemUsers, setSystemUsers] = useState<any[]>([]);
+
   // Step 5: Deadline
   const [dueDate, setDueDate] = useState("");
   const [remindDays, setRemindDays] = useState("1");
@@ -140,6 +147,27 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
   // Feedback column editing for board records
   const [editingRefId, setEditingRefId] = useState<string | null>(null);
   const [newFbCol, setNewFbCol] = useState({ label: "", type: "text", required: false, assigned_node_id: "" });
+
+  // Table definitions map: table_code → Chinese table_name
+  const [tableDefsMap, setTableDefsMap] = useState<Record<string, string>>({});
+  // User combobox open state (which node's combobox is open)
+  const [userComboOpen, setUserComboOpen] = useState<string | null>(null);
+
+  /* ─── Helper: extract readable label from record ─── */
+  const getRecordDisplayLabel = (record: any): string => {
+    // Try common name-like fields first
+    const nameFields = ["名称", "name", "title", "标题", "subject", "主题", "项目名称", "产品名称", "任务名称"];
+    for (const f of nameFields) {
+      if (record[f] && String(record[f]).trim()) return String(record[f]).trim();
+    }
+    // Fall back to first non-id string field
+    for (const [k, v] of Object.entries(record)) {
+      if (k === "id" || k === "created_at" || k === "updated_at" || k === "sort_order") continue;
+      if (typeof v === "string" && v.trim()) return v.trim();
+    }
+    // Last resort: use id
+    return record.id?.slice(0, 12) || "记录";
+  };
 
   /* ─── Reset on open ─── */
   useEffect(() => {
@@ -158,6 +186,16 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
     }
   }, [open]);
 
+  // Load system users for assignee selection
+  useEffect(() => {
+    if (open) {
+      fetch("/api/users")
+        .then((r) => r.json())
+        .then((j) => { if (j.data) setSystemUsers(j.data); })
+        .catch(() => {});
+    }
+  }, [open]);
+
   // Load projects for Step 4
   useEffect(() => {
     if (open) {
@@ -168,12 +206,25 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
     }
   }, [open]);
 
-  // Load board selector projects
+  // Load board selector projects + table definitions
   useEffect(() => {
     if (showBoardSelector) {
       fetch("/api/projects")
         .then((r) => r.json())
         .then((j) => { if (j.data) setBoardProjects(j.data); })
+        .catch(() => {});
+      // Load table definitions for Chinese table name mapping
+      fetch("/api/standards")
+        .then((r) => r.json())
+        .then((j) => {
+          if (j.data && Array.isArray(j.data)) {
+            const map: Record<string, string> = {};
+            for (const def of j.data) {
+              if (def.table_code && def.table_name) map[def.table_code] = def.table_name;
+            }
+            setTableDefsMap(map);
+          }
+        })
         .catch(() => {});
     }
   }, [showBoardSelector]);
@@ -229,9 +280,11 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
   const addBoardRecord = (record: any) => {
     const refId = `ref_${Date.now()}`;
     const sourceTable = boardSelectedTable;
+    // Find the project name for display
+    const proj = boardProjects.find((p: any) => p.project_schema === boardSelectedSchema);
     const ref: BoardRecord = {
       ref_id: refId,
-      label: record.id?.slice(0, 8) || "记录",
+      label: getRecordDisplayLabel(record),
       source_schema: boardSelectedSchema,
       source_table: sourceTable,
       source_record_id: record.id,
@@ -449,9 +502,14 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                   <Select value={boardSelectedTable} onValueChange={loadBoardRecords}>
                     <SelectTrigger><SelectValue placeholder="选择表..." /></SelectTrigger>
                     <SelectContent>
-                      {boardTables.map((t: any) => (
-                        <SelectItem key={t.table_name} value={t.table_name}>{t.table_name}</SelectItem>
-                      ))}
+                      {boardTables.map((t: any) => {
+                        const cnName = tableDefsMap[t.table_name];
+                        return (
+                          <SelectItem key={t.table_name} value={t.table_name}>
+                            {cnName ? `${cnName} (${t.table_name})` : t.table_name}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
@@ -463,7 +521,7 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                 <div className="max-h-48 overflow-auto space-y-1">
                   {boardRecords2.map((r: any) => (
                     <div key={r.id} className="flex items-center justify-between text-sm hover:bg-gray-50 rounded px-2 py-1">
-                      <span className="truncate flex-1">{r.id?.slice(0, 12)}...</span>
+                      <span className="truncate flex-1">{getRecordDisplayLabel(r)}</span>
                       <Button size="sm" variant="ghost" onClick={() => addBoardRecord(r)}>
                         <Plus className="w-3 h-3" />
                       </Button>
@@ -486,7 +544,13 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                 </Button>
               </div>
               <div className="text-xs text-gray-500 mb-2">
-                来源: {ref.source_schema}.{ref.source_table} | 对照列: {ref.copy_columns.map((c) => c.source_col).join(", ")}
+                {(() => {
+                  const proj = boardProjects.find((p: any) => p.project_schema === ref.source_schema);
+                  const cnTable = tableDefsMap[ref.source_table];
+                  return (
+                    <span>项目: {proj?.project_name || ref.source_schema} | 表: {cnTable ? `${cnTable}(${ref.source_table})` : ref.source_table} | 对照列: {ref.copy_columns.map((c) => c.source_col).join(", ")}</span>
+                  );
+                })()}
               </div>
               {/* Feedback columns */}
               <div className="space-y-1 mb-2">
@@ -505,7 +569,7 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                 ))}
               </div>
               {/* Add feedback column */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 flex-wrap">
                 <Input placeholder="反馈列标签" className="h-7 text-xs w-28" value={editingRefId === ref.ref_id ? newFbCol.label : ""}
                   onFocus={() => setEditingRefId(ref.ref_id)}
                   onChange={(e) => setNewFbCol({ ...newFbCol, label: e.target.value })} />
@@ -516,22 +580,26 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                     {COLUMN_TYPES.map((t) => (<SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>))}
                   </SelectContent>
                 </Select>
-                <Select value={editingRefId === ref.ref_id ? newFbCol.assigned_node_id : ""}
-                  onValueChange={(v) => setNewFbCol({ ...newFbCol, assigned_node_id: v })}>
-                  <SelectTrigger className="h-7 text-xs w-24"><SelectValue placeholder="绑定节点" /></SelectTrigger>
-                  <SelectContent>
-                    {workflowNodes.map((n) => (<SelectItem key={n.id} value={n.id}>{n.name}</SelectItem>))}
-                  </SelectContent>
-                </Select>
-                <Button size="sm" className="h-7 text-xs" disabled={!newFbCol.label || !newFbCol.assigned_node_id}
+                {workflowNodes.length > 0 ? (
+                  <Select value={editingRefId === ref.ref_id ? newFbCol.assigned_node_id : ""}
+                    onValueChange={(v) => setNewFbCol({ ...newFbCol, assigned_node_id: v })}>
+                    <SelectTrigger className="h-7 text-xs w-24"><SelectValue placeholder="绑定节点" /></SelectTrigger>
+                    <SelectContent>
+                      {workflowNodes.map((n) => (<SelectItem key={n.id} value={n.id}>{n.name}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span className="text-xs text-gray-400">先去 Step4 创建节点</span>
+                )}
+                <Button size="sm" className="h-7 text-xs" disabled={!newFbCol.label}
                   onClick={() => {
-                    if (!newFbCol.label || !newFbCol.assigned_node_id) return;
+                    if (!newFbCol.label) return;
                     ref.feedback_columns.push({
                       target_col: `${ref.ref_id}_fb_${ref.feedback_columns.length}`,
                       label: newFbCol.label,
                       type: newFbCol.type,
                       required: newFbCol.required,
-                      assigned_node_id: newFbCol.assigned_node_id,
+                      assigned_node_id: newFbCol.assigned_node_id || "",
                     });
                     setBoardRecords([...boardRecords]);
                     setNewFbCol({ label: "", type: "text", required: false, assigned_node_id: "" });
@@ -561,27 +629,50 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
           <div className="space-y-3">
             {workflowNodes.map((node, i) => (
               <Card key={node.id} className="p-3">
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <span className="text-xs font-bold bg-blue-100 text-blue-600 px-2 py-0.5 rounded">节点{i + 1}</span>
-                  <Input className="h-7 text-sm w-32" placeholder="节点名称" value={node.name}
+                  <Input className="h-7 text-sm w-28" placeholder="节点名称" value={node.name}
                     onChange={(e) => {
                       const nodes = [...workflowNodes];
                       nodes[i].name = e.target.value;
                       setWorkflowNodes(nodes);
                     }} />
-                  <Input className="h-7 text-sm flex-1" placeholder="处理人姓名" value={node.handler_name}
-                    onChange={(e) => {
-                      const nodes = [...workflowNodes];
-                      nodes[i].handler_name = e.target.value;
-                      setWorkflowNodes(nodes);
-                    }} />
-                  <Input className="h-7 text-sm w-28" placeholder="处理人ID" value={node.handler_id}
-                    onChange={(e) => {
-                      const nodes = [...workflowNodes];
-                      nodes[i].handler_id = e.target.value;
-                      setWorkflowNodes(nodes);
-                    }} />
-                  <Input className="h-7 text-sm w-16" type="number" placeholder="时限(h)" value={node.deadline_hours}
+                  <Popover open={userComboOpen === node.id} onOpenChange={(open) => setUserComboOpen(open ? node.id : null)}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" role="combobox"
+                        className={`h-7 text-sm w-44 justify-between px-2 font-normal ${!node.handler_id ? "text-muted-foreground" : ""}`}>
+                        {node.handler_id
+                          ? (() => { const u = systemUsers.find((u: any) => u.id === node.handler_id); return u ? `${u.name}${u.department ? ` (${u.department})` : ""}` : (node.handler_name || "选择处理人"); })()
+                          : "选择处理人"}
+                        <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56 p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="搜索人员..." />
+                        <CommandList>
+                          <CommandEmpty>未找到人员</CommandEmpty>
+                          <CommandGroup>
+                            {systemUsers.map((u: any) => (
+                              <CommandItem key={u.id} value={`${u.name} ${u.department || ""} ${u.username || ""}`}
+                                onSelect={() => {
+                                  const nodes = [...workflowNodes];
+                                  nodes[i].handler_id = u.id;
+                                  nodes[i].handler_name = u.name || "";
+                                  setWorkflowNodes(nodes);
+                                  setUserComboOpen(null);
+                                }}>
+                                <span>{u.name}</span>
+                                {u.department && <span className="text-xs text-gray-400 ml-1">({u.department})</span>}
+                                {u.position && <span className="text-xs text-gray-400 ml-1">{u.position}</span>}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  <Input className="h-7 text-sm w-14" type="number" placeholder="时限(h)" value={node.deadline_hours}
                     onChange={(e) => {
                       const nodes = [...workflowNodes];
                       nodes[i].deadline_hours = Number(e.target.value);
