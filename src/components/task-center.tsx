@@ -5,18 +5,17 @@ import {
   Plus, ClipboardList, CheckSquare, List, FileText,
   Clock, User, Calendar, Tag, ChevronRight, Trash2,
   MoreHorizontal, RefreshCw, AlertCircle, ArrowRight,
-  Send, Undo2, SkipForward, UserPlus
+  Send, Undo2, SkipForward, UserPlus, CheckCircle2,
+  XCircle, Archive, Layers, BarChart3, Building2, Phone
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import TaskCenterCreateWizard from "./task-center-create-wizard";
 import TaskCenterDetail from "./task-center-detail";
@@ -78,23 +77,23 @@ interface TaskCenterProps {
 }
 
 /* ─── 状态标签映射 ─── */
-const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  pending: { label: "待处理", color: "bg-yellow-100 text-yellow-700" },
-  in_progress: { label: "进行中", color: "bg-blue-100 text-blue-700" },
-  completed: { label: "已完成", color: "bg-green-100 text-green-700" },
-  returned: { label: "已退回", color: "bg-red-100 text-red-700" },
-  cancelled: { label: "已撤回", color: "bg-gray-100 text-gray-700" },
-  terminated: { label: "已终止", color: "bg-red-100 text-red-700" },
+const STATUS_MAP: Record<string, { label: string; color: string; icon: React.ReactNode; barColor: string }> = {
+  pending: { label: "待处理", color: "bg-yellow-100 text-yellow-700 border-yellow-200", icon: <Clock className="w-3.5 h-3.5" />, barColor: "bg-yellow-400" },
+  in_progress: { label: "进行中", color: "bg-blue-100 text-blue-700 border-blue-200", icon: <FileText className="w-3.5 h-3.5" />, barColor: "bg-blue-400" },
+  completed: { label: "已完成", color: "bg-green-100 text-green-700 border-green-200", icon: <CheckCircle2 className="w-3.5 h-3.5" />, barColor: "bg-green-400" },
+  returned: { label: "已退回", color: "bg-red-100 text-red-700 border-red-200", icon: <XCircle className="w-3.5 h-3.5" />, barColor: "bg-red-400" },
+  cancelled: { label: "已撤回", color: "bg-gray-100 text-gray-600 border-gray-200", icon: <Archive className="w-3.5 h-3.5" />, barColor: "bg-gray-300" },
+  terminated: { label: "已终止", color: "bg-red-100 text-red-700 border-red-200", icon: <XCircle className="w-3.5 h-3.5" />, barColor: "bg-red-400" },
 };
 
-const MODE_LABELS: Record<string, string> = {
-  process: "流程型",
-  project: "项目型",
+const MODE_LABELS: Record<string, { label: string; color: string }> = {
+  process: { label: "流程型", color: "bg-indigo-100 text-indigo-700" },
+  project: { label: "项目型", color: "bg-purple-100 text-purple-700" },
 };
 
-const TIME_LABELS: Record<string, string> = {
-  one_time: "一次性",
-  periodic: "周期性",
+const TIME_LABELS: Record<string, { label: string; color: string }> = {
+  one_time: { label: "一次性", color: "bg-teal-100 text-teal-700" },
+  periodic: { label: "周期性", color: "bg-cyan-100 text-cyan-700" },
 };
 
 export default function TaskCenter({ currentUser }: TaskCenterProps) {
@@ -250,48 +249,85 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
   const renderPublished = () => (
     <div className="space-y-3">
       {defs.length === 0 && !loading && (
-        <div className="text-center py-16 text-gray-400">
-          <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p>暂无发布的任务</p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={() => setShowWizard(true)}>
+        <div className="text-center py-20 text-gray-400">
+          <ClipboardList className="w-16 h-16 mx-auto mb-4 opacity-20" />
+          <p className="text-sm font-medium text-gray-500">暂无发布的任务</p>
+          <p className="text-xs text-gray-400 mt-1">创建一个任务来开始工作流</p>
+          <Button variant="outline" size="sm" className="mt-4" onClick={() => setShowWizard(true)}>
             <Plus className="w-4 h-4 mr-1" />创建任务
           </Button>
         </div>
       )}
 
-      {defs.map((def) => (
-        <Card key={def.id} className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <CardTitle className="text-base flex items-center gap-2">
-                  {def.task_name}
-                  <Badge variant="outline" className="text-xs">{MODE_LABELS[def.task_mode]}</Badge>
-                  <Badge variant="outline" className="text-xs">{TIME_LABELS[def.time_type]}</Badge>
-                </CardTitle>
-                <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                  <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{fmtDate(def.created_at)}</span>
-                  {def.workflow_nodes?.length > 0 && (
-                    <span className="flex items-center gap-1"><ArrowRight className="w-3 h-3" />{def.workflow_nodes.length} 个节点</span>
-                  )}
-                </div>
+      {defs.map((def) => {
+        const modeInfo = MODE_LABELS[def.task_mode] || { label: def.task_mode, color: "bg-gray-100 text-gray-600" };
+        const timeInfo = TIME_LABELS[def.time_type] || { label: def.time_type, color: "bg-gray-100 text-gray-600" };
+        return (
+        <div key={def.id}
+          className="bg-white rounded-lg border border-gray-200/80 overflow-hidden hover:shadow-lg hover:border-gray-300/80 transition-all duration-200 group cursor-pointer"
+          onClick={async () => {
+            // Load instances for this def to show in detail view
+            try {
+              const res = await fetch(`/api/tasks/instances?def_id=${def.id}`);
+              const json = await res.json();
+              if (json.data?.length > 0) {
+                setSelectedDef(def);
+                setSelectedInstance(json.data[0]);
+              } else {
+                toast.info("该任务暂无实例");
+              }
+            } catch (e) {}
+          }}
+        >
+          <div className="h-1 bg-indigo-400" />
+          <div className="p-4 pt-3">
+            <div className="flex items-start justify-between mb-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <h4 className="font-medium text-sm truncate group-hover:text-indigo-600 transition-colors">{def.task_name}</h4>
               </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm"><MoreHorizontal className="w-4 h-4" /></Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => {
-                    setDeleteTarget({ type: "def", id: def.id, name: def.task_name });
-                  }} className="text-red-600">
-                    <Trash2 className="w-4 h-4 mr-2" />删除任务
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                <Badge className={`${modeInfo.color} text-xs border-0 font-normal`}>{modeInfo.label}</Badge>
+                <Badge className={`${timeInfo.color} text-xs border-0 font-normal`}>{timeInfo.label}</Badge>
+              </div>
             </div>
-          </CardHeader>
-        </Card>
-      ))}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 mb-2">
+              <span className="flex items-center gap-1"><Calendar className="w-3 h-3 text-gray-400" />{fmtDate(def.created_at)}</span>
+              {def.workflow_nodes?.length > 0 && (
+                <span className="flex items-center gap-1"><Layers className="w-3 h-3 text-gray-400" />{def.workflow_nodes.length} 个节点</span>
+              )}
+              {def.form_columns?.length > 0 && (
+                <span className="flex items-center gap-1"><FileText className="w-3 h-3 text-gray-400" />{def.form_columns.length} 个字段</span>
+              )}
+              {def.board_records?.length > 0 && (
+                <span className="flex items-center gap-1"><Building2 className="w-3 h-3 text-gray-400" />{def.board_records.length} 条引用</span>
+              )}
+            </div>
+            <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t border-gray-100">
+              <span className="flex items-center gap-1">
+                <User className="w-3 h-3" />{def.created_by_name || currentUser.name}
+              </span>
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                      <MoreHorizontal className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTarget({ type: "def", id: def.id, name: def.task_name });
+                    }} className="text-red-600">
+                      <Trash2 className="w-4 h-4 mr-2" />删除任务
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+      })}
     </div>
   );
 
@@ -299,16 +335,18 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
   const renderTodos = () => (
     <div className="space-y-3">
       {instances.length === 0 && !loading && (
-        <div className="text-center py-16 text-gray-400">
-          <CheckSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p>暂无待办任务</p>
+        <div className="text-center py-20 text-gray-400">
+          <CheckSquare className="w-16 h-16 mx-auto mb-4 opacity-20" />
+          <p className="text-sm font-medium text-gray-500">暂无待办任务</p>
+          <p className="text-xs text-gray-400 mt-1">所有任务都已处理完毕</p>
         </div>
       )}
 
-      {instances.map((inst) => (
-        <Card
-          key={inst.id}
-          className="hover:shadow-md transition-shadow cursor-pointer"
+      {instances.map((inst) => {
+        const statusInfo = STATUS_MAP[inst.status] || STATUS_MAP.pending;
+        return (
+        <div key={inst.id}
+          className="bg-white rounded-lg border border-gray-200/80 overflow-hidden hover:shadow-lg hover:border-gray-300/80 transition-all duration-200 group cursor-pointer"
           onClick={async () => {
             try {
               const res = await fetch(`/api/tasks/defs/${inst.def_id}`);
@@ -320,22 +358,33 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
             } catch (e) {}
           }}
         >
-          <CardHeader className="pb-2">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <CardTitle className="text-base flex items-center gap-2">
-                  {inst.task_name}
-                  <span className={`text-xs px-2 py-0.5 rounded ${STATUS_MAP[inst.status]?.color || ""}`}>
-                    {STATUS_MAP[inst.status]?.label || inst.status}
-                  </span>
-                </CardTitle>
-                <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                  <span className="flex items-center gap-1"><User className="w-3 h-3" />{inst.assignee_name || "-"}</span>
-                  {inst.due_date && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{inst.due_date}</span>}
-                  {inst.period_label && <span className="flex items-center gap-1"><Tag className="w-3 h-3" />{inst.period_label}</span>}
-                </div>
+          <div className={`h-1 ${statusInfo.barColor}`} />
+          <div className="p-4 pt-3">
+            <div className="flex items-start justify-between mb-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <h4 className="font-medium text-sm truncate group-hover:text-blue-600 transition-colors">{inst.task_name}</h4>
               </div>
-              <div className="flex gap-1">
+              <Badge className={`${statusInfo.color} text-xs shrink-0 ml-2 border`}>
+                {statusInfo.icon}
+                <span className="ml-1">{statusInfo.label}</span>
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500 mb-2">
+              <span className="flex items-center gap-1"><User className="w-3 h-3 text-gray-400" />{inst.assignee_name || "-"}</span>
+              {inst.due_date && <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-gray-400" />{inst.due_date}</span>}
+              {inst.period_label && <span className="flex items-center gap-1"><Tag className="w-3 h-3 text-gray-400" />{inst.period_label}</span>}
+              <span className="flex items-center gap-1"><Calendar className="w-3 h-3 text-gray-400" />{fmtDate(inst.created_at)}</span>
+            </div>
+            {inst.status === "in_progress" && inst.current_node_id && (
+              <p className="text-xs text-gray-400 mb-2">
+                当前节点: {inst.assignee_name || "处理中"}
+              </p>
+            )}
+            <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t border-gray-100">
+              <span className="flex items-center gap-1">
+                <Calendar className="w-3 h-3" />{fmtDate(inst.created_at)}
+              </span>
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                 {inst.status === "in_progress" && (
                   <>
                     <Button size="sm" variant="outline" className="h-7 text-xs"
@@ -350,7 +399,7 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
                 )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                    <Button variant="ghost" size="sm"><MoreHorizontal className="w-4 h-4" /></Button>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="w-4 h-4" /></Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={(e) => {
@@ -369,9 +418,10 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
                 </DropdownMenu>
               </div>
             </div>
-          </CardHeader>
-        </Card>
-      ))}
+          </div>
+        </div>
+      );
+      })}
     </div>
   );
 
@@ -379,82 +429,137 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
   const renderAll = () => (
     <div className="space-y-3">
       {instances.length === 0 && !loading && (
-        <div className="text-center py-16 text-gray-400">
-          <List className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p>暂无任务实例</p>
+        <div className="text-center py-20 text-gray-400">
+          <BarChart3 className="w-16 h-16 mx-auto mb-4 opacity-20" />
+          <p className="text-sm font-medium text-gray-500">暂无任务实例</p>
+          <p className="text-xs text-gray-400 mt-1">创建任务后将在此处查看所有实例</p>
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left text-gray-500">
-              <th className="pb-2 font-medium">任务名称</th>
-              <th className="pb-2 font-medium">模式</th>
-              <th className="pb-2 font-medium">处理人</th>
-              <th className="pb-2 font-medium">状态</th>
-              <th className="pb-2 font-medium">截止</th>
-              <th className="pb-2 font-medium">创建时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            {instances.map((inst) => (
-              <tr key={inst.id} className="border-b hover:bg-gray-50 cursor-pointer"
-                onClick={async () => {
-                  try {
-                    const res = await fetch(`/api/tasks/defs/${inst.def_id}`);
-                    const json = await res.json();
-                    if (json.data) {
-                      setSelectedDef(json.data);
-                      setSelectedInstance(inst);
-                    }
-                  } catch (e) {}
-                }}
-              >
-                <td className="py-2 pr-3 font-medium">{inst.task_name}</td>
-                <td className="py-2 pr-3">{MODE_LABELS[inst.task_mode]}</td>
-                <td className="py-2 pr-3">{inst.assignee_name || "-"}</td>
-                <td className="py-2 pr-3">
-                  <span className={`text-xs px-2 py-0.5 rounded ${STATUS_MAP[inst.status]?.color || ""}`}>
-                    {STATUS_MAP[inst.status]?.label || inst.status}
-                  </span>
-                </td>
-                <td className="py-2 pr-3">{inst.due_date || "-"}</td>
-                <td className="py-2 text-gray-500">{fmtDate(inst.created_at)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {instances.map((inst) => {
+        const statusInfo = STATUS_MAP[inst.status] || STATUS_MAP.pending;
+        const modeInfo = MODE_LABELS[inst.task_mode] || { label: inst.task_mode, color: "bg-gray-100 text-gray-600" };
+        return (
+        <div key={inst.id}
+          className="bg-white rounded-lg border border-gray-200/80 overflow-hidden hover:shadow-lg hover:border-gray-300/80 transition-all duration-200 group cursor-pointer"
+          onClick={async () => {
+            try {
+              const res = await fetch(`/api/tasks/defs/${inst.def_id}`);
+              const json = await res.json();
+              if (json.data) {
+                setSelectedDef(json.data);
+                setSelectedInstance(inst);
+              }
+            } catch (e) {}
+          }}
+        >
+          <div className={`h-1 ${statusInfo.barColor}`} />
+          <div className="p-4 pt-3">
+            <div className="flex items-start justify-between mb-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <h4 className="font-medium text-sm truncate group-hover:text-blue-600 transition-colors">{inst.task_name}</h4>
+                <Badge className={`${modeInfo.color} text-xs border-0 font-normal`}>{modeInfo.label}</Badge>
+              </div>
+              <Badge className={`${statusInfo.color} text-xs shrink-0 ml-2 border`}>
+                {statusInfo.icon}
+                <span className="ml-1">{statusInfo.label}</span>
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500 mb-2">
+              <span className="flex items-center gap-1"><User className="w-3 h-3 text-gray-400" />{inst.assignee_name || "-"}</span>
+              {inst.due_date && <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-gray-400" />{inst.due_date}</span>}
+              {inst.period_label && <span className="flex items-center gap-1"><Tag className="w-3 h-3 text-gray-400" />{inst.period_label}</span>}
+              <span className="flex items-center gap-1"><Calendar className="w-3 h-3 text-gray-400" />{fmtDate(inst.created_at)}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t border-gray-100">
+              <span className="flex items-center gap-1">
+                <Calendar className="w-3 h-3" />{fmtDate(inst.created_at)}
+              </span>
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button size="sm" variant="ghost" className="h-7 text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Load detail
+                    fetch(`/api/tasks/defs/${inst.def_id}`).then(r => r.json()).then(j => {
+                      if (j.data) { setSelectedDef(j.data); setSelectedInstance(inst); }
+                    });
+                  }}>
+                  详情<ChevronRight className="w-3 h-3 ml-1" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+      })}
     </div>
   );
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold">任务中心</h2>
+    <div className="h-full flex flex-col bg-gray-50">
+      {/* 页面标题 */}
+      <div className="p-6">
+        <h2 className="text-2xl font-semibold flex items-center gap-2">
+          <CheckSquare className="w-6 h-6" />
+          任务中心
+        </h2>
+        <p className="text-sm text-muted-foreground mt-1">管理和追踪流程任务与项目任务</p>
+      </div>
+
+      {/* Tab 栏 — 胶囊式 */}
+      <div className="flex items-center justify-between gap-1.5 px-4 py-2 bg-gray-50 border-b">
+        <div className="flex items-center gap-1.5">
+          {[
+            { key: "published", label: "我发布的", icon: <ClipboardList className="w-4 h-4" /> },
+            { key: "todos", label: "我的待办", icon: <CheckSquare className="w-4 h-4" /> },
+            { key: "all", label: "全部", icon: <BarChart3 className="w-4 h-4" /> },
+          ].map((tab) => {
+            const isActive = activeTab === tab.key;
+            const count = tab.key === "todos" ? instances.length : tab.key === "published" ? defs.length : 0;
+            return (
+              <button key={tab.key}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-full transition-all duration-200 ${
+                  isActive
+                    ? "bg-blue-50 text-blue-600 font-medium shadow-sm ring-1 ring-blue-200"
+                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                }`}
+                onClick={() => setActiveTab(tab.key)}>
+                <span className={isActive ? "text-blue-500" : "text-gray-400"}>{tab.icon}</span>
+                {tab.label}
+                {count > 0 && (
+                  <span className={`ml-0.5 min-w-[18px] h-[18px] rounded-full text-[10px] font-medium flex items-center justify-center px-1 ${
+                    isActive ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-500"
+                  }`}>{count > 99 ? '99+' : count}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
+          <Button variant="ghost" size="sm" onClick={loadData} disabled={loading} className="h-8 w-8 p-0">
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button size="sm" onClick={() => setShowWizard(true)}>
+          <Button size="sm" onClick={() => setShowWizard(true)} className="bg-blue-600 hover:bg-blue-700 shadow-sm">
             <Plus className="w-4 h-4 mr-1" />新建任务
           </Button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <TabsList>
-          <TabsTrigger value="published">我发布的</TabsTrigger>
-          <TabsTrigger value="todos">我的待办</TabsTrigger>
-          <TabsTrigger value="all">全部</TabsTrigger>
-        </TabsList>
-        <TabsContent value="published" className="flex-1 overflow-auto mt-3">{renderPublished()}</TabsContent>
-        <TabsContent value="todos" className="flex-1 overflow-auto mt-3">{renderTodos()}</TabsContent>
-        <TabsContent value="all" className="flex-1 overflow-auto mt-3">{renderAll()}</TabsContent>
-      </Tabs>
+      {/* 内容区 */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
+            <p className="text-sm">加载中...</p>
+          </div>
+        ) : (
+          <>
+            {activeTab === "published" && renderPublished()}
+            {activeTab === "todos" && renderTodos()}
+            {activeTab === "all" && renderAll()}
+          </>
+        )}
+      </div>
 
       {/* Create Wizard */}
       <TaskCenterCreateWizard
@@ -478,51 +583,59 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
 
       {/* Delete Confirmation */}
       <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>确认删除</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="sm:max-w-[440px] overflow-hidden p-0 [&>button[data-slot=dialog-close]]:text-white/80 [&>button[data-slot=dialog-close]]:hover:text-white [&>button[data-slot=dialog-close]]:z-10">
+          <div className="px-6 pb-4 pt-5 bg-gradient-to-r from-red-600 to-red-400 rounded-t-lg shrink-0">
+            <DialogTitle className="text-white text-lg font-semibold flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" />确认删除
+            </DialogTitle>
+            <p className="text-white/80 text-sm mt-1">
               {deleteTarget?.type === "def"
-                ? "此操作将删除该任务定义、所有实例及对应数据，不可恢复。确认删除？"
-                : "此操作将删除该实例及对应数据，不可恢复。确认删除？"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="text-sm text-gray-700 font-medium">{deleteTarget?.name}</div>
-          <DialogFooter>
+                ? "此操作将删除该任务定义、所有实例及对应数据，不可恢复。"
+                : "此操作将删除该实例及对应数据，不可恢复。"}
+            </p>
+          </div>
+          <div className="px-6 py-3 text-sm text-gray-700 font-medium">{deleteTarget?.name}</div>
+          <DialogFooter className="px-6 pb-4">
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>取消</Button>
             <Button variant="destructive" onClick={handleDelete}>确认删除</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Advance Dialog — Submit/Reject/Skip/Withdraw */}
+      {/* Advance Dialog */}
       <Dialog open={!!advanceTarget} onOpenChange={() => setAdvanceTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {advanceAction === "submit" && "确认提交"}
-              {advanceAction === "reject" && "驳回任务"}
-              {advanceAction === "skip" && "跳过节点"}
-              {advanceAction === "withdraw" && "撤回任务"}
+        <DialogContent className="sm:max-w-[440px] overflow-hidden p-0 [&>button[data-slot=dialog-close]]:text-white/80 [&>button[data-slot=dialog-close]]:hover:text-white [&>button[data-slot=dialog-close]]:z-10">
+          <div className={`px-6 pb-4 pt-5 rounded-t-lg shrink-0 bg-gradient-to-r ${
+            advanceAction === "submit" ? "from-blue-600 to-blue-400"
+            : advanceAction === "reject" ? "from-red-600 to-red-400"
+            : advanceAction === "withdraw" ? "from-gray-600 to-gray-400"
+            : "from-amber-600 to-amber-400"
+          }`}>
+            <DialogTitle className="text-white text-lg font-semibold flex items-center gap-2">
+              {advanceAction === "submit" && <><Send className="w-5 h-5" />确认提交</>}
+              {advanceAction === "reject" && <><Undo2 className="w-5 h-5" />驳回任务</>}
+              {advanceAction === "skip" && <><SkipForward className="w-5 h-5" />跳过节点</>}
+              {advanceAction === "withdraw" && <><Archive className="w-5 h-5" />撤回任务</>}
             </DialogTitle>
-            <DialogDescription>
+            <p className="text-white/80 text-sm mt-1">
               {advanceAction === "submit" && "提交后将推进到下一节点处理人"}
               {advanceAction === "reject" && "驳回后将退回上一节点处理人，请填写驳回原因"}
               {advanceAction === "skip" && "跳过当前节点，任务直接进入下一节点"}
               {advanceAction === "withdraw" && "撤回后任务将取消，不再继续流转"}
-            </DialogDescription>
-          </DialogHeader>
-
-          {advanceAction === "reject" && (
-            <textarea id="reject-reason" className="w-full border rounded-md p-2 text-sm min-h-[80px]"
-              placeholder="请填写驳回原因..." />
-          )}
-
-          <DialogFooter>
+            </p>
+          </div>
+          <div className="px-6 pt-4">
+            {advanceAction === "reject" && (
+              <textarea id="reject-reason" className="w-full border rounded-md p-2 text-sm min-h-[80px] focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-300"
+                placeholder="请填写驳回原因..." />
+            )}
+          </div>
+          <DialogFooter className="px-6 pb-4">
             <Button variant="outline" onClick={() => setAdvanceTarget(null)}>取消</Button>
             <Button
               variant={advanceAction === "reject" || advanceAction === "withdraw" ? "destructive" : "default"}
               onClick={() => handleAdvance(advanceAction)}
+              className={advanceAction === "submit" ? "bg-blue-600 hover:bg-blue-700" : advanceAction === "skip" ? "bg-amber-600 hover:bg-amber-700" : ""}
             >
               {advanceAction === "submit" && "确认提交"}
               {advanceAction === "reject" && "确认驳回"}
