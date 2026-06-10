@@ -710,7 +710,7 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                       onValueChange={(v) => { setEditingRefId(ref.ref_id); setNewFbCol({ ...newFbCol, assigned_node_id: v }); }}>
                       <SelectTrigger className="h-7 text-xs w-28"><SelectValue placeholder="绑定节点" /></SelectTrigger>
                       <SelectContent>
-                        {workflowNodes.map((n) => (<SelectItem key={n.id} value={n.id}>{n.name}</SelectItem>))}
+                        {workflowNodes.map((n, ni) => (<SelectItem key={n.id} value={n.id}>{ni + 1}. {n.name}</SelectItem>))}
                       </SelectContent>
                     </Select>
                   ) : (

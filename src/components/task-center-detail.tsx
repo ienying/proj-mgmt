@@ -150,7 +150,8 @@ export default function TaskCenterDetail({ open, onOpenChange, instance, def, cu
             // Initiator sees all fields
             perms[fc.target_col] = "readonly";
           } else {
-            perms[fc.target_col] = (assignedNodeIndex < currentIndex || wasFilled) ? "readonly" : "hidden";
+            // Show all feedback columns (readonly if not current node), never hide
+            perms[fc.target_col] = "readonly";
           }
         }
       }
@@ -323,14 +324,18 @@ export default function TaskCenterDetail({ open, onOpenChange, instance, def, cu
             if (perm === "hidden") return null;
             const value = formData[fc.target_col] !== undefined ? formData[fc.target_col] : (physRow?.[fc.target_col] ?? "");
             const filled = value != null && value !== "";
+            const assignedNodeIdx = workflowNodes.findIndex((n: any) => n.id === fc.assigned_node_id);
+            const isFutureNode = assignedNodeIdx > currentIndex;
 
             return (
               <div key={fc.target_col} className="space-y-1">
                 <label className="text-xs font-medium">
                   {fc.label}{fc.required && <span className="text-red-500 ml-0.5">*</span>}
                   <span className="text-gray-400 ml-1">({nodeName})</span>
-                  {perm === "readonly" && isInitiator && (
-                    filled ? <span className="text-green-500 ml-1">✓已填写</span> : <span className="text-orange-400 ml-1">○待填写</span>
+                  {perm === "readonly" && (
+                    filled ? <span className="text-green-500 ml-1">✓已填写</span>
+                    : isFutureNode ? <span className="text-gray-400 ml-1">○待后续节点填写</span>
+                    : <span className="text-orange-400 ml-1">○未填写</span>
                   )}
                 </label>
                 {perm === "readonly" ? (
