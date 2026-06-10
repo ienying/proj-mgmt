@@ -154,6 +154,7 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
 
   /* ─── 创建任务 ─── */
   const handleCreate = async (data: any) => {
+    console.log("[CreateWizard] Saving task, board_records:", JSON.stringify(data.board_records, null, 2));
     try {
       const res = await fetch("/api/tasks/defs", {
         method: "POST",

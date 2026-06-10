@@ -488,17 +488,17 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
               {col.required && <Badge className="text-xs bg-rose-50 text-rose-600 border-rose-200 font-normal">必填</Badge>}
               {taskMode === "process" && (
                 workflowNodes.length > 0 ? (
-                  <Select value={col.assigned_node_id || ""}
+                  <Select value={col.assigned_node_id || "__all__"}
                     onValueChange={(v) => {
                       const cols = [...formColumns];
-                      cols[i].assigned_node_id = v || undefined;
+                      cols[i].assigned_node_id = v === "__all__" ? undefined : v;
                       setFormColumns(cols);
                     }}>
                     <SelectTrigger className="h-6 text-xs w-28 border-dashed">
                       <SelectValue placeholder="指派节点" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">全部节点可填</SelectItem>
+                      <SelectItem value="__all__">全部节点可填</SelectItem>
                       {workflowNodes.map((n) => (<SelectItem key={n.id} value={n.id}>{n.name}</SelectItem>))}
                     </SelectContent>
                   </Select>
@@ -679,31 +679,49 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                 ))}
               </div>
               {/* Add feedback column */}
-              <div className="flex items-center gap-1.5 flex-wrap bg-gray-50 rounded-lg p-2">
-                <Input placeholder="反馈列标签" className="h-7 text-xs w-28 border-dashed" value={editingRefId === ref.ref_id ? newFbCol.label : ""}
-                  onFocus={() => setEditingRefId(ref.ref_id)}
-                  onChange={(e) => setNewFbCol({ ...newFbCol, label: e.target.value })} />
-                <Select value={editingRefId === ref.ref_id ? newFbCol.type : "text"}
-                  onValueChange={(v) => setNewFbCol({ ...newFbCol, type: v })}>
-                  <SelectTrigger className="h-7 text-xs w-20"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {COLUMN_TYPES.map((t) => (<SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>))}
-                  </SelectContent>
-                </Select>
-                {workflowNodes.length > 0 ? (
-                  <Select value={editingRefId === ref.ref_id ? newFbCol.assigned_node_id : ""}
-                    onValueChange={(v) => setNewFbCol({ ...newFbCol, assigned_node_id: v })}>
-                    <SelectTrigger className="h-7 text-xs w-24"><SelectValue placeholder="绑定节点" /></SelectTrigger>
+              <div className="space-y-2 bg-gray-50 rounded-lg p-2.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <Input placeholder="反馈列标签" className="h-7 text-xs w-28 border-dashed" value={newFbCol.label}
+                    onFocus={() => setEditingRefId(ref.ref_id)}
+                    onChange={(e) => setNewFbCol({ ...newFbCol, label: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newFbCol.label && (workflowNodes.length === 0 || newFbCol.assigned_node_id)) {
+                        e.preventDefault();
+                        ref.feedback_columns.push({
+                          target_col: `${ref.ref_id}_fb_${ref.feedback_columns.length}`,
+                          label: newFbCol.label,
+                          type: newFbCol.type,
+                          required: newFbCol.required,
+                          assigned_node_id: newFbCol.assigned_node_id || "",
+                        });
+                        setBoardRecords([...boardRecords]);
+                        setNewFbCol({ label: "", type: "text", required: false, assigned_node_id: "" });
+                      }
+                    }} />
+                  <Select value={newFbCol.type}
+                    onValueChange={(v) => { setEditingRefId(ref.ref_id); setNewFbCol({ ...newFbCol, type: v }); }}>
+                    <SelectTrigger className="h-7 text-xs w-20"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {workflowNodes.map((n) => (<SelectItem key={n.id} value={n.id}>{n.name}</SelectItem>))}
+                      {COLUMN_TYPES.map((t) => (<SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>))}
                     </SelectContent>
                   </Select>
-                ) : (
-                  <span className="text-xs text-gray-400 italic">去 Step4 创建节点</span>
-                )}
-                <Button size="sm" className="h-7 text-xs" disabled={!newFbCol.label}
+                  {workflowNodes.length > 0 ? (
+                    <Select value={newFbCol.assigned_node_id || ""}
+                      onValueChange={(v) => { setEditingRefId(ref.ref_id); setNewFbCol({ ...newFbCol, assigned_node_id: v }); }}>
+                      <SelectTrigger className="h-7 text-xs w-28"><SelectValue placeholder="绑定节点" /></SelectTrigger>
+                      <SelectContent>
+                        {workflowNodes.map((n) => (<SelectItem key={n.id} value={n.id}>{n.name}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <span className="text-xs text-gray-400 italic">去 Step4 创建节点</span>
+                  )}
+                </div>
+                <Button size="sm" className="h-7 text-xs w-full" variant="outline"
+                  disabled={!newFbCol.label || (workflowNodes.length > 0 && !newFbCol.assigned_node_id)}
                   onClick={() => {
                     if (!newFbCol.label) return;
+                    if (workflowNodes.length > 0 && !newFbCol.assigned_node_id) { toast.error("请选择绑定节点"); return; }
                     ref.feedback_columns.push({
                       target_col: `${ref.ref_id}_fb_${ref.feedback_columns.length}`,
                       label: newFbCol.label,
@@ -715,7 +733,7 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                     setNewFbCol({ label: "", type: "text", required: false, assigned_node_id: "" });
                     setEditingRefId(null);
                   }}>
-                  <Plus className="w-3 h-3" />
+                  <Plus className="w-3.5 h-3.5 mr-1" />添加反馈列
                 </Button>
               </div>
             </Card>
@@ -758,14 +776,14 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                     <Popover open={userComboOpen === node.id} onOpenChange={(open) => setUserComboOpen(open ? node.id : null)}>
                       <PopoverTrigger asChild>
                         <Button variant="outline" size="sm" role="combobox"
-                          className={`h-8 text-sm w-48 justify-between px-3 font-normal ${!node.handler_id ? "text-muted-foreground border-dashed" : "border-blue-200"}`}>
+                          className={`h-8 text-sm w-72 justify-between px-3 font-normal ${!node.handler_id ? "text-muted-foreground border-dashed" : "border-blue-200"}`}>
                           {node.handler_id
                             ? (() => { const u = systemUsers.find((u: any) => u.id === node.handler_id); return u ? `${u.name}${u.department ? ` · ${u.department}` : ""}` : (node.handler_name || "选择处理人"); })()
                             : "选择处理人"}
                           <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-56 p-0" align="start">
+                      <PopoverContent className="w-72 p-0" align="start">
                         <Command>
                           <CommandInput placeholder="搜索人员..." />
                           <CommandList>

@@ -64,6 +64,21 @@ export default function TaskCenterDetail({ open, onOpenChange, instance, def, cu
   const isHandler = currentNode?.handler_id === currentUser.id;
   const isInitiator = def?.created_by === currentUser.id;
 
+  /* ─── Debug: log data on open ─── */
+  useEffect(() => {
+    if (open && def) {
+      console.log("[Detail] def.board_records:", JSON.stringify(def.board_records, null, 2));
+      console.log("[Detail] def.workflow_nodes:", JSON.stringify(def.workflow_nodes, null, 2));
+      console.log("[Detail] currentIndex:", currentIndex, "currentNode:", currentNode);
+      console.log("[Detail] isHandler:", isHandler, "isInitiator:", isInitiator);
+      if (def.board_records && Array.isArray(def.board_records)) {
+        def.board_records.forEach((ref: any, ri: number) => {
+          console.log(`[Detail] boardRecords[${ri}].feedback_columns:`, JSON.stringify(ref.feedback_columns, null, 2));
+        });
+      }
+    }
+  }, [open, def]);
+
   /* ─── Load physical row ─── */
   useEffect(() => {
     if (open && instance) {
@@ -141,6 +156,16 @@ export default function TaskCenterDetail({ open, onOpenChange, instance, def, cu
       }
     }
 
+    // Debug: log feedback column permissions
+    const fbPerms: Record<string, string> = {};
+    for (const key of Object.keys(perms)) {
+      if (key.includes("_fb_") || key.includes("ref_")) fbPerms[key] = perms[key];
+    }
+    if (Object.keys(fbPerms).length > 0) {
+      console.log("[Detail] columnPermissions (feedback/ref cols):", fbPerms);
+      console.log("[Detail] currentIndex:", currentIndex, "currentNode?.id:", currentNode?.id, "isInitiator:", isInitiator, "isHandler:", isHandler);
+    }
+
     return perms;
   }, [formColumns, boardRecords, currentNode, physRow, isProcess, isComplete, isInitiator, currentIndex, workflowNodes]);
 
@@ -173,7 +198,7 @@ export default function TaskCenterDetail({ open, onOpenChange, instance, def, cu
     setLoading(true);
     try {
       // First save draft
-      await fetch(`/api/tasks/instances/${instance.id}`, {
+      const saveRes = await fetch(`/api/tasks/instances/${instance.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -181,6 +206,8 @@ export default function TaskCenterDetail({ open, onOpenChange, instance, def, cu
           phys_id: physId,
         }),
       });
+      const saveJson = await saveRes.json();
+      if (!saveRes.ok) throw new Error(saveJson.error || "保存失败");
 
       // Then advance
       const res = await fetch(`/api/tasks/instances/${instance.id}/advance`, {

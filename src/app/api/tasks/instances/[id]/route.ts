@@ -83,11 +83,15 @@ export async function PUT(
       const tableName = d.table_name;
 
       if (physId) {
-        // Update existing row
+        // Update existing row — strip _phys_id (not a column in physical table)
+        const { _phys_id: _p, ...cleanData } = body.phys_data || {};
+        if (Object.keys(cleanData).length === 0) {
+          return NextResponse.json({ data: { saved: true } });
+        }
         const { error: updateError } = await client.rpc("dp_update", {
           p_table: `${schemaName}.${tableName}`,
           p_id: physId,
-          p_data: body.phys_data,
+          p_data: cleanData,
         });
         if (updateError) {
           return NextResponse.json({ error: `保存数据失败: ${updateError.message}` }, { status: 500 });
