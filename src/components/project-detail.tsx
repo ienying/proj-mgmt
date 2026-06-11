@@ -894,30 +894,30 @@ export function ProjectDetail({
             {/* 基本信息 */}
             <div>
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">基本信息</h3>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="bg-slate-50 rounded-lg p-2.5">
-                  <span className="text-xs text-slate-400">项目名称</span>
-                  <p className="text-slate-900 font-medium mt-0.5 truncate">{project.project_name}</p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="bg-slate-50 rounded-lg p-2">
+                  <span className="text-[10px] text-slate-400">项目名称</span>
+                  <p className="text-slate-900 text-xs font-medium mt-0.5 truncate">{project.project_name}</p>
                 </div>
-                <div className="bg-slate-50 rounded-lg p-2.5">
-                  <span className="text-xs text-slate-400">项目编号</span>
-                  <p className="text-slate-900 font-mono mt-0.5">{project.project_code}</p>
+                <div className="bg-slate-50 rounded-lg p-2">
+                  <span className="text-[10px] text-slate-400">项目编号</span>
+                  <p className="text-slate-900 text-xs font-mono mt-0.5">{project.project_code}</p>
                 </div>
-                <div className={cn("rounded-lg p-2.5", mc.light)}>
-                  <span className={cn("text-xs", mc.text)}>项目类型</span>
-                  <p className="text-slate-900 mt-0.5">{projectType || "-"}</p>
+                <div className={cn("rounded-lg p-2", mc.light)}>
+                  <span className={cn("text-[10px]", mc.text)}>项目类型</span>
+                  <p className="text-slate-900 text-xs mt-0.5">{projectType || "-"}</p>
                 </div>
-                <div className={cn("rounded-lg p-2.5", mc.light)}>
-                  <span className={cn("text-xs", mc.text)}>项目阶段</span>
-                  <p className="text-slate-900 mt-0.5">{projectStage || "-"}</p>
+                <div className={cn("rounded-lg p-2", mc.light)}>
+                  <span className={cn("text-[10px]", mc.text)}>项目阶段</span>
+                  <p className="text-slate-900 text-xs mt-0.5">{projectStage || "-"}</p>
                 </div>
-                <div className="bg-slate-50 rounded-lg p-2.5">
-                  <span className="text-xs text-slate-400">状态</span>
+                <div className="bg-slate-50 rounded-lg p-2">
+                  <span className="text-[10px] text-slate-400">状态</span>
                   <div className="mt-0.5">{getStatusBadge(project.status)}</div>
                 </div>
-                <div className="bg-slate-50 rounded-lg p-2.5">
-                  <span className="text-xs text-slate-400">创建时间</span>
-                  <p className="text-slate-900 mt-0.5">{new Date(project.created_at).toLocaleDateString()}</p>
+                <div className="bg-slate-50 rounded-lg p-2">
+                  <span className="text-[10px] text-slate-400">创建时间</span>
+                  <p className="text-slate-900 text-xs mt-0.5">{new Date(project.created_at).toLocaleDateString()}</p>
                 </div>
               </div>
             </div>
@@ -926,17 +926,17 @@ export function ProjectDetail({
             {project.customer_info && (
               <div className="pt-3 border-t border-slate-100">
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">客户信息</h3>
-                <div className="space-y-2 text-sm">
+                <div className="space-y-1.5 text-xs">
                   {project.customer_info.company_name && (
-                    <div className={cn("flex items-center gap-2.5 rounded-lg px-3 py-2", mc.light)}>
-                      <Building2 className={cn("w-4 h-4 shrink-0", mc.text)} />
-                      <span className="text-slate-900">{project.customer_info.company_name}</span>
+                    <div className={cn("flex items-center gap-2 rounded-lg px-2.5 py-1.5", mc.light)}>
+                      <Building2 className={cn("w-3.5 h-3.5 shrink-0", mc.text)} />
+                      <span className="text-slate-900 text-xs">{project.customer_info.company_name}</span>
                     </div>
                   )}
                   {project.customer_info.contact_person && (
-                    <div className="flex items-center gap-2.5 rounded-lg px-3 py-2 bg-slate-50">
-                      <Users className="w-4 h-4 shrink-0 text-slate-400" />
-                      <span className="text-slate-900">{project.customer_info.contact_person}</span>
+                    <div className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-slate-50">
+                      <Users className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                      <span className="text-slate-900 text-xs">{project.customer_info.contact_person}</span>
                     </div>
                   )}
                 </div>
@@ -947,7 +947,7 @@ export function ProjectDetail({
             {project.description && (
               <div className="pt-3 border-t border-slate-100">
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">项目描述</h3>
-                <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 rounded-lg p-3">{project.description}</p>
+                <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 rounded-lg p-2.5">{project.description}</p>
               </div>
             )}
           </div>
