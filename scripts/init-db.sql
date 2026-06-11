@@ -699,17 +699,4 @@ CREATE TABLE IF NOT EXISTS issue_mgmt_issue_warranty_status (
 -- Case Center
 -- ============================================
 
-CREATE TABLE IF NOT EXISTS case_center_config (
-  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(200) NOT NULL,
-  config_type VARCHAR(50) DEFAULT 'product_case',
-  project_type VARCHAR(50),
-  project_stage VARCHAR(50),
-  schema_name VARCHAR(100),
-  table_name VARCHAR(100),
-  display_fields JSONB DEFAULT '[]'::jsonb,
-  filter_fields JSONB DEFAULT '[]'::jsonb,
-  is_enabled BOOLEAN DEFAULT true,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE
-);
+

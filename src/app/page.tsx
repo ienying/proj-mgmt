@@ -29,7 +29,6 @@ const StandardManagement = dynamic(() => import("@/components/standard-managemen
 const SystemSettings = dynamic(() => import("@/components/system-settings"), { ssr: false, loading: () => <LoadingFallback /> });
 const IssueManagement = dynamic(() => import("@/components/issue-management"), { ssr: false, loading: () => <LoadingFallback /> });
 const KnowledgeCenter = dynamic(() => import("@/components/knowledge-center").then(m => ({ default: m.default })), { ssr: false, loading: () => <LoadingFallback /> });
-const CaseCenter = dynamic(() => import("@/components/case-center").then(m => ({ default: m.CaseCenter })), { ssr: false, loading: () => <LoadingFallback /> });
 const AboutPage = dynamic(() => import("@/components/about-page"), { ssr: false, loading: () => <LoadingFallback /> });
 const TaskCenter = dynamic(() => import("@/components/task-center"), { ssr: false, loading: () => <LoadingFallback /> });
 
@@ -40,7 +39,7 @@ import {
   Settings,
   Wrench,
   AlertTriangle,
-  Briefcase,
+
   Megaphone,
   Info,
   CheckSquare,
@@ -149,7 +148,7 @@ export default function HomePage() {
     { id: "tasks", label: "任务中心", icon: <CheckSquare className="w-5 h-5" />, color: "bg-orange-500", badge: badges.tasks },
     { id: "issues", label: "工单提交", icon: <AlertTriangle className="w-5 h-5" />, color: "bg-blue-500", badge: badges.issues },
     { id: "learning", label: "学习中心", icon: <BookOpen className="w-5 h-5" />, color: "bg-cyan-500" },
-    { id: "case-center", label: "案例中心", icon: <Briefcase className="w-5 h-5" />, color: "bg-cyan-500" },
+
     { id: "messages", label: "信息广场", icon: <Megaphone className="w-5 h-5" />, color: "bg-purple-500", badge: badges.messages },
     { id: "standards", label: "规范管理", icon: <Wrench className="w-5 h-5" />, color: "bg-violet-500" },
     { id: "settings", label: "设置", icon: <Settings className="w-5 h-5" />, color: "bg-gray-500" },
@@ -635,13 +634,7 @@ export default function HomePage() {
             <IssueManagement currentUser={currentUser} />
           </ContentErrorBoundary>
         );
-      case "case-center":
-        return (
-          <ContentErrorBoundary>
-            <CaseCenter currentUser={currentUser} />
-          </ContentErrorBoundary>
-        );
-      case "messages":
+case "messages":
         return (
           <ContentErrorBoundary>
             <KnowledgeCenter currentUser={currentUser} />

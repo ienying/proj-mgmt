@@ -14,7 +14,7 @@ import {
   Package,
   AlertTriangle,
   LayoutGrid,
-  Briefcase,
+
   Megaphone,
   GripVertical,
   Plus,
@@ -71,7 +71,7 @@ const BaseDataManagement = dynamic(() => import("./base-data-management"), { ssr
 const SchemaRulesConfig = dynamic(() => import("./schema-rules-config").then(m => ({ default: m.SchemaRulesConfig })), { ssr: false });
 const IssueConfigPanel = dynamic(() => import("./issue-config-panel"), { ssr: false });
 const ModuleManagement = dynamic(() => import("./module-management"), { ssr: false });
-const CaseCenterSettings = dynamic(() => import("./case-center-settings").then(m => ({ default: m.CaseCenterSettings })), { ssr: false });
+
 
 
 interface User {
@@ -103,7 +103,7 @@ const menuItems = [
   { id: "base-data", label: "基础数据", icon: Database },
   { id: "module-mgmt", label: "模块管理", icon: LayoutGrid },
   { id: "issue-config", label: "工单配置", icon: AlertTriangle },
-  { id: "case-center-config", label: "案例中心设置", icon: Briefcase },
+
   { id: "knowledge-category", label: "信息广场分类", icon: Megaphone },
   { id: "config", label: "系统配置", icon: Key },
 ];
@@ -1115,10 +1115,6 @@ export default function SystemSettings({
             {visitedMenus.has("issue-config") && <IssueConfigPanel />}
           </div>
 
-          {/* 案例中心设置 */}
-          <div className={activeMenu === "case-center-config" ? "" : "hidden"}>
-            {visitedMenus.has("case-center-config") && <CaseCenterSettings />}
-          </div>
 
           {/* 信息广场分类维护 */}
           <div className={activeMenu === "knowledge-category" ? "" : "hidden"}>

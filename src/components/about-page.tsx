@@ -10,7 +10,7 @@ import {
   ClipboardList,
   AlertTriangle,
   Megaphone,
-  Briefcase,
+
   Shield,
   Database,
   GitBranch,
@@ -120,20 +120,7 @@ const FEATURE_MODULES = [
       "发布重要公告自动写入待办任务",
     ],
   },
-  {
-    id: "case-center",
-    name: "案例中心",
-    icon: <Briefcase className="w-5 h-5" />,
-    color: "bg-violet-500",
-    viewId: "case-center",
-    desc: "产品案例展示与用户画像，跨项目数据聚合。",
-    highlights: [
-      "产品案例：跨项目查询规范表数据，卡片+统计看板",
-      "用户画像：10大模块全方位展示（学校/组织/业务/信息化等）",
-      "字段映射：列→显示名→渲染方式灵活配置",
-      "概览指标：总数/条件计数/百分比",
-    ],
-  },
+
   {
     id: "settings",
     name: "系统设置",
@@ -158,7 +145,7 @@ const DATABASE_TABLES = [
   { group: "待办任务（统一待办）", tables: ["todo_task_defs", "todo_task_instances"] },
   { group: "问题上报", tables: ["issue_mgmt_issues", "issue_mgmt_issue_attachments", "issue_mgmt_issue_processing_records", "issue_mgmt_issue_notifications", "issue_mgmt_issue_categories", "issue_mgmt_issue_urgency", "issue_mgmt_issue_warranty_status"] },
   { group: "信息广场", tables: ["knowledge_categories", "knowledge_posts", "knowledge_attachments", "knowledge_reads", "knowledge_likes", "knowledge_comments"] },
-  { group: "案例中心", tables: ["case_center_config"] },
+
   { group: "基础数据", tables: ["product_module_types", "product_categories", "product_vendors", "product_scopes", "member_role_types"] },
 ];
 
