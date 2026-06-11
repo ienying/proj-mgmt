@@ -1081,14 +1081,14 @@ export function ProjectManagement({
                 <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="项目类型" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">全部类型</SelectItem>
-                  {projectTypes.map((t: { name: string; code: string }) => <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>)}
+                  {projectTypes.filter(t => t.code).map((t: { name: string; code: string }) => <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filterStage} onValueChange={(v) => setFilterStage(v)}>
                 <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="项目阶段" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">全部阶段</SelectItem>
-                  {projectStages.map((s: { name: string; code: string }) => <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>)}
+                  {projectStages.filter(s => s.code).map((s: { name: string; code: string }) => <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Button
@@ -1171,7 +1171,7 @@ export function ProjectManagement({
           onSuccess={() => { setShowProjectForm(false); setEditingProject(null); refreshProjects(); }}
           projectTypes={projectTypes}
           projectStages={projectStages}
-          memberRoles={memberRoles.map(r => r.name)}
+          memberRoles={memberRoles.map(r => r.name).filter(Boolean)}
           productModules={procurementModules.map(m => ({ module_code: m.code, module_name: m.name, product_name: m.name }))}
           users={users}
         />

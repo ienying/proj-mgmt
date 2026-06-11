@@ -201,14 +201,14 @@ export default function HomePage() {
         const typesRes = await fetch("/api/dicts?type=project_types");
         if (typesRes.ok) {
           const typesData = await typesRes.json();
-          setProjectTypes(typesData.data || []);
+          setProjectTypes((typesData.data || []).filter((item: any) => item.code));
         }
 
         // 获取项目阶段
         const stagesRes = await fetch("/api/dicts?type=project_stages");
         if (stagesRes.ok) {
           const stagesData = await stagesRes.json();
-          setProjectStages(stagesData.data || []);
+          setProjectStages((stagesData.data || []).filter((item: any) => item.code));
         }
 
         // 获取采购模块（来源于产品模块数据）
@@ -265,11 +265,11 @@ export default function HomePage() {
 
       if (typesRes.ok) {
         const typesData = await typesRes.json();
-        setProjectTypes(typesData.data || []);
+        setProjectTypes((typesData.data || []).filter((item: any) => item.code));
       }
       if (stagesRes.ok) {
         const stagesData = await stagesRes.json();
-        setProjectStages(stagesData.data || []);
+        setProjectStages((stagesData.data || []).filter((item: any) => item.code));
       }
       if (modulesRes.ok) {
         const modulesData = await modulesRes.json();

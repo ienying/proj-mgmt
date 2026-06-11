@@ -419,7 +419,7 @@ export function ProjectForm({
         .then((res) => res.json())
         .then((data) => {
           if (data.data) {
-            setCustomerTypes(data.data.filter((item: { is_enabled: boolean }) => item.is_enabled !== false).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
+            setCustomerTypes(data.data.filter((item: { is_enabled: boolean; code: string }) => item.is_enabled !== false && item.code).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
           }
         })
         .catch(() => {});
@@ -428,7 +428,7 @@ export function ProjectForm({
         .then((res) => res.json())
         .then((data) => {
           if (data.data) {
-            setDeploymentModes(data.data.filter((item: { is_enabled: boolean }) => item.is_enabled !== false).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
+            setDeploymentModes(data.data.filter((item: { is_enabled: boolean; code: string }) => item.is_enabled !== false && item.code).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
           }
         })
         .catch(() => {});
@@ -437,7 +437,7 @@ export function ProjectForm({
         .then((res) => res.json())
         .then((data) => {
           if (data.data) {
-            setProjectStatuses(data.data.filter((item: { is_enabled: boolean }) => item.is_enabled !== false).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
+            setProjectStatuses(data.data.filter((item: { is_enabled: boolean; code: string }) => item.is_enabled !== false && item.code).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
           }
         })
         .catch(() => {});
@@ -446,7 +446,7 @@ export function ProjectForm({
         .then((res) => res.json())
         .then((data) => {
           if (data.data) {
-            setDepartmentOptions(data.data.filter((item: { is_enabled: boolean }) => item.is_enabled !== false).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
+            setDepartmentOptions(data.data.filter((item: { is_enabled: boolean; name: string }) => item.is_enabled !== false && item.name).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
           }
         })
         .catch(() => {});
@@ -886,7 +886,7 @@ export function ProjectForm({
                       <SelectValue placeholder="请选择项目类型" />
                     </SelectTrigger>
                     <SelectContent>
-                      {projectTypes.map((type) => (
+                      {projectTypes.filter(t => t.code).map((type) => (
                         <SelectItem key={type.code} value={type.code}>
                           {type.name}
                         </SelectItem>
@@ -903,7 +903,7 @@ export function ProjectForm({
                       <SelectValue placeholder="请选择项目阶段" />
                     </SelectTrigger>
                     <SelectContent>
-                      {projectStages.map((stage) => (
+                      {projectStages.filter(s => s.code).map((stage) => (
                         <SelectItem key={stage.code} value={stage.code}>
                           {stage.name}
                         </SelectItem>
@@ -920,7 +920,7 @@ export function ProjectForm({
                       <SelectValue placeholder="请选择项目状态" />
                     </SelectTrigger>
                     <SelectContent>
-                      {projectStatuses.map((status) => (
+                      {projectStatuses.filter(s => s.code).map((status) => (
                         <SelectItem key={status.code} value={status.code}>
                           {status.name}
                         </SelectItem>
@@ -935,7 +935,7 @@ export function ProjectForm({
                       <SelectValue placeholder="请选择部门" />
                     </SelectTrigger>
                     <SelectContent>
-                      {departmentOptions.map((dept) => (
+                      {departmentOptions.filter(d => d.name).map((dept) => (
                         <SelectItem key={dept.code} value={dept.name}>{dept.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -954,7 +954,7 @@ export function ProjectForm({
                     <Select value={r.v} onValueChange={r.s}>
                       <SelectTrigger className="w-full"><SelectValue placeholder="选择人员" /></SelectTrigger>
                       <SelectContent>
-                        {users.map((u: { id: string; name: string }) => (
+                        {users.filter(u => u.name).map((u: { id: string; name: string }) => (
                           <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -970,7 +970,7 @@ export function ProjectForm({
                       <SelectValue placeholder="请选择客户类型" />
                     </SelectTrigger>
                     <SelectContent>
-                      {customerTypes.map((type) => (
+                      {customerTypes.filter(t => t.code).map((type) => (
                         <SelectItem key={type.code} value={type.code}>
                           {type.name}
                         </SelectItem>
@@ -985,7 +985,7 @@ export function ProjectForm({
                       <SelectValue placeholder="请选择部署模式" />
                     </SelectTrigger>
                     <SelectContent>
-                      {deploymentModes.map((mode) => (
+                      {deploymentModes.filter(m => m.code).map((mode) => (
                         <SelectItem key={mode.code} value={mode.code}>
                           {mode.name}
                         </SelectItem>
@@ -1297,7 +1297,7 @@ export function ProjectForm({
                         <SelectValue placeholder="选择角色" />
                       </SelectTrigger>
                       <SelectContent>
-                        {memberRoles.map((role) => (
+                        {memberRoles.filter(r => r).map((role) => (
                           <SelectItem key={role} value={role}>
                             {role}
                           </SelectItem>
