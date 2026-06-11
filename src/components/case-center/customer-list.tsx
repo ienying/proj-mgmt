@@ -6,16 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SCHOOL_TYPE_OPTIONS, INFO_LEVEL_OPTIONS } from "@/lib/case-center-constants";
+import { SCHOOL_TYPE_OPTIONS } from "@/lib/case-center-constants";
 import { toast } from "sonner";
 
 interface CustomerRow {
   id: string;
   school_name: string;
   school_type: string;
-  province: string;
-  city: string;
-  info_level: string;
+  location: string;
   department_count: string;
   module_count: string;
   landed_count: string;
@@ -33,9 +31,6 @@ export function CustomerList({ onViewCustomer, onCreateCustomer }: CustomerListP
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [schoolType, setSchoolType] = useState("all");
-  const [infoLevel, setInfoLevel] = useState("all");
-  const [provinces, setProvinces] = useState<string[]>([]);
-  const [province, setProvince] = useState("all");
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -43,26 +38,18 @@ export function CustomerList({ onViewCustomer, onCreateCustomer }: CustomerListP
       const params = new URLSearchParams();
       if (search) params.set("q", search);
       if (schoolType !== "all") params.set("school_type", schoolType);
-      if (infoLevel !== "all") params.set("info_level", infoLevel);
-      if (province !== "all") params.set("province", province);
 
       const res = await fetch(`/api/case-center/customers?${params.toString()}`);
       if (res.ok) {
         const { data } = await res.json();
         setCustomers(data || []);
-
-        // 提取省份列表（去重）
-        const uniqueProvinces = Array.from(
-          new Set((data || []).map((c: CustomerRow) => c.province).filter(Boolean))
-        ) as string[];
-        setProvinces(uniqueProvinces);
       }
     } catch {
       toast.error("加载客户列表失败");
     } finally {
       setLoading(false);
     }
-  }, [search, schoolType, infoLevel, province]);
+  }, [search, schoolType]);
 
   useEffect(() => {
     fetchCustomers();
@@ -109,30 +96,6 @@ export function CustomerList({ onViewCustomer, onCreateCustomer }: CustomerListP
             ))}
           </SelectContent>
         </Select>
-        <Select value={infoLevel} onValueChange={setInfoLevel}>
-          <SelectTrigger className="w-[120px]">
-            <SelectValue placeholder="等级" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部等级</SelectItem>
-            {INFO_LEVEL_OPTIONS.map((l) => (
-              <SelectItem key={l.code} value={l.code}>{l.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {provinces.length > 0 && (
-          <Select value={province} onValueChange={setProvince}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="省份" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部省份</SelectItem>
-              {provinces.map((p) => (
-                <SelectItem key={p} value={p}>{p}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
         <Button onClick={onCreateCustomer} size="sm" className="ml-auto">
           <Plus className="w-4 h-4 mr-1" />
           新建画像
@@ -161,7 +124,6 @@ export function CustomerList({ onViewCustomer, onCreateCustomer }: CustomerListP
               <tr>
                 <th className="text-left px-4 py-3 font-medium">学校</th>
                 <th className="text-left px-4 py-3 font-medium">类型</th>
-                <th className="text-left px-4 py-3 font-medium">等级</th>
                 <th className="text-center px-4 py-3 font-medium">科室数</th>
                 <th className="text-center px-4 py-3 font-medium">已购模块</th>
                 <th className="text-center px-4 py-3 font-medium">已落地</th>
@@ -181,25 +143,12 @@ export function CustomerList({ onViewCustomer, onCreateCustomer }: CustomerListP
                       <School className="w-4 h-4 text-muted-foreground" />
                       <span className="font-medium">{c.school_name}</span>
                     </div>
-                    {c.province && (
-                      <span className="text-xs text-muted-foreground ml-6">{c.province} {c.city}</span>
+                    {c.location && (
+                      <span className="text-xs text-muted-foreground ml-6">{c.location}</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant="secondary" className="text-xs">{c.school_type}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge
-                      variant="outline"
-                      className={`
-                        text-xs
-                        ${c.info_level === "高级" ? "border-green-500 text-green-600" : ""}
-                        ${c.info_level === "中级" ? "border-blue-500 text-blue-600" : ""}
-                        ${c.info_level === "初级" ? "border-orange-500 text-orange-600" : ""}
-                      `}
-                    >
-                      {c.info_level}
-                    </Badge>
                   </td>
                   <td className="px-4 py-3 text-center">{c.department_count}</td>
                   <td className="px-4 py-3 text-center">{c.module_count}</td>

@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Pencil, FileText, History, Building2, Users, Target, AlertCircle, CheckCircle2, XCircle, Download, Play, FileText as FileIcon } from "lucide-react";
+import { ArrowLeft, Pencil, FileText, History, Building2, Users, Target, AlertCircle, CheckCircle2, XCircle, Download, Play, FileText as FileIcon, Columns2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { SCHOOL_TYPE_DEPARTMENTS } from "@/lib/case-center-constants";
 import { toast } from "sonner";
@@ -75,6 +76,8 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showWeeklyReport, setShowWeeklyReport] = useState(false);
   const [filterLandedOnly, setFilterLandedOnly] = useState(false);
+  const [compareDepts, setCompareDepts] = useState<string[]>([]);
+  const [showCompare, setShowCompare] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -138,6 +141,17 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
 
   const currentDept = departments.find((d) => d.department_code === activeDept);
 
+  const toggleCompareDept = (code: string) => {
+    setCompareDepts((prev) => {
+      if (prev.includes(code)) return prev.filter((c) => c !== code);
+      if (prev.length >= 4) {
+        toast.error("最多选择4个科室进行对比");
+        return prev;
+      }
+      return [...prev, code];
+    });
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* 顶部栏 */}
@@ -150,16 +164,6 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
           <Building2 className="w-5 h-5 text-muted-foreground" />
           <h2 className="font-semibold text-lg">{customer.school_name}</h2>
           <Badge variant="secondary">{customer.school_type}</Badge>
-          <Badge
-            variant="outline"
-            className={cn(
-              customer.info_level === "高级" && "border-green-500 text-green-600",
-              customer.info_level === "中级" && "border-blue-500 text-blue-600",
-              customer.info_level === "初级" && "border-orange-500 text-orange-600"
-            )}
-          >
-            {customer.info_level}
-          </Badge>
         </div>
         <span className="text-xs text-muted-foreground">
           最后更新: {new Date(customer.updated_at).toLocaleDateString("zh-CN")}
@@ -186,28 +190,48 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
           {/* 统计卡片 */}
           {activeDept === "overview" && (
             <div className="grid grid-cols-4 gap-3 mb-4">
-              <Card>
-                <CardContent className="p-4 text-center">
-                  <div className="text-2xl font-bold">{totalModules}</div>
-                  <div className="text-xs text-muted-foreground">已购模块</div>
+              <Card className="overflow-hidden border-0 shadow-sm bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-slate-500/10 flex items-center justify-center">
+                    <Target className="w-5 h-5 text-slate-500" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold tracking-tight">{totalModules}</div>
+                    <div className="text-xs text-muted-foreground">已购模块</div>
+                  </div>
                 </CardContent>
               </Card>
-              <Card>
-                <CardContent className="p-4 text-center">
-                  <div className="text-2xl font-bold text-green-600">{landedModules.length}</div>
-                  <div className="text-xs text-muted-foreground">✅ 已落地</div>
+              <Card className="overflow-hidden border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400">{landedModules.length}</div>
+                    <div className="text-xs text-emerald-600/70 dark:text-emerald-400/70">已落地</div>
+                  </div>
                 </CardContent>
               </Card>
-              <Card>
-                <CardContent className="p-4 text-center">
-                  <div className="text-2xl font-bold text-orange-500">{notLandedModules.length}</div>
-                  <div className="text-xs text-muted-foreground">⚠️ 未落地</div>
+              <Card className="overflow-hidden border-0 shadow-sm bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
+                    <AlertCircle className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold tracking-tight text-amber-700 dark:text-amber-400">{notLandedModules.length}</div>
+                    <div className="text-xs text-amber-600/70 dark:text-amber-400/70">未落地</div>
+                  </div>
                 </CardContent>
               </Card>
-              <Card>
-                <CardContent className="p-4 text-center">
-                  <div className="text-2xl font-bold text-blue-600">{materialCoverage}%</div>
-                  <div className="text-xs text-muted-foreground">素材覆盖率</div>
+              <Card className="overflow-hidden border-0 shadow-sm bg-gradient-to-br from-sky-50 to-sky-100 dark:from-sky-950 dark:to-sky-900">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center">
+                    <FileIcon className="w-5 h-5 text-sky-600" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold tracking-tight text-sky-700 dark:text-sky-400">{materialCoverage}%</div>
+                    <div className="text-xs text-sky-600/70 dark:text-sky-400/70">素材覆盖率</div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -215,37 +239,61 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
 
           {/* 科室速览卡片（overview 时显示） */}
           {activeDept === "overview" && (
-            <div className="flex gap-3 overflow-x-auto pb-3 mb-3">
-              {departments.map((dept) => {
-                const deptMods = modules.filter((m) => m.customer_department_id === dept.id);
-                const landed = deptMods.filter((m) => m.status === "已落地").length;
-                const total = deptMods.length;
-                return (
-                  <button
-                    key={dept.id}
-                    className="flex-shrink-0 w-40 border rounded-lg p-3 text-left hover:border-primary/50 hover:bg-muted/30 transition-colors"
-                    onClick={() => setActiveDept(dept.department_code)}
-                  >
-                    <div className="font-medium text-sm mb-1 truncate">{dept.department_name}</div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="flex gap-0.5">
-                        {deptMods.map((m) => (
-                          <div
-                            key={m.id}
-                            className={cn(
-                              "w-2.5 h-2.5 rounded-full",
-                              m.status === "已落地" ? "bg-green-500" : m.status === "未落地" ? "bg-orange-400" : "bg-gray-300"
-                            )}
-                            title={`${m.module_name}: ${m.status}`}
-                          />
-                        ))}
-                      </div>
-                      <span className="text-xs text-muted-foreground">{landed}/{total}</span>
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-muted-foreground">勾选 2-4 个科室可进行对比</span>
+                {compareDepts.length >= 2 && (
+                  <Button size="sm" variant="outline" onClick={() => setShowCompare(true)} className="h-7 text-xs">
+                    <Columns2 className="w-3.5 h-3.5 mr-1" />
+                    对比选中科室 ({compareDepts.length})
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-3 mb-3">
+                {departments.map((dept) => {
+                  const deptMods = modules.filter((m) => m.customer_department_id === dept.id);
+                  const landed = deptMods.filter((m) => m.status === "已落地").length;
+                  const total = deptMods.length;
+                  const isCompared = compareDepts.includes(dept.department_code);
+                  return (
+                    <div key={dept.id} className="relative flex-shrink-0">
+                      <button
+                        className={cn(
+                          "w-40 border rounded-lg p-3 text-left hover:border-primary/50 hover:bg-muted/30 transition-colors",
+                          isCompared && "border-primary/50 bg-primary/5"
+                        )}
+                        onClick={() => setActiveDept(dept.department_code)}
+                      >
+                        <div className="font-medium text-sm mb-1 truncate">{dept.department_name}</div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="flex gap-0.5">
+                            {deptMods.map((m) => (
+                              <div
+                                key={m.id}
+                                className={cn(
+                                  "w-2.5 h-2.5 rounded-full",
+                                  m.status === "已落地" ? "bg-green-500" : m.status === "未落地" ? "bg-orange-400" : "bg-gray-300"
+                                )}
+                                title={`${m.module_name}: ${m.status}`}
+                              />
+                            ))}
+                          </div>
+                          <span className="text-xs text-muted-foreground">{landed}/{total}</span>
+                        </div>
+                      </button>
+                      <label className="absolute top-1 right-1 flex items-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          className="rounded w-3.5 h-3.5"
+                          checked={isCompared}
+                          onChange={() => toggleCompareDept(dept.department_code)}
+                        />
+                      </label>
                     </div>
-                  </button>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            </>
           )}
 
           {/* 科室 Tab 栏 */}
@@ -262,6 +310,15 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
                 {dept.department_name}
               </TabsTrigger>
             ))}
+            <div className="w-px h-6 bg-border self-center mx-1" />
+            <TabsTrigger value="version" className="text-xs px-3 py-2 data-[state=active]:bg-background">
+              <History className="w-3.5 h-3.5 mr-1" />
+              版本
+            </TabsTrigger>
+            <TabsTrigger value="weekly" className="text-xs px-3 py-2 data-[state=active]:bg-background">
+              <FileText className="w-3.5 h-3.5 mr-1" />
+              周报
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -286,9 +343,30 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
                 allDepartments={departments}
                 filterLandedOnly={filterLandedOnly}
                 onToggleFilter={() => setFilterLandedOnly(!filterLandedOnly)}
+                onEditDept={() => onEdit(customerId)}
               />
             </TabsContent>
           ))}
+
+          {/* 版本 Tab */}
+          <TabsContent value="version" className="mt-0 border-0 p-0">
+            <VersionHistory
+              customerId={customerId}
+              onClose={() => setActiveDept("overview")}
+              embedded
+            />
+          </TabsContent>
+
+          {/* 周报 Tab */}
+          <TabsContent value="weekly" className="mt-0 border-0 p-0">
+            <WeeklyReportForm
+              customerId={customerId}
+              customerName={customer.school_name}
+              currentUser={currentUser}
+              onClose={() => setActiveDept("overview")}
+              embedded
+            />
+          </TabsContent>
         </div>
       </Tabs>
 
@@ -307,6 +385,15 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
           onClose={() => setShowWeeklyReport(false)}
         />
       )}
+
+      {/* 跨科室对比弹窗 */}
+      {showCompare && (
+        <DepartmentCompareDialog
+          departments={departments.filter((d) => compareDepts.includes(d.department_code))}
+          allModules={modules}
+          onClose={() => setShowCompare(false)}
+        />
+      )}
     </div>
   );
 }
@@ -318,12 +405,14 @@ function DepartmentDetailView({
   allDepartments,
   filterLandedOnly,
   onToggleFilter,
+  onEditDept,
 }: {
   department: DepartmentData;
   modules: ModuleData[];
   allDepartments: DepartmentData[];
   filterLandedOnly: boolean;
   onToggleFilter: () => void;
+  onEditDept: () => void;
 }) {
   const personnel = Array.isArray(department.personnel) ? department.personnel : [];
   const filteredModules = filterLandedOnly ? modules.filter((m) => m.status === "已落地") : modules;
@@ -337,6 +426,17 @@ function DepartmentDetailView({
 
   return (
     <div className="space-y-4">
+      {/* 科室名称栏 + 编辑按钮 */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold flex items-center gap-2">
+          {department.department_name}
+        </h3>
+        <Button variant="outline" size="sm" onClick={onEditDept}>
+          <Pencil className="w-3.5 h-3.5 mr-1" />
+          编辑此科室
+        </Button>
+      </div>
+
       {/* 科室人员 */}
       {personnel.length > 0 && (
         <div>
@@ -558,5 +658,96 @@ function ModuleCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// 跨科室对比弹窗
+function DepartmentCompareDialog({
+  departments,
+  allModules,
+  onClose,
+}: {
+  departments: DepartmentData[];
+  allModules: ModuleData[];
+  onClose: () => void;
+}) {
+  const rows = [
+    { label: "匹配模块", render: (d: DepartmentData) => String(allModules.filter((m) => m.customer_department_id === d.id).length) + "个" },
+    {
+      label: "已落地",
+      render: (d: DepartmentData) => {
+        const mods = allModules.filter((m) => m.customer_department_id === d.id);
+        const landed = mods.filter((m) => m.status === "已落地").length;
+        return `${landed} (${mods.length > 0 ? Math.round((landed / mods.length) * 100) : 0}%)`;
+      },
+    },
+    {
+      label: "使用率均值",
+      render: (d: DepartmentData) => {
+        const landedMods = allModules.filter((m) => m.customer_department_id === d.id && m.status === "已落地");
+        if (landedMods.length === 0) return "-";
+        const avg = Math.round(landedMods.reduce((sum, m) => sum + m.usage_rate, 0) / landedMods.length);
+        return `${avg}%`;
+      },
+    },
+    {
+      label: "素材数",
+      render: (d: DepartmentData) => {
+        const mods = allModules.filter((m) => m.customer_department_id === d.id);
+        return String(mods.reduce((sum, m) => sum + (Array.isArray(m.materials) ? m.materials.length : 0), 0));
+      },
+    },
+    { label: "核心痛点", render: (d: DepartmentData) => d.pain_points ? d.pain_points.slice(0, 30) + (d.pain_points.length > 30 ? "..." : "") : "-" },
+    {
+      label: "人员态度",
+      render: (d: DepartmentData) => {
+        const personnel = Array.isArray(d.personnel) ? d.personnel : [];
+        if (personnel.length === 0) return "未采集";
+        return personnel[0]?.attitude || "未标注";
+      },
+    },
+  ];
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-base">科室对比（{departments.length}个科室）</DialogTitle>
+        </DialogHeader>
+        <div className="border rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="text-left px-4 py-2 font-medium w-24" />
+                {departments.map((d) => (
+                  <th key={d.department_code} className="text-center px-4 py-2 font-medium">
+                    {d.department_name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.label} className="border-t">
+                  <td className="px-4 py-2 text-xs text-muted-foreground font-medium">{row.label}</td>
+                  {departments.map((d) => (
+                    <td key={d.department_code} className="px-4 py-2 text-center text-xs">
+                      {row.render(d)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="text-xs text-muted-foreground text-center py-1">
+          结论：{departments.map((d) => {
+            const mods = allModules.filter((m) => m.customer_department_id === d.id);
+            const landed = mods.filter((m) => m.status === "已落地").length;
+            return `${d.department_name}(${landed}/${mods.length})`;
+          }).join(" vs ")}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

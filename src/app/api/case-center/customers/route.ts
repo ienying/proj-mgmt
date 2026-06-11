@@ -9,8 +9,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q") || "";
     const schoolType = searchParams.get("school_type") || "";
-    const infoLevel = searchParams.get("info_level") || "";
-    const province = searchParams.get("province") || "";
+    const location = searchParams.get("location") || "";
 
     let conditions: string[] = [];
     if (q) {
@@ -21,13 +20,9 @@ export async function GET(request: NextRequest) {
       const safeType = schoolType.replace(/'/g, "''");
       conditions.push(`c.school_type = '${safeType}'`);
     }
-    if (infoLevel) {
-      const safeLevel = infoLevel.replace(/'/g, "''");
-      conditions.push(`c.info_level = '${safeLevel}'`);
-    }
-    if (province) {
-      const safeProvince = province.replace(/'/g, "''");
-      conditions.push(`c.province = '${safeProvince}'`);
+    if (location) {
+      const safeLocation = location.replace(/'/g, "''");
+      conditions.push(`c.location ILIKE '%${safeLocation}%'`);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -61,7 +56,7 @@ export async function POST(request: NextRequest) {
   try {
     const client = await createServerClient();
     const body = await request.json();
-    const { school_name, school_type, province, city, info_level, description } = body;
+    const { school_name, school_type, location, description } = body;
 
     if (!school_name || !school_type) {
       return NextResponse.json({ error: "学校名称和类型为必填项" }, { status: 400 });
@@ -71,10 +66,10 @@ export async function POST(request: NextRequest) {
     const customerData: Record<string, unknown> = {
       school_name,
       school_type,
-      province: province || null,
-      city: city || null,
-      info_level: info_level || "初级",
+      location: location || "",
       description: description || "",
+      hardware_info: body.hardware_info || {},
+      network_info: body.network_info || {},
       created_by: body.created_by || "system",
     };
 

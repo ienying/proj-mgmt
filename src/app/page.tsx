@@ -150,10 +150,10 @@ export default function HomePage() {
     { id: "issues", label: "工单提交", icon: <AlertTriangle className="w-5 h-5" />, color: "bg-blue-500", badge: badges.issues },
     { id: "learning", label: "学习中心", icon: <BookOpen className="w-5 h-5" />, color: "bg-cyan-500" },
 
+    { id: "case-center", label: "案例中心", icon: <BriefcaseBusiness className="w-5 h-5" />, color: "bg-teal-500" },
     { id: "messages", label: "信息广场", icon: <Megaphone className="w-5 h-5" />, color: "bg-purple-500", badge: badges.messages },
     { id: "standards", label: "规范管理", icon: <Wrench className="w-5 h-5" />, color: "bg-violet-500" },
     { id: "settings", label: "设置", icon: <Settings className="w-5 h-5" />, color: "bg-gray-500" },
-    { id: "case-center", label: "案例中心", icon: <BriefcaseBusiness className="w-5 h-5" />, color: "bg-teal-500" },
     { id: "about", label: "关于", icon: <Info className="w-5 h-5" />, color: "bg-indigo-500" },
   ];
 

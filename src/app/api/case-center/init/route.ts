@@ -12,9 +12,7 @@ export async function POST() {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         school_name TEXT NOT NULL,
         school_type TEXT NOT NULL,
-        province TEXT,
-        city TEXT,
-        info_level TEXT DEFAULT '初级',
+        location TEXT DEFAULT '',
         description TEXT,
         hardware_info JSONB DEFAULT '{}'::jsonb,
         network_info JSONB DEFAULT '{}'::jsonb,
@@ -84,7 +82,6 @@ export async function POST() {
       );
 
       CREATE INDEX IF NOT EXISTS idx_customers_school_type ON design_case_center.customers(school_type);
-      CREATE INDEX IF NOT EXISTS idx_customers_province ON design_case_center.customers(province);
       CREATE INDEX IF NOT EXISTS idx_customer_modules_customer ON design_case_center.customer_modules(customer_id);
       CREATE INDEX IF NOT EXISTS idx_customer_modules_status ON design_case_center.customer_modules(status);
       CREATE INDEX IF NOT EXISTS idx_customer_modules_module ON design_case_center.customer_modules(module_code);
