@@ -31,6 +31,7 @@ const IssueManagement = dynamic(() => import("@/components/issue-management"), {
 const KnowledgeCenter = dynamic(() => import("@/components/knowledge-center").then(m => ({ default: m.default })), { ssr: false, loading: () => <LoadingFallback /> });
 const AboutPage = dynamic(() => import("@/components/about-page"), { ssr: false, loading: () => <LoadingFallback /> });
 const TaskCenter = dynamic(() => import("@/components/task-center"), { ssr: false, loading: () => <LoadingFallback /> });
+const CaseCenter = dynamic(() => import("@/components/case-center"), { ssr: false, loading: () => <LoadingFallback /> });
 
 import {
   FolderKanban,
@@ -39,7 +40,7 @@ import {
   Settings,
   Wrench,
   AlertTriangle,
-
+  BriefcaseBusiness,
   Megaphone,
   Info,
   CheckSquare,
@@ -152,6 +153,7 @@ export default function HomePage() {
     { id: "messages", label: "信息广场", icon: <Megaphone className="w-5 h-5" />, color: "bg-purple-500", badge: badges.messages },
     { id: "standards", label: "规范管理", icon: <Wrench className="w-5 h-5" />, color: "bg-violet-500" },
     { id: "settings", label: "设置", icon: <Settings className="w-5 h-5" />, color: "bg-gray-500" },
+    { id: "case-center", label: "案例中心", icon: <BriefcaseBusiness className="w-5 h-5" />, color: "bg-teal-500" },
     { id: "about", label: "关于", icon: <Info className="w-5 h-5" />, color: "bg-indigo-500" },
   ];
 
@@ -626,6 +628,12 @@ export default function HomePage() {
         return (
           <ContentErrorBoundary>
             <AboutPage onNavigate={(viewId) => setActiveItem(viewId)} />
+          </ContentErrorBoundary>
+        );
+      case "case-center":
+        return (
+          <ContentErrorBoundary>
+            <CaseCenter currentUser={currentUser} />
           </ContentErrorBoundary>
         );
       case "issues":
