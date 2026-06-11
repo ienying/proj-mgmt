@@ -4168,7 +4168,7 @@ export function ProjectDetail({
     }
 
     return (
-      <div className="space-y-4 max-w-6xl mx-auto">
+      <div className="space-y-4">
         {tables.map((table) => (
           <div key={table.id}>
             {renderDataTable(table)}
@@ -4248,10 +4248,16 @@ export function ProjectDetail({
           </div>
         </div>
 
-        {/* 左侧统计 + 中间数据区 + 右侧概览 */}
+        {/* 左侧概览+统计 + 中间数据区 */}
         <div className="flex-1 flex min-h-0">
-          {/* 左侧统计面板 */}
-          <div className="w-72 bg-white border-r border-slate-200/80 p-4 overflow-y-auto space-y-5">
+          {/* 左侧：概览 + 统计 */}
+          <div className="w-60 bg-white border-r border-slate-200/80 overflow-y-auto flex flex-col shrink-0">
+            {/* 项目概览 */}
+            <div className="p-4 border-b border-slate-100">
+              {renderOverview()}
+            </div>
+            {/* 数据统计 */}
+            <div className="p-4 space-y-5 flex-1">
             {/* 数据统计 */}
             <div>
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">数据统计</h3>
@@ -4309,15 +4315,11 @@ export function ProjectDetail({
               })()}
             </div>
           </div>
-
-          {/* 中间数据区 */}
-          <div className="flex-1 p-5 overflow-y-auto">
-            {renderModuleContent()}
           </div>
 
-          {/* 右侧概览面板 */}
-          <div className="w-72 bg-white border-l border-slate-200/80 p-4 overflow-y-auto">
-            {renderOverview()}
+          {/* 中间数据区 */}
+          <div className="flex-1 p-3 overflow-y-auto">
+            {renderModuleContent()}
           </div>
         </div>
       </div>
