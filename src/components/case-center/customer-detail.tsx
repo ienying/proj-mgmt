@@ -90,8 +90,8 @@ function DockNavItem({
         className={cn(
           "relative flex items-center justify-center rounded-2xl transition-all duration-200",
           active
-            ? "scale-110 bg-white dark:bg-white shadow-xl shadow-sky-300/60 ring-2 ring-sky-300/50"
-            : "bg-white/80 dark:bg-zinc-200/80 group-hover:scale-105 group-hover:bg-white group-hover:shadow-lg group-hover:shadow-sky-200/50",
+            ? "scale-110 bg-white dark:bg-white shadow-xl shadow-blue-300/60 ring-2 ring-blue-300/50"
+            : "bg-white/80 dark:bg-zinc-200/80 group-hover:scale-105 group-hover:bg-white group-hover:shadow-lg group-hover:shadow-blue-200/50",
         )}
         style={{ width: 22, height: 22 }}
       >
@@ -106,7 +106,7 @@ function DockNavItem({
       </div>
       <span className={cn(
         "text-[9px] leading-none text-center truncate w-full",
-        active ? "text-sky-700 dark:text-sky-200 font-bold" : "text-slate-500 dark:text-slate-300"
+        active ? "text-blue-700 dark:text-blue-200 font-bold" : "text-slate-500 dark:text-slate-300"
       )}>
         {label.length > 3 ? label.slice(0, 3) : label}
       </span>
@@ -332,7 +332,7 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
                 );
               })}
 
-              <div className="w-10 h-px bg-sky-200/30 dark:bg-sky-600/20 my-0.5" />
+              <div className="w-10 h-px bg-blue-200/30 dark:bg-blue-600/20 my-0.5" />
 
               {/* 版本 / 周报 */}
               <DockNavItem
@@ -388,14 +388,14 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
                   </div>
                 </CardContent>
               </Card>
-              <Card className="overflow-hidden border-0 shadow-sm bg-gradient-to-br from-sky-50 to-sky-100 dark:from-sky-950 dark:to-sky-900">
+              <Card className="overflow-hidden border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
                 <CardContent className="p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center">
-                    <FileIcon className="w-5 h-5 text-sky-600" />
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                    <FileIcon className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
-                    <div className="text-2xl font-bold tracking-tight text-sky-700 dark:text-sky-400">{materialCoverage}%</div>
-                    <div className="text-xs text-sky-600/70 dark:text-sky-400/70">素材覆盖率</div>
+                    <div className="text-2xl font-bold tracking-tight text-blue-700 dark:text-blue-400">{materialCoverage}%</div>
+                    <div className="text-xs text-blue-600/70 dark:text-blue-400/70">素材覆盖率</div>
                   </div>
                 </CardContent>
               </Card>
@@ -488,7 +488,7 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
                       <div className="text-2xl font-bold text-green-700 dark:text-green-400">{landedMods}</div>
                     </CardContent>
                   </Card>
-                  <Card className="bg-gradient-to-br from-blue-50 to-sky-50 dark:from-blue-950 dark:to-sky-950">
+                  <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-950">
                     <CardContent className="p-3">
                       <div className="text-[11px] text-muted-foreground mb-1">🔵 试用中</div>
                       <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">{trialMods}</div>
