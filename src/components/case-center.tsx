@@ -75,7 +75,7 @@ export default function CaseCenter({ currentUser }: CaseCenterProps) {
   }, []);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col min-h-0">
       {/* 顶部 Tab 导航：用户画像 | 产品案例 */}
       <div className="flex items-center gap-1 px-4 pt-3 pb-2 border-b bg-card">
         <button

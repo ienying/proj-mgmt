@@ -11,8 +11,8 @@ export async function POST() {
       CREATE TABLE IF NOT EXISTS design_case_center.customers (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         school_name TEXT NOT NULL,
-        school_type TEXT NOT NULL,
-        location TEXT DEFAULT '',
+        customer_types JSONB DEFAULT '[]'::jsonb,
+        location JSONB DEFAULT '{}'::jsonb,
         description TEXT,
         hardware_info JSONB DEFAULT '{}'::jsonb,
         network_info JSONB DEFAULT '{}'::jsonb,
@@ -81,7 +81,28 @@ export async function POST() {
         UNIQUE(customer_id, report_week, created_by)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_customers_school_type ON design_case_center.customers(school_type);
+      -- 迁移旧字段（school_type → customer_types）
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'design_case_center' AND table_name = 'customers' AND column_name = 'school_type'
+        ) THEN
+          UPDATE design_case_center.customers
+            SET customer_types = to_jsonb(ARRAY[school_type])
+            WHERE customer_types IS NULL OR customer_types = '[]'::jsonb;
+          ALTER TABLE design_case_center.customers DROP COLUMN IF EXISTS school_type;
+        END IF;
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'design_case_center' AND table_name = 'customers' AND column_name = 'location'
+            AND data_type NOT IN ('jsonb', 'json')
+        ) THEN
+          UPDATE design_case_center.customers
+            SET location = jsonb_build_object('province', location)
+            WHERE location IS NOT NULL AND location::text <> '' AND NOT location::text ~ '^\{';
+        END IF;
+      END $$;
       CREATE INDEX IF NOT EXISTS idx_customer_modules_customer ON design_case_center.customer_modules(customer_id);
       CREATE INDEX IF NOT EXISTS idx_customer_modules_status ON design_case_center.customer_modules(status);
       CREATE INDEX IF NOT EXISTS idx_customer_modules_module ON design_case_center.customer_modules(module_code);

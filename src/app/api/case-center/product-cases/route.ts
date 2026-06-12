@@ -8,7 +8,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const departmentCode = searchParams.get("department_code") || "";
     const moduleCode = searchParams.get("module_code") || "";
+    const customerType = searchParams.get("customer_type") || "";
     const schoolType = searchParams.get("school_type") || "";
+    const effectiveType = customerType || schoolType;
 
     // 构建 WHERE 条件
     const conditions: string[] = ["cm.status = '已落地'"];
@@ -18,8 +20,8 @@ export async function GET(request: NextRequest) {
     if (moduleCode) {
       conditions.push(`cm.module_code = '${moduleCode.replace(/'/g, "''")}'`);
     }
-    if (schoolType) {
-      conditions.push(`c.school_type = '${schoolType.replace(/'/g, "''")}'`);
+    if (effectiveType) {
+      conditions.push(`c.customer_types @> to_jsonb(ARRAY['${effectiveType.replace(/'/g, "''")}'])`);
     }
     const whereClause = conditions.join(" AND ");
 
@@ -37,7 +39,7 @@ export async function GET(request: NextRequest) {
          JOIN design_case_center.customers c2 ON m2.customer_id = c2.id
          WHERE m2.status = '已落地'
          ${departmentCode ? `AND d2.department_code = '${departmentCode.replace(/'/g, "''")}'` : ""}
-         ${schoolType ? `AND c2.school_type = '${schoolType.replace(/'/g, "''")}'` : ""}
+         ${effectiveType ? `AND c2.customer_types @> to_jsonb(ARRAY['${effectiveType.replace(/'/g, "''")}'])` : ""}
         ) as total_materials
       FROM design_case_center.customer_modules cm
       JOIN design_case_center.customer_departments cd ON cm.customer_department_id = cd.id
@@ -52,9 +54,8 @@ export async function GET(request: NextRequest) {
       SELECT
         c.id as school_id,
         c.school_name,
-        c.school_type,
-        c.province,
-        c.info_level,
+        c.customer_types,
+        c.location,
         cm.usage_rate,
         cm.active_users,
         cm.effect,
@@ -70,16 +71,17 @@ export async function GET(request: NextRequest) {
       ORDER BY cm.usage_rate DESC
     `;
 
-    // 3. 学校类型分布
+    // 3. 客户类型分布（展开 JSONB 数组）
     const typeDistSql = `
       SELECT
-        c.school_type,
+        ct as school_type,
         COUNT(DISTINCT c.id) as school_count
       FROM design_case_center.customer_modules cm
       JOIN design_case_center.customers c ON cm.customer_id = c.id
+      CROSS JOIN LATERAL jsonb_array_elements_text(c.customer_types) AS ct
       ${departmentCode || moduleCode ? "JOIN design_case_center.customer_departments cd ON cm.customer_department_id = cd.id" : ""}
       WHERE ${whereClause}
-      GROUP BY c.school_type
+      GROUP BY ct
       ORDER BY school_count DESC
     `;
 

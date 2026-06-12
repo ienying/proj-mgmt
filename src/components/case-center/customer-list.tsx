@@ -6,14 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SCHOOL_TYPE_OPTIONS } from "@/lib/case-center-constants";
+import { CUSTOMER_TYPE_OPTIONS } from "@/lib/case-center-constants";
 import { toast } from "sonner";
 
 interface CustomerRow {
   id: string;
   school_name: string;
-  school_type: string;
-  location: string;
+  customer_types: string[];
+  location: Record<string, string>;
   department_count: string;
   module_count: string;
   landed_count: string;
@@ -30,14 +30,14 @@ export function CustomerList({ onViewCustomer, onCreateCustomer }: CustomerListP
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [schoolType, setSchoolType] = useState("all");
+  const [customerType, setCustomerType] = useState("all");
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (search) params.set("q", search);
-      if (schoolType !== "all") params.set("school_type", schoolType);
+      if (customerType !== "all") params.set("customer_type", customerType);
 
       const res = await fetch(`/api/case-center/customers?${params.toString()}`);
       if (res.ok) {
@@ -49,7 +49,7 @@ export function CustomerList({ onViewCustomer, onCreateCustomer }: CustomerListP
     } finally {
       setLoading(false);
     }
-  }, [search, schoolType]);
+  }, [search, customerType]);
 
   useEffect(() => {
     fetchCustomers();
@@ -85,13 +85,13 @@ export function CustomerList({ onViewCustomer, onCreateCustomer }: CustomerListP
             className="pl-9"
           />
         </div>
-        <Select value={schoolType} onValueChange={setSchoolType}>
+        <Select value={customerType} onValueChange={setCustomerType}>
           <SelectTrigger className="w-[120px]">
             <SelectValue placeholder="类型" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">全部类型</SelectItem>
-            {SCHOOL_TYPE_OPTIONS.map((t) => (
+            {CUSTOMER_TYPE_OPTIONS.map((t) => (
               <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>
             ))}
           </SelectContent>
@@ -143,12 +143,18 @@ export function CustomerList({ onViewCustomer, onCreateCustomer }: CustomerListP
                       <School className="w-4 h-4 text-muted-foreground" />
                       <span className="font-medium">{c.school_name}</span>
                     </div>
-                    {c.location && (
-                      <span className="text-xs text-muted-foreground ml-6">{c.location}</span>
+                    {c.location && (c.location.province || c.location.city) && (
+                      <span className="text-xs text-muted-foreground ml-6">
+                        {[c.location.province, c.location.city, c.location.district].filter(Boolean).join(" ")}
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <Badge variant="secondary" className="text-xs">{c.school_type}</Badge>
+                    <div className="flex flex-wrap gap-1">
+                      {(c.customer_types || []).map((t) => (
+                        <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>
+                      ))}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-center">{c.department_count}</td>
                   <td className="px-4 py-3 text-center">{c.module_count}</td>

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { SCHOOL_TYPE_OPTIONS, ALL_DEPARTMENTS } from "@/lib/case-center-constants";
+import { CUSTOMER_TYPE_OPTIONS, ALL_DEPARTMENTS } from "@/lib/case-center-constants";
 import { toast } from "sonner";
 import { CompareView } from "./compare-view";
 
@@ -22,9 +22,8 @@ interface StatsRow {
 interface RankingRow {
   school_id: string;
   school_name: string;
-  school_type: string;
-  province: string;
-  info_level: string;
+  customer_types: string[];
+  location: Record<string, string>;
   usage_rate: number;
   active_users: number;
   effect: string;
@@ -50,6 +49,7 @@ export function ProductCases() {
   const [department, setDepartment] = useState("all");
   const [module, setModule] = useState("all");
   const [schoolType, setSchoolType] = useState("all");
+  const customerType = schoolType;
   const [loading, setLoading] = useState(true);
 
   const [stats, setStats] = useState<StatsRow[]>([]);
@@ -66,7 +66,7 @@ export function ProductCases() {
       const params = new URLSearchParams();
       if (department !== "all") params.set("department_code", department);
       if (module !== "all") params.set("module_code", module);
-      if (schoolType !== "all") params.set("school_type", schoolType);
+      if (customerType !== "all") params.set("customer_type", customerType);
 
       const res = await fetch(`/api/case-center/product-cases?${params.toString()}`);
       if (res.ok) {
@@ -82,7 +82,7 @@ export function ProductCases() {
     } finally {
       setLoading(false);
     }
-  }, [department, module, schoolType]);
+  }, [department, module, customerType]);
 
   useEffect(() => {
     fetchData();
@@ -155,7 +155,7 @@ export function ProductCases() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">全部类型</SelectItem>
-            {SCHOOL_TYPE_OPTIONS.map((t) => (
+            {CUSTOMER_TYPE_OPTIONS.map((t) => (
               <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>
             ))}
           </SelectContent>
@@ -285,7 +285,7 @@ export function ProductCases() {
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-medium truncate">{r.school_name}</div>
                     <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                      <span>{r.school_type}</span>
+                      <span>{(r.customer_types || []).join(", ")}</span>
                       {r.module_name && <span>· {r.module_name}</span>}
                     </div>
                   </div>
@@ -343,10 +343,16 @@ export function ProductCases() {
                       <School className="w-3.5 h-3.5 text-muted-foreground" />
                       <span className="font-medium">{r.school_name}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground ml-5">{r.province}</span>
+                    <span className="text-xs text-muted-foreground ml-5">
+                      {r.location ? [r.location.province, r.location.city].filter(Boolean).join(" ") : ""}
+                    </span>
                   </td>
                   <td className="px-4 py-2">
-                    <Badge variant="secondary" className="text-xs">{r.school_type}</Badge>
+                    <div className="flex flex-wrap gap-1">
+                      {(r.customer_types || []).map((t) => (
+                        <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>
+                      ))}
+                    </div>
                   </td>
                   <td className="px-4 py-2 text-xs">{r.department_name}</td>
                   <td className="px-4 py-2 text-xs">{r.module_name}</td>

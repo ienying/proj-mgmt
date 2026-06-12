@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Pencil, FileText, History, Building2, Users, Target, AlertCircle, CheckCircle2, XCircle, Download, Play, FileText as FileIcon, Columns2 } from "lucide-react";
+import { ArrowLeft, Pencil, FileText, History, Building2, Users, Target, AlertCircle, CheckCircle2, XCircle, Download, Play, FileText as FileIcon, Columns2, MapPin, Wifi, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -16,10 +16,9 @@ import { WeeklyReportForm } from "./weekly-report-form";
 interface CustomerData {
   id: string;
   school_name: string;
+  customer_types: string[];
   school_type: string;
-  province: string;
-  city: string;
-  info_level: string;
+  location: Record<string, string>;
   description: string;
   hardware_info: Record<string, unknown>;
   network_info: Record<string, unknown>;
@@ -78,11 +77,16 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
   const [filterLandedOnly, setFilterLandedOnly] = useState(false);
   const [compareDepts, setCompareDepts] = useState<string[]>([]);
   const [showCompare, setShowCompare] = useState(false);
+  const [projectLocation, setProjectLocation] = useState<Record<string, string> | null>(null);
+  const [locationSynced, setLocationSynced] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/case-center/customers/${customerId}`);
+      const [res, projRes] = await Promise.all([
+        fetch(`/api/case-center/customers/${customerId}`),
+        fetch("/api/projects"),
+      ]);
       if (res.ok) {
         const { data } = await res.json();
         setCustomer(data.customer);
@@ -90,6 +94,35 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
         setModules(data.modules || []);
         if (data.departments?.length > 0) {
           setActiveDept(data.departments[0].department_code);
+        }
+
+        // 查找匹配项目，同步位置信息
+        if (projRes.ok) {
+          const projData = await projRes.json();
+          const projects = (projData.data || []) as Array<{
+            project_name: string;
+            customer_location: Record<string, string>;
+            longitude: string;
+            latitude: string;
+          }>;
+          const matched = projects.find(
+            (p) => p.project_name === data.customer.school_name
+          );
+          if (matched) {
+            setProjectLocation({
+              province: matched.customer_location?.province || "",
+              city: matched.customer_location?.city || "",
+              district: matched.customer_location?.district || "",
+              town: matched.customer_location?.town || "",
+              village: matched.customer_location?.village || "",
+              longitude: matched.longitude || "",
+              latitude: matched.latitude || "",
+            });
+            setLocationSynced(true);
+          } else {
+            setProjectLocation(null);
+            setLocationSynced(false);
+          }
         }
       }
     } catch {
@@ -163,7 +196,9 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
         <div className="flex items-center gap-2">
           <Building2 className="w-5 h-5 text-muted-foreground" />
           <h2 className="font-semibold text-lg">{customer.school_name}</h2>
-          <Badge variant="secondary">{customer.school_type}</Badge>
+          {(customer.customer_types || []).map((t) => (
+            <Badge key={t} variant="secondary">{t}</Badge>
+          ))}
         </div>
         <span className="text-xs text-muted-foreground">
           最后更新: {new Date(customer.updated_at).toLocaleDateString("zh-CN")}
@@ -330,7 +365,93 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
                 <p className="text-sm text-muted-foreground">{customer.description}</p>
               </div>
             )}
-            <p className="text-sm text-muted-foreground text-center py-8">
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              {/* 位置信息 */}
+              <Card>
+                <CardHeader className="py-2.5 px-4">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-muted-foreground" />
+                    <CardTitle className="text-sm">位置信息</CardTitle>
+                    {locationSynced && (
+                      <Badge variant="secondary" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
+                        来源于项目数据
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="px-4 pb-3 pt-0">
+                  {(() => {
+                    const loc = projectLocation || customer.location || {};
+                    const parts = [loc.province, loc.city, loc.district, loc.town, loc.village].filter(Boolean);
+                    return (
+                      <div className="space-y-1.5">
+                        <p className="text-sm">{parts.length > 0 ? parts.join(" / ") : "未设置"}</p>
+                        {(loc.longitude || loc.latitude) && (
+                          <p className="text-xs text-muted-foreground">
+                            经度: {loc.longitude || "-"} / 纬度: {loc.latitude || "-"}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+
+              {/* 硬件信息 */}
+              <Card>
+                <CardHeader className="py-2.5 px-4">
+                  <div className="flex items-center gap-2">
+                    <Server className="w-4 h-4 text-muted-foreground" />
+                    <CardTitle className="text-sm">硬件信息</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="px-4 pb-3 pt-0">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                    {(() => {
+                      const hw = (customer.hardware_info || {}) as Record<string, unknown>;
+                      const keys = ["总人数", "教师人数", "学生人数", "班级数量", "教室数量", "功能教室数量", "总面积", "宿舍楼栋数", "校区数量", "校门数量", "食堂数量", "二级学院数"];
+                      const items = keys.filter((k) => hw[k]).map((k) => ({ label: k, value: String(hw[k]) }));
+                      if (items.length === 0) return <span className="text-muted-foreground col-span-2">未设置</span>;
+                      return items.map((item) => (
+                        <div key={item.label} className="flex justify-between">
+                          <span className="text-muted-foreground">{item.label}</span>
+                          <span className="font-medium">{item.value}</span>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* 网络信息 */}
+              <Card className="md:col-span-2">
+                <CardHeader className="py-2.5 px-4">
+                  <div className="flex items-center gap-2">
+                    <Wifi className="w-4 h-4 text-muted-foreground" />
+                    <CardTitle className="text-sm">网络基础设施</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="px-4 pb-3 pt-0">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1 text-xs">
+                    {(() => {
+                      const nw = (customer.network_info || {}) as Record<string, unknown>;
+                      const keys = ["带宽", "服务器数量", "虚拟化平台", "存储", "数据库", "公网IP", "无线覆盖", "堡垒机", "内网IP段"];
+                      const items = keys.filter((k) => nw[k]).map((k) => ({ label: k, value: String(nw[k]) }));
+                      if (items.length === 0) return <span className="text-muted-foreground col-span-4">未设置</span>;
+                      return items.map((item) => (
+                        <div key={item.label} className="flex justify-between">
+                          <span className="text-muted-foreground">{item.label}</span>
+                          <span className="font-medium">{item.value}</span>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <p className="text-sm text-muted-foreground text-center py-4 border-t">
               选择一个科室 Tab 查看详细画像信息
             </p>
           </TabsContent>

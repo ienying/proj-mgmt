@@ -6,8 +6,8 @@ import { Badge } from "@/components/ui/badge";
 interface CompareSchool {
   school_id: string;
   school_name: string;
-  school_type: string;
-  province: string;
+  customer_types: string[];
+  location: Record<string, string>;
   usage_rate: number;
   active_users: number;
   effect: string;
@@ -23,8 +23,8 @@ interface CompareViewProps {
 
 export function CompareView({ schools, onClose }: CompareViewProps) {
   const metrics = [
-    { label: "学校类型", key: "school_type" as const },
-    { label: "省份", key: "province" as const },
+    { label: "客户类型", key: "customer_types" as const, format: (v: string[]) => (v || []).join(", ") },
+    { label: "位置", key: "location" as const, format: (v: Record<string, string>) => (v ? [v.province, v.city, v.district].filter(Boolean).join(" ") : "") },
     { label: "所属科室", key: "department_name" as const },
     { label: "模块名称", key: "module_name" as const },
     { label: "使用率", key: "usage_rate" as const, format: (v: number) => `${v}%` },
@@ -48,7 +48,9 @@ export function CompareView({ schools, onClose }: CompareViewProps) {
                 {schools.map((s) => (
                   <th key={s.school_id} className="text-center px-4 py-2 font-medium">
                     <div>{s.school_name}</div>
-                    <Badge variant="secondary" className="text-[10px] mt-0.5">{s.school_type}</Badge>
+                    {(s.customer_types || []).map((t) => (
+                      <Badge key={t} variant="secondary" className="text-[10px] mt-0.5 mr-0.5">{t}</Badge>
+                    ))}
                   </th>
                 ))}
               </tr>

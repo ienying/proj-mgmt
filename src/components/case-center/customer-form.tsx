@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Save, ChevronDown, ChevronUp, Plus, Trash2, Upload, X, Search } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { ArrowLeft, Save, ChevronDown, ChevronUp, Plus, Trash2, Upload, X, Search, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,11 +14,13 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import {
-  SCHOOL_TYPE_OPTIONS,
-  SCHOOL_TYPE_DEPARTMENTS,
+  CUSTOMER_TYPE_OPTIONS,
+  MULTI_SELECT_CUSTOMER_TYPES,
+  CUSTOMER_TYPE_DEPARTMENTS,
   ALL_DEPARTMENTS,
   MODULE_STATUS_OPTIONS,
   DEFAULT_MODULES_BY_DEPT,
+  PROVINCES,
 } from "@/lib/case-center-constants";
 import { toast } from "sonner";
 
@@ -123,9 +125,32 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
 
   // 基础信息
   const [schoolName, setSchoolName] = useState("");
-  const [schoolType, setSchoolType] = useState("中职");
-  const [location, setLocation] = useState("");
+  const [customerTypes, setCustomerTypes] = useState<string[]>(["中职"]);
   const [description, setDescription] = useState("");
+
+  // 位置信息（同步自项目管理页面创建新项目的数据）
+  const [province, setProvince] = useState("");
+  const [provinceOpen, setProvinceOpen] = useState(false);
+  const [city, setCity] = useState("");
+  const [district, setDistrict] = useState("");
+  const [town, setTown] = useState("");
+  const [village, setVillage] = useState("");
+  const [longitude, setLongitude] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [locationSynced, setLocationSynced] = useState(false);
+  const [syncedProjectName, setSyncedProjectName] = useState("");
+  const provinceRef = useRef<HTMLDivElement>(null);
+
+  // 关闭省份下拉的点击外部监听
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (provinceRef.current && !provinceRef.current.contains(e.target as Node)) {
+        setProvinceOpen(false);
+      }
+    };
+    if (provinceOpen) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [provinceOpen]);
 
   // 硬件/网络信息
   const [hardwareInfo, setHardwareInfo] = useState<Record<string, string>>({});
@@ -141,10 +166,51 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
   const [fetching, setFetching] = useState(false);
 
   // 下拉数据源
-  const [projectList, setProjectList] = useState<Array<{ id: string; project_name: string; project_type: string; location?: string }>>([]);
+  const [projectList, setProjectList] = useState<Array<{
+    id: string;
+    project_name: string;
+    customer_type: string;
+    customer_location: { province: string; city: string; district: string; town: string; village: string };
+    longitude: string;
+    latitude: string;
+  }>>([]);
   const [moduleTypeList, setModuleTypeList] = useState<Array<{ code: string; module_name: string }>>([]);
 
-  const applicableDepts = SCHOOL_TYPE_DEPARTMENTS[schoolType] || [];
+  // 从多个客户类型合并科室列表（去重保持顺序）
+  // 科室板块颜色映射（看板风格）
+  const DEPT_COLORS: Record<string, { bg: string; border: string; header: string; accent: string }> = {
+    school_leader:      { bg: "bg-slate-50 dark:bg-slate-950", border: "border-l-slate-400", header: "bg-slate-100 dark:bg-slate-900", accent: "bg-slate-500" },
+    academic_affairs:   { bg: "bg-blue-50 dark:bg-blue-950", border: "border-l-blue-400", header: "bg-blue-100 dark:bg-blue-900", accent: "bg-blue-500" },
+    teaching_research:  { bg: "bg-indigo-50 dark:bg-indigo-950", border: "border-l-indigo-400", header: "bg-indigo-100 dark:bg-indigo-900", accent: "bg-indigo-500" },
+    student_affairs:    { bg: "bg-emerald-50 dark:bg-emerald-950", border: "border-l-emerald-400", header: "bg-emerald-100 dark:bg-emerald-900", accent: "bg-emerald-500" },
+    it_center:          { bg: "bg-purple-50 dark:bg-purple-950", border: "border-l-purple-400", header: "bg-purple-100 dark:bg-purple-900", accent: "bg-purple-500" },
+    hr:                 { bg: "bg-amber-50 dark:bg-amber-950", border: "border-l-amber-400", header: "bg-amber-100 dark:bg-amber-900", accent: "bg-amber-500" },
+    finance:            { bg: "bg-green-50 dark:bg-green-950", border: "border-l-green-400", header: "bg-green-100 dark:bg-green-900", accent: "bg-green-500" },
+    logistics:          { bg: "bg-orange-50 dark:bg-orange-950", border: "border-l-orange-400", header: "bg-orange-100 dark:bg-orange-900", accent: "bg-orange-500" },
+    security:           { bg: "bg-red-50 dark:bg-red-950", border: "border-l-red-400", header: "bg-red-100 dark:bg-red-900", accent: "bg-red-500" },
+    admissions:         { bg: "bg-teal-50 dark:bg-teal-950", border: "border-l-teal-400", header: "bg-teal-100 dark:bg-teal-900", accent: "bg-teal-500" },
+    employment:         { bg: "bg-cyan-50 dark:bg-cyan-950", border: "border-l-cyan-400", header: "bg-cyan-100 dark:bg-cyan-900", accent: "bg-cyan-500" },
+    supervision:        { bg: "bg-rose-50 dark:bg-rose-950", border: "border-l-rose-400", header: "bg-rose-100 dark:bg-rose-900", accent: "bg-rose-500" },
+    psychology:         { bg: "bg-pink-50 dark:bg-pink-950", border: "border-l-pink-400", header: "bg-pink-100 dark:bg-pink-900", accent: "bg-pink-500" },
+    dormitory:          { bg: "bg-violet-50 dark:bg-violet-950", border: "border-l-violet-400", header: "bg-violet-100 dark:bg-violet-900", accent: "bg-violet-500" },
+    school_office:      { bg: "bg-stone-50 dark:bg-stone-950", border: "border-l-stone-400", header: "bg-stone-100 dark:bg-stone-900", accent: "bg-stone-500" },
+    grade_group:        { bg: "bg-lime-50 dark:bg-lime-950", border: "border-l-lime-400", header: "bg-lime-100 dark:bg-lime-900", accent: "bg-lime-500" },
+  };
+
+  const applicableDepts = (() => {
+    const seen = new Set<string>();
+    const merged: string[] = [];
+    for (const ct of customerTypes) {
+      const depts = CUSTOMER_TYPE_DEPARTMENTS[ct] || [];
+      for (const d of depts) {
+        if (!seen.has(d)) {
+          seen.add(d);
+          merged.push(d);
+        }
+      }
+    }
+    return merged;
+  })();
 
   // 加载项目列表和模块类型列表
   useEffect(() => {
@@ -156,12 +222,23 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
         ]);
         if (projRes.ok) {
           const { data } = await projRes.json();
-          setProjectList((data || []).map((p: Record<string, unknown>) => ({
-            id: p.id,
-            project_name: p.project_name,
-            project_type: p.project_type,
-            location: [p.province, p.city].filter(Boolean).join(" ") || (p.customer_info as Record<string, unknown>)?.location || "",
-          })));
+          setProjectList((data || []).map((p: Record<string, unknown>) => {
+            const loc = (p.customer_location as Record<string, string>) || {};
+            return {
+              id: p.id,
+              project_name: p.project_name,
+              customer_type: p.customer_type || "",
+              customer_location: {
+                province: loc.province || "",
+                city: loc.city || "",
+                district: loc.district || "",
+                town: loc.town || "",
+                village: loc.village || "",
+              },
+              longitude: (p.longitude as string) || "",
+              latitude: (p.latitude as string) || "",
+            };
+          }));
         }
         if (modRes.ok) {
           const { data } = await modRes.json();
@@ -175,9 +252,16 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
     fetchDropdownData();
   }, []);
 
-  // 初始化科室
-  const initDepartments = useCallback((type: string) => {
-    const deptNames = SCHOOL_TYPE_DEPARTMENTS[type] || [];
+  // 初始化科室（从多个客户类型合并）
+  const initDepartments = useCallback((types: string[]) => {
+    const seen = new Set<string>();
+    const deptNames: string[] = [];
+    for (const t of types) {
+      const names = CUSTOMER_TYPE_DEPARTMENTS[t] || [];
+      for (const n of names) {
+        if (!seen.has(n)) { seen.add(n); deptNames.push(n); }
+      }
+    }
     const newDepts: Record<string, DepartmentData> = {};
     const newModules: Record<string, ModuleFormData[]> = {};
     const newExpanded: Record<string, boolean> = {};
@@ -230,25 +314,101 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
   // 加载已有数据（编辑模式）
   useEffect(() => {
     if (!customerId) {
-      initDepartments(schoolType);
+      initDepartments(customerTypes);
       return;
     }
 
     setFetching(true);
-    fetch(`/api/case-center/customers/${customerId}`)
-      .then((res) => res.json())
-      .then(({ data }) => {
+    // 同时加载客户数据和项目列表，确保能同步最新位置
+    Promise.all([
+      fetch(`/api/case-center/customers/${customerId}`).then((res) => res.json()),
+      fetch("/api/projects").then((res) => res.json()),
+    ])
+      .then(([{ data }, projResult]) => {
         if (!data) return;
+
+        // 更新项目列表（用于位置同步）
+        if (projResult.data) {
+          setProjectList((projResult.data || []).map((p: Record<string, unknown>) => {
+            const loc = (p.customer_location as Record<string, string>) || {};
+            return {
+              id: p.id,
+              project_name: p.project_name,
+              customer_type: p.customer_type || "",
+              customer_location: {
+                province: loc.province || "",
+                city: loc.city || "",
+                district: loc.district || "",
+                town: loc.town || "",
+                village: loc.village || "",
+              },
+              longitude: (p.longitude as string) || "",
+              latitude: (p.latitude as string) || "",
+            };
+          }));
+        }
 
         const c = data.customer;
         setSchoolName(c.school_name || "");
-        setSchoolType(c.school_type || "中职");
-        setLocation(c.location || c.province || "");
+
+        // 查找匹配项目，优先使用项目最新位置
+        const allProjects = ((projResult.data || []) as Record<string, unknown>[]).map((p: Record<string, unknown>) => {
+          const loc = (p.customer_location as Record<string, string>) || {};
+          return {
+            id: p.id as string,
+            project_name: p.project_name as string,
+            customer_type: p.customer_type || "",
+            customer_location: {
+              province: loc.province || "",
+              city: loc.city || "",
+              district: loc.district || "",
+              town: loc.town || "",
+              village: loc.village || "",
+            },
+            longitude: (p.longitude as string) || "",
+            latitude: (p.latitude as string) || "",
+          };
+        });
+        const matchedProject = allProjects.find((p) => p.project_name === c.school_name);
+
+        const types = Array.isArray(c.customer_types) ? c.customer_types as string[] : [];
+        setCustomerTypes(types.length > 0 ? types : ["中职"]);
+
+        // 位置信息：优先使用项目最新数据
+        if (matchedProject) {
+          setProvince(matchedProject.customer_location.province || "");
+          setCity(matchedProject.customer_location.city || "");
+          setDistrict(matchedProject.customer_location.district || "");
+          setTown(matchedProject.customer_location.town || "");
+          setVillage(matchedProject.customer_location.village || "");
+          setLongitude(matchedProject.longitude || "");
+          setLatitude(matchedProject.latitude || "");
+          setLocationSynced(true);
+          setSyncedProjectName(matchedProject.project_name);
+        } else {
+          const loc = typeof c.location === "object" && c.location !== null ? c.location as Record<string, string> : {};
+          setProvince(loc.province || "");
+          setCity(loc.city || "");
+          setDistrict(loc.district || "");
+          setTown(loc.town || "");
+          setVillage(loc.village || "");
+          setLongitude(loc.longitude || "");
+          setLatitude(loc.latitude || "");
+          setLocationSynced(false);
+          setSyncedProjectName("");
+        }
         setDescription(c.description || "");
         setHardwareInfo(typeof c.hardware_info === "object" && c.hardware_info !== null ? c.hardware_info as Record<string, string> : {});
         setNetworkInfo(typeof c.network_info === "object" && c.network_info !== null ? c.network_info as Record<string, string> : {});
 
-        const deptNames = SCHOOL_TYPE_DEPARTMENTS[c.school_type] || [];
+        const loadedTypes: string[] = Array.isArray(c.customer_types) ? c.customer_types as string[] : (c.school_type ? [c.school_type as string] : ["中职"]);
+        const deptNames: string[] = [];
+        const deptSeen = new Set<string>();
+        for (const t of loadedTypes) {
+          for (const n of (CUSTOMER_TYPE_DEPARTMENTS[t] || [])) {
+            if (!deptSeen.has(n)) { deptSeen.add(n); deptNames.push(n); }
+          }
+        }
         const newDepts: Record<string, DepartmentData> = {};
         const newModules: Record<string, ModuleFormData[]> = {};
         const newExpanded: Record<string, boolean> = {};
@@ -329,21 +489,35 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
       .finally(() => setFetching(false));
   }, [customerId]);
 
-  // 切换学校类型
-  const handleSchoolTypeChange = (newType: string) => {
-    if (isEdit && schoolType !== newType) {
-      if (!confirm("更改学校类型将重新生成科室结构。已有数据中适配新类型的科室将保留，不适用的科室数据将丢失。确认继续？")) {
+  // 切换客户类型（多选 toggle）
+  const toggleCustomerType = (type: string) => {
+    if (isEdit) {
+      if (!confirm("更改客户类型将重新生成科室结构。已有数据中适配新类型的科室将保留，不适用的科室数据将丢失。确认继续？")) {
         return;
       }
     }
-    setSchoolType(newType);
+    if (MULTI_SELECT_CUSTOMER_TYPES.includes(type)) {
+      // 多选组：toggle 当前项
+      setCustomerTypes((prev) =>
+        prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+      );
+    } else {
+      // 单选组：点击已选中的取消，否则替换非多选组的选择
+      setCustomerTypes((prev) => {
+        const multiSelected = prev.filter((t) => MULTI_SELECT_CUSTOMER_TYPES.includes(t));
+        if (prev.includes(type)) {
+          return multiSelected.length > 0 ? multiSelected : prev.filter((t) => t !== type);
+        }
+        return [...multiSelected, type];
+      });
+    }
   };
 
   useEffect(() => {
-    if (!customerId || schoolType) {
-      initDepartments(schoolType);
+    if (!customerId || customerTypes.length > 0) {
+      initDepartments(customerTypes);
     }
-  }, [schoolType]);
+  }, [customerTypes]);
 
   // 更新科室字段
   const updateDepartment = (code: string, field: string, value: unknown) => {
@@ -464,8 +638,10 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             school_name: schoolName,
-            school_type: schoolType,
-            location,
+            customer_types: customerTypes,
+            location: {
+              province, city, district, town, village, longitude, latitude,
+            },
             description,
             hardware_info: hardwareInfo,
             network_info: networkInfo,
@@ -502,8 +678,10 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             school_name: schoolName,
-            school_type: schoolType,
-            location,
+            customer_types: customerTypes,
+            location: {
+              province, city, district, town, village, longitude, latitude,
+            },
             description,
             hardware_info: hardwareInfo,
             network_info: networkInfo,
@@ -613,9 +791,9 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col">
       {/* 顶部操作栏 */}
-      <div className="flex items-center justify-between px-4 py-3 border-b bg-card">
+      <div className="flex items-center justify-between px-4 py-3 border-b bg-card sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={onCancel}>
             <ArrowLeft className="w-4 h-4 mr-1" />
@@ -635,61 +813,171 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
       </div>
 
       {/* 表单内容 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="p-4 space-y-4">
         {/* 基础信息 */}
         <Card className="shadow-sm">
           <CardHeader className="py-3">
             <CardTitle className="text-base">基础信息</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">学校名称 *</Label>
-              <Select
-                value={schoolName}
-                onValueChange={(v) => {
-                  setSchoolName(v);
-                  const proj = projectList.find((p) => p.project_name === v);
-                  if (proj) {
-                    setSchoolType(proj.project_type);
-                    if (proj.location) setLocation(proj.location);
-                  }
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="选择已建项目学校..." /></SelectTrigger>
-                <SelectContent>
-                  {projectList.map((p) => (
-                    <SelectItem key={p.id} value={p.project_name}>{p.project_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {!isEdit && (
-                <p className="text-[11px] text-muted-foreground">来源于已建项目</p>
+          <CardContent className="space-y-4">
+            {/* 学校名称（搜索下拉） */}
+            <div className="flex items-start gap-4">
+              <div className="space-y-1.5 w-[300px]">
+                <Label className="text-xs">学校名称 *</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="h-9 w-full justify-between text-xs font-normal"
+                    >
+                      {schoolName || "搜索选择项目学校..."}
+                      <Search className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="搜索学校名称..."
+                        className="h-8 text-xs"
+                      />
+                      <CommandList className="max-h-[200px]">
+                        <CommandEmpty className="text-xs py-2 text-center">未找到匹配学校</CommandEmpty>
+                        <CommandGroup>
+                          {projectList.map((p) => (
+                            <CommandItem
+                              key={p.id}
+                              value={p.project_name}
+                              onSelect={() => {
+                                setSchoolName(p.project_name);
+                                if (p.customer_type && !isEdit) {
+                                  setCustomerTypes([p.customer_type]);
+                                }
+                                setProvince(p.customer_location.province || "");
+                                setCity(p.customer_location.city || "");
+                                setDistrict(p.customer_location.district || "");
+                                setTown(p.customer_location.town || "");
+                                setVillage(p.customer_location.village || "");
+                                setLongitude(p.longitude || "");
+                                setLatitude(p.latitude || "");
+                                setLocationSynced(true);
+                                setSyncedProjectName(p.project_name);
+                              }}
+                              className="text-xs"
+                            >
+                              <Check className={cn("mr-2 h-3.5 w-3.5", schoolName === p.project_name ? "opacity-100" : "opacity-0")} />
+                              {p.project_name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {!isEdit && (
+                  <p className="text-[11px] text-muted-foreground">来源于已建项目，自动带出位置信息</p>
+                )}
+              </div>
+
+              {/* 客户类型（多选） */}
+              <div className="space-y-1.5 flex-1">
+                <Label className="text-xs">客户类型</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {CUSTOMER_TYPE_OPTIONS.map((t) => {
+                    const selected = customerTypes.includes(t.code);
+                    const isMulti = MULTI_SELECT_CUSTOMER_TYPES.includes(t.code);
+                    return (
+                      <Badge
+                        key={t.code}
+                        variant={selected ? "default" : "outline"}
+                        className={cn(
+                          "cursor-pointer text-xs py-1 px-2 transition-colors",
+                          selected ? "hover:bg-primary/80" : "hover:bg-muted"
+                        )}
+                        onClick={() => toggleCustomerType(t.code)}
+                      >
+                        {t.name}
+                        {isMulti && selected && customerTypes.filter((ct) => MULTI_SELECT_CUSTOMER_TYPES.includes(ct)).length > 1 && (
+                          <span className="ml-1 opacity-70">({customerTypes.filter((ct) => MULTI_SELECT_CUSTOMER_TYPES.includes(ct)).indexOf(t.code) + 1})</span>
+                        )}
+                      </Badge>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  幼儿园/小学/初中/中职/高中 支持多选，其余单选
+                </p>
+              </div>
+            </div>
+
+            {/* 位置信息（同步自项目管理页面创建新项目的数据） */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Label className="text-xs">位置信息</Label>
+                {locationSynced && (
+                  <Badge variant="secondary" className="text-[10px] gap-1 bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
+                    <Check className="w-3 h-3" />
+                    来源于项目数据
+                  </Badge>
+                )}
+              </div>
+              {locationSynced && (
+                <p className="text-[11px] text-muted-foreground">
+                  位置数据同步自项目管理「{syncedProjectName}」的最新数据，自动更新。如需修改请前往项目管理页面。
+                </p>
               )}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="relative" ref={provinceRef}>
+                  <Input
+                    value={province}
+                    onChange={(e) => { if (!locationSynced) { setProvince(e.target.value); setProvinceOpen(true); } }}
+                    onFocus={() => { if (!locationSynced) setProvinceOpen(true); }}
+                    placeholder="省/自治区/直辖市"
+                    className={cn("h-8 pr-6 text-xs", locationSynced && "bg-muted/50 text-muted-foreground cursor-default")}
+                    readOnly={locationSynced}
+                  />
+                  {province && !locationSynced && (
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      onClick={() => { setProvince(""); setProvinceOpen(false); }}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {provinceOpen && !locationSynced && (
+                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-48 overflow-auto">
+                      {PROVINCES.filter((p) => !province || p.includes(province) || p.replace(/[省市自治区特别行政区壮族回族维吾尔]/g, "").includes(province)).map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                          onClick={() => { setProvince(p); setProvinceOpen(false); }}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                      {PROVINCES.filter((p) => !province || p.includes(province) || p.replace(/[省市自治区特别行政区壮族回族维吾尔]/g, "").includes(province)).length === 0 && (
+                        <div className="px-3 py-2 text-xs text-slate-400">无匹配结果</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="市" className={cn("h-8 text-xs", locationSynced && "bg-muted/50 text-muted-foreground")} readOnly={locationSynced} />
+                <Input value={district} onChange={(e) => setDistrict(e.target.value)} placeholder="区/县" className={cn("h-8 text-xs", locationSynced && "bg-muted/50 text-muted-foreground")} readOnly={locationSynced} />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <Input value={town} onChange={(e) => setTown(e.target.value)} placeholder="镇/乡" className={cn("h-8 text-xs", locationSynced && "bg-muted/50 text-muted-foreground")} readOnly={locationSynced} />
+                <Input value={village} onChange={(e) => setVillage(e.target.value)} placeholder="村" className={cn("h-8 text-xs", locationSynced && "bg-muted/50 text-muted-foreground")} readOnly={locationSynced} />
+                <div className="grid grid-cols-2 gap-3">
+                  <Input value={longitude} onChange={(e) => setLongitude(e.target.value)} placeholder="经度" className={cn("h-8 text-xs", locationSynced && "bg-muted/50 text-muted-foreground")} readOnly={locationSynced} />
+                  <Input value={latitude} onChange={(e) => setLatitude(e.target.value)} placeholder="纬度" className={cn("h-8 text-xs", locationSynced && "bg-muted/50 text-muted-foreground")} readOnly={locationSynced} />
+                </div>
+              </div>
             </div>
+
+            {/* 描述 */}
             <div className="space-y-1.5">
-              <Label className="text-xs">学校类型</Label>
-              <Select value={schoolType} onValueChange={handleSchoolTypeChange}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {SCHOOL_TYPE_OPTIONS.map((t) => (
-                    <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {!isEdit && (
-                <p className="text-[11px] text-muted-foreground">选择项目后自动带出</p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">位置信息</Label>
-              <Input
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="如：浙江 金华"
-                className="h-9 text-xs"
-              />
-            </div>
-            <div className="space-y-1.5 md:col-span-3">
               <Label className="text-xs">描述</Label>
               <Textarea
                 value={description}
@@ -786,10 +1074,6 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                   <Input className="h-8 text-xs" value={networkInfo["公网IP"] || ""} onChange={(e) => setNetworkInfo((prev) => ({ ...prev, "公网IP": e.target.value }))} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">内网IP段</Label>
-                  <Input className="h-8 text-xs" value={networkInfo["内网IP段"] || ""} onChange={(e) => setNetworkInfo((prev) => ({ ...prev, "内网IP段": e.target.value }))} />
-                </div>
-                <div className="space-y-1.5">
                   <Label className="text-xs">无线覆盖</Label>
                   <Select value={networkInfo["无线覆盖"] || ""} onValueChange={(v) => setNetworkInfo((prev) => ({ ...prev, "无线覆盖": v }))}>
                     <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="选择..." /></SelectTrigger>
@@ -810,6 +1094,10 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">内网IP段</Label>
+                  <Input className="h-8 text-xs" value={networkInfo["内网IP段"] || ""} onChange={(e) => setNetworkInfo((prev) => ({ ...prev, "内网IP段": e.target.value }))} />
+                </div>
               </div>
             </div>
           </CardContent>
@@ -825,26 +1113,31 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
 
           if (!dept) return null;
 
+          const colors = DEPT_COLORS[code] || DEPT_COLORS.school_leader;
+
           return (
             <Collapsible
               key={code}
               open={isExpanded}
               onOpenChange={(open) => setExpandedDepts((prev) => ({ ...prev, [code]: open }))}
             >
-              <Card>
+              <Card className={cn("border-l-4 shadow-sm transition-colors", colors.bg, colors.border)}>
                 <CollapsibleTrigger className="w-full">
-                  <CardHeader className="py-3 cursor-pointer hover:bg-muted/30 transition-colors">
+                  <CardHeader className={cn("py-3 cursor-pointer transition-colors rounded-tr-lg", colors.header)}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         {code === "school_leader" ? (
                           <CardTitle className="text-base">{deptName}</CardTitle>
                         ) : (
-                          <Input
-                            className="h-8 w-40 text-base font-semibold"
-                            value={dept.department_name}
-                            onChange={(e) => updateDepartment(code, "department_name", e.target.value)}
-                            onClick={(ev) => ev.stopPropagation()}
-                          />
+                          <div className="flex items-center gap-1.5">
+                            <div className={cn("w-2 h-2 rounded-full", colors.accent)} />
+                            <Input
+                              className="h-8 w-40 text-base font-semibold border-0 bg-transparent focus-visible:ring-1 px-1"
+                              value={dept.department_name}
+                              onChange={(e) => updateDepartment(code, "department_name", e.target.value)}
+                              onClick={(ev) => ev.stopPropagation()}
+                            />
+                          </div>
                         )}
                         <Badge variant="secondary" className="text-xs">
                           {deptModules.length} 个模块
@@ -961,91 +1254,94 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                       </div>
                       <div className="space-y-2">
                         {deptModules.map((mod, mi) => (
-                          <div key={mi} className="border rounded-lg p-3 bg-background">
-                            <div className="flex items-start gap-3">
-                              <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-2">
+                          <div key={mi} className={cn("border rounded-lg p-3 relative", colors.bg, "border-l-2 border-l-slate-300 dark:border-l-slate-600")}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="absolute top-2 right-2 h-7 w-7 z-10"
+                              onClick={() => removeModule(code, mi)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                            </Button>
+                            {/* Row 1: 模块名称 + 状态 */}
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <Label className="text-[11px]">模块名称</Label>
+                                <ModuleSearchSelect
+                                  value={mod.module_name}
+                                  onChange={(name) => {
+                                    updateModule(code, mi, "module_name", name);
+                                    updateModule(code, mi, "module_code", name);
+                                  }}
+                                  options={moduleTypeList}
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[11px]">状态</Label>
+                                <Select
+                                  value={mod.status}
+                                  onValueChange={(v) => updateModule(code, mi, "status", v)}
+                                >
+                                  <SelectTrigger className="h-8 w-full text-xs">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {MODULE_STATUS_OPTIONS.map((s) => (
+                                      <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+
+                            {/* Row 2 (已落地): 使用率 + 活跃用户 */}
+                            {mod.status === "已落地" && (
+                              <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1">
-                                  <Label className="text-[11px]">模块名称</Label>
-                                  <ModuleSearchSelect
-                                    value={mod.module_name}
-                                    onChange={(name) => {
-                                      updateModule(code, mi, "module_name", name);
-                                      updateModule(code, mi, "module_code", name);
-                                    }}
-                                    options={moduleTypeList}
+                                  <Label className="text-[11px]">使用率(%)</Label>
+                                  <Input
+                                    className="h-8 text-xs"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    value={mod.usage_rate}
+                                    onChange={(e) => updateModule(code, mi, "usage_rate", Number(e.target.value))}
                                   />
                                 </div>
                                 <div className="space-y-1">
-                                  <Label className="text-[11px]">状态</Label>
-                                  <Select
-                                    value={mod.status}
-                                    onValueChange={(v) => updateModule(code, mi, "status", v)}
-                                  >
-                                    <SelectTrigger className="h-8 text-xs">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {MODULE_STATUS_OPTIONS.map((s) => (
-                                        <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                  <Label className="text-[11px]">活跃用户</Label>
+                                  <Input
+                                    className="h-8 text-xs"
+                                    type="number"
+                                    min="0"
+                                    value={mod.active_users}
+                                    onChange={(e) => updateModule(code, mi, "active_users", Number(e.target.value))}
+                                  />
                                 </div>
-                                {mod.status === "已落地" && (
-                                  <>
-                                    <div className="space-y-1">
-                                      <Label className="text-[11px]">使用率(%)</Label>
-                                      <Input
-                                        className="h-8 text-xs"
-                                        type="number"
-                                        min="0"
-                                        max="100"
-                                        value={mod.usage_rate}
-                                        onChange={(e) => updateModule(code, mi, "usage_rate", Number(e.target.value))}
-                                      />
-                                    </div>
-                                    <div className="space-y-1">
-                                      <Label className="text-[11px]">活跃用户</Label>
-                                      <Input
-                                        className="h-8 text-xs"
-                                        type="number"
-                                        min="0"
-                                        value={mod.active_users}
-                                        onChange={(e) => updateModule(code, mi, "active_users", Number(e.target.value))}
-                                      />
-                                    </div>
-                                  </>
-                                )}
-                                {mod.status === "未购" && (
-                                  <div className="space-y-1">
-                                    <Label className="text-[11px]">当前替代做法</Label>
-                                    <Textarea
-                                      className="min-h-[60px] text-xs"
-                                      value={mod.current_practice}
-                                      onChange={(e) => updateModule(code, mi, "current_practice", e.target.value)}
-                                    />
-                                  </div>
-                                )}
                               </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 shrink-0"
-                                onClick={() => removeModule(code, mi)}
-                              >
-                                <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                              </Button>
-                            </div>
+                            )}
 
-                            {/* 效果/问题 */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                            {/* Row 2 (未购): 当前替代做法 */}
+                            {mod.status === "未购" && (
+                              <div className="space-y-1">
+                                <Label className="text-[11px]">当前替代做法</Label>
+                                <Textarea
+                                  className="min-h-[70px] text-xs"
+                                  value={mod.current_practice}
+                                  onChange={(e) => updateModule(code, mi, "current_practice", e.target.value)}
+                                />
+                              </div>
+                            )}
+
+                            {/* Row 3: 效果/原因 + 问题 */}
+                            <div className="grid grid-cols-2 gap-3">
                               <div className="space-y-1">
                                 <Label className="text-[11px]">
                                   {mod.status === "已落地" ? "落地效果" : mod.status === "未落地" ? "未落地原因" : "备注"}
                                 </Label>
-                                <Input
-                                  className="h-8 text-xs"
-                                  value={mod.status === "未购" ? mod.current_practice : (mod.status === "已落地" ? mod.effect : mod.issues)}
+                                <Textarea
+                                  className="min-h-[70px] text-xs"
+                                  value={mod.status === "已落地" ? mod.effect : mod.status === "未落地" ? mod.issues : mod.current_practice}
                                   onChange={(e) => {
                                     if (mod.status === "已落地") updateModule(code, mi, "effect", e.target.value);
                                     else if (mod.status === "未落地") updateModule(code, mi, "issues", e.target.value);
@@ -1055,8 +1351,8 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                               </div>
                               <div className="space-y-1">
                                 <Label className="text-[11px]">问题</Label>
-                                <Input
-                                  className="h-8 text-xs"
+                                <Textarea
+                                  className="min-h-[70px] text-xs"
                                   value={mod.issues}
                                   onChange={(e) => updateModule(code, mi, "issues", e.target.value)}
                                 />
@@ -1140,7 +1436,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
       </div>
 
       {/* 底部操作栏 */}
-      <div className="flex items-center justify-end gap-2 px-4 py-3 border-t bg-card">
+      <div className="flex items-center justify-end gap-2 px-4 py-3 border-t bg-card sticky bottom-0 z-10">
         <Button variant="outline" onClick={onCancel}>取消</Button>
         <Button onClick={handleSubmit} disabled={loading}>
           <Save className="w-4 h-4 mr-1" />

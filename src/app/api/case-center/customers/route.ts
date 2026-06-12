@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
-import { SCHOOL_TYPE_DEPARTMENTS, ALL_DEPARTMENTS } from "@/lib/case-center-constants";
+import { CUSTOMER_TYPE_DEPARTMENTS, ALL_DEPARTMENTS } from "@/lib/case-center-constants";
 
 // GET /api/case-center/customers — 客户列表（支持搜索/筛选）
 export async function GET(request: NextRequest) {
@@ -8,21 +8,21 @@ export async function GET(request: NextRequest) {
     const client = await createServerClient();
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q") || "";
-    const schoolType = searchParams.get("school_type") || "";
-    const location = searchParams.get("location") || "";
+    const customerType = searchParams.get("customer_type") || "";
+    const locationQuery = searchParams.get("location") || "";
 
     let conditions: string[] = [];
     if (q) {
       const safeQ = q.replace(/'/g, "''");
       conditions.push(`c.school_name ILIKE '%${safeQ}%'`);
     }
-    if (schoolType) {
-      const safeType = schoolType.replace(/'/g, "''");
-      conditions.push(`c.school_type = '${safeType}'`);
+    if (customerType) {
+      const safeType = customerType.replace(/'/g, "''");
+      conditions.push(`c.customer_types @> to_jsonb(ARRAY['${safeType}'])`);
     }
-    if (location) {
-      const safeLocation = location.replace(/'/g, "''");
-      conditions.push(`c.location ILIKE '%${safeLocation}%'`);
+    if (locationQuery) {
+      const safeLocation = locationQuery.replace(/'/g, "''");
+      conditions.push(`(c.location->>'province' ILIKE '%${safeLocation}%' OR c.location->>'city' ILIKE '%${safeLocation}%')`);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -56,17 +56,17 @@ export async function POST(request: NextRequest) {
   try {
     const client = await createServerClient();
     const body = await request.json();
-    const { school_name, school_type, location, description } = body;
+    const { school_name, customer_types, location, description } = body;
 
-    if (!school_name || !school_type) {
-      return NextResponse.json({ error: "学校名称和类型为必填项" }, { status: 400 });
+    if (!school_name || !customer_types || !Array.isArray(customer_types) || customer_types.length === 0) {
+      return NextResponse.json({ error: "学校名称和客户类型为必填项" }, { status: 400 });
     }
 
     // 1. 插入客户
     const customerData: Record<string, unknown> = {
       school_name,
-      school_type,
-      location: location || "",
+      customer_types: customer_types,
+      location: location || {},
       description: description || "",
       hardware_info: body.hardware_info || {},
       network_info: body.network_info || {},
@@ -84,17 +84,25 @@ export async function POST(request: NextRequest) {
 
     const customerId = (customer as Record<string, unknown>).id as string;
 
-    // 2. 根据学校类型自动生成科室
-    const deptNames = SCHOOL_TYPE_DEPARTMENTS[school_type] || [];
-    const departmentRecords = deptNames.map((name, index) => {
-      const deptDef = ALL_DEPARTMENTS.find((d) => d.name === name);
-      return {
-        customer_id: customerId,
-        department_code: deptDef?.code || name,
-        department_name: name,
-        sort_order: index,
-      };
-    });
+    // 2. 根据客户类型合并生成科室
+    const deptSeen = new Set<string>();
+    const deptList: { name: string; code: string }[] = [];
+    for (const ct of customer_types) {
+      const names = CUSTOMER_TYPE_DEPARTMENTS[ct] || [];
+      for (const name of names) {
+        if (!deptSeen.has(name)) {
+          deptSeen.add(name);
+          const deptDef = ALL_DEPARTMENTS.find((d) => d.name === name);
+          deptList.push({ name, code: deptDef?.code || name });
+        }
+      }
+    }
+    const departmentRecords = deptList.map((d, index) => ({
+      customer_id: customerId,
+      department_code: d.code,
+      department_name: d.name,
+      sort_order: index,
+    }));
 
     for (const dept of departmentRecords) {
       await client.rpc("dp_insert", {
