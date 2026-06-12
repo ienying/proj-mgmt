@@ -84,7 +84,7 @@ function DockNavItem({
     >
       {/* 选中指示点 */}
       {active && (
-        <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-sky-500" />
+        <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-blue-500" />
       )}
       <div
         className={cn(
@@ -249,8 +249,8 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
 
   return (
     <div className="flex flex-col h-full">
-      {/* 顶部栏 */}
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b bg-card">
+      {/* 顶部栏 — 左对齐与内容区一致 (80px dock + 16px padding) */}
+      <div className="flex items-center gap-3 pl-[96px] pr-4 py-2.5 border-b bg-card">
         <div className="flex items-center gap-2">
           <Building2 className="w-5 h-5 text-muted-foreground" />
           <h2 className="font-semibold text-lg">{customer.school_name}</h2>
@@ -280,9 +280,9 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
       {/* 主体：Dock 侧栏 + 内容区（flex 布局，Dock 占据空间不遮挡） */}
       <div className="flex-1 flex overflow-hidden">
         {/* 左侧 Dock 栏 */}
-        <div className="w-[80px] flex-shrink-0 flex items-center py-1 bg-gradient-to-r from-sky-100/60 to-sky-50/30 dark:from-sky-950/40 dark:to-sky-950/10">
+        <div className="w-[80px] flex-shrink-0 flex items-center py-1 bg-gradient-to-r from-blue-100/60 to-blue-50/30 dark:from-blue-950/40 dark:to-blue-950/10">
           <div className="flex flex-col items-center w-full">
-            <div className="flex flex-col items-center gap-0.5 bg-sky-200/60 dark:bg-sky-800/50 backdrop-blur-xl rounded-[16px] shadow-lg shadow-sky-300/30 dark:shadow-black/30 border border-sky-300/40 dark:border-sky-600/30 p-1.5">
+            <div className="flex flex-col items-center gap-0.5 bg-blue-200/60 dark:bg-blue-800/50 backdrop-blur-xl rounded-[16px] shadow-lg shadow-blue-300/30 dark:shadow-black/30 border border-blue-300/40 dark:border-blue-600/30 p-1.5">
               {/* 返回 */}
               <DockNavItem
                 icon={<ArrowLeft className="w-4 h-4" />}
@@ -290,7 +290,7 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
                 onClick={onBack}
               />
 
-              <div className="w-10 h-px bg-sky-300/30 dark:bg-sky-600/30 my-0.5" />
+              <div className="w-10 h-px bg-blue-300/30 dark:bg-blue-600/30 my-0.5" />
 
               {/* 总览 */}
               <DockNavItem
@@ -300,7 +300,7 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
                 onClick={() => setActiveDept("overview")}
               />
 
-              <div className="w-10 h-px bg-sky-200/30 dark:bg-sky-600/20 my-0.5" />
+              <div className="w-10 h-px bg-blue-200/30 dark:bg-blue-600/20 my-0.5" />
 
               {/* 科室 */}
               {departments.map((dept) => {
