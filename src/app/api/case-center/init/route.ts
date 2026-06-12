@@ -81,9 +81,15 @@ export async function POST() {
         UNIQUE(customer_id, report_week, created_by)
       );
 
-      -- 迁移旧字段（school_type → customer_types）
+      -- 迁移：确保 customer_types 列存在（兼容旧表无此列的情况）
       DO $$
       BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'design_case_center' AND table_name = 'customers' AND column_name = 'customer_types'
+        ) THEN
+          ALTER TABLE design_case_center.customers ADD COLUMN customer_types JSONB DEFAULT '[]'::jsonb;
+        END IF;
         IF EXISTS (
           SELECT 1 FROM information_schema.columns
           WHERE table_schema = 'design_case_center' AND table_name = 'customers' AND column_name = 'school_type'
@@ -93,14 +99,23 @@ export async function POST() {
             WHERE customer_types IS NULL OR customer_types = '[]'::jsonb;
           ALTER TABLE design_case_center.customers DROP COLUMN IF EXISTS school_type;
         END IF;
-        IF EXISTS (
+        IF NOT EXISTS (
           SELECT 1 FROM information_schema.columns
           WHERE table_schema = 'design_case_center' AND table_name = 'customers' AND column_name = 'location'
-            AND data_type NOT IN ('jsonb', 'json')
         ) THEN
-          UPDATE design_case_center.customers
-            SET location = jsonb_build_object('province', location)
-            WHERE location IS NOT NULL AND location::text <> '' AND NOT location::text ~ '^\{';
+          ALTER TABLE design_case_center.customers ADD COLUMN location JSONB DEFAULT '{}'::jsonb;
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'design_case_center' AND table_name = 'customers' AND column_name = 'hardware_info'
+        ) THEN
+          ALTER TABLE design_case_center.customers ADD COLUMN hardware_info JSONB DEFAULT '{}'::jsonb;
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'design_case_center' AND table_name = 'customers' AND column_name = 'network_info'
+        ) THEN
+          ALTER TABLE design_case_center.customers ADD COLUMN network_info JSONB DEFAULT '{}'::jsonb;
         END IF;
       END $$;
       CREATE INDEX IF NOT EXISTS idx_customer_modules_customer ON design_case_center.customer_modules(customer_id);

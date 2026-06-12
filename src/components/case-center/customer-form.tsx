@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ArrowLeft, Save, ChevronDown, ChevronUp, Plus, Trash2, Upload, X, Search, Check } from "lucide-react";
+import { ArrowLeft, Save, ChevronDown, ChevronUp, Plus, Trash2, Upload, X, Search, Check, Download, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,6 +23,7 @@ import {
   PROVINCES,
 } from "@/lib/case-center-constants";
 import { toast } from "sonner";
+import * as XLSX from "xlsx";
 
 interface DepartmentData {
   id?: string;
@@ -164,6 +165,131 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
 
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 下载模板
+  const handleDownloadTemplate = useCallback(() => {
+    const a = document.createElement("a");
+    a.href = "/api/case-center/template";
+    a.download = "画像录入模板.xlsx";
+    a.click();
+  }, []);
+
+  // 导入 Excel
+  const handleImportExcel = useCallback(async (file: File) => {
+    try {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data, { type: "array" });
+
+      // Sheet 1: 基础信息与位置
+      const basicSheet = wb.Sheets["基础信息与位置"];
+      if (basicSheet) {
+        const rows = XLSX.utils.sheet_to_json<string[]>(basicSheet, { header: 1 });
+        if (rows.length > 1) {
+          const r = rows[1] as string[];
+          if (r[0] && r[0] !== "示例：北京电子信息学校") setSchoolName(String(r[0] || ""));
+          if (r[1]) setCustomerTypes(String(r[1]).split(/[,，、]/).map((s) => s.trim()).filter(Boolean));
+          if (r[2]) setDescription(String(r[2] || ""));
+          setProvince(String(r[3] || ""));
+          setCity(String(r[4] || ""));
+          setDistrict(String(r[5] || ""));
+          setTown(String(r[6] || ""));
+          setVillage(String(r[7] || ""));
+          setLongitude(String(r[8] || ""));
+          setLatitude(String(r[9] || ""));
+          setLocationSynced(false);
+          setSyncedProjectName("");
+        }
+      }
+
+      // Sheet 2: 硬件与网络信息
+      const hwSheet = wb.Sheets["硬件与网络信息"];
+      if (hwSheet) {
+        const rows = XLSX.utils.sheet_to_json<string[]>(hwSheet, { header: 1 });
+        if (rows.length > 1) {
+          const r = rows[1] as string[];
+          const hw: Record<string, string> = {};
+          const hwKeys = ["总人数","教师人数","学生人数","班级数量","教室数量","功能教室数量","总面积","宿舍楼栋数","校区数量","校门数量","食堂数量","二级学院数"];
+          const nw: Record<string, string> = {};
+          const nwKeys = ["带宽","服务器数量","虚拟化平台","存储","数据库","公网IP","无线覆盖","堡垒机","内网IP段"];
+
+          hwKeys.forEach((k, i) => { if (r[i] !== undefined && r[i] !== "") hw[k] = String(r[i]); });
+          nwKeys.forEach((k, i) => { const v = r[12 + i]; if (v !== undefined && v !== "") nw[k] = String(v); });
+
+          setHardwareInfo(hw);
+          setNetworkInfo(nw);
+        }
+      }
+
+      // Sheet 3: 科室业务
+      const deptSheet = wb.Sheets["科室业务"];
+      const deptNameToCode: Record<string, string> = {};
+      if (deptSheet) {
+        const rows = XLSX.utils.sheet_to_json<string[]>(deptSheet, { header: 1 });
+        const newDepts: Record<string, typeof departments[string]> = { ...departments };
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i] as string[];
+          if (!r[0]) continue;
+          const name = String(r[0]).trim();
+          const deptDef = ALL_DEPARTMENTS.find((d) => d.name === name);
+          const code = deptDef?.code || name;
+          deptNameToCode[name] = code;
+          newDepts[code] = {
+            department_code: code,
+            department_name: name,
+            daily_work: String(r[1] || ""),
+            workflow: String(r[2] || ""),
+            pain_points: String(r[3] || ""),
+            tools: String(r[4] || ""),
+            expectations: String(r[5] || ""),
+            department_summary: String(r[6] || ""),
+            personnel: [
+              { name: String(r[7] || ""), role: String(r[8] || ""), phone: String(r[9] || ""), attitude: String(r[10] || "") },
+              { name: String(r[11] || ""), role: String(r[12] || ""), phone: String(r[13] || ""), attitude: String(r[14] || "") },
+            ].filter((p) => p.name),
+          };
+        }
+        setDepartments(newDepts);
+      }
+
+      // Sheet 4: 模块状态
+      const modSheet = wb.Sheets["模块状态"];
+      if (modSheet) {
+        const rows = XLSX.utils.sheet_to_json<string[]>(modSheet, { header: 1 });
+        const newModules: Record<string, typeof modules[string]> = { ...modules };
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i] as string[];
+          if (!r[0] || !r[1]) continue;
+          const deptName = String(r[0]).trim();
+          const code = deptNameToCode[deptName] || ALL_DEPARTMENTS.find((d) => d.name === deptName)?.code || deptName;
+          if (!newModules[code]) newModules[code] = [];
+          const statuses = ["已落地", "未落地", "未购"];
+          const rawStatus = String(r[2] || "").trim();
+          const status = statuses.includes(rawStatus) ? rawStatus : "未购";
+          newModules[code].push({
+            module_code: String(r[1] || ""),
+            module_name: String(r[1] || ""),
+            status,
+            usage_rate: Number(r[3]) || 0,
+            active_users: Number(r[4]) || 0,
+            effect: status === "已落地" ? String(r[5] || "") : "",
+            issues: String(r[6] || ""),
+            current_practice: status === "未购" ? String(r[7] || "") : "",
+            collaborating_departments: [] as string[],
+            materials: [] as Array<{ key: string; name: string; size: number }>,
+          });
+        }
+        setModules(newModules);
+      }
+
+      toast.success("Excel 导入成功，请检查并补充数据后保存");
+    } catch {
+      toast.error("Excel 解析失败，请确认文件格式正确");
+    } finally {
+      // 重置 file input 以便重复选择同一文件
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, [departments, modules]);
 
   // 下拉数据源
   const [projectList, setProjectList] = useState<Array<{
@@ -218,7 +344,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
       try {
         const [projRes, modRes] = await Promise.all([
           fetch("/api/projects"),
-          fetch("/api/module-types"),
+          fetch("/api/dicts?type=product_module_types"),
         ]);
         if (projRes.ok) {
           const { data } = await projRes.json();
@@ -242,10 +368,16 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
         }
         if (modRes.ok) {
           const { data } = await modRes.json();
-          setModuleTypeList((data || []).map((m: Record<string, unknown>) => ({
-            code: m.code || m.module_code,
-            module_name: m.module_name || m.product_name || m.code,
-          })).filter((m: { module_name: string }) => m.module_name));
+          // 去重：多个产品可能共享同一模块名称
+          const seen = new Set<string>();
+          setModuleTypeList((data || []).map((m: Record<string, unknown>) => {
+            const name = (m.module_name as string) || (m.product_name as string) || "";
+            return { code: name, module_name: name };
+          }).filter((m: { module_name: string }) => {
+            if (!m.module_name || seen.has(m.module_name)) return false;
+            seen.add(m.module_name);
+            return true;
+          }));
         }
       } catch { /* ignore */ }
     };
@@ -633,7 +765,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
 
       if (isEdit && cid) {
         // 更新基本信息
-        await fetch(`/api/case-center/customers/${cid}`, {
+        const updateRes = await fetch(`/api/case-center/customers/${cid}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -647,6 +779,11 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
             network_info: networkInfo,
           }),
         });
+
+        if (!updateRes.ok) {
+          const errData = await updateRes.json().catch(() => ({}));
+          throw new Error(errData.error || "更新失败");
+        }
 
         // 更新科室业务字段（含可编辑的科室名称）
         const buildDeptPayload = (depts: Record<string, DepartmentData>) =>
@@ -689,7 +826,10 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
           }),
         });
 
-        if (!res.ok) throw new Error("创建失败");
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || "创建失败");
+        }
         const { data } = await res.json();
         cid = data.id;
 
@@ -802,6 +942,28 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
           <h2 className="font-semibold text-lg">{isEdit ? "编辑画像" : "新建画像"}</h2>
         </div>
         <div className="flex items-center gap-2">
+          {!isEdit && (
+            <>
+              <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
+                <Download className="w-4 h-4 mr-1" />
+                下载模板
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                <FileSpreadsheet className="w-4 h-4 mr-1" />
+                导入Excel
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleImportExcel(file);
+                }}
+              />
+            </>
+          )}
           <Button variant="outline" size="sm" onClick={onCancel}>
             取消
           </Button>
