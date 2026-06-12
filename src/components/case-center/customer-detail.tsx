@@ -79,7 +79,7 @@ function DockNavItem({
   return (
     <button
       onClick={onClick}
-      className="relative flex flex-col items-center py-1 px-1 w-full transition-all duration-200 group"
+      className="relative flex flex-col items-center py-0.5 px-1 w-full transition-all duration-200 group"
       title={label}
     >
       {/* 选中指示点 */}
@@ -282,7 +282,7 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
         {/* 左侧 Dock 栏 */}
         <div className="w-[100px] flex-shrink-0 flex items-center py-1 bg-gradient-to-r from-blue-100/60 to-blue-50/30 dark:from-blue-950/40 dark:to-blue-950/10">
           <div className="flex flex-col items-start pl-1 w-full">
-            <div className="flex flex-col items-center gap-0.5 bg-blue-200/60 dark:bg-blue-800/50 backdrop-blur-xl rounded-[16px] shadow-lg shadow-blue-300/30 dark:shadow-black/30 border border-blue-300/40 dark:border-blue-600/30 p-1.5">
+            <div className="flex flex-col items-center gap-[2px] bg-blue-200/60 dark:bg-blue-800/50 backdrop-blur-xl rounded-[16px] shadow-lg shadow-blue-300/30 dark:shadow-black/30 border border-blue-300/40 dark:border-blue-600/30 p-1">
               {/* 返回 */}
               <DockNavItem
                 icon={<ArrowLeft className="w-4 h-4" />}
@@ -290,7 +290,7 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
                 onClick={onBack}
               />
 
-              <div className="w-10 h-px bg-blue-300/30 dark:bg-blue-600/30 my-0.5" />
+              <div className="w-8 h-px bg-blue-300/30 dark:bg-blue-600/30 my-0.5" />
 
               {/* 总览 */}
               <DockNavItem
@@ -300,7 +300,7 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
                 onClick={() => setActiveDept("overview")}
               />
 
-              <div className="w-10 h-px bg-blue-200/30 dark:bg-blue-600/20 my-0.5" />
+              <div className="w-8 h-px bg-blue-200/30 dark:bg-blue-600/20 my-0.5" />
 
               {/* 科室 */}
               {departments.map((dept) => {
@@ -332,7 +332,7 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
                 );
               })}
 
-              <div className="w-10 h-px bg-blue-200/30 dark:bg-blue-600/20 my-0.5" />
+              <div className="w-8 h-px bg-blue-200/30 dark:bg-blue-600/20 my-0.5" />
 
               {/* 版本 / 周报 */}
               <DockNavItem
