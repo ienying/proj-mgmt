@@ -79,12 +79,12 @@ function DockNavItem({
   return (
     <button
       onClick={onClick}
-      className="relative flex flex-col items-center gap-0.5 py-1 px-1 w-full transition-all duration-200 group"
+      className="relative flex flex-col items-center py-0.5 px-1 w-full transition-all duration-200 group"
       title={label}
     >
       {/* 选中指示点 */}
       {active && (
-        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-sky-500 shadow-sm shadow-sky-400" />
+        <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-sky-500" />
       )}
       <div
         className={cn(
@@ -99,13 +99,13 @@ function DockNavItem({
         {/* 状态圆点 */}
         {dotColor && (
           <div className={cn(
-            "absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-zinc-300",
+            "absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-white dark:border-zinc-300",
             dotColor
           )} />
         )}
       </div>
       <span className={cn(
-        "text-[10px] leading-tight text-center truncate w-full",
+        "text-[9px] leading-none text-center truncate w-full",
         active ? "text-sky-700 dark:text-sky-200 font-bold" : "text-slate-500 dark:text-slate-300"
       )}>
         {label.length > 3 ? label.slice(0, 3) : label}
@@ -280,12 +280,12 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
       {/* 主体：Dock 侧栏 + 内容区（flex 布局，Dock 占据空间不遮挡） */}
       <div className="flex-1 flex overflow-hidden">
         {/* 左侧 Dock 栏 */}
-        <div className="w-[90px] flex-shrink-0 flex items-center py-2 bg-gradient-to-r from-sky-100/60 to-sky-50/30 dark:from-sky-950/40 dark:to-sky-950/10">
+        <div className="w-[80px] flex-shrink-0 flex items-center py-1 bg-gradient-to-r from-sky-100/60 to-sky-50/30 dark:from-sky-950/40 dark:to-sky-950/10">
           <div className="flex flex-col items-center w-full">
-            <div className="flex flex-col items-center gap-0 bg-sky-200/60 dark:bg-sky-800/50 backdrop-blur-xl rounded-[20px] shadow-xl shadow-sky-300/40 dark:shadow-black/30 border-2 border-sky-300/40 dark:border-sky-600/30 p-1.5">
+            <div className="flex flex-col items-center gap-0 bg-sky-200/60 dark:bg-sky-800/50 backdrop-blur-xl rounded-[16px] shadow-lg shadow-sky-300/30 dark:shadow-black/30 border border-sky-300/40 dark:border-sky-600/30 p-1">
               {/* 返回 */}
               <DockNavItem
-                icon={<ArrowLeft className="w-5 h-5" />}
+                icon={<ArrowLeft className="w-4 h-4" />}
                 label="返回"
                 onClick={onBack}
               />
