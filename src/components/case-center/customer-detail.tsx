@@ -108,7 +108,7 @@ function DockNavItem({
         "text-[9px] leading-none text-center truncate w-full",
         active ? "text-blue-700 dark:text-blue-200 font-bold" : "text-slate-500 dark:text-slate-300"
       )}>
-        {label.length > 3 ? label.slice(0, 3) : label}
+        {label.length > 6 ? label.slice(0, 6) : label}
       </span>
       {/* Tooltip */}
       <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 z-50 bg-white dark:bg-zinc-800 border rounded-xl shadow-xl p-3 w-52 pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-150 text-left">
@@ -249,8 +249,8 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
 
   return (
     <div className="flex flex-col h-full">
-      {/* 顶部栏 — 左对齐与内容区一致 (80px dock + 16px padding) */}
-      <div className="flex items-center gap-3 pl-[96px] pr-4 py-2.5 border-b bg-card">
+      {/* 顶部栏 — 左对齐与内容区一致 (100px dock + 16px padding) */}
+      <div className="flex items-center gap-3 pl-[116px] pr-4 py-2.5 border-b bg-card">
         <div className="flex items-center gap-2">
           <Building2 className="w-5 h-5 text-muted-foreground" />
           <h2 className="font-semibold text-lg">{customer.school_name}</h2>
@@ -280,8 +280,8 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
       {/* 主体：Dock 侧栏 + 内容区（flex 布局，Dock 占据空间不遮挡） */}
       <div className="flex-1 flex overflow-hidden">
         {/* 左侧 Dock 栏 */}
-        <div className="w-[80px] flex-shrink-0 flex items-center py-1 bg-gradient-to-r from-blue-100/60 to-blue-50/30 dark:from-blue-950/40 dark:to-blue-950/10">
-          <div className="flex flex-col items-center w-full">
+        <div className="w-[100px] flex-shrink-0 flex items-center py-1 bg-gradient-to-r from-blue-100/60 to-blue-50/30 dark:from-blue-950/40 dark:to-blue-950/10">
+          <div className="flex flex-col items-start pl-1 w-full">
             <div className="flex flex-col items-center gap-0.5 bg-blue-200/60 dark:bg-blue-800/50 backdrop-blur-xl rounded-[16px] shadow-lg shadow-blue-300/30 dark:shadow-black/30 border border-blue-300/40 dark:border-blue-600/30 p-1.5">
               {/* 返回 */}
               <DockNavItem
