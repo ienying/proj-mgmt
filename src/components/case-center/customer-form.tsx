@@ -36,6 +36,9 @@ interface DepartmentData {
   tools: string;
   expectations: string;
   department_summary: string;
+  metrics: Array<{ indicator: string; value: string; source: string; period: string }>;
+  dept_scope: string;
+  campus_id: string;
 }
 
 interface ModuleFormData {
@@ -59,14 +62,14 @@ interface CustomerFormProps {
   currentUser: { id: string; name: string };
 }
 
-// 模块名称搜索选择器
+// 模块名称搜索选择器（数据来源：系统设置-基础数据-产品名称-模块名称）
 function ModuleSearchSelect({
   value,
   onChange,
   options,
 }: {
   value: string;
-  onChange: (name: string) => void;
+  onChange: (code: string, name: string) => void;
   options: Array<{ code: string; module_name: string }>;
 }) {
   const [open, setOpen] = useState(false);
@@ -89,7 +92,7 @@ function ModuleSearchSelect({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[250px] p-0" align="start">
-        <Command>
+        <Command shouldFilter={false}>
           <CommandInput
             placeholder="搜索模块名称..."
             value={search}
@@ -102,9 +105,9 @@ function ModuleSearchSelect({
               {filtered.map((opt) => (
                 <CommandItem
                   key={opt.code}
-                  value={opt.module_name}
+                  value={opt.code}
                   onSelect={() => {
-                    onChange(opt.module_name);
+                    onChange(opt.code, opt.module_name);
                     setOpen(false);
                     setSearch("");
                   }}
@@ -152,6 +155,10 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
     if (provinceOpen) document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [provinceOpen]);
+
+  // 校区管理
+  const [campusMode, setCampusMode] = useState<string>("single");
+  const [campuses, setCampuses] = useState<Array<{ name: string; type: string; address: string }>>([]);
 
   // 硬件/网络信息
   const [hardwareInfo, setHardwareInfo] = useState<Record<string, string>>({});
@@ -247,6 +254,9 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
               { name: String(r[7] || ""), role: String(r[8] || ""), phone: String(r[9] || ""), attitude: String(r[10] || "") },
               { name: String(r[11] || ""), role: String(r[12] || ""), phone: String(r[13] || ""), attitude: String(r[14] || "") },
             ].filter((p) => p.name),
+            metrics: [],
+            dept_scope: "school_wide",
+            campus_id: "",
           };
         }
         setDepartments(newDepts);
@@ -368,16 +378,19 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
         }
         if (modRes.ok) {
           const { data } = await modRes.json();
-          // 去重：多个产品可能共享同一模块名称
+          // 系统设置-基础数据-产品名称-模块名称，仅展示已启用的模块
           const seen = new Set<string>();
-          setModuleTypeList((data || []).map((m: Record<string, unknown>) => {
-            const name = (m.module_name as string) || (m.product_name as string) || "";
-            return { code: name, module_name: name };
-          }).filter((m: { module_name: string }) => {
-            if (!m.module_name || seen.has(m.module_name)) return false;
-            seen.add(m.module_name);
-            return true;
-          }));
+          setModuleTypeList((data || [])
+            .filter((m: Record<string, unknown>) => m.is_enabled !== false)
+            .map((m: Record<string, unknown>) => ({
+              code: (m.code as string) || "",
+              module_name: (m.module_name as string) || (m.product_name as string) || "",
+            }))
+            .filter((m: { code: string; module_name: string }) => {
+              if (!m.code || !m.module_name || seen.has(m.module_name)) return false;
+              seen.add(m.module_name);
+              return true;
+            }));
         }
       } catch { /* ignore */ }
     };
@@ -417,6 +430,9 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
           tools: "",
           expectations: "",
           department_summary: "",
+          metrics: [],
+          dept_scope: "school_wide",
+          campus_id: "",
         };
 
         // 自动生成默认模块
@@ -532,6 +548,8 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
         setDescription(c.description || "");
         setHardwareInfo(typeof c.hardware_info === "object" && c.hardware_info !== null ? c.hardware_info as Record<string, string> : {});
         setNetworkInfo(typeof c.network_info === "object" && c.network_info !== null ? c.network_info as Record<string, string> : {});
+        setCampusMode((c.campus_mode as string) || "single");
+        setCampuses(Array.isArray(c.campuses) ? c.campuses as Array<{ name: string; type: string; address: string }> : []);
 
         const loadedTypes: string[] = Array.isArray(c.customer_types) ? c.customer_types as string[] : (c.school_type ? [c.school_type as string] : ["中职"]);
         const deptNames: string[] = [];
@@ -565,6 +583,9 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
               tools: existingDept.tools || "",
               expectations: existingDept.expectations || "",
               department_summary: existingDept.department_summary || "",
+              metrics: Array.isArray(existingDept.metrics) ? existingDept.metrics as Array<{ indicator: string; value: string; source: string; period: string }> : [],
+              dept_scope: (existingDept.dept_scope as string) || "school_wide",
+              campus_id: (existingDept.campus_id as string) || "",
             };
 
             const deptModules = (data.modules || []).filter(
@@ -594,6 +615,9 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
               tools: "",
               expectations: "",
               department_summary: "",
+              metrics: [],
+              dept_scope: "school_wide",
+              campus_id: "",
             };
             const defaultModuleNames = DEFAULT_MODULES_BY_DEPT[name] || [];
             newModules[code] = defaultModuleNames.map((modName) => ({
@@ -777,6 +801,8 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
             description,
             hardware_info: hardwareInfo,
             network_info: networkInfo,
+            campus_mode: campusMode,
+            campuses,
           }),
         });
 
@@ -797,6 +823,9 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
             tools: d.tools,
             expectations: d.expectations,
             department_summary: d.department_summary,
+            metrics: d.metrics,
+            dept_scope: d.dept_scope,
+            campus_id: d.campus_id,
           }));
 
         const deptPayload = buildDeptPayload(departments);
@@ -822,6 +851,8 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
             description,
             hardware_info: hardwareInfo,
             network_info: networkInfo,
+            campus_mode: campusMode,
+            campuses,
             created_by: currentUser.name,
           }),
         });
@@ -856,6 +887,9 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
           tools: d.tools,
           expectations: d.expectations,
           department_summary: d.department_summary,
+          metrics: d.metrics,
+          dept_scope: d.dept_scope,
+          campus_id: d.campus_id,
         }));
 
         if (deptPayload.length > 0) {
@@ -1072,6 +1106,93 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
               </div>
             </div>
 
+            {/* 校区模式 */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">校区模式</Label>
+                  <Select value={campusMode} onValueChange={setCampusMode}>
+                    <SelectTrigger className="h-8 w-[180px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="single">单校区</SelectItem>
+                      <SelectItem value="multi_independent">多校区独立</SelectItem>
+                      <SelectItem value="multi_cross">多校区交叉</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* 多校区列表配置 */}
+              {campusMode !== "single" && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">校区列表</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-xs"
+                      onClick={() => setCampuses((prev) => [...prev, { name: "", type: "中职", address: "" }])}
+                    >
+                      <Plus className="w-3 h-3 mr-0.5" />
+                      添加校区
+                    </Button>
+                  </div>
+                  {campuses.map((campus, ci) => (
+                    <div key={ci} className="flex items-center gap-2 p-2 border rounded-md bg-muted/20">
+                      <Input
+                        className="flex-1 h-8 text-xs"
+                        placeholder="校区名称"
+                        value={campus.name}
+                        onChange={(e) => {
+                          const updated = [...campuses];
+                          updated[ci] = { ...updated[ci], name: e.target.value };
+                          setCampuses(updated);
+                        }}
+                      />
+                      <Select
+                        value={campus.type}
+                        onValueChange={(v) => {
+                          const updated = [...campuses];
+                          updated[ci] = { ...updated[ci], type: v };
+                          setCampuses(updated);
+                        }}
+                      >
+                        <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {CUSTOMER_TYPE_OPTIONS.map((t) => (
+                            <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        className="w-40 h-8 text-xs"
+                        placeholder="地址"
+                        value={campus.address}
+                        onChange={(e) => {
+                          const updated = [...campuses];
+                          updated[ci] = { ...updated[ci], address: e.target.value };
+                          setCampuses(updated);
+                        }}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0"
+                        onClick={() => setCampuses((prev) => prev.filter((_, i) => i !== ci))}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                      </Button>
+                    </div>
+                  ))}
+                  {campuses.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground">请添加至少一个校区</p>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* 位置信息（同步自项目管理页面创建新项目的数据） */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
@@ -1236,25 +1357,24 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                   <Input className="h-8 text-xs" value={networkInfo["公网IP"] || ""} onChange={(e) => setNetworkInfo((prev) => ({ ...prev, "公网IP": e.target.value }))} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">无线覆盖</Label>
-                  <Select value={networkInfo["无线覆盖"] || ""} onValueChange={(v) => setNetworkInfo((prev) => ({ ...prev, "无线覆盖": v }))}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="选择..." /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="全覆盖">全覆盖</SelectItem>
-                      <SelectItem value="部分覆盖">部分覆盖</SelectItem>
-                      <SelectItem value="无">无</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">堡垒机</Label>
-                  <Select value={networkInfo["堡垒机"] || ""} onValueChange={(v) => setNetworkInfo((prev) => ({ ...prev, "堡垒机": v }))}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="选择..." /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="有">有</SelectItem>
-                      <SelectItem value="无">无</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-xs">无线覆盖 / 堡垒机</Label>
+                  <div className="flex gap-2">
+                    <Select value={networkInfo["无线覆盖"] || ""} onValueChange={(v) => setNetworkInfo((prev) => ({ ...prev, "无线覆盖": v }))}>
+                      <SelectTrigger className="h-8 flex-1 text-xs"><SelectValue placeholder="无线覆盖..." /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="全覆盖">全覆盖</SelectItem>
+                        <SelectItem value="部分覆盖">部分覆盖</SelectItem>
+                        <SelectItem value="无">无</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={networkInfo["堡垒机"] || ""} onValueChange={(v) => setNetworkInfo((prev) => ({ ...prev, "堡垒机": v }))}>
+                      <SelectTrigger className="h-8 flex-1 text-xs"><SelectValue placeholder="堡垒机..." /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="有">有</SelectItem>
+                        <SelectItem value="无">无</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">内网IP段</Label>
@@ -1300,6 +1420,40 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                               onClick={(ev) => ev.stopPropagation()}
                             />
                           </div>
+                        )}
+                        {campusMode === "multi_cross" && (
+                          <Select
+                            value={dept.dept_scope || "school_wide"}
+                            onValueChange={(v) => {
+                              updateDepartment(code, "dept_scope", v);
+                              if (v === "school_wide") updateDepartment(code, "campus_id", "");
+                            }}
+                          >
+                            <SelectTrigger className="h-7 w-28 text-[10px]" onClick={(ev) => ev.stopPropagation()}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="school_wide">全校共享</SelectItem>
+                              <SelectItem value="campus_specific">校区专属</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                        {(campusMode !== "single" && dept.dept_scope === "campus_specific") && (
+                          <Select
+                            value={dept.campus_id || ""}
+                            onValueChange={(v) => updateDepartment(code, "campus_id", v)}
+                          >
+                            <SelectTrigger className="h-7 w-28 text-[10px]" onClick={(ev) => ev.stopPropagation()}>
+                              <SelectValue placeholder="选择校区" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {campuses.map((c, i) => (
+                                <SelectItem key={i} value={c.name || `校区${i + 1}`}>
+                                  {c.name || `校区${i + 1}`}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         )}
                         <Badge variant="secondary" className="text-xs">
                           {deptModules.length} 个模块
@@ -1405,6 +1559,84 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                       </div>
                     </div>
 
+                    {/* 核心数据 */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="text-xs font-medium">核心数据</Label>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-xs"
+                          onClick={() => {
+                            const current = dept.metrics || [];
+                            updateDepartment(code, "metrics", [...current, { indicator: "", value: "", source: "人工统计", period: "" }]);
+                          }}
+                        >
+                          <Plus className="w-3 h-3 mr-0.5" />
+                          添加指标
+                        </Button>
+                      </div>
+                      {(dept.metrics || []).map((m, mi) => (
+                        <div key={mi} className="flex items-center gap-2 mb-2 p-2 border rounded-md bg-muted/20">
+                          <Input
+                            className="flex-1 h-8 text-xs"
+                            placeholder="指标名称（如：排课冲突率）"
+                            value={m.indicator}
+                            onChange={(e) => {
+                              const updated = [...(dept.metrics || [])];
+                              updated[mi] = { ...updated[mi], indicator: e.target.value };
+                              updateDepartment(code, "metrics", updated);
+                            }}
+                          />
+                          <Input
+                            className="w-24 h-8 text-xs"
+                            placeholder="数值"
+                            value={m.value}
+                            onChange={(e) => {
+                              const updated = [...(dept.metrics || [])];
+                              updated[mi] = { ...updated[mi], value: e.target.value };
+                              updateDepartment(code, "metrics", updated);
+                            }}
+                          />
+                          <Select
+                            value={m.source}
+                            onValueChange={(v) => {
+                              const updated = [...(dept.metrics || [])];
+                              updated[mi] = { ...updated[mi], source: v };
+                              updateDepartment(code, "metrics", updated);
+                            }}
+                          >
+                            <SelectTrigger className="w-28 h-8 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="人工统计">人工统计</SelectItem>
+                              <SelectItem value="系统自动统计">系统自动统计</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            className="w-20 h-8 text-xs"
+                            placeholder="周期"
+                            value={m.period}
+                            onChange={(e) => {
+                              const updated = [...(dept.metrics || [])];
+                              updated[mi] = { ...updated[mi], period: e.target.value };
+                              updateDepartment(code, "metrics", updated);
+                            }}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 shrink-0"
+                            onClick={() => {
+                              const updated = (dept.metrics || []).filter((_, i) => i !== mi);
+                              updateDepartment(code, "metrics", updated);
+                            }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+
                     {/* 模块匹配表 */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
@@ -1431,9 +1663,9 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                                 <Label className="text-[11px]">模块名称</Label>
                                 <ModuleSearchSelect
                                   value={mod.module_name}
-                                  onChange={(name) => {
-                                    updateModule(code, mi, "module_name", name);
-                                    updateModule(code, mi, "module_code", name);
+                                  onChange={(modCode, modName) => {
+                                    updateModule(code, mi, "module_code", modCode);
+                                    updateModule(code, mi, "module_name", modName);
                                   }}
                                   options={moduleTypeList}
                                 />

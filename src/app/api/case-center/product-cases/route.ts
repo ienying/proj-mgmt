@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     }
     const whereClause = conditions.join(" AND ");
 
-    // 1. 按模块统计概览
+    // 1. 按模块统计概览（已落地）
     const statsSql = `
       SELECT
         cm.module_code,
@@ -47,6 +47,39 @@ export async function GET(request: NextRequest) {
       WHERE ${whereClause}
       GROUP BY cm.module_code, cm.module_name
       ORDER BY school_count DESC
+    `;
+
+    // 1.1 产品模块使用排名（按模块聚合所有状态的学校数）
+    const moduleRankingBaseConditions: string[] = [];
+    if (departmentCode) {
+      moduleRankingBaseConditions.push(`cd.department_code = '${departmentCode.replace(/'/g, "''")}'`);
+    }
+    if (effectiveType) {
+      moduleRankingBaseConditions.push(`c.customer_types @> to_jsonb(ARRAY['${effectiveType.replace(/'/g, "''")}'])`);
+    }
+    const moduleRankingWhere = moduleRankingBaseConditions.length > 0
+      ? `WHERE ${moduleRankingBaseConditions.join(" AND ")}`
+      : "";
+
+    const moduleRankingSql = `
+      SELECT
+        cm.module_code,
+        cm.module_name,
+        COUNT(DISTINCT cm.customer_id) as landed_schools,
+        COUNT(DISTINCT cm.customer_id) FILTER (WHERE cm.status = '已落地') as active_schools,
+        COUNT(DISTINCT cm.customer_id) FILTER (WHERE cm.status = '未落地') as trial_schools,
+        COUNT(DISTINCT cm.customer_id) FILTER (WHERE cm.status = '未购') as not_purchased_schools,
+        ROUND(
+          COUNT(DISTINCT cm.customer_id) FILTER (WHERE cm.status = '已落地')::numeric
+          / NULLIF(COUNT(DISTINCT cm.customer_id), 0) * 100, 1
+        ) as coverage_rate,
+        COUNT(DISTINCT cm.customer_id) as total_school_count
+      FROM design_case_center.customer_modules cm
+      JOIN design_case_center.customer_departments cd ON cm.customer_department_id = cd.id
+      JOIN design_case_center.customers c ON cm.customer_id = c.id
+      ${moduleRankingWhere}
+      GROUP BY cm.module_code, cm.module_name
+      ORDER BY landed_schools DESC
     `;
 
     // 2. 学校使用率排行
@@ -85,13 +118,27 @@ export async function GET(request: NextRequest) {
       ORDER BY school_count DESC
     `;
 
-    const [statsRes, rankingRes, typeDistRes] = await Promise.all([
+    // 4. 省份画像分布
+    const provinceDistSql = `
+      SELECT
+        COALESCE(c.location->>'province', '未知') as province,
+        COUNT(DISTINCT c.id) as school_count
+      FROM design_case_center.customers c
+      JOIN design_case_center.customer_modules cm ON cm.customer_id = c.id
+      WHERE ${whereClause}
+      GROUP BY c.location->>'province'
+      ORDER BY school_count DESC
+    `;
+
+    const [statsRes, rankingRes, typeDistRes, moduleRankingRes, provinceDistRes] = await Promise.all([
       client.rpc("execute_sql", { p_sql: statsSql }),
       client.rpc("execute_sql", { p_sql: rankingSql }),
       client.rpc("execute_sql", { p_sql: typeDistSql }),
+      client.rpc("execute_sql", { p_sql: moduleRankingSql }),
+      client.rpc("execute_sql", { p_sql: provinceDistSql }),
     ]);
 
-    // 4. 可用筛选选项（从已有数据提取）
+    // 5. 可用筛选选项（从已有数据提取）
     const filterOptionsSql = `
       SELECT DISTINCT cd.department_code, cd.department_name
       FROM design_case_center.customer_modules cm
@@ -115,6 +162,8 @@ export async function GET(request: NextRequest) {
         stats: statsRes.data || [],
         ranking: rankingRes.data || [],
         typeDistribution: typeDistRes.data || [],
+        moduleRanking: moduleRankingRes.data || [],
+        provinceDistribution: provinceDistRes.data || [],
         filterOptions: {
           departments: deptOptions || [],
           modules: moduleOptions || [],

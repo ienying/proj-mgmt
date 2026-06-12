@@ -16,6 +16,8 @@ export async function POST() {
         description TEXT,
         hardware_info JSONB DEFAULT '{}'::jsonb,
         network_info JSONB DEFAULT '{}'::jsonb,
+        campus_mode TEXT DEFAULT 'single' CHECK (campus_mode IN ('single', 'multi_independent', 'multi_cross')),
+        campuses JSONB DEFAULT '[]'::jsonb,
         created_by TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -33,6 +35,9 @@ export async function POST() {
         tools TEXT DEFAULT '',
         expectations TEXT DEFAULT '',
         department_summary TEXT DEFAULT '',
+        metrics JSONB DEFAULT '[]'::jsonb,
+        dept_scope TEXT DEFAULT 'school_wide' CHECK (dept_scope IN ('school_wide', 'campus_specific')),
+        campus_id TEXT DEFAULT '',
         sort_order INT DEFAULT 0,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -116,6 +121,36 @@ export async function POST() {
           WHERE table_schema = 'design_case_center' AND table_name = 'customers' AND column_name = 'network_info'
         ) THEN
           ALTER TABLE design_case_center.customers ADD COLUMN network_info JSONB DEFAULT '{}'::jsonb;
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'design_case_center' AND table_name = 'customer_departments' AND column_name = 'metrics'
+        ) THEN
+          ALTER TABLE design_case_center.customer_departments ADD COLUMN metrics JSONB DEFAULT '[]'::jsonb;
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'design_case_center' AND table_name = 'customers' AND column_name = 'campus_mode'
+        ) THEN
+          ALTER TABLE design_case_center.customers ADD COLUMN campus_mode TEXT DEFAULT 'single';
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'design_case_center' AND table_name = 'customers' AND column_name = 'campuses'
+        ) THEN
+          ALTER TABLE design_case_center.customers ADD COLUMN campuses JSONB DEFAULT '[]'::jsonb;
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'design_case_center' AND table_name = 'customer_departments' AND column_name = 'dept_scope'
+        ) THEN
+          ALTER TABLE design_case_center.customer_departments ADD COLUMN dept_scope TEXT DEFAULT 'school_wide';
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'design_case_center' AND table_name = 'customer_departments' AND column_name = 'campus_id'
+        ) THEN
+          ALTER TABLE design_case_center.customer_departments ADD COLUMN campus_id TEXT DEFAULT '';
         END IF;
       END $$;
       CREATE INDEX IF NOT EXISTS idx_customer_modules_customer ON design_case_center.customer_modules(customer_id);

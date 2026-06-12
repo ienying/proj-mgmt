@@ -64,11 +64,38 @@ export async function PUT(
         updateFields.personnel = dept.personnel;
       }
 
-      const { data, error } = await client.rpc("dp_update", {
+      if (dept.metrics !== undefined) {
+        updateFields.metrics = dept.metrics;
+      }
+
+      if (dept.dept_scope !== undefined) {
+        updateFields.dept_scope = dept.dept_scope;
+      }
+
+      if (dept.campus_id !== undefined) {
+        updateFields.campus_id = dept.campus_id;
+      }
+
+      // 先尝试完整更新，如果新列不存在则回退去除新列
+      let { data, error } = await client.rpc("dp_update", {
         p_table: "design_case_center.customer_departments",
         p_id: deptId,
         p_data: updateFields,
       });
+
+      if (error && error.message?.includes("does not exist")) {
+        const safeFields = { ...updateFields };
+        delete safeFields.metrics;
+        delete safeFields.dept_scope;
+        delete safeFields.campus_id;
+        const retry = await client.rpc("dp_update", {
+          p_table: "design_case_center.customer_departments",
+          p_id: deptId,
+          p_data: safeFields,
+        });
+        data = retry.data;
+        error = retry.error;
+      }
 
       if (!error && data) {
         results.push(data);

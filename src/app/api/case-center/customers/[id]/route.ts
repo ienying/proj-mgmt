@@ -57,6 +57,7 @@ export async function PUT(
     const allowedFields = [
       "school_name", "customer_types", "location",
       "description", "hardware_info", "network_info",
+      "campus_mode", "campuses",
     ];
 
     for (const field of allowedFields) {
@@ -69,11 +70,25 @@ export async function PUT(
       return NextResponse.json({ error: "没有可更新的字段" }, { status: 400 });
     }
 
-    const { data, error } = await client.rpc("dp_update", {
+    // 先尝试完整更新，如果新列不存在则回退去除新列
+    let { data, error } = await client.rpc("dp_update", {
       p_table: "design_case_center.customers",
       p_id: id,
       p_data: updateFields,
     });
+
+    if (error && error.message?.includes("does not exist")) {
+      const safeFields = { ...updateFields };
+      delete safeFields.campus_mode;
+      delete safeFields.campuses;
+      const retry = await client.rpc("dp_update", {
+        p_table: "design_case_center.customers",
+        p_id: id,
+        p_data: safeFields,
+      });
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

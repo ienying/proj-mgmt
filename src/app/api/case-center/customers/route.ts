@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
   try {
     const client = await createServerClient();
     const body = await request.json();
-    const { school_name, customer_types, location, description } = body;
+    const { school_name, customer_types, location, description, campus_mode, campuses } = body;
 
     if (!school_name || !customer_types || !Array.isArray(customer_types) || customer_types.length === 0) {
       return NextResponse.json({ error: "学校名称和客户类型为必填项" }, { status: 400 });
@@ -70,6 +70,8 @@ export async function POST(request: NextRequest) {
       description: description || "",
       hardware_info: body.hardware_info || {},
       network_info: body.network_info || {},
+      campus_mode: campus_mode || "single",
+      campuses: campuses || [],
       created_by: body.created_by || "system",
     };
 

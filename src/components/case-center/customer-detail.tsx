@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Pencil, FileText, History, Building2, Users, Target, AlertCircle, CheckCircle2, XCircle, Download, Play, FileText as FileIcon, Columns2, MapPin, Wifi, Server } from "lucide-react";
+import { ArrowLeft, Pencil, FileText, History, Building2, Users, Target, AlertCircle, CheckCircle2, XCircle, Download, Play, FileText as FileIcon, Columns2, MapPin, Wifi, Server, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -37,6 +37,7 @@ interface DepartmentData {
   tools: string;
   expectations: string;
   department_summary: string;
+  metrics?: Array<{ indicator: string; value: string; source: string; period: string }>;
   sort_order: number;
 }
 
@@ -57,6 +58,67 @@ interface ModuleData {
   department_name?: string;
   department_code?: string;
   sort_order: number;
+}
+
+// 侧边栏导航项（macOS Dock 风格）
+function DockNavItem({
+  icon,
+  label,
+  active,
+  onClick,
+  badge,
+  dotColor,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+  badge?: string;
+  dotColor?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="relative flex flex-col items-center gap-0.5 py-1 px-1 w-full transition-all duration-200 group"
+      title={label}
+    >
+      {/* 选中指示点 */}
+      {active && (
+        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-sky-500 shadow-sm shadow-sky-400" />
+      )}
+      <div
+        className={cn(
+          "relative flex items-center justify-center rounded-2xl transition-all duration-200",
+          active
+            ? "scale-110 bg-white dark:bg-white shadow-xl shadow-sky-300/60 ring-2 ring-sky-300/50"
+            : "bg-white/80 dark:bg-zinc-200/80 group-hover:scale-105 group-hover:bg-white group-hover:shadow-lg group-hover:shadow-sky-200/50",
+        )}
+        style={{ width: 28, height: 28 }}
+      >
+        <span className="text-base">{icon}</span>
+        {/* 状态圆点 */}
+        {dotColor && (
+          <div className={cn(
+            "absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-zinc-300",
+            dotColor
+          )} />
+        )}
+      </div>
+      <span className={cn(
+        "text-[10px] leading-tight text-center truncate w-full",
+        active ? "text-sky-700 dark:text-sky-200 font-bold" : "text-slate-500 dark:text-slate-300"
+      )}>
+        {label.length > 3 ? label.slice(0, 3) : label}
+      </span>
+      {/* Tooltip */}
+      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 z-50 bg-white dark:bg-zinc-800 border rounded-xl shadow-xl p-3 w-52 pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-150 text-left">
+        <div className="text-sm font-semibold">{label}</div>
+        {badge && (
+          <div className="text-xs text-muted-foreground mt-0.5">{badge} 模块</div>
+        )}
+      </div>
+    </button>
+  );
 }
 
 interface CustomerDetailProps {
@@ -188,11 +250,7 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
   return (
     <div className="flex flex-col h-full">
       {/* 顶部栏 */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b bg-card">
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          <ArrowLeft className="w-4 h-4 mr-1" />
-          返回
-        </Button>
+      <div className="flex items-center gap-3 px-4 py-2.5 border-b bg-card">
         <div className="flex items-center gap-2">
           <Building2 className="w-5 h-5 text-muted-foreground" />
           <h2 className="font-semibold text-lg">{customer.school_name}</h2>
@@ -201,7 +259,7 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
           ))}
         </div>
         <span className="text-xs text-muted-foreground">
-          最后更新: {new Date(customer.updated_at).toLocaleDateString("zh-CN")}
+          更新: {new Date(customer.updated_at).toLocaleDateString("zh-CN")}
         </span>
         <div className="flex items-center gap-2 ml-auto">
           <Button variant="outline" size="sm" onClick={() => setShowWeeklyReport(true)}>
@@ -219,9 +277,82 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
         </div>
       </div>
 
-      {/* 主体 */}
-      <Tabs value={activeDept} onValueChange={setActiveDept} className="flex-1 flex flex-col">
-        <div className="px-4 pt-3 border-b">
+      {/* 主体：Dock 侧栏 + 内容区（flex 布局，Dock 占据空间不遮挡） */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* 左侧 Dock 栏 */}
+        <div className="w-[90px] flex-shrink-0 flex items-center py-2 bg-gradient-to-r from-sky-100/60 to-sky-50/30 dark:from-sky-950/40 dark:to-sky-950/10">
+          <div className="flex flex-col items-center w-full">
+            <div className="flex flex-col items-center gap-0 bg-sky-200/60 dark:bg-sky-800/50 backdrop-blur-xl rounded-[20px] shadow-xl shadow-sky-300/40 dark:shadow-black/30 border-2 border-sky-300/40 dark:border-sky-600/30 p-1.5">
+              {/* 返回 */}
+              <DockNavItem
+                icon={<ArrowLeft className="w-5 h-5" />}
+                label="返回"
+                onClick={onBack}
+              />
+
+              <div className="w-10 h-px bg-sky-300/30 dark:bg-sky-600/30" />
+
+              {/* 总览 */}
+              <DockNavItem
+                icon="📊"
+                label="总览"
+                active={activeDept === "overview"}
+                onClick={() => setActiveDept("overview")}
+              />
+
+              <div className="w-10 h-px bg-sky-200/30 dark:bg-sky-600/20" />
+
+              {/* 科室 */}
+              {departments.map((dept) => {
+                const deptMods = modules.filter((m) => m.customer_department_id === dept.id);
+                const landedCount = deptMods.filter((m) => m.status === "已落地").length;
+                const totalCount = deptMods.length;
+                const hasLanded = landedCount > 0;
+                const hasTrialOnly = !hasLanded && deptMods.some((m) => m.status === "未落地");
+                const dotColor = hasLanded ? "bg-green-500" : hasTrialOnly ? "bg-amber-500" : "bg-slate-400";
+
+                const deptIcons: Record<string, string> = {
+                  school_leader: "🏫", academic_affairs: "📋", teaching_research: "📚",
+                  student_affairs: "👥", it_center: "🖥️", hr: "👔", finance: "💰",
+                  logistics: "🔧", security: "🛡️", admissions: "🎓", employment: "💼",
+                  supervision: "📊", psychology: "💚", dormitory: "🏠",
+                  school_office: "📝", grade_group: "🏢",
+                };
+                const icon = deptIcons[dept.department_code] || "📌";
+
+                return (
+                  <DockNavItem
+                    key={dept.department_code}
+                    icon={icon}
+                    label={dept.department_name}
+                    active={activeDept === dept.department_code}
+                    onClick={() => setActiveDept(dept.department_code)}
+                    badge={`${landedCount}/${totalCount}`}
+                    dotColor={dotColor}
+                  />
+                );
+              })}
+
+              <div className="w-10 h-px bg-sky-200/30 dark:bg-sky-600/20" />
+
+              {/* 版本 / 周报 */}
+              <DockNavItem
+                icon="📜"
+                label="版本"
+                onClick={() => setShowVersionHistory(true)}
+              />
+              <DockNavItem
+                icon="📝"
+                label="周报"
+                onClick={() => setShowWeeklyReport(true)}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 右侧内容区 */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="px-4 pt-3">
           {/* 统计卡片 */}
           {activeDept === "overview" && (
             <div className="grid grid-cols-4 gap-3 mb-4">
@@ -331,35 +462,49 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
             </>
           )}
 
-          {/* 科室 Tab 栏 */}
-          <TabsList className="flex-wrap h-auto mb-0 gap-0.5 bg-transparent p-0">
-            <TabsTrigger value="overview" className="text-xs px-3 py-2 data-[state=active]:bg-background">
-              总览
-            </TabsTrigger>
-            {departments.map((dept) => (
-              <TabsTrigger
-                key={dept.department_code}
-                value={dept.department_code}
-                className="text-xs px-3 py-2 data-[state=active]:bg-background"
-              >
-                {dept.department_name}
-              </TabsTrigger>
-            ))}
-            <div className="w-px h-6 bg-border self-center mx-1" />
-            <TabsTrigger value="version" className="text-xs px-3 py-2 data-[state=active]:bg-background">
-              <History className="w-3.5 h-3.5 mr-1" />
-              版本
-            </TabsTrigger>
-            <TabsTrigger value="weekly" className="text-xs px-3 py-2 data-[state=active]:bg-background">
-              <FileText className="w-3.5 h-3.5 mr-1" />
-              周报
-            </TabsTrigger>
-          </TabsList>
         </div>
 
-        {/* Tab 内容 */}
-        <div className="flex-1 overflow-y-auto p-4">
-          <TabsContent value="overview" className="mt-0 border-0 p-0">
+        {/* 内容 */}
+        <div>
+          {activeDept === "overview" && <>
+            {/* 总览仪表盘 KPI 卡片 */}
+            {(() => {
+              const allMods = modules;
+              const totalMods = allMods.length;
+              const landedMods = allMods.filter((m) => m.status === "已落地").length;
+              const trialMods = allMods.filter((m) => m.status === "未落地").length;
+              const notPurchasedMods = allMods.filter((m) => m.status === "未购").length;
+              const coverageRate = totalMods > 0 ? Math.round((landedMods / totalMods) * 100) : 0;
+              return (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  <Card className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
+                    <CardContent className="p-3">
+                      <div className="text-[11px] text-muted-foreground mb-1">已购模块</div>
+                      <div className="text-2xl font-bold text-slate-700 dark:text-slate-300">{totalMods}</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950">
+                    <CardContent className="p-3">
+                      <div className="text-[11px] text-muted-foreground mb-1">🟢 正式使用</div>
+                      <div className="text-2xl font-bold text-green-700 dark:text-green-400">{landedMods}</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-gradient-to-br from-blue-50 to-sky-50 dark:from-blue-950 dark:to-sky-950">
+                    <CardContent className="p-3">
+                      <div className="text-[11px] text-muted-foreground mb-1">🔵 试用中</div>
+                      <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">{trialMods}</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950 dark:to-orange-950">
+                    <CardContent className="p-3">
+                      <div className="text-[11px] text-muted-foreground mb-1">覆盖率</div>
+                      <div className="text-2xl font-bold text-amber-700 dark:text-amber-400">{coverageRate}%</div>
+                    </CardContent>
+                  </Card>
+                </div>
+              );
+            })()}
+
             {customer.description && (
               <div className="mb-4 p-4 border rounded-lg bg-muted/30">
                 <p className="text-sm text-muted-foreground">{customer.description}</p>
@@ -452,44 +597,30 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
             </div>
 
             <p className="text-sm text-muted-foreground text-center py-4 border-t">
-              选择一个科室 Tab 查看详细画像信息
+              选择一个科室查看详细画像信息
             </p>
-          </TabsContent>
+          </>}
 
-          {departments.map((dept) => (
-            <TabsContent key={dept.department_code} value={dept.department_code} className="mt-0 border-0 p-0">
-              <DepartmentDetailView
-                department={dept}
-                modules={modules.filter((m) => m.customer_department_id === dept.id)}
-                allDepartments={departments}
-                filterLandedOnly={filterLandedOnly}
-                onToggleFilter={() => setFilterLandedOnly(!filterLandedOnly)}
-                onEditDept={() => onEdit(customerId)}
-              />
-            </TabsContent>
-          ))}
-
-          {/* 版本 Tab */}
-          <TabsContent value="version" className="mt-0 border-0 p-0">
-            <VersionHistory
-              customerId={customerId}
-              onClose={() => setActiveDept("overview")}
-              embedded
-            />
-          </TabsContent>
-
-          {/* 周报 Tab */}
-          <TabsContent value="weekly" className="mt-0 border-0 p-0">
-            <WeeklyReportForm
-              customerId={customerId}
-              customerName={customer.school_name}
-              currentUser={currentUser}
-              onClose={() => setActiveDept("overview")}
-              embedded
-            />
-          </TabsContent>
+          {(() => {
+            const activeDeptData = departments.find((d) => d.department_code === activeDept);
+            if (activeDeptData) {
+              return (
+                <DepartmentDetailView
+                  key={activeDeptData.department_code}
+                  department={activeDeptData}
+                  modules={modules.filter((m) => m.customer_department_id === activeDeptData.id)}
+                  allDepartments={departments}
+                  filterLandedOnly={filterLandedOnly}
+                  onToggleFilter={() => setFilterLandedOnly(!filterLandedOnly)}
+                  onEditDept={() => onEdit(customerId)}
+                />
+              );
+            }
+            return null;
+          })()}
         </div>
-      </Tabs>
+      </div>
+      </div>
 
       {/* 弹窗 */}
       {showVersionHistory && (
@@ -657,6 +788,32 @@ function DepartmentDetailView({
           </div>
         )}
       </div>
+
+      {/* 核心数据 */}
+      {Array.isArray(department.metrics) && department.metrics.length > 0 && (
+        <div>
+          <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
+            <BarChart3 className="w-4 h-4 text-muted-foreground" />
+            核心数据
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {(department.metrics as Array<{ indicator: string; value: string; source: string; period: string }>).map((m, i) => (
+              <Card key={i} className="p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium">{m.indicator || "未命名指标"}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {m.period && <span>{m.period} · </span>}
+                      数据来源：{m.source || "人工统计"}
+                    </div>
+                  </div>
+                  <div className="text-xl font-bold">{m.value || "-"}</div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 科室总结 */}
       {department.department_summary && (
