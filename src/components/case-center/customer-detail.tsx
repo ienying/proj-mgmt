@@ -79,7 +79,7 @@ function DockNavItem({
   return (
     <button
       onClick={onClick}
-      className="relative flex flex-col items-center py-0.5 px-1 w-full transition-all duration-200 group"
+      className="relative flex flex-col items-center py-1 px-1 w-full transition-all duration-200 group"
       title={label}
     >
       {/* 选中指示点 */}
@@ -93,9 +93,9 @@ function DockNavItem({
             ? "scale-110 bg-white dark:bg-white shadow-xl shadow-sky-300/60 ring-2 ring-sky-300/50"
             : "bg-white/80 dark:bg-zinc-200/80 group-hover:scale-105 group-hover:bg-white group-hover:shadow-lg group-hover:shadow-sky-200/50",
         )}
-        style={{ width: 28, height: 28 }}
+        style={{ width: 22, height: 22 }}
       >
-        <span className="text-base">{icon}</span>
+        <span className="text-sm">{icon}</span>
         {/* 状态圆点 */}
         {dotColor && (
           <div className={cn(
@@ -282,7 +282,7 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
         {/* 左侧 Dock 栏 */}
         <div className="w-[80px] flex-shrink-0 flex items-center py-1 bg-gradient-to-r from-sky-100/60 to-sky-50/30 dark:from-sky-950/40 dark:to-sky-950/10">
           <div className="flex flex-col items-center w-full">
-            <div className="flex flex-col items-center gap-0 bg-sky-200/60 dark:bg-sky-800/50 backdrop-blur-xl rounded-[16px] shadow-lg shadow-sky-300/30 dark:shadow-black/30 border border-sky-300/40 dark:border-sky-600/30 p-1">
+            <div className="flex flex-col items-center gap-0.5 bg-sky-200/60 dark:bg-sky-800/50 backdrop-blur-xl rounded-[16px] shadow-lg shadow-sky-300/30 dark:shadow-black/30 border border-sky-300/40 dark:border-sky-600/30 p-1.5">
               {/* 返回 */}
               <DockNavItem
                 icon={<ArrowLeft className="w-4 h-4" />}
@@ -290,7 +290,7 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
                 onClick={onBack}
               />
 
-              <div className="w-10 h-px bg-sky-300/30 dark:bg-sky-600/30" />
+              <div className="w-10 h-px bg-sky-300/30 dark:bg-sky-600/30 my-0.5" />
 
               {/* 总览 */}
               <DockNavItem
@@ -300,7 +300,7 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
                 onClick={() => setActiveDept("overview")}
               />
 
-              <div className="w-10 h-px bg-sky-200/30 dark:bg-sky-600/20" />
+              <div className="w-10 h-px bg-sky-200/30 dark:bg-sky-600/20 my-0.5" />
 
               {/* 科室 */}
               {departments.map((dept) => {
@@ -328,12 +328,11 @@ export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: Cust
                     active={activeDept === dept.department_code}
                     onClick={() => setActiveDept(dept.department_code)}
                     badge={`${landedCount}/${totalCount}`}
-                    dotColor={dotColor}
                   />
                 );
               })}
 
-              <div className="w-10 h-px bg-sky-200/30 dark:bg-sky-600/20" />
+              <div className="w-10 h-px bg-sky-200/30 dark:bg-sky-600/20 my-0.5" />
 
               {/* 版本 / 周报 */}
               <DockNavItem
