@@ -138,7 +138,7 @@ function parseBlocks(md: string): Block[] {
     if (pLines.length > 0) {
       const text = pLines.join("\n");
       // 检测裸 mermaid（AI 有时省略 ```mermaid 包裹）
-      if (/^(pie|graph\s|flowchart\s|gantt\s|sequenceDiagram|classDiagram|stateDiagram|erDiagram|journey|gitgraph)\b/i.test(text.trim())) {
+      if (/^(pie|graph\s|flowchart\s|gantt\s|sequenceDiagram|classDiagram|stateDiagram|erDiagram|journey|gitgraph|xychart-beta)\b/i.test(text.trim())) {
         // 修复中文引号→ASCII
         blocks.push({ type: "chart", text: text.replace(/"/g, '"').replace(/"/g, '"') });
       } else {
