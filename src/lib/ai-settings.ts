@@ -124,28 +124,21 @@ pie showData
   ];
 
   try {
-    const { data } = await client.rpc("dp_select", { p_table: "ai_prompt_templates" });
-    const rows = (data as Record<string, unknown>[]) || [];
-
     for (const d of defaults) {
-      const oldDefault = rows.find(
-        (r) => r.is_default === true && r.prompt_type === d.prompt_type && String(r.project_schema || "") === ""
-      );
-      if (oldDefault) {
-        // 已有默认模板，覆盖更新确保内容是最新版
-        await client.rpc("dp_update", {
-          p_table: "ai_prompt_templates",
-          p_id: oldDefault.id as string,
-          p_data: {
-            name: d.name,
-            system_message: d.system_message,
-            user_prompt: d.user_prompt,
-            updated_at: new Date().toISOString(),
-          },
-        });
-      } else {
-        await client.rpc("dp_insert", { p_table: "ai_prompt_templates", p_data: d as any });
-      }
+      const escaped = {
+        name: d.name.replace(/'/g, "''"),
+        prompt_type: d.prompt_type,
+        system_message: d.system_message.replace(/'/g, "''"),
+        user_prompt: d.user_prompt.replace(/'/g, "''"),
+      };
+      // 先删旧默认，再插入最新版（保证幂等）
+      await client.rpc("execute_sql", {
+        p_sql: `DELETE FROM design_public.ai_prompt_templates WHERE is_default = true AND prompt_type = '${escaped.prompt_type}' AND project_schema = ''`,
+      });
+      await client.rpc("execute_sql", {
+        p_sql: `INSERT INTO design_public.ai_prompt_templates (project_schema, name, prompt_type, is_default, system_message, user_prompt, sort_order)
+        VALUES ('', '${escaped.name}', '${escaped.prompt_type}', true, '${escaped.system_message}', '${escaped.user_prompt}', ${d.sort_order})`,
+      });
     }
   } catch (e) { console.error("ai_prompt_templates 种子数据维护失败:", e); }
 }
