@@ -65,9 +65,6 @@ export async function POST(request: Request) {
 
     let tables = (tablesResult as Array<{ table_name: string }>) || [];
 
-    // 过滤掉任务中心自动生成的 task_ 虚拟表
-    tables = tables.filter((t) => !t.table_name.startsWith("task_"));
-
     // 如果指定了 tableCode，只分析该表
     if (tableCode) {
       tables = tables.filter((t) => t.table_name === tableCode);
