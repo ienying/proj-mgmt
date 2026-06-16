@@ -147,7 +147,7 @@ pie showData
         await client.rpc("dp_insert", { p_table: "ai_prompt_templates", p_data: d as any });
       }
     }
-  } catch { /* 种子数据维护失败，降级使用已有模板 */ }
+  } catch (e) { console.error("ai_prompt_templates 种子数据维护失败:", e); }
 }
 
 // ==================== 提示词模板 CRUD ====================

@@ -72,6 +72,67 @@ export function AIPromptDialog({
   );
   const isDefaultSelected = selectedTemplate?.is_default === true;
 
+  // 内置默认模板（API 无数据时的 fallback）
+  const builtinDefaults = useMemo(() => ({
+    global: {
+      id: "__builtin_global__",
+      name: "默认全局分析",
+      prompt_type: "global",
+      is_default: true,
+      project_schema: "",
+      system_message: "你是一个项目管理数据分析专家，擅长从结构化数据中提炼洞察。使用中文回复，报告要具体、可操作。始终使用人类可读的项目名称和表名，绝不输出数据库内部标识符。",
+      user_prompt: `你是一个项目管理数据分析专家。请分析项目【\${projectName}】的数据库内容，给出专业的分析报告。
+
+\${baseRules}
+\${moduleHint}
+数据表数量: \${tableCount} | 总数据行数: \${totalRows}
+
+各表结构与样本数据：
+\${tableSummaries}
+
+请按以下结构输出分析报告（Markdown，适当使用 📊📈⚠️✅🔴🟡🟢 等图标增强可读性）：
+
+1. **📊 数据概览**：整体数据量、表关联关系
+   - 用 \`\`\`mermaid 输出一张饼图（pie），展示各表数据量占比
+2. **🔍 关键发现**：数据中值得关注的模式、异常或亮点（至少5条）
+   - 如有数值对比，用 \`\`\`mermaid 输出柱状图（bar 或 xychart-beta）
+3. **📈 趋势与建议**：基于数据给出项目管理建议
+4. **🛡️ 数据质量**：缺失值、不一致或异常值情况
+
+Mermaid 图表示例格式：
+\`\`\`mermaid
+pie showData
+    title 各表数据分布
+    "进度表" : 23
+    "成本表" : 5
+    "风险表" : 8
+\`\`\``,
+    },
+    single_table: {
+      id: "__builtin_single__",
+      name: "默认单表分析",
+      prompt_type: "single_table",
+      is_default: true,
+      project_schema: "",
+      system_message: "你是一个项目管理数据分析专家，擅长从结构化数据中提炼洞察。使用中文回复，报告要具体、可操作。始终使用人类可读的项目名称和表名，绝不输出数据库内部标识符。",
+      user_prompt: `你是一个项目管理数据分析专家。请对项目【\${projectName}】中的【\${tableName}】表进行深入分析。
+
+\${baseRules}
+\${moduleHint}
+
+数据：
+\${tableSummaries}
+
+请按以下结构输出分析报告（Markdown，适当使用 📊📈⚠️✅🔴🟡🟢 等图标增强可读性）：
+
+1. **📊 数据概览**：该表的数据规模、字段结构概要
+2. **🔍 关键发现**：数据中值得关注的模式、异常或亮点（至少3条）
+   - 如有数值对比，用 \`\`\`mermaid 输出柱状图
+3. **📈 \${moduleHintPrefix}**：基于数据分析给出具体管理建议
+4. **🛡️ 数据质量**：缺失值、不一致或异常值情况`,
+    },
+  } as Record<string, TemplateItem>), []);
+
   const fetchTemplates = useCallback(async () => {
     try {
       const res = await fetch(
@@ -79,6 +140,19 @@ export function AIPromptDialog({
       );
       const json = await res.json();
       const list: TemplateItem[] = json.data || [];
+
+      // API 无数据时用内置默认
+      if (list.length === 0) {
+        const builtin = builtinDefaults[promptType];
+        if (builtin) {
+          setTemplates([builtin]);
+          setSelectedId(builtin.id);
+          setSystemMessage(builtin.system_message);
+          setUserPrompt(builtin.user_prompt);
+          return;
+        }
+      }
+
       // 排序：默认模板在前
       list.sort((a, b) => (a.is_default === b.is_default ? 0 : a.is_default ? -1 : 1));
       setTemplates(list);
@@ -90,8 +164,17 @@ export function AIPromptDialog({
         setSystemMessage(def.system_message || "");
         setUserPrompt(def.user_prompt || "");
       }
-    } catch { /* ignore */ }
-  }, [projectSchema, promptType]);
+    } catch {
+      // 网络错误时也用内置默认
+      const builtin = builtinDefaults[promptType];
+      if (builtin) {
+        setTemplates([builtin]);
+        setSelectedId(builtin.id);
+        setSystemMessage(builtin.system_message);
+        setUserPrompt(builtin.user_prompt);
+      }
+    }
+  }, [projectSchema, promptType, builtinDefaults]);
 
   useEffect(() => {
     if (open) {
