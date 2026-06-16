@@ -25,6 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Markdown } from "@/components/markdown";
+import { AIPromptDialog } from "@/components/ai-prompt-dialog";
 import {
   Select,
   SelectContent,
@@ -348,8 +349,27 @@ export function ProjectDetail({
   const [aiConversationHistory, setAiConversationHistory] = useState<Array<{ role: string; content: string }>>([]);
   const [aiFollowUpQuestion, setAiFollowUpQuestion] = useState("");
   const [aiFollowUpLoading, setAiFollowUpLoading] = useState(false);
+  const [aiPromptDialogOpen, setAiPromptDialogOpen] = useState(false);
+  const [aiPendingTableCode, setAiPendingTableCode] = useState<string>("");
+  const [aiCustomSystemMessage, setAiCustomSystemMessage] = useState("");
+  const [aiCustomUserPrompt, setAiCustomUserPrompt] = useState("");
 
-  const handleAIAnalysis = useCallback(async (tableCode?: string) => {
+  // AI 按钮 → 打开提示词对话框
+  const openAIPromptDialog = useCallback((tableCode?: string) => {
+    setAiPendingTableCode(tableCode || "");
+    setAiPromptDialogOpen(true);
+  }, []);
+
+  // 提示词对话框 → 执行分析
+  const handleAIPromptSubmit = useCallback((result: { systemMessage: string; userPrompt: string; templateId?: string }) => {
+    setAiCustomSystemMessage(result.systemMessage);
+    setAiCustomUserPrompt(result.userPrompt);
+    setAiPromptDialogOpen(false);
+    // 触发分析
+    handleAIAnalysis(aiPendingTableCode || undefined, result.systemMessage, result.userPrompt);
+  }, [aiPendingTableCode]);
+
+  const handleAIAnalysis = useCallback(async (tableCode?: string, customSystem?: string, customUserPrompt?: string) => {
     setAiDialogOpen(true);
     setAiLoading(true);
     setAiResult(null);
@@ -367,6 +387,8 @@ export function ProjectDetail({
           projectName: project.project_name,
           moduleName: activeModule,
           tableCode: tableCode || undefined,
+          ...(customSystem ? { systemMessage: customSystem } : {}),
+          ...(customUserPrompt ? { userPrompt: customUserPrompt } : {}),
         }),
       });
 
@@ -1295,7 +1317,7 @@ export function ProjectDetail({
           </button>
         ))}
         <button
-          onClick={() => handleAIAnalysis()}
+          onClick={() => openAIPromptDialog()}
           className="px-2 py-1 rounded text-[11px] leading-tight font-medium transition-all whitespace-nowrap text-center text-teal-600 hover:bg-teal-50 flex items-center gap-1"
         >
           <Sparkles className="w-3 h-3" />
@@ -1706,7 +1728,7 @@ export function ProjectDetail({
             </PopoverContent>
           </Popover>
           <button
-            onClick={() => handleAIAnalysis(table.table_code)}
+            onClick={() => openAIPromptDialog(table.table_code)}
             className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
           >
             <Sparkles className="h-3 w-3" />AI
@@ -2046,7 +2068,7 @@ export function ProjectDetail({
             </PopoverContent>
           </Popover>
           <button
-            onClick={() => handleAIAnalysis(table.table_code)}
+            onClick={() => openAIPromptDialog(table.table_code)}
             className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
           >
             <Sparkles className="h-3 w-3" />AI
@@ -2365,7 +2387,7 @@ export function ProjectDetail({
             </PopoverContent>
           </Popover>
           <button
-            onClick={() => handleAIAnalysis(table.table_code)}
+            onClick={() => openAIPromptDialog(table.table_code)}
             className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
           >
             <Sparkles className="h-3 w-3" />AI
@@ -2756,7 +2778,7 @@ export function ProjectDetail({
             {levelDesc} · {data.length} 条记录
           </span>
           <button
-            onClick={() => handleAIAnalysis(table.table_code)}
+            onClick={() => openAIPromptDialog(table.table_code)}
             className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
           >
             <Sparkles className="h-3 w-3" />AI
@@ -2805,7 +2827,7 @@ export function ProjectDetail({
               下一条 ▶
             </button>
             <button
-              onClick={() => handleAIAnalysis(table.table_code)}
+              onClick={() => openAIPromptDialog(table.table_code)}
               className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
             >
               <Sparkles className="h-3 w-3" />AI
@@ -3392,7 +3414,7 @@ export function ProjectDetail({
             ))}
           </div>
           <button
-            onClick={() => handleAIAnalysis(table.table_code)}
+            onClick={() => openAIPromptDialog(table.table_code)}
             className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors ml-auto"
           >
             <Sparkles className="h-3 w-3" />AI
@@ -3633,7 +3655,7 @@ export function ProjectDetail({
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs text-gray-400">按「{groupLabels}」分组 · {data.length} 条记录</span>
           <button
-            onClick={() => handleAIAnalysis(table.table_code)}
+            onClick={() => openAIPromptDialog(table.table_code)}
             className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
           >
             <Sparkles className="h-3 w-3" />AI
@@ -4138,6 +4160,16 @@ export function ProjectDetail({
         </DialogContent>
       </Dialog>
 
+      {/* AI 提示词模板弹窗 */}
+      <AIPromptDialog
+        open={aiPromptDialogOpen}
+        onOpenChange={setAiPromptDialogOpen}
+        onSubmit={handleAIPromptSubmit}
+        projectSchema={project.project_schema}
+        promptType={aiPendingTableCode ? "single_table" : "global"}
+        tableName={aiPendingTableCode || undefined}
+      />
+
       {/* AI 数据分析弹窗 */}
       <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
         <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
@@ -4188,7 +4220,7 @@ export function ProjectDetail({
                   <div className="space-y-3">
                     <p className="text-red-500 text-sm">分析失败</p>
                     <p className="text-red-400 text-xs">{aiError}</p>
-                    <Button variant="outline" size="sm" onClick={() => handleAIAnalysis(aiAnalyzingTable || undefined)}>
+                    <Button variant="outline" size="sm" onClick={() => handleAIAnalysis(aiAnalyzingTable || undefined, aiCustomSystemMessage || undefined, aiCustomUserPrompt || undefined)}>
                       重试
                     </Button>
                   </div>
@@ -4264,7 +4296,7 @@ export function ProjectDetail({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleAIAnalysis(aiAnalyzingTable || undefined)}
+                    onClick={() => handleAIAnalysis(aiAnalyzingTable || undefined, aiCustomSystemMessage || undefined, aiCustomUserPrompt || undefined)}
                   >
                     <Loader2 className="w-3.5 h-3.5 mr-1" />
                     重新分析

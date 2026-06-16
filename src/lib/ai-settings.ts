@@ -39,6 +39,143 @@ export async function ensureAITables() {
       `,
     });
   } catch { /* 表可能已存在 */ }
+
+  // 尝试创建 ai_prompt_templates 表
+  try {
+    await client.rpc("execute_sql", {
+      p_sql: `
+        CREATE TABLE IF NOT EXISTS design_public.ai_prompt_templates (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          project_schema TEXT NOT NULL DEFAULT '',
+          name TEXT NOT NULL,
+          prompt_type TEXT NOT NULL DEFAULT 'global',
+          is_default BOOLEAN NOT NULL DEFAULT false,
+          system_message TEXT NOT NULL DEFAULT '',
+          user_prompt TEXT NOT NULL DEFAULT '',
+          sort_order INTEGER DEFAULT 0,
+          created_by TEXT DEFAULT 'system',
+          created_by_name TEXT DEFAULT '系统',
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `,
+    });
+  } catch { /* 表可能已存在 */ }
+
+  // 写入种子数据
+  const defaults = [
+    {
+      project_schema: "",
+      name: "默认全局分析",
+      prompt_type: "global",
+      is_default: true,
+      sort_order: 1,
+      system_message: "你是一个项目管理数据分析专家，擅长从结构化数据中提炼洞察。使用中文回复，报告要具体、可操作。始终使用人类可读的项目名称和表名，绝不输出数据库内部标识符。",
+      user_prompt: "你是一个项目管理数据分析专家。请分析项目【${projectName}】的数据库内容，给出专业的分析报告。\n\n${baseRules}\n${moduleHint}\n数据表数量: ${tableCount} | 总数据行数: ${totalRows}\n\n各表结构与样本数据：\n${tableSummaries}\n\n请按以下结构输出分析报告（Markdown，适当使用 📊📈⚠️✅🔴🟡🟢 等图标增强可读性）：\n\n1. **📊 数据概览**：整体数据量、表关联关系\n   - 用 ```mermaid 输出一张饼图（pie），展示各表数据量占比\n2. **🔍 关键发现**：数据中值得关注的模式、异常或亮点（至少5条）\n   - 如有数值对比，用 ```mermaid 输出柱状图\n3. **📈 趋势与建议**：基于数据给出项目管理建议\n4. **🛡️ 数据质量**：缺失值、不一致或异常值情况",
+    },
+    {
+      project_schema: "",
+      name: "默认单表分析",
+      prompt_type: "single_table",
+      is_default: true,
+      sort_order: 2,
+      system_message: "你是一个项目管理数据分析专家，擅长从结构化数据中提炼洞察。使用中文回复，报告要具体、可操作。始终使用人类可读的项目名称和表名，绝不输出数据库内部标识符。",
+      user_prompt: "你是一个项目管理数据分析专家。请对项目【${projectName}】中的【${tableName}】表进行深入分析。\n\n${baseRules}\n${moduleHint}\n\n数据：\n${tableSummaries}\n\n请按以下结构输出分析报告（Markdown，适当使用 📊📈⚠️✅🔴🟡🟢 等图标增强可读性）：\n\n1. **📊 数据概览**：该表的数据规模、字段结构概要\n2. **🔍 关键发现**：数据中值得关注的模式、异常或亮点（至少3条）\n   - 如有数值对比，用 ```mermaid 输出柱状图\n3. **📈 ${moduleHintPrefix}**：基于数据分析给出具体管理建议\n4. **🛡️ 数据质量**：缺失值、不一致或异常值情况",
+    },
+  ];
+
+  for (const d of defaults) {
+    try {
+      const { data } = await client.rpc("dp_select", { p_table: "ai_prompt_templates" });
+      const rows = (data as Record<string, unknown>[]) || [];
+      const exists = rows.some(
+        (r) => r.is_default === true && r.prompt_type === d.prompt_type && String(r.project_schema || "") === (d as any).project_schema
+      );
+      if (!exists) {
+        await client.rpc("dp_insert", { p_table: "ai_prompt_templates", p_data: d as any });
+      }
+    } catch { /* 种子数据插入失败 */ }
+  }
+}
+
+// ==================== 提示词模板 CRUD ====================
+export async function getPromptTemplates(params: { projectSchema: string; promptType?: string }) {
+  const client = await createServerClient();
+  await ensureAITables();
+  const { data } = await client.rpc("dp_select", { p_table: "ai_prompt_templates" });
+  const rows = (data as Record<string, unknown>[]) || [];
+  const matched = rows.filter((r) => {
+    const ps = String(r.project_schema || "");
+    return ps === params.projectSchema || ps === "";
+  });
+  if (params.promptType) {
+    return matched.filter((r) => String(r.prompt_type) === params.promptType);
+  }
+  return matched;
+}
+
+export async function savePromptTemplate(params: {
+  id?: string;
+  project_schema: string;
+  name: string;
+  prompt_type: string;
+  system_message: string;
+  user_prompt: string;
+  created_by?: string;
+  created_by_name?: string;
+}) {
+  const client = await createServerClient();
+  await ensureAITables();
+
+  if (params.id) {
+    const { data: existing } = await client.rpc("dp_select", { p_table: "ai_prompt_templates" });
+    const rows = (existing as Record<string, unknown>[]) || [];
+    const found = rows.find((r) => r.id === params.id);
+    if (!found) throw new Error("模板不存在");
+    if (found.is_default === true) throw new Error("默认模板不可编辑");
+
+    await client.rpc("dp_update", {
+      p_table: "ai_prompt_templates",
+      p_id: params.id,
+      p_data: {
+        name: params.name,
+        system_message: params.system_message,
+        user_prompt: params.user_prompt,
+        updated_at: new Date().toISOString(),
+      },
+    });
+    return { id: params.id };
+  }
+
+  const result = await client.rpc("dp_insert", {
+    p_table: "ai_prompt_templates",
+    p_data: {
+      project_schema: params.project_schema,
+      name: params.name,
+      prompt_type: params.prompt_type,
+      is_default: false,
+      system_message: params.system_message,
+      user_prompt: params.user_prompt,
+      sort_order: 10,
+      created_by: params.created_by || "user",
+      created_by_name: params.created_by_name || "当前用户",
+    } as any,
+  });
+  const raw: any = result;
+  const inserted = Array.isArray(raw?.data) ? raw.data[0] : raw?.data;
+  const id = (inserted as any)?.id as string;
+  return { id };
+}
+
+export async function deletePromptTemplate(id: string) {
+  const client = await createServerClient();
+  const { data: existing } = await client.rpc("dp_select", { p_table: "ai_prompt_templates" });
+  const rows = (existing as Record<string, unknown>[]) || [];
+  const found = rows.find((r) => r.id === id);
+  if (!found) throw new Error("模板不存在");
+  if (found.is_default === true) throw new Error("默认模板不可删除");
+
+  await client.rpc("dp_delete", { p_table: "ai_prompt_templates", p_id: id });
 }
 
 // ==================== 配置读写 ====================

@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   try {
     await ensureAITables();
     const body = await request.json();
-    const { projectSchema, projectName, moduleName, tableCode, userId, userName, question, conversationHistory } = body;
+    const { projectSchema, projectName, moduleName, tableCode, userId, userName, question, conversationHistory, systemMessage, userPrompt } = body;
 
     if (!projectSchema) {
       return NextResponse.json({ error: "缺少 projectSchema" }, { status: 400 });
@@ -180,57 +180,78 @@ export async function POST(request: Request) {
 
     const displayProjectName = projectName || projectSchema;
     const moduleHint = MODULE_PROMPT_HINTS[moduleName] || "全面分析项目数据";
+    const moduleHintPrefix = moduleHint.slice(0, 30);
 
     const baseRules = `【重要规则】
 - 项目名称是"${displayProjectName}"，不要使用 "${projectSchema}" 这个内部标识
 - 各表的显示名称见上文括号内标注，请始终使用显示名称，不要使用内部表码
 - 报告里绝对不要出现原始数据库标识符（如 ${projectSchema}、表码等），只使用中文可读名称`;
 
-    const prompt = tableCode
-      ? `你是一个项目管理数据分析专家。请对项目【${displayProjectName}】中的【${displayName(tableCode)}】表进行深入分析。
+    // 变量替换函数
+    function substituteVariables(template: string): string {
+      const vars: Record<string, string> = {
+        projectName: displayProjectName,
+        projectSchema,
+        moduleName: moduleName || "全部模块",
+        moduleHint,
+        moduleHintPrefix,
+        baseRules,
+        tableSummaries,
+        tableCount: String(tables.length),
+        totalRows: String(totalRows),
+        tableName: tableCode ? displayName(tableCode) : "",
+        tableCode: tableCode || "",
+      };
+      return template.replace(/\$\{(\w+)\}/g, (_, key) => vars[key] ?? `$\{${key}}`);
+    }
 
-${baseRules}
-${moduleHint}
+    // 使用自定义 prompt 或默认 prompt
+    const defaultSystemMessage = "你是一个项目管理数据分析专家，擅长从结构化数据中提炼洞察。使用中文回复，报告要具体、可操作。始终使用人类可读的项目名称和表名，绝不输出数据库内部标识符。";
+    const effectiveSystemMessage = systemMessage || defaultSystemMessage;
+
+    let effectiveUserPrompt: string;
+    if (userPrompt) {
+      effectiveUserPrompt = substituteVariables(userPrompt);
+    } else if (tableCode) {
+      effectiveUserPrompt = `你是一个项目管理数据分析专家。请对项目【\${projectName}】中的【\${tableName}】表进行深入分析。
+
+\${baseRules}
+\${moduleHint}
 
 数据：
-${tableSummaries}
+\${tableSummaries}
 
 请按以下结构输出分析报告（Markdown）：
 1. **数据概览**：该表的数据规模、字段结构概要
 2. **关键发现**：数据中值得关注的模式、异常或亮点（至少3条）
-3. **${moduleName ? moduleHint.slice(0, 30) : "趋势与建议"}**：基于数据分析给出具体管理建议
-4. **数据质量**：缺失值、不一致或异常值情况`
-      : `你是一个项目管理数据分析专家。请分析项目【${displayProjectName}】的数据库内容，给出专业的分析报告。
+3. **\${moduleHintPrefix}**：基于数据分析给出具体管理建议
+4. **数据质量**：缺失值、不一致或异常值情况`;
+      effectiveUserPrompt = substituteVariables(effectiveUserPrompt);
+    } else {
+      effectiveUserPrompt = `你是一个项目管理数据分析专家。请分析项目【\${projectName}】的数据库内容，给出专业的分析报告。
 
-${baseRules}
-${moduleHint}
-数据表数量: ${tables.length} | 总数据行数: ${totalRows}
+\${baseRules}
+\${moduleHint}
+数据表数量: \${tableCount} | 总数据行数: \${totalRows}
 
 各表结构与样本数据：
-${tableSummaries}
+\${tableSummaries}
 
 请按以下结构输出分析报告（Markdown，适当使用 📊📈⚠️✅🔴🟡🟢 等图标增强可读性）：
 
 1. **📊 数据概览**：整体数据量、表关联关系
    - 用 \`\`\`mermaid 输出一张饼图（pie），展示各表数据量占比
 2. **🔍 关键发现**：数据中值得关注的模式、异常或亮点（至少5条）
-   - 如有数值对比，用 \`\`\`mermaid 输出柱状图（bar 或 xychart-beta）
+   - 如有数值对比，用 \`\`\`mermaid 输出柱状图
 3. **📈 趋势与建议**：基于数据给出项目管理建议
-4. **🛡️ 数据质量**：缺失值、不一致或异常值情况
-
-Mermaid 图表示例格式：
-\`\`\`mermaid
-pie showData
-    title 各表数据分布
-    "进度表" : 23
-    "成本表" : 5
-    "风险表" : 8
-\`\`\``;
+4. **🛡️ 数据质量**：缺失值、不一致或异常值情况`;
+      effectiveUserPrompt = substituteVariables(effectiveUserPrompt);
+    }
 
     // 4. 调用大模型
     const { content, tokens } = await chatCompletion([
-      { role: "system", content: "你是一个项目管理数据分析专家，擅长从结构化数据中提炼洞察。使用中文回复，报告要具体、可操作。始终使用人类可读的项目名称和表名，绝不输出数据库内部标识符。" },
-      { role: "user", content: prompt },
+      { role: "system", content: effectiveSystemMessage },
+      { role: "user", content: effectiveUserPrompt },
     ]);
 
     // 5. 记录日志
@@ -242,10 +263,9 @@ pie showData
         tableCount: tables.length,
         totalRows,
         tokens,
-        // 返回对话历史供前端追问复用
         conversationHistory: [
-          { role: "system", content: "你是一个项目管理数据分析专家，擅长从结构化数据中提炼洞察。使用中文回复，报告要具体、可操作。始终使用人类可读的项目名称和表名，绝不输出数据库内部标识符。" },
-          { role: "user", content: prompt },
+          { role: "system", content: effectiveSystemMessage },
+          { role: "user", content: effectiveUserPrompt },
           { role: "assistant", content },
         ],
       },
