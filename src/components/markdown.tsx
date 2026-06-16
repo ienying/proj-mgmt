@@ -62,7 +62,8 @@ function parseBlocks(md: string): Block[] {
         i++;
       }
       if (lang === "mermaid") {
-        blocks.push({ type: "chart", text: codeLines.join("\n") });
+        // 修复中文引号→ASCII（DeepSeek 常输出中文引号导致 mermaid 解析失败）
+        blocks.push({ type: "chart", text: codeLines.join("\n").replace(/“/g, '"').replace(/”/g, '"') });
       } else {
         blocks.push({ type: "code", lang, text: codeLines.join("\n") });
       }
@@ -138,7 +139,8 @@ function parseBlocks(md: string): Block[] {
       const text = pLines.join("\n");
       // 检测裸 mermaid（AI 有时省略 ```mermaid 包裹）
       if (/^(pie|graph\s|flowchart\s|gantt\s|sequenceDiagram|classDiagram|stateDiagram|erDiagram|journey|gitgraph)\b/i.test(text.trim())) {
-        blocks.push({ type: "chart", text });
+        // 修复中文引号→ASCII
+        blocks.push({ type: "chart", text: text.replace(/"/g, '"').replace(/"/g, '"') });
       } else {
         blocks.push({ type: "p", tokens: parseInline(text) });
       }
