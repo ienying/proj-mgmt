@@ -1,71 +1,47 @@
 import { createServerClient } from "@/storage/database/pg-client";
-import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync } from "crypto";
-import { logAIUsage } from "@/lib/ai-usage-logger";
 
-const CRYPTO_PASSWORD = process.env.AI_ENCRYPTION_KEY || "change-me-32-bytes-secret-key!!";
-const ALGORITHM = "aes-256-gcm";
-
-function getKey(): Buffer {
-  return pbkdf2Sync(CRYPTO_PASSWORD, "ai-settings-salt", 100000, 32, "sha256");
-}
-
-function encrypt(text: string): string {
-  const key = getKey();
-  const iv = randomBytes(12);
-  const cipher = createCipheriv(ALGORITHM, key, iv);
-  const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  const combined = Buffer.concat([iv, tag, encrypted]);
-  // 使用 base64url（无 +/= 特殊字符，SQL 安全）
-  return combined.toString("base64url");
-}
-
-function decrypt(text: string): string {
-  const key = getKey();
-  const combined = Buffer.from(text, "base64url");
-  const iv = combined.subarray(0, 12);
-  const tag = combined.subarray(12, 28);
-  const encrypted = combined.subarray(28);
-  const decipher = createDecipheriv(ALGORITHM, key, iv);
-  decipher.setAuthTag(tag);
-  return decipher.update(encrypted) + decipher.final("utf8");
-}
-
-// 确保 ai_settings / ai_usage_logs 表存在于 design_public schema
+// ==================== 表结构确保 ====================
 export async function ensureAITables() {
   const client = await createServerClient();
 
-  await client.rpc("execute_sql", {
-    p_sql: `
-      CREATE TABLE IF NOT EXISTS design_public.ai_settings (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        key_name TEXT,
-        api_key TEXT,
-        base_url TEXT DEFAULT 'https://api.deepseek.com',
-        model TEXT DEFAULT 'deepseek-chat',
-        is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `,
-  });
+  // 尝试创建 ai_settings 表（dp_select 在 design_public 中查找）
+  try {
+    await client.rpc("execute_sql", {
+      p_sql: `
+        CREATE TABLE IF NOT EXISTS design_public.ai_settings (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          key_name TEXT,
+          api_key TEXT,
+          base_url TEXT DEFAULT 'https://api.deepseek.com',
+          model TEXT DEFAULT 'deepseek-chat',
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `,
+    });
+  } catch { /* 表可能已存在 */ }
 
-  await client.rpc("execute_sql", {
-    p_sql: `
-      CREATE TABLE IF NOT EXISTS design_public.ai_usage_logs (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id TEXT,
-        user_name TEXT,
-        feature TEXT,
-        tokens_used INTEGER DEFAULT 0,
-        model TEXT DEFAULT 'deepseek-chat',
-        project_id TEXT,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `,
-  });
+  // 尝试创建 ai_usage_logs 表
+  try {
+    await client.rpc("execute_sql", {
+      p_sql: `
+        CREATE TABLE IF NOT EXISTS design_public.ai_usage_logs (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id TEXT,
+          user_name TEXT,
+          feature TEXT,
+          tokens_used INTEGER DEFAULT 0,
+          model TEXT DEFAULT 'deepseek-chat',
+          project_id TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `,
+    });
+  } catch { /* 表可能已存在 */ }
 }
 
+// ==================== 配置读写 ====================
 export async function getAISettings(): Promise<{
   apiKey: string;
   baseUrl: string;
@@ -74,25 +50,16 @@ export async function getAISettings(): Promise<{
 } | null> {
   try {
     const client = await createServerClient();
-    await ensureAITables();
-
-    const { data } = await client.rpc("execute_sql", {
-      p_sql: `SELECT * FROM design_public.ai_settings WHERE is_active = true ORDER BY created_at DESC LIMIT 1`,
+    const { data } = await client.rpc("dp_select", {
+      p_table: "ai_settings",
     });
     const rows = (data as Record<string, unknown>[]) || [];
-    const active = rows[0];
+    const active = rows.find((r) => r.is_active === true);
     if (!active) return null;
 
-    const encryptedKey = String(active.api_key || "");
-    let apiKey = "";
-    try {
-      apiKey = decrypt(encryptedKey);
-    } catch {
-      return null;
-    }
-
-    const raw = apiKey || "";
-    const maskedKey = raw.length > 4 ? "****-****-" + raw.slice(-4) : "****";
+    const raw = String(active.api_key || "");
+    const maskedKey =
+      raw.length > 4 ? "****-****-" + raw.slice(-4) : "****";
 
     return {
       apiKey: raw,
@@ -111,26 +78,36 @@ export async function saveAISettings(params: {
   model?: string;
 }) {
   const client = await createServerClient();
-  await ensureAITables();
 
-  const encryptedKey = encrypt(params.apiKey);
-  const baseUrl = params.baseUrl || "https://api.deepseek.com";
-  const model = params.model || "deepseek-chat";
-
-  // 清空旧数据（避免旧加密格式残留），插入新记录
-  await client.rpc("execute_sql", {
-    p_sql: `DELETE FROM design_public.ai_settings`,
+  // 先删后插，确保干净
+  const { data: existing } = await client.rpc("dp_select", {
+    p_table: "ai_settings",
   });
+  const rows = (existing as Record<string, unknown>[]) || [];
+  for (const row of rows) {
+    await client.rpc("dp_delete", {
+      p_table: "ai_settings",
+      p_id: row.id as string,
+    });
+  }
 
-  await client.rpc("execute_sql", {
-    p_sql: `
-      INSERT INTO design_public.ai_settings (key_name, api_key, base_url, model, is_active)
-      VALUES ('DeepSeek', '${encryptedKey.replace(/'/g, "''")}', '${baseUrl.replace(/'/g, "''")}', '${model.replace(/'/g, "''")}', true)
-    `,
+  await client.rpc("dp_insert", {
+    p_table: "ai_settings",
+    p_data: {
+      key_name: "DeepSeek",
+      api_key: params.apiKey,
+      base_url: params.baseUrl || "https://api.deepseek.com",
+      model: params.model || "deepseek-chat",
+      is_active: true,
+    },
   });
 }
 
-export async function testAIConnection(apiKey: string, baseUrl: string): Promise<{ ok: boolean; models: string[]; error: string }> {
+// ==================== 连接测试 ====================
+export async function testAIConnection(
+  apiKey: string,
+  baseUrl: string
+): Promise<{ ok: boolean; models: string[]; error: string }> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10000);
@@ -139,9 +116,10 @@ export async function testAIConnection(apiKey: string, baseUrl: string): Promise
       signal: controller.signal,
     });
     clearTimeout(timer);
+
     if (!res.ok) {
       const err = await res.text();
-      return { ok: false, models: [], error: `HTTP ${res.status}: ${err.slice(0, 200)}` };
+      return { ok: false, models: [], error: `HTTP ${res.status}: ${err.slice(0, 300)}` };
     }
     const json = await res.json();
     const models = (json.data || []).map((m: { id: string }) => m.id);
@@ -151,7 +129,8 @@ export async function testAIConnection(apiKey: string, baseUrl: string): Promise
   }
 }
 
-async function chatCompletion(
+// ==================== 大模型调用 ====================
+export async function chatCompletion(
   messages: Array<{ role: string; content: string }>,
   options?: { model?: string; maxTokens?: number }
 ) {
@@ -186,5 +165,3 @@ async function chatCompletion(
   const tokens = json.usage?.total_tokens || 0;
   return { content, tokens };
 }
-
-export { chatCompletion, logAIUsage };
