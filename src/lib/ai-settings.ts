@@ -62,7 +62,7 @@ export async function ensureAITables() {
     });
   } catch { /* 表可能已存在 */ }
 
-  // 写入种子数据
+  // 写入种子数据（先删旧的默认模板，再插入最新版本）
   const defaults = [
     {
       project_schema: "",
@@ -71,7 +71,32 @@ export async function ensureAITables() {
       is_default: true,
       sort_order: 1,
       system_message: "你是一个项目管理数据分析专家，擅长从结构化数据中提炼洞察。使用中文回复，报告要具体、可操作。始终使用人类可读的项目名称和表名，绝不输出数据库内部标识符。",
-      user_prompt: "你是一个项目管理数据分析专家。请分析项目【${projectName}】的数据库内容，给出专业的分析报告。\n\n${baseRules}\n${moduleHint}\n数据表数量: ${tableCount} | 总数据行数: ${totalRows}\n\n各表结构与样本数据：\n${tableSummaries}\n\n请按以下结构输出分析报告（Markdown，适当使用 📊📈⚠️✅🔴🟡🟢 等图标增强可读性）：\n\n1. **📊 数据概览**：整体数据量、表关联关系\n   - 用 ```mermaid 输出一张饼图（pie），展示各表数据量占比\n2. **🔍 关键发现**：数据中值得关注的模式、异常或亮点（至少5条）\n   - 如有数值对比，用 ```mermaid 输出柱状图\n3. **📈 趋势与建议**：基于数据给出项目管理建议\n4. **🛡️ 数据质量**：缺失值、不一致或异常值情况",
+      user_prompt: `你是一个项目管理数据分析专家。请分析项目【\${projectName}】的数据库内容，给出专业的分析报告。
+
+\${baseRules}
+\${moduleHint}
+数据表数量: \${tableCount} | 总数据行数: \${totalRows}
+
+各表结构与样本数据：
+\${tableSummaries}
+
+请按以下结构输出分析报告（Markdown，适当使用 📊📈⚠️✅🔴🟡🟢 等图标增强可读性）：
+
+1. **📊 数据概览**：整体数据量、表关联关系
+   - 用 \`\`\`mermaid 输出一张饼图（pie），展示各表数据量占比
+2. **🔍 关键发现**：数据中值得关注的模式、异常或亮点（至少5条）
+   - 如有数值对比，用 \`\`\`mermaid 输出柱状图（bar 或 xychart-beta）
+3. **📈 趋势与建议**：基于数据给出项目管理建议
+4. **🛡️ 数据质量**：缺失值、不一致或异常值情况
+
+Mermaid 图表示例格式：
+\`\`\`mermaid
+pie showData
+    title 各表数据分布
+    "进度表" : 23
+    "成本表" : 5
+    "风险表" : 8
+\`\`\``,
     },
     {
       project_schema: "",
@@ -80,22 +105,49 @@ export async function ensureAITables() {
       is_default: true,
       sort_order: 2,
       system_message: "你是一个项目管理数据分析专家，擅长从结构化数据中提炼洞察。使用中文回复，报告要具体、可操作。始终使用人类可读的项目名称和表名，绝不输出数据库内部标识符。",
-      user_prompt: "你是一个项目管理数据分析专家。请对项目【${projectName}】中的【${tableName}】表进行深入分析。\n\n${baseRules}\n${moduleHint}\n\n数据：\n${tableSummaries}\n\n请按以下结构输出分析报告（Markdown，适当使用 📊📈⚠️✅🔴🟡🟢 等图标增强可读性）：\n\n1. **📊 数据概览**：该表的数据规模、字段结构概要\n2. **🔍 关键发现**：数据中值得关注的模式、异常或亮点（至少3条）\n   - 如有数值对比，用 ```mermaid 输出柱状图\n3. **📈 ${moduleHintPrefix}**：基于数据分析给出具体管理建议\n4. **🛡️ 数据质量**：缺失值、不一致或异常值情况",
+      user_prompt: `你是一个项目管理数据分析专家。请对项目【\${projectName}】中的【\${tableName}】表进行深入分析。
+
+\${baseRules}
+\${moduleHint}
+
+数据：
+\${tableSummaries}
+
+请按以下结构输出分析报告（Markdown，适当使用 📊📈⚠️✅🔴🟡🟢 等图标增强可读性）：
+
+1. **📊 数据概览**：该表的数据规模、字段结构概要
+2. **🔍 关键发现**：数据中值得关注的模式、异常或亮点（至少3条）
+   - 如有数值对比，用 \`\`\`mermaid 输出柱状图
+3. **📈 \${moduleHintPrefix}**：基于数据分析给出具体管理建议
+4. **🛡️ 数据质量**：缺失值、不一致或异常值情况`,
     },
   ];
 
-  for (const d of defaults) {
-    try {
-      const { data } = await client.rpc("dp_select", { p_table: "ai_prompt_templates" });
-      const rows = (data as Record<string, unknown>[]) || [];
-      const exists = rows.some(
-        (r) => r.is_default === true && r.prompt_type === d.prompt_type && String(r.project_schema || "") === (d as any).project_schema
+  try {
+    const { data } = await client.rpc("dp_select", { p_table: "ai_prompt_templates" });
+    const rows = (data as Record<string, unknown>[]) || [];
+
+    for (const d of defaults) {
+      const oldDefault = rows.find(
+        (r) => r.is_default === true && r.prompt_type === d.prompt_type && String(r.project_schema || "") === ""
       );
-      if (!exists) {
+      if (oldDefault) {
+        // 已有默认模板，覆盖更新确保内容是最新版
+        await client.rpc("dp_update", {
+          p_table: "ai_prompt_templates",
+          p_id: oldDefault.id as string,
+          p_data: {
+            name: d.name,
+            system_message: d.system_message,
+            user_prompt: d.user_prompt,
+            updated_at: new Date().toISOString(),
+          },
+        });
+      } else {
         await client.rpc("dp_insert", { p_table: "ai_prompt_templates", p_data: d as any });
       }
-    } catch { /* 种子数据插入失败 */ }
-  }
+    }
+  } catch { /* 种子数据维护失败，降级使用已有模板 */ }
 }
 
 // ==================== 提示词模板 CRUD ====================
