@@ -207,14 +207,16 @@ const MermaidChart = memo(function MermaidChart({ chart }: { chart: string }) {
     return <pre className="bg-red-50 border border-red-200 rounded-lg p-4 my-3 text-xs text-red-600 overflow-x-auto font-mono">{error + "\n\n" + chart}</pre>;
   }
 
+  if (!svg) {
+    return <div className="animate-pulse bg-gray-100 rounded h-40 w-full my-4" />;
+  }
+
   return (
     <div
       ref={containerRef}
       className="my-4 flex justify-center"
-      dangerouslySetInnerHTML={svg ? { __html: svg } : undefined}
-    >
-      {!svg && <div className="animate-pulse bg-gray-100 rounded h-40 w-full" />}
-    </div>
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
   );
 });
 
