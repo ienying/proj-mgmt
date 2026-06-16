@@ -49,17 +49,13 @@ export async function POST(request: Request) {
         { role: "user", content: `请整理以下文档内容：\n\n${extractedText.slice(0, 15000)}` },
       ]);
 
-      if (userId) {
-        logAIUsage({ userId, userName, feature: "file-transcribe", tokensUsed: tokens });
-      }
+      logAIUsage({ userId: userId || "default", userName: userName || "当前用户", feature: "file-transcribe", tokensUsed: tokens });
 
       return NextResponse.json({ data: { text: content, tokens } });
     }
 
     // 文本太短或无法提取，直接返回
-    if (userId) {
-      logAIUsage({ userId, userName, feature: "file-transcribe", tokensUsed: 0 });
-    }
+    logAIUsage({ userId: userId || "default", userName: userName || "当前用户", feature: "file-transcribe", tokensUsed: 0 });
 
     return NextResponse.json({ data: { text: extractedText, tokens: 0 } });
   } catch (err) {

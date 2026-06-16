@@ -51,9 +51,7 @@ export async function POST(request: Request) {
 
       const { content, tokens } = await chatCompletion(messages);
 
-      if (userId) {
-        logAIUsage({ userId, userName, feature: "analyze-project-followup", tokensUsed: tokens, projectId: projectSchema });
-      }
+      logAIUsage({ userId: userId || "default", userName: userName || "当前用户", feature: "analyze-project-followup", tokensUsed: tokens, projectId: projectSchema });
 
       return NextResponse.json({ data: { analysis: content, tokens } });
     }
@@ -224,9 +222,7 @@ ${tableSummaries}
     ]);
 
     // 5. 记录日志
-    if (userId) {
-      logAIUsage({ userId, userName, feature: "analyze-project", tokensUsed: tokens, projectId: projectSchema });
-    }
+    logAIUsage({ userId: userId || "default", userName: userName || "当前用户", feature: "analyze-project", tokensUsed: tokens, projectId: projectSchema });
 
     return NextResponse.json({
       data: {

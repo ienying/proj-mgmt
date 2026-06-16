@@ -43,9 +43,7 @@ export async function POST(request: Request) {
         const json = await res.json();
         const text = json.text || "";
 
-        if (userId) {
-          logAIUsage({ userId, userName, feature: "speech-to-text", tokensUsed: Math.ceil(text.length / 4) });
-        }
+        logAIUsage({ userId: userId || "default", userName: userName || "当前用户", feature: "speech-to-text", tokensUsed: Math.ceil(text.length / 4) });
 
         return NextResponse.json({ data: { text } });
       }
