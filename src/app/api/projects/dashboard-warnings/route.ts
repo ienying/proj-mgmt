@@ -277,23 +277,6 @@ ${projectDataText}`;
     // 7. 存入数据库
     const projectIdArr = projectSummaries.map((p) => p.id);
     const insertedBy = user_name || "当前用户";
-
-    await client.rpc("execute_sql", {
-      p_sql: `INSERT INTO design_public.dashboard_ai_warnings (project_ids, warnings, generated_by)
-              VALUES ($1, $2, $3)
-              RETURNING id, generated_at`,
-      // Use array format for parameterized query
-    }).catch(async () => {
-      // Fallback: use text interpolation for arrays
-      const idsStr = `{${projectIdArr.join(",")}}`;
-      const warningsJson = JSON.stringify(warnings).replace(/'/g, "''");
-      await client.rpc("execute_sql", {
-        p_sql: `INSERT INTO design_public.dashboard_ai_warnings (project_ids, warnings, generated_by)
-                VALUES ('${idsStr}', '${warningsJson}'::jsonb, '${insertedBy.replace(/'/g, "''")}')`,
-      });
-    });
-
-    // Use direct SQL for the insert to handle JSONB and arrays properly
     const warningsJson = JSON.stringify(warnings).replace(/'/g, "''");
     const idsStr = `{${projectIdArr.join(",")}}`;
     const safeUser = insertedBy.replace(/'/g, "''");

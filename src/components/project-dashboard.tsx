@@ -41,7 +41,6 @@ import {
   TrendingUp,
   Users,
   Search,
-  X,
   ChevronDown,
   FileText,
   Shield,
@@ -251,9 +250,11 @@ JSON 格式示例：
     loadCachedWarnings();
   }, []);
 
-  // 生成新 AI 预警
-  const generateAiWarnings = async () => {
+  // 生成新 AI 预警（可选传入自定义提示词）
+  const generateAiWarnings = async (opts?: { systemPrompt?: string; userPrompt?: string }) => {
     setAiGenerating(true);
+    const systemMsg = opts?.systemPrompt ?? (customSystemPrompt !== DEFAULT_SYSTEM_PROMPT ? customSystemPrompt : undefined);
+    const userMsg = opts?.userPrompt ?? (customUserPrompt !== DEFAULT_USER_PROMPT ? customUserPrompt : undefined);
     try {
       const projectIds = selectedIds.size > 0 ? Array.from(selectedIds) : undefined;
       const res = await fetch("/api/projects/dashboard-warnings", {
@@ -261,8 +262,8 @@ JSON 格式示例：
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           project_ids: projectIds,
-          system_message: customSystemPrompt !== DEFAULT_SYSTEM_PROMPT ? customSystemPrompt : undefined,
-          user_message: customUserPrompt !== DEFAULT_USER_PROMPT ? customUserPrompt : undefined,
+          system_message: systemMsg,
+          user_message: userMsg,
         }),
       });
       if (!res.ok) {
@@ -271,10 +272,13 @@ JSON 格式示例：
       }
       const json = await res.json();
       if (json.data) {
-        setAiWarnings(json.data.warnings || []);
+        const newWarnings = json.data.warnings || [];
+        setAiWarnings(newWarnings);
         setAiGeneratedAt(json.data.generated_at || null);
         setAiGeneratedBy(json.data.generated_by || null);
-        toast.success(`AI 预警生成完成，共 ${json.data.warnings?.length || 0} 条`);
+        // 展开全部级别筛选，确保 AI 生成的所有预警可见
+        setWarningLevelFilter(new Set(["error", "warning", "info"]));
+        toast.success(`AI 预警生成完成，共 ${newWarnings.length} 条`);
       }
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "AI 预警生成失败");
@@ -668,7 +672,7 @@ JSON 格式示例：
                 variant="outline"
                 size="sm"
                 className="h-7 text-xs gap-1"
-                onClick={generateAiWarnings}
+                onClick={() => generateAiWarnings()}
                 disabled={aiGenerating}
               >
                 {aiGenerating ? (
@@ -1005,8 +1009,12 @@ JSON 格式示例：
             <Button
               size="sm"
               onClick={() => {
+                const sys = customSystemPrompt;
+                const usr = customUserPrompt;
                 setPromptDialogOpen(false);
-                generateAiWarnings();
+                setTimeout(() => {
+                  generateAiWarnings({ systemPrompt: sys, userPrompt: usr });
+                }, 100);
               }}
             >
               <Sparkles className="w-3.5 h-3.5 mr-1" />
