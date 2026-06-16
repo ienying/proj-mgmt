@@ -1,56 +1,32 @@
 import { createServerClient } from "@/storage/database/pg-client";
+import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync } from "crypto";
 
-const CRYPTO_KEY = process.env.AI_ENCRYPTION_KEY || "change-me-32-bytes-secret-key!!";
+const CRYPTO_PASSWORD = process.env.AI_ENCRYPTION_KEY || "change-me-32-bytes-secret-key!!";
+const ALGORITHM = "aes-256-gcm";
 
-async function deriveKey(): Promise<CryptoKey> {
-  const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(CRYPTO_KEY).slice(0, 32),
-    { name: "PBKDF2" },
-    false,
-    ["deriveKey"]
-  );
-  return crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt: enc.encode("ai-settings-salt"),
-      iterations: 100000,
-      hash: "SHA-256",
-    },
-    keyMaterial,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"]
-  );
+function getKey(): Buffer {
+  return pbkdf2Sync(CRYPTO_PASSWORD, "ai-settings-salt", 100000, 32, "sha256");
 }
 
-async function encrypt(text: string): Promise<string> {
-  const key = await deriveKey();
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const enc = new TextEncoder();
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    key,
-    enc.encode(text)
-  );
-  const combined = new Uint8Array(iv.length + ciphertext.byteLength);
-  combined.set(iv);
-  combined.set(new Uint8Array(ciphertext), iv.length);
-  return Buffer.from(combined).toString("base64");
+function encrypt(text: string): string {
+  const key = getKey();
+  const iv = randomBytes(12);
+  const cipher = createCipheriv(ALGORITHM, key, iv);
+  const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  const combined = Buffer.concat([iv, tag, encrypted]);
+  return combined.toString("base64");
 }
 
-async function decrypt(text: string): Promise<string> {
-  const key = await deriveKey();
+function decrypt(text: string): string {
+  const key = getKey();
   const combined = Buffer.from(text, "base64");
-  const iv = combined.slice(0, 12);
-  const ciphertext = combined.slice(12);
-  const decrypted = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv },
-    key,
-    ciphertext
-  );
-  return new TextDecoder().decode(decrypted);
+  const iv = combined.subarray(0, 12);
+  const tag = combined.subarray(12, 28);
+  const encrypted = combined.subarray(28);
+  const decipher = createDecipheriv(ALGORITHM, key, iv);
+  decipher.setAuthTag(tag);
+  return decipher.update(encrypted) + decipher.final("utf8");
 }
 
 export async function getAISettings(): Promise<{
@@ -69,7 +45,13 @@ export async function getAISettings(): Promise<{
     if (!active) return null;
 
     const encryptedKey = String(active.api_key || "");
-    const apiKey = await decrypt(encryptedKey);
+    let apiKey = "";
+    try {
+      apiKey = decrypt(encryptedKey);
+    } catch {
+      // 解密失败，可能 key 损坏或加密方式变更，返回空
+      return null;
+    }
     const raw = apiKey || "";
     const maskedKey =
       raw.length > 4 ? "****-****-" + raw.slice(-4) : "****";
@@ -92,7 +74,7 @@ export async function saveAISettings(params: {
 }) {
   const client = await createServerClient();
 
-  const encryptedKey = await encrypt(params.apiKey);
+  const encryptedKey = encrypt(params.apiKey);
 
   // 先查是否有已有记录
   const { data: existing } = await client.rpc("dp_select", {
@@ -146,9 +128,17 @@ export async function testAIConnection(apiKey: string, baseUrl: string): Promise
 export async function ensureAITables() {
   const client = await createServerClient();
 
+  // 获取 search_path 中的默认 schema
+  const { data: schemaResult } = await client.rpc("execute_sql", {
+    p_sql: `SELECT current_schema() AS schema_name`,
+  });
+  const schemaName =
+    ((schemaResult as Array<{ schema_name: string }>)?.[0]?.schema_name) ||
+    "design_public";
+
   await client.rpc("execute_sql", {
     p_sql: `
-      CREATE TABLE IF NOT EXISTS design_public.ai_settings (
+      CREATE TABLE IF NOT EXISTS ${schemaName}.ai_settings (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         key_name TEXT,
         api_key TEXT,
@@ -163,7 +153,7 @@ export async function ensureAITables() {
 
   await client.rpc("execute_sql", {
     p_sql: `
-      CREATE TABLE IF NOT EXISTS design_public.ai_usage_logs (
+      CREATE TABLE IF NOT EXISTS ${schemaName}.ai_usage_logs (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id TEXT,
         user_name TEXT,
