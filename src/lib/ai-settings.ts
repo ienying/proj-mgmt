@@ -1,5 +1,6 @@
 import { createServerClient } from "@/storage/database/pg-client";
 import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync } from "crypto";
+import { logAIUsage } from "@/lib/ai-usage-logger";
 
 const CRYPTO_PASSWORD = process.env.AI_ENCRYPTION_KEY || "change-me-32-bytes-secret-key!!";
 const ALGORITHM = "aes-256-gcm";
@@ -29,6 +30,41 @@ function decrypt(text: string): string {
   return decipher.update(encrypted) + decipher.final("utf8");
 }
 
+// 确保 ai_settings / ai_usage_logs 表存在于 design_public schema
+export async function ensureAITables() {
+  const client = await createServerClient();
+
+  await client.rpc("execute_sql", {
+    p_sql: `
+      CREATE TABLE IF NOT EXISTS design_public.ai_settings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        key_name TEXT,
+        api_key TEXT,
+        base_url TEXT DEFAULT 'https://api.deepseek.com',
+        model TEXT DEFAULT 'deepseek-chat',
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `,
+  });
+
+  await client.rpc("execute_sql", {
+    p_sql: `
+      CREATE TABLE IF NOT EXISTS design_public.ai_usage_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id TEXT,
+        user_name TEXT,
+        feature TEXT,
+        tokens_used INTEGER DEFAULT 0,
+        model TEXT DEFAULT 'deepseek-chat',
+        project_id TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `,
+  });
+}
+
 export async function getAISettings(): Promise<{
   apiKey: string;
   baseUrl: string;
@@ -37,11 +73,13 @@ export async function getAISettings(): Promise<{
 } | null> {
   try {
     const client = await createServerClient();
-    const { data } = await client.rpc("dp_select", {
-      p_table: "ai_settings",
+    await ensureAITables();
+
+    const { data } = await client.rpc("execute_sql", {
+      p_sql: `SELECT * FROM design_public.ai_settings WHERE is_active = true ORDER BY created_at DESC LIMIT 1`,
     });
     const rows = (data as Record<string, unknown>[]) || [];
-    const active = rows.find((r) => r.is_active === true);
+    const active = rows[0];
     if (!active) return null;
 
     const encryptedKey = String(active.api_key || "");
@@ -49,12 +87,11 @@ export async function getAISettings(): Promise<{
     try {
       apiKey = decrypt(encryptedKey);
     } catch {
-      // 解密失败，可能 key 损坏或加密方式变更，返回空
       return null;
     }
+
     const raw = apiKey || "";
-    const maskedKey =
-      raw.length > 4 ? "****-****-" + raw.slice(-4) : "****";
+    const maskedKey = raw.length > 4 ? "****-****-" + raw.slice(-4) : "****";
 
     return {
       apiKey: raw,
@@ -73,36 +110,38 @@ export async function saveAISettings(params: {
   model?: string;
 }) {
   const client = await createServerClient();
+  await ensureAITables();
 
   const encryptedKey = encrypt(params.apiKey);
+  const baseUrl = params.baseUrl || "https://api.deepseek.com";
+  const model = params.model || "deepseek-chat";
 
-  // 先查是否有已有记录
-  const { data: existing } = await client.rpc("dp_select", {
-    p_table: "ai_settings",
+  // 查询已有记录
+  const { data: existing } = await client.rpc("execute_sql", {
+    p_sql: `SELECT id FROM design_public.ai_settings LIMIT 1`,
   });
   const rows = (existing as Record<string, unknown>[]) || [];
 
-  if (rows.length > 0) {
-    await client.rpc("dp_update", {
-      p_table: "ai_settings",
-      p_id: rows[0].id,
-      p_data: {
-        api_key: encryptedKey,
-        base_url: params.baseUrl || "https://api.deepseek.com",
-        model: params.model || "deepseek-chat",
-        is_active: true,
-      },
+  if (rows.length > 0 && rows[0].id) {
+    // 更新
+    await client.rpc("execute_sql", {
+      p_sql: `
+        UPDATE design_public.ai_settings
+        SET api_key = '${encryptedKey.replace(/'/g, "''")}',
+            base_url = '${baseUrl.replace(/'/g, "''")}',
+            model = '${model.replace(/'/g, "''")}',
+            is_active = true,
+            updated_at = NOW()
+        WHERE id = '${String(rows[0].id).replace(/'/g, "''")}'
+      `,
     });
   } else {
-    await client.rpc("dp_insert", {
-      p_table: "ai_settings",
-      p_data: {
-        key_name: "DeepSeek",
-        api_key: encryptedKey,
-        base_url: params.baseUrl || "https://api.deepseek.com",
-        model: params.model || "deepseek-chat",
-        is_active: true,
-      },
+    // 插入
+    await client.rpc("execute_sql", {
+      p_sql: `
+        INSERT INTO design_public.ai_settings (key_name, api_key, base_url, model, is_active)
+        VALUES ('DeepSeek', '${encryptedKey.replace(/'/g, "''")}', '${baseUrl.replace(/'/g, "''")}', '${model.replace(/'/g, "''")}', true)
+      `,
     });
   }
 }
@@ -123,48 +162,6 @@ export async function testAIConnection(apiKey: string, baseUrl: string): Promise
   } catch (e) {
     return { ok: false, models: [], error: String(e) };
   }
-}
-
-export async function ensureAITables() {
-  const client = await createServerClient();
-
-  // 获取 search_path 中的默认 schema
-  const { data: schemaResult } = await client.rpc("execute_sql", {
-    p_sql: `SELECT current_schema() AS schema_name`,
-  });
-  const schemaName =
-    ((schemaResult as Array<{ schema_name: string }>)?.[0]?.schema_name) ||
-    "design_public";
-
-  await client.rpc("execute_sql", {
-    p_sql: `
-      CREATE TABLE IF NOT EXISTS ${schemaName}.ai_settings (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        key_name TEXT,
-        api_key TEXT,
-        base_url TEXT DEFAULT 'https://api.deepseek.com',
-        model TEXT DEFAULT 'deepseek-chat',
-        is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `,
-  });
-
-  await client.rpc("execute_sql", {
-    p_sql: `
-      CREATE TABLE IF NOT EXISTS ${schemaName}.ai_usage_logs (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id TEXT,
-        user_name TEXT,
-        feature TEXT,
-        tokens_used INTEGER DEFAULT 0,
-        model TEXT DEFAULT 'deepseek-chat',
-        project_id TEXT,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `,
-  });
 }
 
 async function chatCompletion(
@@ -200,4 +197,4 @@ async function chatCompletion(
   return { content, tokens };
 }
 
-export { chatCompletion };
+export { chatCompletion, logAIUsage };
