@@ -110,6 +110,15 @@ export interface ColumnConfig {
   };
 }
 
+function dedupeColumnsByName(cols: ColumnConfig[]): ColumnConfig[] {
+  const seen = new Set<string>();
+  return cols.filter((col) => {
+    if (seen.has(col.name)) return false;
+    seen.add(col.name);
+    return true;
+  });
+}
+
 const MODULE_TYPES = [
   { code: "scope", name: "范围管理" },
   { code: "schedule", name: "进度管理" },
@@ -836,8 +845,13 @@ export function StandardManagement({
   const openEditDialog = (def: TableDefinition) => {
     setEditingId(def.id);
     // 兼容旧数据：确保 module_type 是数组
+    const dedupedColumns = dedupeColumnsByName(def.columns_config || []);
+    if (dedupedColumns.length < (def.columns_config || []).length) {
+      toast.warning(`检测到 ${(def.columns_config || []).length - dedupedColumns.length} 个重复列名，已自动去除`);
+    }
     const normalizedDef = {
       ...def,
+      columns_config: dedupedColumns,
       module_type: Array.isArray(def.module_type)
         ? def.module_type
         : def.module_type
@@ -850,10 +864,16 @@ export function StandardManagement({
   };
 
   const handleSubmit = () => {
+    const cols = formData.columns_config || [];
+    const deduped = dedupeColumnsByName(cols);
+    if (deduped.length < cols.length) {
+      toast.warning(`检测到 ${cols.length - deduped.length} 个重复列名，已自动去除`);
+    }
+    const cleanFormData = { ...formData, columns_config: deduped };
     if (editingId) {
-      onUpdate(editingId, formData);
+      onUpdate(editingId, cleanFormData);
     } else {
-      onCreate(formData);
+      onCreate(cleanFormData);
     }
     setDialogOpen(false);
   };
@@ -1043,7 +1063,7 @@ export function StandardManagement({
 
   // 打开数据记录对话框
   const openDataDialog = async (def: TableDefinition) => {
-    setCurrentTableDef(def);
+    setCurrentTableDef({ ...def, columns_config: dedupeColumnsByName(def.columns_config || []) });
     setDataDialogOpen(true);
     await loadTableData(def.table_code);
   };

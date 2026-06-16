@@ -227,3 +227,103 @@
 | Token 计费 | 按 DeepSeek 官方定价估算，仅作展示参考 |
 | 数据安全 | 发往大模型的数据仅含列名/统计值/样本数据，自动过滤手机号/身份证等敏感字段 |
 | 前端 Loading | 所有 AI 调用统一 > 2s 展示 Loading 态，> 30s 展示超时重试 |
+
+
+
+除了默认的不可以改其余都可以
+
+在点击全局模式 — 点顶部 AI 分析按钮和单表模式 — 点表工具栏 AI 按钮的时候都先弹出对话框。将当前给 AI 的提示词做成模版可以引用。二次编辑后也可以保存成模板。模板依据项目来。所有有权限的人可以维护和删除。除了默认的不可以改其余都可以。你先告诉我你的数据库方案后。我确定了你在开始
+
+数据库方案
+新表 design_public.ai_prompt_templates
+
+CREATE TABLE IF NOT EXISTS design_public.ai_prompt_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_schema TEXT NOT NULL,          -- '' = 全局默认模板
+  name TEXT NOT NULL,                    -- 模板名称
+  prompt_type TEXT NOT NULL DEFAULT 'global',  -- 'global' | 'single_table'
+  is_default BOOLEAN NOT NULL DEFAULT false,  -- 默认模板受保护，不可改/删
+  system_message TEXT NOT NULL,          -- system role 提示词
+  user_prompt TEXT NOT NULL,             -- user prompt，含变量占位符
+  sort_order INTEGER DEFAULT 0,
+  created_by TEXT DEFAULT 'system',
+  created_by_name TEXT DEFAULT '系统',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+变量占位符
+用户 prompt 中支持以下变量，服务端解析替换：
+
+变量	含义	适用模式
+${projectName}	项目名称（如"遵义19"）	全局 + 单表
+${projectSchema}	内部 schema 标识	全局 + 单表
+${tableName}	表显示名	单表
+${tableCode}	表代码	单表
+${moduleName}	当前模块 code	全局
+${moduleHint}	模块分析提示词	全局 + 单表
+${tableSummaries}	表结构+样本数据 JSON	全局 + 单表
+${totalRows}	总行数	全局
+${tableCount}	表数量	全局
+${baseRules}	基础规则（名称映射等）	全局 + 单表
+种子数据（2 条默认模板，is_default = true）
+name	prompt_type	来源
+默认全局分析	global	当前全局 prompt
+默认单表分析	single_table	当前单表 prompt
+权限规则
+默认模板	自定义模板
+查看	✅ 所有人	✅ 所有人
+编辑	❌	✅ 任何有项目权限的人
+删除	❌	✅ 任何有项目权限的人
+新建	—	✅ 任何人
+前端交互流程
+
+点击 [AI 分析] 按钮
+  → 打开对话框
+  → 加载该项目 + 该模式下的模板列表
+  → 默认选中"默认模板"（或上次使用的模板）
+  → 显示：
+      [模板下拉选择器]  [★ 设为默认]  [🗑 删除]  [💾 另存为]
+      ┌─────────────────────────────┐
+      │ System Message (可编辑)      │
+      │ ┌─────────────────────────┐ │
+      │ │ ...                     │ │
+      │ └─────────────────────────┘ │
+      │ User Prompt (可编辑)         │
+      │ ┌─────────────────────────┐ │
+      │ │ ${projectName}...       │ │
+      │ │ 变量实时预览高亮          │ │
+      │ └─────────────────────────┘ │
+      │ [变量说明: ${projectName} ...]│
+      └─────────────────────────────┘
+  → [发送分析]
+API 设计
+方法	路径	用途
+GET	/api/ai/prompt-templates?projectSchema=&promptType=	列出模板
+POST	/api/ai/prompt-templates	新建模板
+PUT	/api/ai/prompt-templates?id=	更新模板（默认模板 403）
+DELETE	/api/ai/prompt-templates?id=	删除模板（默认模板 403）
+analyze-project 路由新增可选参数：
+
+templateId — 使用指定模板
+systemMessage — 覆盖 system（来自用户编辑）
+userPrompt — 覆盖 user prompt（来自用户编辑）
+改动波及
+文件	改动
+src/lib/ai-settings.ts	新增 ensureAITables 建表 + CRUD 函数
+src/app/api/ai/prompt-templates/route.ts	新增 API
+src/app/api/ai/analyze-project/route.ts	支持 templateId/systemMessage/userPrompt
+src/components/project-detail.tsx	AI 按钮 → 先弹配置对话框再发请求
+src/components/ai-prompt-dialog.tsx	新文件 — 模板选择 + 编辑对话框
+
+
+数据库：2 条默认模板已存入 design_public.ai_prompt_templates
+
+ID	名称	类型	保护
+3ca1...	默认全局分析	global	🔒
+dfce...	默认单表分析	single_table	🔒
+三道防线确保不可删除：
+
+层级	机制
+前端	isDefaultSelected 时删除按钮隐藏
+API	DELETE 检测 is_default=true 返回 403
+数据库	deletePromptTemplate() 抛异常 Error("默认模板不可删除")

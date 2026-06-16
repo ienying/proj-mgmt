@@ -165,6 +165,15 @@ interface TableData {
   [key: string]: unknown;
 }
 
+function dedupeColumnsByName(columns: ColumnConfig[]): ColumnConfig[] {
+  const seen = new Set<string>();
+  return columns.filter((col) => {
+    if (seen.has(col.name)) return false;
+    seen.add(col.name);
+    return true;
+  });
+}
+
 // 采购模块搜索选择组件
 function ProcurementModuleSelect({
   col,
@@ -681,7 +690,7 @@ export function ProjectDetail({
             table_name: d.table_name as string,
             module_codes: (d.module_type as string[]) || ["scope"],
             allow_add: d.allow_add as boolean | undefined,
-            columns_config: (d.columns_config as ColumnConfig[]).map(col => ({ ...col, key: col.key || col.name })),
+            columns_config: dedupeColumnsByName(d.columns_config as ColumnConfig[]).map(col => ({ ...col, key: col.key || col.name })),
           }));
 
         // 检测含有采购模块记录类型列的表，自动设置 allow_add = false
