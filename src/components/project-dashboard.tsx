@@ -137,6 +137,7 @@ export function ProjectDashboard({
 }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // 多选项目
@@ -154,7 +155,11 @@ export function ProjectDashboard({
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const fetchData = useCallback(async (ids?: string[]) => {
-    setLoading(true);
+    if (!data) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
     setError(null);
     try {
       const params = new URLSearchParams();
@@ -176,8 +181,9 @@ export function ProjectDashboard({
       setError(e instanceof Error ? e.message : "加载失败");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, []);
+  }, [data]);
 
   useEffect(() => {
     fetchData();
@@ -331,7 +337,7 @@ export function ProjectDashboard({
     toast.success("导出成功");
   };
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground mr-2" />
@@ -340,7 +346,7 @@ export function ProjectDashboard({
     );
   }
 
-  if (error) {
+  if (error && !data) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <AlertTriangle className="w-10 h-10 text-red-400" />
@@ -362,6 +368,9 @@ export function ProjectDashboard({
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <LayoutDashboard className="w-7 h-7 text-teal-500" />
             项目看板
+            {refreshing && (
+              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground ml-1" />
+            )}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             全局项目概览与数据统计
