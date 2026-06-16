@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ArrowLeft, Save, ChevronDown, ChevronUp, Plus, Trash2, Upload, X, Search, Check, Download, FileSpreadsheet } from "lucide-react";
+import { ArrowLeft, Save, ChevronDown, ChevronUp, Plus, Trash2, Upload, X, Search, Check, Download, FileSpreadsheet, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AIInputDialog } from "./ai-input-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
@@ -131,6 +132,10 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
   const [schoolName, setSchoolName] = useState("");
   const [customerTypes, setCustomerTypes] = useState<string[]>(["中职"]);
   const [description, setDescription] = useState("");
+
+  // AI 录入弹窗
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [aiTargetDesc, setAiTargetDesc] = useState("");
 
   // 位置信息（同步自项目管理页面创建新项目的数据）
   const [province, setProvince] = useState("");
@@ -998,6 +1003,15 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
               />
             </>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-teal-600 border-teal-200 hover:bg-teal-50"
+            onClick={() => { setAiTargetDesc(""); setAiDialogOpen(true); }}
+          >
+            <Sparkles className="w-4 h-4 mr-1" />
+            AI 智能录入
+          </Button>
           <Button variant="outline" size="sm" onClick={onCancel}>
             取消
           </Button>
@@ -1837,6 +1851,21 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
           {loading ? "保存中..." : (isEdit ? "保存" : "创建")}
         </Button>
       </div>
+
+      <AIInputDialog
+        open={aiDialogOpen}
+        onOpenChange={setAiDialogOpen}
+        onConfirm={(text, _mappings) => {
+          // 如果有 target 描述字段则填入，否则追加到项目描述
+          setDescription((prev) => prev + (prev ? "\n\n" : "") + text);
+        }}
+        fieldOptions={[
+          { key: "description", label: "项目描述" },
+          { key: "business", label: "科室业务描述" },
+          { key: "needs", label: "需求分析" },
+          { key: "remark", label: "备注" },
+        ]}
+      />
     </div>
   );
 }

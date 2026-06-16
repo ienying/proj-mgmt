@@ -39,6 +39,8 @@ import {
   ThumbsUp,
   Star,
   KeyRound,
+  Cpu,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,6 +73,8 @@ const BaseDataManagement = dynamic(() => import("./base-data-management"), { ssr
 const SchemaRulesConfig = dynamic(() => import("./schema-rules-config").then(m => ({ default: m.SchemaRulesConfig })), { ssr: false });
 const IssueConfigPanel = dynamic(() => import("./issue-config-panel"), { ssr: false });
 const ModuleManagement = dynamic(() => import("./module-management"), { ssr: false });
+const AIConfigPanel = dynamic(() => import("./ai-config-panel"), { ssr: false });
+const AIStatsPanel = dynamic(() => import("./ai-stats-panel"), { ssr: false });
 
 
 
@@ -105,6 +109,8 @@ const menuItems = [
   { id: "issue-config", label: "工单配置", icon: AlertTriangle },
 
   { id: "knowledge-category", label: "信息广场分类", icon: Megaphone },
+  { id: "ai-config", label: "大模型配置", icon: Cpu },
+  { id: "ai-stats", label: "AI 使用统计", icon: BarChart3 },
   { id: "config", label: "系统配置", icon: Key },
 ];
 
@@ -1119,6 +1125,16 @@ export default function SystemSettings({
           {/* 信息广场分类维护 */}
           <div className={activeMenu === "knowledge-category" ? "" : "hidden"}>
             {visitedMenus.has("knowledge-category") && <KnowledgeCategoryPanel />}
+          </div>
+
+          {/* 大模型配置 */}
+          <div className={activeMenu === "ai-config" ? "" : "hidden"}>
+            {visitedMenus.has("ai-config") && <AIConfigPanel />}
+          </div>
+
+          {/* AI 使用统计 */}
+          <div className={activeMenu === "ai-stats" ? "" : "hidden"}>
+            {visitedMenus.has("ai-stats") && <AIStatsPanel />}
           </div>
 
           {/* 模块管理 */}
