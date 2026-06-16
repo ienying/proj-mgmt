@@ -134,7 +134,15 @@ function parseBlocks(md: string): Block[] {
     while (i < lines.length && lines[i].trim() !== "" && !lines[i].startsWith("```") && !lines[i].startsWith("|") && !/^(#{1,4}\s|[>\-\*]\s|\d+\.\s|-{3,}$)/.test(lines[i])) {
       pLines.push(lines[i]); i++;
     }
-    if (pLines.length > 0) blocks.push({ type: "p", tokens: parseInline(pLines.join("\n")) });
+    if (pLines.length > 0) {
+      const text = pLines.join("\n");
+      // 检测裸 mermaid（AI 有时省略 ```mermaid 包裹）
+      if (/^(pie|graph\s|flowchart\s|gantt\s|sequenceDiagram|classDiagram|stateDiagram|erDiagram|journey|gitgraph)\b/i.test(text.trim())) {
+        blocks.push({ type: "chart", text });
+      } else {
+        blocks.push({ type: "p", tokens: parseInline(text) });
+      }
+    }
   }
   return blocks;
 }
