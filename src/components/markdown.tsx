@@ -192,7 +192,24 @@ const MermaidChart = memo(function MermaidChart({ chart }: { chart: string }) {
           });
         }
         if (cancelled) return;
-        window.mermaid.initialize({ startOnLoad: false, theme: "neutral" });
+        window.mermaid.initialize({
+          startOnLoad: false,
+          theme: "base",
+          themeVariables: {
+            pie1: "#6366f1",
+            pie2: "#06b6d4",
+            pie3: "#10b981",
+            pie4: "#f59e0b",
+            pie5: "#ef4444",
+            pie6: "#8b5cf6",
+            pie7: "#ec4899",
+            pie8: "#14b8a6",
+            pie9: "#f97316",
+            pie10: "#3b82f6",
+            pie11: "#84cc16",
+            pie12: "#e11d48",
+          },
+        });
         const id = "mermaid-" + Math.random().toString(36).slice(2, 10);
         const { svg: rendered } = await window.mermaid.render(id, chart);
         if (!cancelled) setSvg(rendered);
