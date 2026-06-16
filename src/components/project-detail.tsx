@@ -10,7 +10,7 @@ import {
   ShoppingCart, Briefcase, Archive,
   Columns3, GitBranch, FileSearch, GanttChart, Group,
   ChevronDown, ChevronRight as ChevronRightIcon,
-  Settings2, Route, BarChart3, Trash2, Download, Upload, Filter,
+  Settings2, Trash2, Download, Upload, Filter,
   Link as LinkIcon, Search, Table as TableIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -59,7 +59,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Target, TrendingUp, Check, DollarSign, UsersIcon, MessageSquare, Shield,
   ShoppingCart, Briefcase, Archive, Layers, FolderKanban, Users, Building2,
   LayoutGrid, List, Columns3, GitBranch, GanttChart, Group, FileSearch,
-  ArrowLeft, Plus, Pencil, X, Settings2, Route, BarChart3, Trash2, Download, Upload, Filter,
+  ArrowLeft, Plus, Pencil, X, Settings2, Trash2, Download, Upload, Filter,
 };
 
 const PROJECT_MODULES = [
@@ -340,10 +340,10 @@ export function ProjectDetail({
   
   // 编辑状态
   const [editingCell, setEditingCell] = useState<{ tableCode: string; rowId: string; column: string } | null>(null);
-  const [viewMode, setViewMode] = useState<"card" | "compact" | "kanban" | "tree" | "form" | "gantt" | "group" | "trace" | "progress">(() => {
+  const [viewMode, setViewMode] = useState<"card" | "compact" | "kanban" | "tree" | "form" | "gantt" | "group">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("project_detail_view_mode");
-      return (saved === "card" || saved === "compact" || saved === "kanban" || saved === "tree" || saved === "form" || saved === "gantt" || saved === "group" || saved === "trace" || saved === "progress") ? saved : "compact";
+      return (saved === "card" || saved === "compact" || saved === "kanban" || saved === "tree" || saved === "form" || saved === "gantt" || saved === "group") ? saved : "compact";
     }
     return "compact";
   });
@@ -1164,11 +1164,9 @@ export function ProjectDetail({
       { key: "form" as const, label: "表单", icon: FileSearch },
       { key: "gantt" as const, label: "甘特", icon: GanttChart },
       { key: "group" as const, label: "分组", icon: Group },
-      { key: "trace" as const, label: "色标脉络", icon: Route },
-      { key: "progress" as const, label: "进度条", icon: BarChart3 },
     ];
     // 判断当前视图是否有可配置项
-    const configurableViews = ["kanban", "group", "gantt", "compact", "tree", "trace", "progress"];
+    const configurableViews = ["kanban", "group", "gantt", "compact", "tree"];
     const hasSettings = configurableViews.includes(viewMode);
 
     return (
@@ -1492,129 +1490,6 @@ export function ProjectDetail({
       );
     };
 
-    const renderTraceSettings = () => {
-      // 脉络视图共享配置：分组字段、分支字段、主行字段(1-3)、串联字段
-      const groupField = (getTableSetting(tc, "trace_group_field") as string) || (allFields[0]?.key || allFields[0]?.name || "");
-      const branchField = (getTableSetting(tc, "trace_branch_field") as string) || (selectFields.length > 0 ? (selectFields[0]?.key || selectFields[0]?.name) : (allFields.length > 1 ? (allFields[1]?.key || allFields[1]?.name) : ""));
-      const mainFields = (getTableSetting(tc, "trace_main_fields") as string[]) || (allFields.length > 1 ? [allFields[0]?.key || allFields[0]?.name || ""] : []);
-      const chainFields = (getTableSetting(tc, "trace_chain_fields") as string[]) || allFields.slice(1, 6).map(f => f.key || f.name).filter(Boolean);
-
-      const addMainField = () => {
-        const used = new Set(mainFields);
-        const next = allFields.find(f => !used.has(f.key || f.name));
-        if (next) setTableSetting(tc, "trace_main_fields", [...mainFields, next.key || next.name]);
-      };
-      const removeMainField = (idx: number) => {
-        setTableSetting(tc, "trace_main_fields", mainFields.filter((_, i) => i !== idx));
-      };
-      const updateMainField = (idx: number, val: string) => {
-        const next = [...mainFields]; next[idx] = val; setTableSetting(tc, "trace_main_fields", next);
-      };
-
-      const addChainField = () => {
-        const used = new Set(chainFields);
-        const next = allFields.find(f => !used.has(f.key || f.name));
-        if (next) setTableSetting(tc, "trace_chain_fields", [...chainFields, next.key || next.name]);
-      };
-      const removeChainField = (idx: number) => {
-        setTableSetting(tc, "trace_chain_fields", chainFields.filter((_, i) => i !== idx));
-      };
-      const updateChainField = (idx: number, val: string) => {
-        const next = [...chainFields]; next[idx] = val; setTableSetting(tc, "trace_chain_fields", next);
-      };
-      const moveChainField = (idx: number, dir: -1 | 1) => {
-        const target = idx + dir;
-        if (target < 0 || target >= chainFields.length) return;
-        const next = [...chainFields]; [next[idx], next[target]] = [next[target], next[idx]];
-        setTableSetting(tc, "trace_chain_fields", next);
-      };
-
-      return (
-        <div className="space-y-3">
-          {/* 分组字段 */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">分组字段 <span className="text-red-400">*</span></Label>
-            <Select value={groupField} onValueChange={v => setTableSetting(tc, "trace_group_field", v)}>
-              <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="选择分组字段" /></SelectTrigger>
-              <SelectContent>
-                {allFields.map(f => (
-                  <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-[10px] text-muted-foreground">值相同的记录归为一组</p>
-          </div>
-
-          {/* 分支字段 */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">分支字段 <span className="text-red-400">*</span></Label>
-            <Select value={branchField} onValueChange={v => setTableSetting(tc, "trace_branch_field", v)}>
-              <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="选择分支字段" /></SelectTrigger>
-              <SelectContent>
-                {allFields.map(f => (
-                  <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-[10px] text-muted-foreground">值不同的记录成为组内并行线</p>
-          </div>
-
-          {/* 主行字段 */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">主行字段</Label>
-            {mainFields.map((mf, i) => (
-              <div key={i} className="flex items-center gap-1">
-                <Select value={mf} onValueChange={v => updateMainField(i, v)}>
-                  <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {allFields.map(f => (
-                      <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => removeMainField(i)}>
-                  <X className="w-3 h-3" />
-                </Button>
-              </div>
-            ))}
-            {mainFields.length < 3 && (
-              <Button variant="ghost" size="sm" className="h-6 text-xs text-blue-500" onClick={addMainField}>+ 添加</Button>
-            )}
-            <p className="text-[10px] text-muted-foreground">显示在每组标题区，最多3个</p>
-          </div>
-
-          {/* 串联字段 */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">串联字段 <span className="text-red-400">*</span></Label>
-            {chainFields.map((cf, i) => {
-              const col = allFields.find(f => (f.key || f.name) === cf);
-              return (
-                <div key={i} className="flex items-center gap-1">
-                  <span className="text-[10px] text-gray-400 w-4 text-right shrink-0">{i + 1}</span>
-                  <Select value={cf} onValueChange={v => updateChainField(i, v)}>
-                    <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {allFields.map(f => (
-                        <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => moveChainField(i, -1)} disabled={i === 0}>↑</Button>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => moveChainField(i, 1)} disabled={i === chainFields.length - 1}>↓</Button>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => removeChainField(i)}>
-                    <X className="w-3 h-3" />
-                  </Button>
-                </div>
-              );
-            })}
-            {chainFields.length < allFields.length && (
-              <Button variant="ghost" size="sm" className="h-6 text-xs text-blue-500" onClick={addChainField}>+ 添加</Button>
-            )}
-            <p className="text-[10px] text-muted-foreground">按顺序排列，形成每条线的节点流</p>
-          </div>
-        </div>
-      );
-    };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const settingsMap: Record<string, () => any> = {
@@ -1623,8 +1498,6 @@ export function ProjectDetail({
       gantt: renderGanttSettings,
       compact: renderCompactSettings,
       tree: renderTreeSettings,
-      trace: renderTraceSettings,
-      progress: renderTraceSettings,
     };
 
     const viewLabels: Record<string, string> = {
@@ -1633,13 +1506,11 @@ export function ProjectDetail({
       gantt: "甘特图",
       compact: "表格",
       tree: "树形",
-      trace: "色标脉络",
-      progress: "进度条",
     };
 
     if (!settingsMap[viewMode]) return null;
-    // compact, kanban, tree, gantt, trace, progress have inline settings in toolbar
-    if (["compact", "kanban", "tree", "gantt", "trace", "progress", "group"].includes(viewMode)) return null;
+    // compact, kanban, tree, gantt have inline settings in toolbar
+    if (["compact", "kanban", "tree", "gantt", "group"].includes(viewMode)) return null;
 
     return (
       <Popover>
@@ -1649,7 +1520,7 @@ export function ProjectDetail({
             设置
           </Button>
         </PopoverTrigger>
-        <PopoverContent className={cn("p-3", ["trace", "progress"].includes(viewMode) ? "w-80" : viewMode === "group" ? "w-72 max-h-[70vh] overflow-y-auto" : "w-64")} align="end">
+        <PopoverContent className={cn("p-3", viewMode === "group" ? "w-72 max-h-[70vh] overflow-y-auto" : "w-64")} align="end">
           <div className="space-y-1 mb-3">
             <h4 className="text-sm font-medium">{viewLabels[viewMode]}设置</h4>
           </div>
@@ -3619,483 +3490,6 @@ export function ProjectDetail({
   // ==================== 脉络视图共享逻辑 ====================
 
   /** 获取脉络视图的配置（3种视图共享） */
-  const getTraceConfig = (table: TableDefinition) => {
-    const tc = table.table_code;
-    const cols = table.columns_config;
-    const findCol = (key: string) => key ? cols.find((c: ColumnConfig) => (c.key || c.name) === key) : null;
-
-    const groupFieldKey = (getTableSetting(tc, "trace_group_field") as string) || (cols[0]?.key || cols[0]?.name || "");
-    const branchFieldKey = (getTableSetting(tc, "trace_branch_field") as string) || (cols.length > 1 ? (cols[1]?.key || cols[1]?.name) : "");
-    const mainFieldKeys = (getTableSetting(tc, "trace_main_fields") as string[]) || [];
-    const chainFieldKeys = (getTableSetting(tc, "trace_chain_fields") as string[]) || cols.slice(1, 6).map((f: ColumnConfig) => f.key || f.name).filter(Boolean);
-
-    const groupCol = findCol(groupFieldKey) || cols[0];
-    const branchCol = findCol(branchFieldKey) || cols[1];
-    const mainCols = mainFieldKeys.map((k: string) => findCol(k)).filter(Boolean) as ColumnConfig[];
-    const chainCols = chainFieldKeys.map((k: string) => findCol(k)).filter(Boolean) as ColumnConfig[];
-
-    return { groupCol, branchCol, mainCols, chainCols, groupFieldKey, branchFieldKey };
-  };
-
-  /** 按分组字段分组，每组内按分支字段分出并行线 */
-  const buildTraceGroups = (data: Record<string, unknown>[], config: ReturnType<typeof getTraceConfig>) => {
-    const { groupCol, branchCol, chainCols } = config;
-    if (!groupCol || !branchCol) return [];
-
-    // 按分组字段分组
-    const groupMap = new Map<string, Record<string, unknown>[]>();
-    data.forEach((row) => {
-      const gKey = String(row[groupCol.key] || "未分组");
-      if (!groupMap.has(gKey)) groupMap.set(gKey, []);
-      groupMap.get(gKey)!.push(row);
-    });
-
-    // 每组内按分支字段分出并行线
-    return Array.from(groupMap.entries()).map(([groupKey, rows]) => {
-      const branchMap = new Map<string, Record<string, unknown>[]>();
-      rows.forEach((row) => {
-        const bKey = String(row[branchCol.key] || "未指定");
-        if (!branchMap.has(bKey)) branchMap.set(bKey, []);
-        branchMap.get(bKey)!.push(row);
-      });
-      const branches = Array.from(branchMap.entries()).map(([branchKey, branchRows]) => ({
-        branchKey,
-        rows: branchRows,
-        // 获取串联字段值
-        chainValues: chainCols.map(col => {
-          // 取第一条记录的值（分支下可能有多条记录，取最后一条——最新）
-          const lastRow = branchRows[branchRows.length - 1];
-          return {
-            col,
-            value: String(lastRow?.[col.key] ?? ""),
-          };
-        }),
-      }));
-
-      return { groupKey, rows, branches };
-    });
-  };
-
-  /** 计算整体状态 */
-  const calcTraceStatus = (branches: { chainValues: { value: string }[] }[], expectFieldKey?: string) => {
-    // 判断每条并行线是否完成：最后一个串联字段有值
-    const totalBranches = branches.length;
-    const completedBranches = branches.filter(b => {
-      const lastVal = b.chainValues[b.chainValues.length - 1]?.value;
-      return lastVal && lastVal !== "" && lastVal !== "undefined" && lastVal !== "null";
-    }).length;
-    const completionRate = totalBranches > 0 ? completedBranches / totalBranches : 0;
-    const allDone = completedBranches === totalBranches && totalBranches > 0;
-    const noneStarted = branches.every(b => b.chainValues.every(cv => !cv.value || cv.value === "" || cv.value === "undefined"));
-
-    return { totalBranches, completedBranches, completionRate, allDone, noneStarted };
-  };
-
-  /** 获取节点状态色标 */
-  const getNodeStatus = (value: string, prevValue: string): "done" | "active" | "delayed" | "pending" => {
-    if (!value || value === "" || value === "undefined" || value === "null") return "pending";
-    if (prevValue && prevValue !== "" && prevValue !== "undefined") return "done";
-    return "done";
-  };
-
-  const STATUS_COLORS: Record<string, { dot: string; bg: string; text: string; bar: string }> = {
-    done: { dot: "🟢", bg: "bg-emerald-100", text: "text-emerald-700", bar: "bg-emerald-500" },
-    active: { dot: "🟡", bg: "bg-amber-100", text: "text-amber-700", bar: "bg-amber-400" },
-    delayed: { dot: "🔴", bg: "bg-red-100", text: "text-red-700", bar: "bg-red-500" },
-    pending: { dot: "⬜", bg: "bg-gray-100", text: "text-gray-400", bar: "bg-gray-200" },
-  };
-
-  // ===== D1 状态色标脉络 =====
-  const renderTraceView = (table: TableDefinition) => {
-    const data = tableDataMap[table.table_code] || [];
-    const mc = getModuleColor(activeModule);
-    const tc = table.table_code;
-    const columns = table.columns_config;
-    const config = getTraceConfig(table);
-
-    // Trace settings inline
-    const tAllFields = columns;
-    const tSelectFields = columns.filter((f: ColumnConfig) => f.type === 'select' || f.type === 'radio');
-    const traceGroupField = (getTableSetting(tc, "trace_group_field") as string) || (tAllFields[0]?.key || tAllFields[0]?.name || "");
-    const traceBranchField = (getTableSetting(tc, "trace_branch_field") as string) || (tSelectFields.length > 0 ? (tSelectFields[0]?.key || tSelectFields[0]?.name) : (tAllFields.length > 1 ? (tAllFields[1]?.key || tAllFields[1]?.name) : ""));
-    const traceMainFields = (getTableSetting(tc, "trace_main_fields") as string[]) || (tAllFields.length > 1 ? [tAllFields[0]?.key || tAllFields[0]?.name || ""] : []);
-    const traceChainFields = (getTableSetting(tc, "trace_chain_fields") as string[]) || tAllFields.slice(1, 6).map((f: ColumnConfig) => f.key || f.name).filter(Boolean);
-
-    if (!config.groupCol || !config.branchCol || config.chainCols.length === 0) {
-      return (
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-gray-50/50">
-            <Popover>
-              <PopoverTrigger asChild>
-                <button className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-gray-600 hover:bg-gray-200 transition-colors">
-                  <Settings2 className="h-3 w-3" />设置
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-72 max-h-[70vh] overflow-y-auto p-3" align="start">
-                <div className="text-xs font-semibold mb-2">脉络配置</div>
-                <div className="space-y-2">
-                  <div className="space-y-1">
-                    <Label className="text-[10px] text-gray-500">分组字段 <span className="text-red-400">*</span></Label>
-                    <Select value={traceGroupField} onValueChange={v => setTableSetting(tc, "trace_group_field", v)}>
-                      <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>{tAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[10px] text-gray-500">分支字段 <span className="text-red-400">*</span></Label>
-                    <Select value={traceBranchField} onValueChange={v => setTableSetting(tc, "trace_branch_field", v)}>
-                      <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>{tAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[10px] text-gray-500">主行字段</Label>
-                    {traceMainFields.map((mf: string, i: number) => (
-                      <div key={i} className="flex items-center gap-1">
-                        <Select value={mf} onValueChange={v => { const n = [...traceMainFields]; n[i] = v; setTableSetting(tc, "trace_main_fields", n); }}>
-                          <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                          <SelectContent>{tAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <button onClick={() => setTableSetting(tc, "trace_main_fields", traceMainFields.filter((_: string, j: number) => j !== i))} className="p-1 hover:bg-gray-100 rounded"><X className="w-3 h-3" /></button>
-                      </div>
-                    ))}
-                    {traceMainFields.length < 3 && <button onClick={() => { const used = new Set(traceMainFields); const next = tAllFields.find(f => !used.has(f.key || f.name)); if (next) setTableSetting(tc, "trace_main_fields", [...traceMainFields, next.key || next.name]); }} className="text-[10px] text-blue-500 hover:bg-blue-50 px-1">+ 添加</button>}
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[10px] text-gray-500">串联字段 <span className="text-red-400">*</span></Label>
-                    {traceChainFields.map((cf: string, i: number) => (
-                      <div key={i} className="flex items-center gap-1">
-                        <span className="text-[9px] text-gray-400 w-3">{i+1}</span>
-                        <Select value={cf} onValueChange={v => { const n = [...traceChainFields]; n[i] = v; setTableSetting(tc, "trace_chain_fields", n); }}>
-                          <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                          <SelectContent>{tAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <button onClick={() => setTableSetting(tc, "trace_chain_fields", traceChainFields.filter((_: string, j: number) => j !== i))} className="p-1 hover:bg-gray-100 rounded"><X className="w-3 h-3" /></button>
-                      </div>
-                    ))}
-                    {traceChainFields.length < tAllFields.length && <button onClick={() => { const used = new Set(traceChainFields); const next = tAllFields.find(f => !used.has(f.key || f.name)); if (next) setTableSetting(tc, "trace_chain_fields", [...traceChainFields, next.key || next.name]); }} className="text-[10px] text-blue-500 hover:bg-blue-50 px-1">+ 添加</button>}
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-          <div className="text-center py-8 text-gray-500 text-sm">请先配置分组字段、分支字段和串联字段</div>
-        </div>
-      );
-    }
-
-    const groups = buildTraceGroups(data, config);
-
-    if (groups.length === 0) {
-      return <div className="text-center py-8 text-gray-500">暂无数据</div>;
-    }
-
-    return (
-      <div className="flex flex-col">
-        {/* 工具栏 */}
-        <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-gray-50/50">
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-gray-600 hover:bg-gray-200 transition-colors">
-                <Settings2 className="h-3 w-3" />设置
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-72 max-h-[70vh] overflow-y-auto p-3" align="start">
-              <div className="text-xs font-semibold mb-2">脉络配置</div>
-              <div className="space-y-2">
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-gray-500">分组字段 <span className="text-red-400">*</span></Label>
-                  <Select value={traceGroupField} onValueChange={v => setTableSetting(tc, "trace_group_field", v)}>
-                    <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>{tAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-gray-500">分支字段 <span className="text-red-400">*</span></Label>
-                  <Select value={traceBranchField} onValueChange={v => setTableSetting(tc, "trace_branch_field", v)}>
-                    <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>{tAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-gray-500">主行字段</Label>
-                  {traceMainFields.map((mf: string, i: number) => (
-                    <div key={i} className="flex items-center gap-1">
-                      <Select value={mf} onValueChange={v => { const n = [...traceMainFields]; n[i] = v; setTableSetting(tc, "trace_main_fields", n); }}>
-                        <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>{tAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <button onClick={() => setTableSetting(tc, "trace_main_fields", traceMainFields.filter((_: string, j: number) => j !== i))} className="p-1 hover:bg-gray-100 rounded"><X className="w-3 h-3" /></button>
-                    </div>
-                  ))}
-                  {traceMainFields.length < 3 && <button onClick={() => { const used = new Set(traceMainFields); const next = tAllFields.find(f => !used.has(f.key || f.name)); if (next) setTableSetting(tc, "trace_main_fields", [...traceMainFields, next.key || next.name]); }} className="text-[10px] text-blue-500 hover:bg-blue-50 px-1">+ 添加</button>}
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-gray-500">串联字段 <span className="text-red-400">*</span></Label>
-                  {traceChainFields.map((cf: string, i: number) => (
-                    <div key={i} className="flex items-center gap-1">
-                      <span className="text-[9px] text-gray-400 w-3">{i+1}</span>
-                      <Select value={cf} onValueChange={v => { const n = [...traceChainFields]; n[i] = v; setTableSetting(tc, "trace_chain_fields", n); }}>
-                        <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>{tAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <button onClick={() => setTableSetting(tc, "trace_chain_fields", traceChainFields.filter((_: string, j: number) => j !== i))} className="p-1 hover:bg-gray-100 rounded"><X className="w-3 h-3" /></button>
-                    </div>
-                  ))}
-                  {traceChainFields.length < tAllFields.length && <button onClick={() => { const used = new Set(traceChainFields); const next = tAllFields.find(f => !used.has(f.key || f.name)); if (next) setTableSetting(tc, "trace_chain_fields", [...traceChainFields, next.key || next.name]); }} className="text-[10px] text-blue-500 hover:bg-blue-50 px-1">+ 添加</button>}
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-          <span className="text-[10px] text-gray-400">分组: {tAllFields.find(f => (f.key || f.name) === traceGroupField)?.label || traceGroupField} · 分支: {tAllFields.find(f => (f.key || f.name) === traceBranchField)?.label || traceBranchField} · 串联: {traceChainFields.length}个字段</span>
-        </div>
-        {/* 内容 */}
-        <div className="space-y-6 p-4">
-        {groups.map(({ groupKey, branches }) => {
-          const status = calcTraceStatus(branches);
-          return (
-            <div key={groupKey} className="rounded-lg border border-gray-200 overflow-hidden">
-              {/* 组标题 */}
-              <div className={cn("px-4 py-2.5 font-semibold text-sm flex items-center gap-3", mc.light, mc.text)} style={{ borderLeft: `4px solid ${mc.border}` }}>
-                <span>{groupKey}</span>
-                {config.mainCols.map((col, i) => {
-                  const val = branches[0]?.rows[0]?.[col.key];
-                  if (!val || val === "") return null;
-                  return <span key={i} className="text-xs font-normal opacity-70">{col.label || col.name}: {String(val)}</span>;
-                })}
-                <span className="ml-auto text-xs">
-                  {status.allDone ? "✅ 全部完成" : status.noneStarted ? "⬜ 未开始" : `⏳ ${status.completedBranches}/${status.totalBranches} 完成`}
-                </span>
-              </div>
-              {/* 并行线 */}
-              <div className="px-4 py-2 space-y-1.5">
-                {branches.map(({ branchKey, chainValues }) => {
-                  return (
-                    <div key={branchKey} className="flex items-center gap-2 text-sm">
-                      <span className="shrink-0 w-20 text-gray-500 truncate font-medium">{branchKey}</span>
-                      <span className="text-gray-300">──</span>
-                      {chainValues.map((cv, i) => {
-                        const prevVal = i > 0 ? chainValues[i - 1].value : "has_prev";
-                        const nodeStatus = getNodeStatus(cv.value, prevVal);
-                        const sc = STATUS_COLORS[nodeStatus];
-                        return (
-                          <span key={i} className="inline-flex items-center gap-0.5">
-                            {i > 0 && <span className="text-gray-300">→</span>}
-                            <span className={cn("inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs", sc.bg, sc.text)}>
-                              <span className="text-[10px]">{sc.dot}</span>
-                              {cv.value ? cv.value : "—"}
-                            </span>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-              {/* 整体状态 */}
-              {!status.allDone && (
-                <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-500">
-                  整体完成: {status.completionRate > 0 ? `${Math.round(status.completionRate * 100)}%` : "0%"} — 以最慢分支为准
-                </div>
-              )}
-            </div>
-          );
-        })}
-        </div>
-      </div>
-    );
-  };
-
-  // ===== F 并行进度条 =====
-  const renderProgressView = (table: TableDefinition) => {
-    const data = tableDataMap[table.table_code] || [];
-    const mc = getModuleColor(activeModule);
-    const tc = table.table_code;
-    const columns = table.columns_config;
-    const config = getTraceConfig(table);
-
-    // Trace settings inline (same as trace view)
-    const pAllFields = columns;
-    const pSelectFields = columns.filter((f: ColumnConfig) => f.type === 'select' || f.type === 'radio');
-    const pGroupField = (getTableSetting(tc, "trace_group_field") as string) || (pAllFields[0]?.key || pAllFields[0]?.name || "");
-    const pBranchField = (getTableSetting(tc, "trace_branch_field") as string) || (pSelectFields.length > 0 ? (pSelectFields[0]?.key || pSelectFields[0]?.name) : (pAllFields.length > 1 ? (pAllFields[1]?.key || pAllFields[1]?.name) : ""));
-    const pMainFields = (getTableSetting(tc, "trace_main_fields") as string[]) || (pAllFields.length > 1 ? [pAllFields[0]?.key || pAllFields[0]?.name || ""] : []);
-    const pChainFields = (getTableSetting(tc, "trace_chain_fields") as string[]) || pAllFields.slice(1, 6).map((f: ColumnConfig) => f.key || f.name).filter(Boolean);
-
-    const progressSettingsPopover = (
-      <Popover>
-        <PopoverTrigger asChild>
-          <button className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-gray-600 hover:bg-gray-200 transition-colors">
-            <Settings2 className="h-3 w-3" />设置
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-72 max-h-[70vh] overflow-y-auto p-3" align="start">
-          <div className="text-xs font-semibold mb-2">进度条配置</div>
-          <div className="space-y-2">
-            <div className="space-y-1">
-              <Label className="text-[10px] text-gray-500">分组字段 <span className="text-red-400">*</span></Label>
-              <Select value={pGroupField} onValueChange={v => setTableSetting(tc, "trace_group_field", v)}>
-                <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>{pAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] text-gray-500">分支字段 <span className="text-red-400">*</span></Label>
-              <Select value={pBranchField} onValueChange={v => setTableSetting(tc, "trace_branch_field", v)}>
-                <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>{pAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] text-gray-500">主行字段</Label>
-              {pMainFields.map((mf: string, i: number) => (
-                <div key={i} className="flex items-center gap-1">
-                  <Select value={mf} onValueChange={v => { const n = [...pMainFields]; n[i] = v; setTableSetting(tc, "trace_main_fields", n); }}>
-                    <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>{pAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <button onClick={() => setTableSetting(tc, "trace_main_fields", pMainFields.filter((_: string, j: number) => j !== i))} className="p-1 hover:bg-gray-100 rounded"><X className="w-3 h-3" /></button>
-                </div>
-              ))}
-              {pMainFields.length < 3 && <button onClick={() => { const used = new Set(pMainFields); const next = pAllFields.find(f => !used.has(f.key || f.name)); if (next) setTableSetting(tc, "trace_main_fields", [...pMainFields, next.key || next.name]); }} className="text-[10px] text-blue-500 hover:bg-blue-50 px-1">+ 添加</button>}
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] text-gray-500">串联字段 <span className="text-red-400">*</span></Label>
-              {pChainFields.map((cf: string, i: number) => (
-                <div key={i} className="flex items-center gap-1">
-                  <span className="text-[9px] text-gray-400 w-3">{i+1}</span>
-                  <Select value={cf} onValueChange={v => { const n = [...pChainFields]; n[i] = v; setTableSetting(tc, "trace_chain_fields", n); }}>
-                    <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>{pAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <button onClick={() => setTableSetting(tc, "trace_chain_fields", pChainFields.filter((_: string, j: number) => j !== i))} className="p-1 hover:bg-gray-100 rounded"><X className="w-3 h-3" /></button>
-                </div>
-              ))}
-              {pChainFields.length < pAllFields.length && <button onClick={() => { const used = new Set(pChainFields); const next = pAllFields.find(f => !used.has(f.key || f.name)); if (next) setTableSetting(tc, "trace_chain_fields", [...pChainFields, next.key || next.name]); }} className="text-[10px] text-blue-500 hover:bg-blue-50 px-1">+ 添加</button>}
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
-    );
-
-    if (!config.groupCol || !config.branchCol || config.chainCols.length === 0) {
-      return (
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-gray-50/50">
-            {progressSettingsPopover}
-          </div>
-          <div className="text-center py-8 text-gray-500 text-sm">请先配置分组字段、分支字段和串联字段</div>
-        </div>
-      );
-    }
-
-    const groups = buildTraceGroups(data, config);
-
-    if (groups.length === 0) {
-      return <div className="text-center py-8 text-gray-500">暂无数据</div>;
-    }
-
-    // 用串联字段中的日期列来计算进度比例，如果没有日期列则按完成节点数/总节点数
-    const dateCols = config.chainCols.filter(c => c.type === "date");
-
-    return (
-      <div className="flex flex-col">
-        {/* 工具栏 */}
-        <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-gray-50/50">
-          {progressSettingsPopover}
-          <span className="text-[10px] text-gray-400">分组: {pAllFields.find(f => (f.key || f.name) === pGroupField)?.label || pGroupField} · 分支: {pAllFields.find(f => (f.key || f.name) === pBranchField)?.label || pBranchField} · 串联: {pChainFields.length}个字段</span>
-        </div>
-        {/* 内容 */}
-        <div className="space-y-6 p-4">
-        {groups.map(({ groupKey, branches }, gi) => {
-          const status = calcTraceStatus(branches);
-
-          // 计算每条线的进度
-          const branchProgress = branches.map(b => {
-            const completedNodes = b.chainValues.filter(cv => cv.value && cv.value !== "" && cv.value !== "undefined").length;
-            const progress = b.chainValues.length > 0 ? completedNodes / b.chainValues.length : 0;
-            const lastValue = b.chainValues[b.chainValues.length - 1]?.value || "";
-            const isComplete = lastValue !== "" && lastValue !== "undefined";
-
-            // 日期计算（如果有日期列）
-            let dateRange: { start: string; end: string } | null = null;
-            if (dateCols.length >= 1) {
-              const startVal = b.chainValues.find(cv => cv.col.type === "date" && cv.value)?.value;
-              const endVal = [...b.chainValues].reverse().find(cv => cv.col.type === "date" && cv.value)?.value;
-              if (startVal) dateRange = { start: startVal, end: endVal || "" };
-            }
-
-            return { ...b, progress, isComplete, dateRange };
-          });
-
-          // 整体进度
-          const overallProgress = status.totalBranches > 0 ? status.completedBranches / status.totalBranches : 0;
-
-          return (
-            <div key={groupKey} className="rounded-lg border border-gray-200 overflow-hidden">
-              {/* 组标题 */}
-              <div className={cn("px-4 py-2.5 font-semibold text-sm flex items-center gap-3", mc.light, mc.text)} style={{ borderLeft: `4px solid ${mc.border}` }}>
-                <span>{groupKey}</span>
-                {config.mainCols.map((col, i) => {
-                  const val = branches[0]?.rows[0]?.[col.key];
-                  if (!val || val === "") return null;
-                  return <span key={i} className="text-xs font-normal opacity-70">{col.label || col.name}: {String(val)}</span>;
-                })}
-              </div>
-              {/* 进度条区域 */}
-              <div className="px-4 py-3 space-y-2">
-                {branchProgress.map(bp => {
-                  const barColor = bp.isComplete ? "bg-emerald-500" : bp.progress > 0 ? "bg-blue-400" : "bg-gray-200";
-                  const barBg = bp.isComplete ? "bg-emerald-100" : bp.progress > 0 ? "bg-blue-50" : "bg-gray-50";
-                  return (
-                    <div key={bp.branchKey} className="space-y-0.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-medium text-gray-700">{bp.branchKey}</span>
-                        <span className={cn("text-xs", bp.isComplete ? "text-emerald-600" : "text-gray-400")}>
-                          {bp.isComplete ? `✔ ${bp.chainValues[bp.chainValues.length - 1]?.value || ""}` : bp.progress > 0 ? `${Math.round(bp.progress * 100)}%` : "未开始"}
-                        </span>
-                      </div>
-                      <div className={cn("h-2.5 rounded-full overflow-hidden", barBg)}>
-                        <div className={cn("h-full rounded-full transition-all", barColor)} style={{ width: `${Math.max(bp.progress * 100, bp.progress > 0 ? 4 : 0)}%` }} />
-                      </div>
-                      {/* 串联节点标签 */}
-                      <div className="flex items-center gap-1 text-[10px] text-gray-400">
-                        {bp.chainValues.map((cv, i) => (
-                          <span key={i} className={cn(cv.value && cv.value !== "undefined" ? "text-gray-600" : "")}>
-                            {i > 0 && <span className="text-gray-300">›</span>}
-                            {cv.value && cv.value !== "undefined" ? cv.value : "—"}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-                {/* 整体进度 */}
-                <div className="pt-2 mt-2 border-t border-gray-100">
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="font-medium text-gray-600">整体</span>
-                    <span className={cn("text-xs font-medium", status.allDone ? "text-emerald-600" : "text-gray-500")}>
-                      {status.allDone ? "✔ 已完成" : `${Math.round(overallProgress * 100)}%`}
-                    </span>
-                  </div>
-                  <div className="h-3 rounded-full overflow-hidden bg-gray-100">
-                    <div
-                      className={cn("h-full rounded-full transition-all", status.allDone ? "bg-emerald-500" : "bg-blue-400")}
-                      style={{ width: `${Math.max(overallProgress * 100, overallProgress > 0 ? 4 : 0)}%` }}
-                    />
-                  </div>
-                  <div className="text-[10px] text-gray-400 mt-1">
-                    {status.allDone ? "全部完成" : `${status.completedBranches}/${status.totalBranches} 分支完成 · 以最慢分支为准`}
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-        </div>
-      </div>
-    );
-  };
 
   // 主渲染函数
   const renderDataTable = (table: TableDefinition) => {
@@ -4135,8 +3529,6 @@ export function ProjectDetail({
         {viewMode === "form" && renderFormView(table)}
         {viewMode === "gantt" && renderGanttView(table)}
         {viewMode === "group" && renderGroupView(table)}
-        {viewMode === "trace" && renderTraceView(table)}
-        {viewMode === "progress" && renderProgressView(table)}
       </div>
     );
   };
