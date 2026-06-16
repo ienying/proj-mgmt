@@ -20,10 +20,6 @@ function LoadingFallback() {
 }
 
 // All heavy components loaded dynamically to prevent SSR issues and ChunkLoadError cascade
-const Dashboard = dynamic(() => import("@/components/dashboard").then(m => ({ default: m.Dashboard })), {
-  ssr: false,
-  loading: () => <LoadingFallback />,
-});
 const ProjectManagement = dynamic(() => import("@/components/project-management"), { ssr: false, loading: () => <LoadingFallback /> });
 const StandardManagement = dynamic(() => import("@/components/standard-management").then(m => ({ default: m.StandardManagement })), { ssr: false, loading: () => <LoadingFallback /> });
 const SystemSettings = dynamic(() => import("@/components/system-settings"), { ssr: false, loading: () => <LoadingFallback /> });
@@ -113,7 +109,7 @@ export default function HomePage() {
   const [projectTypes, setProjectTypes] = useState<{ code: string; name: string }[]>([]);
   const [projectStages, setProjectStages] = useState<{ code: string; name: string }[]>([]);
   const [procurementModules, setProcurementModules] = useState<{ code: string; name: string }[]>([]);
-  const [activeItem, setActiveItem] = useState("dashboard");
+  const [activeItem, setActiveItem] = useState("project-board");
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [projects, setProjects] = useState(mockProjects);
   const [users, setUsers] = useState<{ id: string; username: string; name: string; phone?: string; email?: string; department?: string; position?: string; avatar?: string; role?: "super_admin" | "sub_admin" | "user"; is_active: boolean; created_at: string }[]>([]);
@@ -146,7 +142,6 @@ export default function HomePage() {
   } | null>(null);
 
   const dockItems = [
-    { id: "dashboard", label: "数据看板", icon: <FolderKanban className="w-5 h-5" />, color: "bg-emerald-500" },
     { id: "project-board", label: "项目看板", icon: <LayoutDashboard className="w-5 h-5" />, color: "bg-teal-500" },
     { id: "projects", label: "项目管理", icon: <FolderKanban className="w-5 h-5" />, color: "bg-blue-500" },
     { id: "tasks", label: "任务中心", icon: <CheckSquare className="w-5 h-5" />, color: "bg-orange-500", badge: badges.tasks },
@@ -541,31 +536,6 @@ export default function HomePage() {
 
   const renderContent = () => {
     switch (activeItem) {
-      case "dashboard":
-        return (
-          <ContentErrorBoundary>
-            <Dashboard
-              data={{
-                totalProjects: projects.length,
-                activeProjects: projects.filter((p) => p.status === "active").length,
-                completedProjects: projects.filter((p) => p.status === "completed").length,
-                totalTasks: 0,
-                pendingTasks: 0,
-                completedTasks: 0,
-                totalBudget: 500000,
-                usedBudget: 320000,
-              }}
-              projects={projects.map((p) => ({
-                id: p.id,
-                name: p.project_name,
-                progress: 65,
-                status: p.status as "active" | "completed" | "suspended",
-                deadline: "2024-12-31",
-                teamSize: 8,
-              }))}
-            />
-          </ContentErrorBoundary>
-        );
       case "project-board":
         return (
           <ContentErrorBoundary>
