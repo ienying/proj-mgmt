@@ -48,7 +48,20 @@ import {
   Download,
   Loader2,
   ArrowRight,
+  Sparkles,
+  Settings,
+  Info,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -145,6 +158,37 @@ export function ProjectDashboard({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // AI 预警
+  const [aiWarnings, setAiWarnings] = useState<Warning[] | null>(null);
+  const [aiGeneratedAt, setAiGeneratedAt] = useState<string | null>(null);
+  const [aiGeneratedBy, setAiGeneratedBy] = useState<string | null>(null);
+  const [aiGenerating, setAiGenerating] = useState(false);
+
+  // 提示词编辑
+  const [promptDialogOpen, setPromptDialogOpen] = useState(false);
+  const DEFAULT_SYSTEM_PROMPT = `你是一个项目管理预警分析专家。你需要基于项目数据识别风险并生成预警。
+
+分析维度：
+1. 进度风险：截止日期临近/已逾期、进度管理数据为空或极少
+2. 数据异常：长期未更新（>60天）、总记录数异常少
+3. 管理风险：缺少项目经理、无任何数据记录
+
+输出要求：
+- 仅返回 JSON 数组，不要输出任何其他文字
+- 每个预警项包含：project_id（项目id）、project_name（项目名称）、level（error/warning/info）、type（短代码英文）、message（中文描述，简洁明了，每条不超过30字）
+- 每个项目最多3条预警，优先输出最严重的
+- 如果项目状态良好，不要强行生成预警
+
+JSON 格式示例：
+[{"project_id":"xxx","project_name":"项目A","level":"error","type":"overdue","message":"已超过截止日期15天"}]`;
+
+  const DEFAULT_USER_PROMPT = `请分析以下 \${projectCount} 个项目的数据，生成预警：
+
+\${projectData}`;
+
+  const [customSystemPrompt, setCustomSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
+  const [customUserPrompt, setCustomUserPrompt] = useState(DEFAULT_USER_PROMPT);
+
   // 预警筛选
   const [warningLevelFilter, setWarningLevelFilter] = useState<Set<string>>(
     new Set(["error", "warning"])
@@ -189,6 +233,56 @@ export function ProjectDashboard({
     fetchData();
   }, [fetchData]);
 
+  // 加载缓存的 AI 预警
+  useEffect(() => {
+    const loadCachedWarnings = async () => {
+      try {
+        const res = await fetch("/api/projects/dashboard-warnings");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.data) {
+            setAiWarnings(json.data.warnings || []);
+            setAiGeneratedAt(json.data.generated_at || null);
+            setAiGeneratedBy(json.data.generated_by || null);
+          }
+        }
+      } catch { /* ignore */ }
+    };
+    loadCachedWarnings();
+  }, []);
+
+  // 生成新 AI 预警
+  const generateAiWarnings = async () => {
+    setAiGenerating(true);
+    try {
+      const projectIds = selectedIds.size > 0 ? Array.from(selectedIds) : undefined;
+      const res = await fetch("/api/projects/dashboard-warnings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_ids: projectIds,
+          system_message: customSystemPrompt !== DEFAULT_SYSTEM_PROMPT ? customSystemPrompt : undefined,
+          user_message: customUserPrompt !== DEFAULT_USER_PROMPT ? customUserPrompt : undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "生成失败");
+      }
+      const json = await res.json();
+      if (json.data) {
+        setAiWarnings(json.data.warnings || []);
+        setAiGeneratedAt(json.data.generated_at || null);
+        setAiGeneratedBy(json.data.generated_by || null);
+        toast.success(`AI 预警生成完成，共 ${json.data.warnings?.length || 0} 条`);
+      }
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "AI 预警生成失败");
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
   // 选中项目变化时重新请求
   const handleSelectionChange = (newIds: Set<string>) => {
     setSelectedIds(newIds);
@@ -231,17 +325,18 @@ export function ProjectDashboard({
     };
   }, [selectedProjects]);
 
-  // 过滤预警
-  const filteredWarnings = useMemo(() => {
-    if (!data) return [];
-    let warnings = data.warnings;
-    // 只显示选中项目的预警
+  // 过滤预警：优先使用 AI 预警，兜底用规则预警
+  const displayWarnings = useMemo(() => {
+    const source = aiWarnings ?? data?.warnings ?? [];
+    let warnings = source;
     if (selectedIds.size > 0) {
       warnings = warnings.filter((w) => selectedIds.has(w.project_id));
     }
     if (warningLevelFilter.size === 0) return warnings;
     return warnings.filter((w) => warningLevelFilter.has(w.level));
-  }, [data, selectedIds, warningLevelFilter]);
+  }, [data, aiWarnings, selectedIds, warningLevelFilter]);
+
+  const isAiGenerated = aiWarnings !== null;
 
   // 排序后的选中项目
   const sortedProjects = useMemo(() => {
@@ -528,15 +623,21 @@ export function ProjectDashboard({
         </Card>
       </div>
 
-      {/* ===== 板块 2：预警信息 ===== */}
+      {/* ===== 板块 2：AI 预警信息 ===== */}
       <Card className="shadow-sm">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <Shield className="w-4 h-4 text-orange-500" />
-              预警信息
+              AI 预警分析
+              {isAiGenerated && aiGeneratedAt && (
+                <span className="text-xs text-muted-foreground font-normal">
+                  上次生成：{new Date(aiGeneratedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                  {aiGeneratedBy ? `（${aiGeneratedBy}）` : ""}
+                </span>
+              )}
               <Badge variant="secondary" className="text-xs">
-                {filteredWarnings.length}
+                {displayWarnings.length}
               </Badge>
             </CardTitle>
             <div className="flex items-center gap-2">
@@ -563,18 +664,46 @@ export function ProjectDashboard({
                   {level === "error" ? "严重" : level === "warning" ? "警告" : "信息"}
                 </label>
               ))}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={generateAiWarnings}
+                disabled={aiGenerating}
+              >
+                {aiGenerating ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    AI 分析中...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3 h-3" />
+                    生成新预警
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={() => setPromptDialogOpen(true)}
+                title="编辑 AI 提示词"
+              >
+                <Settings className="w-3.5 h-3.5 text-muted-foreground" />
+              </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          {filteredWarnings.length === 0 ? (
+          {displayWarnings.length === 0 ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              暂无预警信息，所有项目状态良好
+              暂无预警信息{!isAiGenerated ? "，点击「生成新预警」使用 AI 分析" : "，所有项目状态良好"}
             </div>
           ) : (
             <div className="space-y-1.5 max-h-[300px] overflow-auto">
-              {filteredWarnings.map((w, i) => (
+              {displayWarnings.map((w, i) => (
                 <div
                   key={`${w.project_id}-${w.type}-${i}`}
                   className={cn(
@@ -820,6 +949,72 @@ export function ProjectDashboard({
           </CardContent>
         </Card>
       </div>
+
+      {/* ===== AI 提示词编辑对话框 ===== */}
+      <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Settings className="w-4 h-4" />
+              AI 预警提示词编辑
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              修改后将替换默认提示词，用于下次生成预警。关闭对话框保留修改（不持久化）。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 space-y-4 overflow-auto py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium flex items-center gap-1">
+                <Info className="w-3 h-3" />
+                System Prompt（系统指令）
+              </Label>
+              <Textarea
+                value={customSystemPrompt}
+                onChange={(e) => setCustomSystemPrompt(e.target.value)}
+                className="min-h-[180px] text-xs font-mono"
+                placeholder="输入系统提示词..."
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium flex items-center gap-1">
+                <Info className="w-3 h-3" />
+                User Prompt（用户消息模板）
+              </Label>
+              <div className="text-[11px] text-muted-foreground mb-1">
+                可用变量：<code className="bg-gray-100 px-1 rounded">{'${projectCount}'}</code> 项目数量、<code className="bg-gray-100 px-1 rounded">{'${projectData}'}</code> 项目数据摘要
+              </div>
+              <Textarea
+                value={customUserPrompt}
+                onChange={(e) => setCustomUserPrompt(e.target.value)}
+                className="min-h-[140px] text-xs font-mono"
+                placeholder="输入用户消息模板..."
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 pt-2 border-t">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCustomSystemPrompt(DEFAULT_SYSTEM_PROMPT);
+                setCustomUserPrompt(DEFAULT_USER_PROMPT);
+              }}
+            >
+              恢复默认
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                setPromptDialogOpen(false);
+                generateAiWarnings();
+              }}
+            >
+              <Sparkles className="w-3.5 h-3.5 mr-1" />
+              保存并用此提示词生成
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
