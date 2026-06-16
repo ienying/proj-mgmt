@@ -364,6 +364,7 @@ export function ProjectDetail({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectSchema: project.project_schema,
+          projectName: project.project_name,
           moduleName: activeModule,
           tableCode: tableCode || undefined,
         }),

@@ -20,13 +20,27 @@ export async function POST(request: Request) {
   try {
     await ensureAITables();
     const body = await request.json();
-    const { projectSchema, moduleName, tableCode, userId, userName, question, conversationHistory } = body;
+    const { projectSchema, projectName, moduleName, tableCode, userId, userName, question, conversationHistory } = body;
 
     if (!projectSchema) {
       return NextResponse.json({ error: "缺少 projectSchema" }, { status: 400 });
     }
 
     const client = await createServerClient();
+
+    // 获取表码→显示名称映射
+    let tableNameMap: Record<string, string> = {};
+    try {
+      const { data: standards } = await client.rpc("dp_select", { p_table: "standards" });
+      const stdRows = (standards as Array<{ table_code: string; table_name: string }>) || [];
+      for (const s of stdRows) {
+        tableNameMap[s.table_code] = s.table_name || s.table_code;
+      }
+    } catch { /* 降级：使用 table_code 作为显示名 */ }
+
+    function displayName(code: string) {
+      return tableNameMap[code] || code;
+    }
 
     // ========== 追问模式 ==========
     if (conversationHistory && question) {
@@ -162,17 +176,22 @@ export async function POST(request: Request) {
         const statsStr = t.stats
           ? `\n数值统计: ${Object.entries(t.stats).map(([k, v]: any) => `${k}(min:${v.min}, max:${v.max}, avg:${v.avg.toFixed(1)})`).join("; ")}`
           : "";
-        return `表名: ${t.name} | 列: [${t.columns.join(", ")}] | 总行数: ${t.rowCount}${statsStr}\n样本数据:\n${JSON.stringify(t.sampleRows, null, 2)}`;
+        return `表（${displayName(t.name)}） | 列: [${t.columns.join(", ")}] | 总行数: ${t.rowCount}${statsStr}\n样本数据:\n${JSON.stringify(t.sampleRows, null, 2)}`;
       })
       .join("\n\n---\n\n");
 
+    const displayProjectName = projectName || projectSchema;
     const moduleHint = MODULE_PROMPT_HINTS[moduleName] || "全面分析项目数据";
 
-    const prompt = tableCode
-      ? `你是一个项目管理数据分析专家。请对项目中的【${tableCode}】表进行深入分析。
+    const baseRules = `【重要规则】
+- 项目名称是"${displayProjectName}"，不要使用 "${projectSchema}" 这个内部标识
+- 各表的显示名称见上文括号内标注，请始终使用显示名称，不要使用内部表码
+- 报告里绝对不要出现原始数据库标识符（如 ${projectSchema}、表码等），只使用中文可读名称`;
 
-项目 Schema: ${projectSchema}
-表名: ${tableCode}
+    const prompt = tableCode
+      ? `你是一个项目管理数据分析专家。请对项目【${displayProjectName}】中的【${displayName(tableCode)}】表进行深入分析。
+
+${baseRules}
 ${moduleHint}
 
 数据：
@@ -183,10 +202,9 @@ ${tableSummaries}
 2. **关键发现**：数据中值得关注的模式、异常或亮点（至少3条）
 3. **${moduleName ? moduleHint.slice(0, 30) : "趋势与建议"}**：基于数据分析给出具体管理建议
 4. **数据质量**：缺失值、不一致或异常值情况`
-      : `你是一个项目管理数据分析专家。请分析以下项目数据库的内容，给出专业的分析报告。
+      : `你是一个项目管理数据分析专家。请分析项目【${displayProjectName}】的数据库内容，给出专业的分析报告。
 
-项目 Schema: ${projectSchema}
-当前模块: ${moduleName || "全部模块"}
+${baseRules}
 ${moduleHint}
 数据表数量: ${tables.length} | 总数据行数: ${totalRows}
 
@@ -201,7 +219,7 @@ ${tableSummaries}
 
     // 4. 调用大模型
     const { content, tokens } = await chatCompletion([
-      { role: "system", content: "你是一个项目管理数据分析专家，擅长从结构化数据中提炼洞察。使用中文回复，报告要具体、可操作。" },
+      { role: "system", content: "你是一个项目管理数据分析专家，擅长从结构化数据中提炼洞察。使用中文回复，报告要具体、可操作。始终使用人类可读的项目名称和表名，绝不输出数据库内部标识符。" },
       { role: "user", content: prompt },
     ]);
 
@@ -218,7 +236,7 @@ ${tableSummaries}
         tokens,
         // 返回对话历史供前端追问复用
         conversationHistory: [
-          { role: "system", content: "你是一个项目管理数据分析专家，擅长从结构化数据中提炼洞察。使用中文回复，报告要具体、可操作。" },
+          { role: "system", content: "你是一个项目管理数据分析专家，擅长从结构化数据中提炼洞察。使用中文回复，报告要具体、可操作。始终使用人类可读的项目名称和表名，绝不输出数据库内部标识符。" },
           { role: "user", content: prompt },
           { role: "assistant", content },
         ],
