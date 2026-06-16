@@ -162,31 +162,47 @@ function RenderInline({ tokens }: { tokens: InlineToken[] }) {
   </>;
 }
 
-/* ---- Mermaid 图表渲染 ---- */
+/* ---- Mermaid 图表渲染（CDN 加载，避免 Turbopack ESM 兼容问题） ---- */
+declare global { interface Window { mermaid?: any } }
+
 const MermaidChart = memo(function MermaidChart({ chart }: { chart: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>("");
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const mermaid = (await import("mermaid")).default;
+        if (!window.mermaid) {
+          await new Promise<void>((resolve, reject) => {
+            if (document.querySelector('script[src*="mermaid"]')) {
+              // 等它加载完
+              const check = setInterval(() => { if (window.mermaid) { clearInterval(check); resolve(); } }, 200);
+              setTimeout(() => { clearInterval(check); if (!window.mermaid) reject(new Error("CDN 超时")); }, 10000);
+              return;
+            }
+            const script = document.createElement("script");
+            script.src = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js";
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error("CDN 加载失败"));
+            document.head.appendChild(script);
+          });
+        }
         if (cancelled) return;
-        mermaid.initialize({ startOnLoad: false, theme: "neutral" });
+        window.mermaid.initialize({ startOnLoad: false, theme: "neutral" });
         const id = "mermaid-" + Math.random().toString(36).slice(2, 10);
-        const { svg: rendered } = await mermaid.render(id, chart);
+        const { svg: rendered } = await window.mermaid.render(id, chart);
         if (!cancelled) setSvg(rendered);
-      } catch {
-        if (!cancelled) setError(true);
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message || String(e));
       }
     })();
     return () => { cancelled = true; };
   }, [chart]);
 
   if (error) {
-    return <pre className="bg-gray-100 rounded-lg p-4 my-3 text-xs text-gray-500 overflow-x-auto font-mono">{chart}</pre>;
+    return <pre className="bg-red-50 border border-red-200 rounded-lg p-4 my-3 text-xs text-red-600 overflow-x-auto font-mono">{error + "\n\n" + chart}</pre>;
   }
 
   return (
