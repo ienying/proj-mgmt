@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Markdown } from "@/components/markdown";
 import {
   Select,
   SelectContent,
@@ -343,36 +344,28 @@ export function ProjectDetail({
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState<{ analysis: string; tableCount: number; totalRows: number } | null>(null);
   const [aiError, setAiError] = useState("");
-  const [aiScanSteps, setAiScanSteps] = useState<string[]>([]);
+  const [aiAnalyzingTable, setAiAnalyzingTable] = useState("");
+  const [aiConversationHistory, setAiConversationHistory] = useState<Array<{ role: string; content: string }>>([]);
+  const [aiFollowUpQuestion, setAiFollowUpQuestion] = useState("");
+  const [aiFollowUpLoading, setAiFollowUpLoading] = useState(false);
 
-  const handleAIAnalysis = useCallback(async () => {
+  const handleAIAnalysis = useCallback(async (tableCode?: string) => {
     setAiDialogOpen(true);
     setAiLoading(true);
     setAiResult(null);
     setAiError("");
-    setAiScanSteps([]);
+    setAiAnalyzingTable(tableCode || "");
+    setAiConversationHistory([]);
+    setAiFollowUpQuestion("");
 
     try {
-      const addStep = (msg: string) => setAiScanSteps((prev) => [...prev, msg]);
-
-      // 先获取表列表
-      const tablesRes = await fetch(`/api/project-data?projectSchema=${project.project_schema}&tableCode=__list__`);
-      const tableNames: string[] = [];
-      if (tablesRes.ok) {
-        const json = await tablesRes.json();
-        if (Array.isArray(json.data)) {
-          tableNames.push(...json.data.map((t: Record<string, unknown>) => String(t.table_code)));
-        }
-      }
-
-      // 如果没有表列表API，直接用 analyze-project
-      addStep("正在连接项目数据库...");
       const res = await fetch("/api/ai/analyze-project", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectSchema: project.project_schema,
           moduleName: activeModule,
+          tableCode: tableCode || undefined,
         }),
       });
 
@@ -392,6 +385,9 @@ export function ProjectDetail({
           tableCount: json.data.tableCount || 0,
           totalRows: json.data.totalRows || 0,
         });
+        if (json.data.conversationHistory) {
+          setAiConversationHistory(json.data.conversationHistory);
+        }
       }
     } catch (e) {
       setAiError(String(e));
@@ -399,6 +395,56 @@ export function ProjectDetail({
       setAiLoading(false);
     }
   }, [project.project_schema, activeModule]);
+
+  const handleAIFollowUp = useCallback(async () => {
+    const q = aiFollowUpQuestion.trim();
+    if (!q || aiConversationHistory.length === 0) return;
+
+    setAiFollowUpLoading(true);
+    setAiFollowUpQuestion("");
+
+    // 乐观更新：先显示用户问题
+    const updatedHistory = [
+      ...aiConversationHistory,
+      { role: "user", content: q },
+    ];
+    setAiConversationHistory(updatedHistory);
+
+    try {
+      const res = await fetch("/api/ai/analyze-project", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectSchema: project.project_schema,
+          question: q,
+          conversationHistory: aiConversationHistory,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        toast.error(json.error || "追问失败");
+        // 回滚用户消息
+        setAiConversationHistory(aiConversationHistory);
+        return;
+      }
+
+      if (json.data?.analysis) {
+        const finalHistory = [
+          ...updatedHistory,
+          { role: "assistant", content: json.data.analysis },
+        ];
+        setAiConversationHistory(finalHistory);
+        // 用最新回复更新展示
+        setAiResult((prev) => prev ? { ...prev, analysis: json.data.analysis } : null);
+      }
+    } catch (e) {
+      toast.error("追问失败: " + String(e));
+      setAiConversationHistory(aiConversationHistory);
+    } finally {
+      setAiFollowUpLoading(false);
+    }
+  }, [aiFollowUpQuestion, aiConversationHistory, project.project_schema]);
   
   // 编辑状态
   const [editingCell, setEditingCell] = useState<{ tableCode: string; rowId: string; column: string } | null>(null);
@@ -1248,7 +1294,7 @@ export function ProjectDetail({
           </button>
         ))}
         <button
-          onClick={handleAIAnalysis}
+          onClick={() => handleAIAnalysis()}
           className="px-2 py-1 rounded text-[11px] leading-tight font-medium transition-all whitespace-nowrap text-center text-teal-600 hover:bg-teal-50 flex items-center gap-1"
         >
           <Sparkles className="w-3 h-3" />
@@ -1658,6 +1704,12 @@ export function ProjectDetail({
               )}
             </PopoverContent>
           </Popover>
+          <button
+            onClick={() => handleAIAnalysis(table.table_code)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
+          >
+            <Sparkles className="h-3 w-3" />AI
+          </button>
         </div>
         {/* 卡片列表 */}
         <div className="space-y-3 p-2">
@@ -1992,6 +2044,12 @@ export function ProjectDetail({
               </div>
             </PopoverContent>
           </Popover>
+          <button
+            onClick={() => handleAIAnalysis(table.table_code)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
+          >
+            <Sparkles className="h-3 w-3" />AI
+          </button>
         </div>
         {/* 表格区域 */}
         <div className="relative overflow-auto max-h-[520px]" style={{ overscrollBehavior: "contain" }}>
@@ -2305,6 +2363,12 @@ export function ProjectDetail({
               </div>
             </PopoverContent>
           </Popover>
+          <button
+            onClick={() => handleAIAnalysis(table.table_code)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
+          >
+            <Sparkles className="h-3 w-3" />AI
+          </button>
         </div>
         {/* 看板列 */}
         <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: 300 }}>
@@ -2690,6 +2754,12 @@ export function ProjectDetail({
           <span className="text-[10px] text-gray-400">
             {levelDesc} · {data.length} 条记录
           </span>
+          <button
+            onClick={() => handleAIAnalysis(table.table_code)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
+          >
+            <Sparkles className="h-3 w-3" />AI
+          </button>
         </div>
         {/* 树形内容 */}
         <div className="space-y-1">
@@ -2732,6 +2802,12 @@ export function ProjectDetail({
               className="px-3 py-1 rounded text-sm border border-gray-200 hover:bg-gray-50 disabled:opacity-30"
             >
               下一条 ▶
+            </button>
+            <button
+              onClick={() => handleAIAnalysis(table.table_code)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
+            >
+              <Sparkles className="h-3 w-3" />AI
             </button>
           </div>
         </div>
@@ -3314,6 +3390,12 @@ export function ProjectDetail({
               </button>
             ))}
           </div>
+          <button
+            onClick={() => handleAIAnalysis(table.table_code)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors ml-auto"
+          >
+            <Sparkles className="h-3 w-3" />AI
+          </button>
         </div>
         {/* 甘特图容器 */}
         <div className="overflow-auto">
@@ -3547,7 +3629,15 @@ export function ProjectDetail({
 
     return (
       <div className="space-y-2">
-        <div className="text-xs text-gray-400 mb-2">按「{groupLabels}」分组 · {data.length} 条记录</div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-gray-400">按「{groupLabels}」分组 · {data.length} 条记录</span>
+          <button
+            onClick={() => handleAIAnalysis(table.table_code)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
+          >
+            <Sparkles className="h-3 w-3" />AI
+          </button>
+        </div>
         {groupTree.map(node => renderGroupNode(node, 0))}
         {groupTree.length === 0 && (
           <div className="text-center py-8 text-gray-400 text-sm">暂无数据</div>
@@ -4049,21 +4139,34 @@ export function ProjectDetail({
 
       {/* AI 数据分析弹窗 */}
       <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-teal-500" />
-              AI 数据分析 · {activeModule}
+              AI 数据分析
+              {aiAnalyzingTable ? (
+                <>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-sm font-normal text-gray-500">{aiAnalyzingTable}</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-sm font-normal text-gray-500">{activeModule}</span>
+                </>
+              )}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="space-y-4 flex-1 overflow-y-auto min-h-0">
             {aiLoading && (
               <div className="flex flex-col items-center py-12">
                 <Sparkles className="w-12 h-12 text-teal-400 animate-pulse mb-4" />
-                <p className="text-sm text-gray-500 mb-2">AI 正在分析项目数据...</p>
+                <p className="text-sm text-gray-500 mb-2">AI 正在分析数据...</p>
                 <p className="text-xs text-gray-400">
-                  正在读取 {project.project_schema} Schema 下的数据表
+                  {aiAnalyzingTable
+                    ? `正在读取表 ${aiAnalyzingTable} 的 ${Math.min(50, 999)} 条样本数据`
+                    : `正在读取 ${project.project_schema} Schema 下当前模块的数据表`}
                 </p>
               </div>
             )}
@@ -4084,7 +4187,7 @@ export function ProjectDetail({
                   <div className="space-y-3">
                     <p className="text-red-500 text-sm">分析失败</p>
                     <p className="text-red-400 text-xs">{aiError}</p>
-                    <Button variant="outline" size="sm" onClick={handleAIAnalysis}>
+                    <Button variant="outline" size="sm" onClick={() => handleAIAnalysis(aiAnalyzingTable || undefined)}>
                       重试
                     </Button>
                   </div>
@@ -4094,16 +4197,57 @@ export function ProjectDetail({
 
             {aiResult && !aiLoading && (
               <>
-                <div className="flex items-center gap-3 text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
-                  <span>共扫描 {aiResult.tableCount} 张表</span>
-                  <span>·</span>
-                  <span>{aiResult.totalRows.toLocaleString()} 条数据</span>
-                </div>
+                {/* 对话历史 */}
+                {aiConversationHistory.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* 初始分析结果：直接展示 markdown */}
+                    <div>
+                      <div className="flex items-center gap-3 text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2 mb-3">
+                        <span>共扫描 {aiResult.tableCount} 张表</span>
+                        <span>·</span>
+                        <span>{aiResult.totalRows.toLocaleString()} 条数据</span>
+                      </div>
+                      <Markdown>{aiResult.analysis}</Markdown>
+                    </div>
 
-                <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">
-                  {aiResult.analysis}
-                </div>
+                    {/* 追问消息（从第3条开始，跳过 system/user/assistant 初始三轮） */}
+                    {aiConversationHistory.slice(3).map((msg, i) => (
+                      <div key={i} className={msg.role === "user" ? "flex justify-end" : ""}>
+                        <div className={msg.role === "user"
+                          ? "bg-teal-500 text-white rounded-2xl rounded-br-md px-4 py-2.5 max-w-[85%] text-sm"
+                          : "bg-gray-100 text-gray-700 rounded-2xl rounded-bl-md px-4 py-2.5 max-w-[85%] text-sm prose prose-sm"
+                        }>
+                          {msg.role === "user" ? (
+                            msg.content
+                          ) : (
+                            <Markdown>{msg.content}</Markdown>
+                          )}
+                        </div>
+                      </div>
+                    ))}
 
+                    {/* 追问加载中 */}
+                    {aiFollowUpLoading && (
+                      <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        AI 思考中...
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {/* 无对话历史：单纯展示结果 */}
+                    <div className="flex items-center gap-3 text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
+                      <span>共扫描 {aiResult.tableCount} 张表</span>
+                      <span>·</span>
+                      <span>{aiResult.totalRows.toLocaleString()} 条数据</span>
+                    </div>
+
+                    <Markdown>{aiResult.analysis}</Markdown>
+                  </>
+                )}
+
+                {/* 操作栏 */}
                 <div className="flex items-center gap-2 pt-2 border-t">
                   <Button
                     variant="outline"
@@ -4119,7 +4263,7 @@ export function ProjectDetail({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={handleAIAnalysis}
+                    onClick={() => handleAIAnalysis(aiAnalyzingTable || undefined)}
                   >
                     <Loader2 className="w-3.5 h-3.5 mr-1" />
                     重新分析
@@ -4128,6 +4272,30 @@ export function ProjectDetail({
               </>
             )}
           </div>
+
+          {/* 追问输入框（有对话历史时显示） */}
+          {aiResult && !aiLoading && aiConversationHistory.length > 0 && (
+            <div className="border-t pt-3 mt-2">
+              <div className="flex gap-2">
+                <Input
+                  value={aiFollowUpQuestion}
+                  onChange={(e) => setAiFollowUpQuestion(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAIFollowUp(); } }}
+                  placeholder="对分析结果追问，例如：延期风险最大的任务是什么？"
+                  className="flex-1 h-9 text-sm"
+                  disabled={aiFollowUpLoading}
+                />
+                <Button
+                  size="sm"
+                  onClick={handleAIFollowUp}
+                  disabled={aiFollowUpLoading || !aiFollowUpQuestion.trim()}
+                  className="bg-teal-500 hover:bg-teal-600 text-white"
+                >
+                  {aiFollowUpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "发送"}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

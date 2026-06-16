@@ -3,11 +3,24 @@ import { createServerClient } from "@/storage/database/pg-client";
 import { getAISettings, ensureAITables, chatCompletion } from "@/lib/ai-settings";
 import { logAIUsage } from "@/lib/ai-usage-logger";
 
+const MODULE_PROMPT_HINTS: Record<string, string> = {
+  scope: "重点关注项目范围的定义完整性、WBS 分解合理性、变更控制情况与范围蔓延风险",
+  schedule: "重点关注里程碑达成率、关键路径偏差、延期任务趋势与进度压缩可行性",
+  quality: "重点关注质量问题的分布与趋势、整改完成率、重复问题模式",
+  cost: "重点关注预算执行偏差率、成本超支风险信号、费用结构合理性",
+  collaboration: "重点关注跨部门协同效率、资源冲突与排队情况",
+  communication: "重点关注沟通记录完整性、干系人覆盖度、问题响应时效",
+  risk: "重点关注风险等级分布、高影响概率风险的应对措施覆盖率、残留风险趋势",
+  procurement: "重点关注采购进度偏差、供应商交付质量、合同执行风险",
+  resource: "重点关注资源利用率、瓶颈资源识别、资源缺口预测与调配建议",
+  document: "重点关注文档完整度、版本管理规范性、关键文档缺失风险",
+};
+
 export async function POST(request: Request) {
   try {
     await ensureAITables();
     const body = await request.json();
-    const { projectSchema, moduleName, userId, userName } = body;
+    const { projectSchema, moduleName, tableCode, userId, userName, question, conversationHistory } = body;
 
     if (!projectSchema) {
       return NextResponse.json({ error: "缺少 projectSchema" }, { status: 400 });
@@ -15,28 +28,49 @@ export async function POST(request: Request) {
 
     const client = await createServerClient();
 
-    // 1. 获取该项目 Schema 下的所有表
+    // ========== 追问模式 ==========
+    if (conversationHistory && question) {
+      const messages: Array<{ role: string; content: string }> = [
+        ...conversationHistory,
+        { role: "user", content: question },
+      ];
+
+      const { content, tokens } = await chatCompletion(messages);
+
+      if (userId) {
+        logAIUsage({ userId, userName, feature: "analyze-project-followup", tokensUsed: tokens, projectId: projectSchema });
+      }
+
+      return NextResponse.json({ data: { analysis: content, tokens } });
+    }
+
+    // ========== 初始分析模式 ==========
+
+    // 1. 获取该 Schema 下的所有表名
     const { data: tablesResult } = await client.rpc("execute_sql", {
-      p_sql: `
-        SELECT table_name
-        FROM information_schema.tables
-        WHERE table_schema = '${projectSchema}'
-        ORDER BY table_name
-      `,
+      p_sql: `SELECT table_name FROM information_schema.tables WHERE table_schema = '${projectSchema}' ORDER BY table_name`,
     });
 
-    const tables = (tablesResult as Array<{ table_name: string }>) || [];
+    let tables = (tablesResult as Array<{ table_name: string }>) || [];
+
+    // 如果指定了 tableCode，只分析该表
+    if (tableCode) {
+      tables = tables.filter((t) => t.table_name === tableCode);
+    }
+
     if (tables.length === 0) {
       return NextResponse.json({
         data: {
-          summary: "该项目 Schema 下暂无数据表",
-          tables: [],
+          analysis: tableCode
+            ? `表 "${tableCode}" 在项目 Schema 中不存在或暂无数据`
+            : "该项目 Schema 下暂无数据表",
+          tableCount: 0,
           totalRows: 0,
         },
       });
     }
 
-    // 2. 为每个表拼接结构+数据样本
+    // 2. 为每个表拼接结构+更多样本数据
     const tableInfos: Array<{
       name: string;
       columns: string[];
@@ -45,47 +79,39 @@ export async function POST(request: Request) {
     }> = [];
 
     let totalRows = 0;
+    const SAMPLE_LIMIT = 50;
 
     for (const t of tables) {
       const tableName = t.table_name;
 
       // 获取列信息
       const { data: colsResult } = await client.rpc("execute_sql", {
-        p_sql: `
-          SELECT column_name, data_type
-          FROM information_schema.columns
-          WHERE table_schema = '${projectSchema}' AND table_name = '${tableName}'
-          ORDER BY ordinal_position
-        `,
+        p_sql: `SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = '${projectSchema}' AND table_name = '${tableName}' ORDER BY ordinal_position`,
       });
       const columns = (colsResult as Array<{ column_name: string; data_type: string }>) || [];
       const colNames = columns.map((c) => c.column_name);
 
-      // 获取行数 + 前 10 条样本
-      const { data: rowsResult } = await client.rpc("execute_sql", {
-        p_sql: `
-          SELECT * FROM ${projectSchema}."${tableName}" LIMIT 10
-        `,
-      });
-      const rows = (rowsResult as Record<string, unknown>[]) || [];
-
       // 获取总行数
       const { data: countResult } = await client.rpc("execute_sql", {
-        p_sql: `
-          SELECT COUNT(*) as cnt FROM ${projectSchema}."${tableName}"
-        `,
+        p_sql: `SELECT COUNT(*) as cnt FROM ${projectSchema}."${tableName}"`,
       });
-      const rowCount =
-        Number((countResult as Array<{ cnt: string }>)?.[0]?.cnt) || 0;
+      const rowCount = Number((countResult as Array<{ cnt: string }>)?.[0]?.cnt) || 0;
       totalRows += rowCount;
 
-      // 脱敏：移除可能敏感的列值
+      // 获取更多样本行（最多50条）
+      const sampleSize = Math.min(SAMPLE_LIMIT, rowCount);
+      let rows: Record<string, unknown>[] = [];
+
+      if (sampleSize > 0) {
+        const { data: rowsResult } = await client.rpc("execute_sql", {
+          p_sql: `SELECT * FROM ${projectSchema}."${tableName}" LIMIT ${sampleSize}`,
+        });
+        rows = (rowsResult as Record<string, unknown>[]) || [];
+      }
+
+      // 脱敏
       const safeCols = colNames.filter(
-        (c) =>
-          !c.includes("password") &&
-          !c.includes("secret") &&
-          c !== "login_password" &&
-          c !== "api_key"
+        (c) => !c.includes("password") && !c.includes("secret") && c !== "login_password" && c !== "api_key"
       );
 
       const sampleRows = rows.map((row) => {
@@ -101,48 +127,87 @@ export async function POST(request: Request) {
         return safe;
       });
 
-      tableInfos.push({ name: tableName, columns: safeCols, rowCount, sampleRows });
+      // 对数值列计算统计摘要
+      const numericCols = columns.filter((c) =>
+        ["integer", "numeric", "bigint", "double precision", "real", "smallint", "decimal"].includes(c.data_type)
+      );
+      const stats: Record<string, { min: number; max: number; avg: number }> = {};
+      if (numericCols.length > 0 && rows.length > 0) {
+        for (const nc of numericCols) {
+          const vals = rows
+            .map((r) => Number(r[nc.column_name]))
+            .filter((v) => !isNaN(v));
+          if (vals.length > 0) {
+            stats[nc.column_name] = {
+              min: Math.min(...vals),
+              max: Math.max(...vals),
+              avg: vals.reduce((a, b) => a + b, 0) / vals.length,
+            };
+          }
+        }
+      }
+
+      tableInfos.push({
+        name: tableName,
+        columns: safeCols,
+        rowCount,
+        sampleRows,
+        ...(Object.keys(stats).length > 0 ? { stats } as any : {}),
+      } as any);
     }
 
     // 3. 拼装 Prompt
     const tableSummaries = tableInfos
-      .map(
-        (t) =>
-          `表名: ${t.name} | 列: [${t.columns.join(", ")}] | 总行数: ${t.rowCount}\n样本数据:\n${JSON.stringify(t.sampleRows, null, 2)}`
-      )
+      .map((t: any) => {
+        const statsStr = t.stats
+          ? `\n数值统计: ${Object.entries(t.stats).map(([k, v]: any) => `${k}(min:${v.min}, max:${v.max}, avg:${v.avg.toFixed(1)})`).join("; ")}`
+          : "";
+        return `表名: ${t.name} | 列: [${t.columns.join(", ")}] | 总行数: ${t.rowCount}${statsStr}\n样本数据:\n${JSON.stringify(t.sampleRows, null, 2)}`;
+      })
       .join("\n\n---\n\n");
 
-    const prompt = `你是一个项目管理数据分析专家。请分析以下项目数据库的内容，给出专业的分析报告。
+    const moduleHint = MODULE_PROMPT_HINTS[moduleName] || "全面分析项目数据";
+
+    const prompt = tableCode
+      ? `你是一个项目管理数据分析专家。请对项目中的【${tableCode}】表进行深入分析。
+
+项目 Schema: ${projectSchema}
+表名: ${tableCode}
+${moduleHint}
+
+数据：
+${tableSummaries}
+
+请按以下结构输出分析报告（Markdown）：
+1. **数据概览**：该表的数据规模、字段结构概要
+2. **关键发现**：数据中值得关注的模式、异常或亮点（至少3条）
+3. **${moduleName ? moduleHint.slice(0, 30) : "趋势与建议"}**：基于数据分析给出具体管理建议
+4. **数据质量**：缺失值、不一致或异常值情况`
+      : `你是一个项目管理数据分析专家。请分析以下项目数据库的内容，给出专业的分析报告。
 
 项目 Schema: ${projectSchema}
 当前模块: ${moduleName || "全部模块"}
-数据表数量: ${tables.length}
-总数据行数: ${totalRows}
+${moduleHint}
+数据表数量: ${tables.length} | 总数据行数: ${totalRows}
 
 各表结构与样本数据：
 ${tableSummaries}
 
-请按以下结构输出分析报告（使用 Markdown 格式）：
+请按以下结构输出分析报告（Markdown）：
 1. **数据概览**：整体数据量、表关联关系
-2. **关键发现**：数据中值得关注的模式、异常或亮点
+2. **关键发现**：数据中值得关注的模式、异常或亮点（至少5条）
 3. **趋势与建议**：基于数据给出项目管理建议
-4. **数据质量**：是否存在缺失值、不一致等问题`;
+4. **数据质量**：缺失值、不一致或异常值情况`;
 
     // 4. 调用大模型
     const { content, tokens } = await chatCompletion([
-      { role: "system", content: "你是一个项目管理数据分析专家，擅长从结构化数据中提炼洞察。" },
+      { role: "system", content: "你是一个项目管理数据分析专家，擅长从结构化数据中提炼洞察。使用中文回复，报告要具体、可操作。" },
       { role: "user", content: prompt },
     ]);
 
     // 5. 记录日志
     if (userId) {
-      logAIUsage({
-        userId,
-        userName,
-        feature: "analyze-project",
-        tokensUsed: tokens,
-        projectId: projectSchema,
-      });
+      logAIUsage({ userId, userName, feature: "analyze-project", tokensUsed: tokens, projectId: projectSchema });
     }
 
     return NextResponse.json({
@@ -151,6 +216,12 @@ ${tableSummaries}
         tableCount: tables.length,
         totalRows,
         tokens,
+        // 返回对话历史供前端追问复用
+        conversationHistory: [
+          { role: "system", content: "你是一个项目管理数据分析专家，擅长从结构化数据中提炼洞察。使用中文回复，报告要具体、可操作。" },
+          { role: "user", content: prompt },
+          { role: "assistant", content },
+        ],
       },
     });
   } catch (err) {
