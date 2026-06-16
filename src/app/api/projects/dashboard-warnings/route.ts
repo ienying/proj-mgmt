@@ -164,14 +164,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 4. 组装项目数据文本
+    // 4. 组装项目数据文本（含 project_id 供 AI 精确引用）
     const lines = projectSummaries.map((p) => {
       const tablesStr = p.tables
         .filter((t) => t.count > 0)
         .map((t) => `${t.name}(${t.count}条)`)
         .join("、") || "无数据";
       const statusText = p.status === "active" ? "进行中" : p.status === "completed" ? "已完成" : p.status;
-      let line = `· ${p.name}（${p.type}/${p.stage}/${statusText}/经理${p.manager}）：总记录${p.total_records}条，进度${p.schedule_records}条`;
+      let line = `· [id:${p.id}] ${p.name}（${p.type}/${p.stage}/${statusText}/经理${p.manager}）：总记录${p.total_records}条，进度${p.schedule_records}条`;
       if (p.end_date) {
         const daysLeft = Math.ceil((new Date(p.end_date).getTime() - Date.now()) / 86400000);
         line += `，截止${p.end_date.slice(0, 10)}（${daysLeft >= 0 ? `剩余${daysLeft}天` : `已逾期${Math.abs(daysLeft)}天`}）`;
@@ -196,12 +196,12 @@ export async function POST(request: NextRequest) {
 
 输出要求：
 - 仅返回 JSON 数组，不要输出任何其他文字
-- 每个预警项包含：project_id（项目id）、project_name（项目名称）、level（error/warning/info）、type（短代码英文）、message（中文描述，简洁明了，每条不超过30字）
+- 每个预警项包含：project_id（项目数据中的 [id:xxx] 部分，必须精确复制）、project_name（项目名称）、level（error/warning/info）、type（短代码英文）、message（中文描述，简洁明了，每条不超过30字）
 - 每个项目最多3条预警，优先输出最严重的
 - 如果项目状态良好，不要强行生成预警
 
 JSON 格式示例：
-[{"project_id":"xxx","project_name":"项目A","level":"error","type":"overdue","message":"已超过截止日期15天"}]`;
+[{"project_id":"a1b2c3d4-...","project_name":"项目A","level":"error","type":"overdue","message":"已超过截止日期15天"}]`;
 
     const effectiveSystem = system_message || DEFAULT_SYSTEM;
     const effectiveUser = user_message

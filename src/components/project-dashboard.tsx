@@ -334,7 +334,20 @@ JSON 格式示例：
     const source = aiWarnings ?? data?.warnings ?? [];
     let warnings = source;
     if (selectedIds.size > 0) {
-      warnings = warnings.filter((w) => selectedIds.has(w.project_id));
+      // 构建 name→id 回退映射（AI 可能返回名称而非精确 ID）
+      const nameToId = new Map<string, string>();
+      if (data?.projects) {
+        for (const p of data.projects) {
+          nameToId.set(p.project_name, p.id);
+        }
+      }
+      warnings = warnings.filter((w) => {
+        if (selectedIds.has(w.project_id)) return true;
+        // fallback: 用项目名称匹配
+        const idByName = nameToId.get(w.project_name);
+        if (idByName && selectedIds.has(idByName)) return true;
+        return false;
+      });
     }
     if (warningLevelFilter.size === 0) return warnings;
     return warnings.filter((w) => warningLevelFilter.has(w.level));
