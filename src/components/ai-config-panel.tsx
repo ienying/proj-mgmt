@@ -36,8 +36,7 @@ export default function AIConfigPanel() {
   useEffect(() => { loadConfig(); }, [loadConfig]);
 
   const handleTest = async () => {
-    const key = configured ? "" : apiKey;
-    if (!configured && !key) {
+    if (!apiKey && !configured) {
       toast.error("请输入 API Key");
       return;
     }
@@ -48,7 +47,7 @@ export default function AIConfigPanel() {
       const res = await fetch("/api/ai/config/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_key: key || undefined, base_url: baseUrl }),
+        body: JSON.stringify({ api_key: apiKey || undefined, base_url: baseUrl }),
       });
       const json = await res.json();
       if (json.data?.ok) {

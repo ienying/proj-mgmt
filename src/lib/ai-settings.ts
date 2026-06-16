@@ -148,10 +148,13 @@ export async function saveAISettings(params: {
 
 export async function testAIConnection(apiKey: string, baseUrl: string): Promise<{ ok: boolean; models: string[]; error: string }> {
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
     const res = await fetch(`${baseUrl}/v1/models`, {
       headers: { Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(10000),
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     if (!res.ok) {
       const err = await res.text();
       return { ok: false, models: [], error: `HTTP ${res.status}: ${err.slice(0, 200)}` };
@@ -171,6 +174,8 @@ async function chatCompletion(
   const settings = await getAISettings();
   if (!settings) throw new Error("API Key 未配置");
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60000);
   const res = await fetch(`${settings.baseUrl}/v1/chat/completions`, {
     method: "POST",
     headers: {
@@ -183,8 +188,9 @@ async function chatCompletion(
       max_tokens: options?.maxTokens || 4096,
       temperature: 0.3,
     }),
-    signal: AbortSignal.timeout(60000),
+    signal: controller.signal,
   });
+  clearTimeout(timer);
 
   if (!res.ok) {
     const err = await res.text();
