@@ -32,6 +32,7 @@ const KnowledgeCenter = dynamic(() => import("@/components/knowledge-center").th
 const AboutPage = dynamic(() => import("@/components/about-page"), { ssr: false, loading: () => <LoadingFallback /> });
 const TaskCenter = dynamic(() => import("@/components/task-center"), { ssr: false, loading: () => <LoadingFallback /> });
 const CaseCenter = dynamic(() => import("@/components/case-center"), { ssr: false, loading: () => <LoadingFallback /> });
+const ProjectDashboard = dynamic(() => import("@/components/project-dashboard").then(m => ({ default: m.ProjectDashboard })), { ssr: false, loading: () => <LoadingFallback /> });
 
 import {
   FolderKanban,
@@ -44,6 +45,7 @@ import {
   Megaphone,
   Info,
   CheckSquare,
+  LayoutDashboard,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -145,6 +147,7 @@ export default function HomePage() {
 
   const dockItems = [
     { id: "dashboard", label: "数据看板", icon: <FolderKanban className="w-5 h-5" />, color: "bg-emerald-500" },
+    { id: "project-board", label: "项目看板", icon: <LayoutDashboard className="w-5 h-5" />, color: "bg-teal-500" },
     { id: "projects", label: "项目管理", icon: <FolderKanban className="w-5 h-5" />, color: "bg-blue-500" },
     { id: "tasks", label: "任务中心", icon: <CheckSquare className="w-5 h-5" />, color: "bg-orange-500", badge: badges.tasks },
     { id: "issues", label: "工单提交", icon: <AlertTriangle className="w-5 h-5" />, color: "bg-blue-500", badge: badges.issues },
@@ -560,6 +563,33 @@ export default function HomePage() {
                 deadline: "2024-12-31",
                 teamSize: 8,
               }))}
+            />
+          </ContentErrorBoundary>
+        );
+      case "project-board":
+        return (
+          <ContentErrorBoundary>
+            <ProjectDashboard
+              onViewProject={(projectId) => {
+                const project = projects.find((p) => p.id === projectId);
+                if (project) {
+                  setViewingProject({
+                    id: project.id,
+                    project_name: project.project_name,
+                    project_code: project.project_code,
+                    project_type: project.project_type,
+                    project_stage: project.project_stage,
+                    project_schema: project.project_schema || `yuansu_${project.project_code.toLowerCase()}`,
+                    status: project.status || "active",
+                    created_at: project.created_at || "",
+                    customer_info: project.customer_info as { company_name?: string; contact_person?: string; contact_phone?: string; contact_email?: string } | undefined,
+                    channel_info: project.channel_info as Array<{ company_name: string; contact_person?: string; contact_phone?: string }> | undefined,
+                    procurement_modules: project.procurement_modules as string[] | undefined,
+                    description: project.description,
+                  });
+                  setActiveItem("projects");
+                }
+              }}
             />
           </ContentErrorBoundary>
         );
