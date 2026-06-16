@@ -16,12 +16,13 @@ function encrypt(text: string): string {
   const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
   const combined = Buffer.concat([iv, tag, encrypted]);
-  return combined.toString("base64");
+  // 使用 base64url（无 +/= 特殊字符，SQL 安全）
+  return combined.toString("base64url");
 }
 
 function decrypt(text: string): string {
   const key = getKey();
-  const combined = Buffer.from(text, "base64");
+  const combined = Buffer.from(text, "base64url");
   const iv = combined.subarray(0, 12);
   const tag = combined.subarray(12, 28);
   const encrypted = combined.subarray(28);
@@ -116,34 +117,17 @@ export async function saveAISettings(params: {
   const baseUrl = params.baseUrl || "https://api.deepseek.com";
   const model = params.model || "deepseek-chat";
 
-  // 查询已有记录
-  const { data: existing } = await client.rpc("execute_sql", {
-    p_sql: `SELECT id FROM design_public.ai_settings LIMIT 1`,
+  // 清空旧数据（避免旧加密格式残留），插入新记录
+  await client.rpc("execute_sql", {
+    p_sql: `DELETE FROM design_public.ai_settings`,
   });
-  const rows = (existing as Record<string, unknown>[]) || [];
 
-  if (rows.length > 0 && rows[0].id) {
-    // 更新
-    await client.rpc("execute_sql", {
-      p_sql: `
-        UPDATE design_public.ai_settings
-        SET api_key = '${encryptedKey.replace(/'/g, "''")}',
-            base_url = '${baseUrl.replace(/'/g, "''")}',
-            model = '${model.replace(/'/g, "''")}',
-            is_active = true,
-            updated_at = NOW()
-        WHERE id = '${String(rows[0].id).replace(/'/g, "''")}'
-      `,
-    });
-  } else {
-    // 插入
-    await client.rpc("execute_sql", {
-      p_sql: `
-        INSERT INTO design_public.ai_settings (key_name, api_key, base_url, model, is_active)
-        VALUES ('DeepSeek', '${encryptedKey.replace(/'/g, "''")}', '${baseUrl.replace(/'/g, "''")}', '${model.replace(/'/g, "''")}', true)
-      `,
-    });
-  }
+  await client.rpc("execute_sql", {
+    p_sql: `
+      INSERT INTO design_public.ai_settings (key_name, api_key, base_url, model, is_active)
+      VALUES ('DeepSeek', '${encryptedKey.replace(/'/g, "''")}', '${baseUrl.replace(/'/g, "''")}', '${model.replace(/'/g, "''")}', true)
+    `,
+  });
 }
 
 export async function testAIConnection(apiKey: string, baseUrl: string): Promise<{ ok: boolean; models: string[]; error: string }> {
