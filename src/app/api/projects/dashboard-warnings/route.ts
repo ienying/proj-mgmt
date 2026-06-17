@@ -349,6 +349,11 @@ ${projectDataText}
           warningCount: warnings.length,
           hasParsedAI: warnings.length > 0,
         },
+        conversationHistory: [
+          { role: "system", content: effectiveSystem },
+          { role: "user", content: effectiveUser },
+          { role: "assistant", content },
+        ],
       },
     });
   } catch (error: unknown) {

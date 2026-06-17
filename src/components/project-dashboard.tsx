@@ -50,6 +50,7 @@ import {
   Sparkles,
   Settings,
   Info,
+  Copy,
 } from "lucide-react";
 import {
   Dialog,
@@ -64,6 +65,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Markdown } from "@/components/markdown";
+import { AIPromptDialog } from "@/components/ai-prompt-dialog";
 
 interface TableStat {
   table_code: string;
@@ -164,37 +166,34 @@ export function ProjectDashboard({
   const [aiGeneratedBy, setAiGeneratedBy] = useState<string | null>(null);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiScanStats, setAiScanStats] = useState<{ projectCount: number; tableCount: number; recordCount: number; warningCount: number; hasParsedAI: boolean } | null>(null);
-  const [aiRawResponse, setAiRawResponse] = useState<string | null>(null);
-  const [showRaw, setShowRaw] = useState(false);
+
+  // AI 分析对话框（和项目管理一致的交互模式）
+  const [aiPromptDialogOpen, setAiPromptDialogOpen] = useState(false);
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<string | null>(null);
+  const [aiError, setAiError] = useState("");
+  const [aiConversationHistory, setAiConversationHistory] = useState<Array<{ role: string; content: string }>>([]);
+  const [aiFollowUpQuestion, setAiFollowUpQuestion] = useState("");
+  const [aiFollowUpLoading, setAiFollowUpLoading] = useState(false);
+  const [aiCustomSystemMessage, setAiCustomSystemMessage] = useState("");
+  const [aiCustomUserPrompt, setAiCustomUserPrompt] = useState("");
+
+  // AI 按钮 → 打开提示词对话框
+  const openAIPromptDialog = useCallback(() => {
+    setAiPromptDialogOpen(true);
+  }, []);
+
+  // 提示词对话框 → 执行分析
+  const handleAIPromptSubmit = useCallback((result: { systemMessage: string; userPrompt: string; templateId?: string }) => {
+    setAiCustomSystemMessage(result.systemMessage);
+    setAiCustomUserPrompt(result.userPrompt);
+    setAiPromptDialogOpen(false);
+    generateAiWarnings({ systemPrompt: result.systemMessage, userPrompt: result.userPrompt });
+  }, []);
 
   // 分析详情对话框
   const [analysisDialog, setAnalysisDialog] = useState<{ open: boolean; projectId: string; projectName: string }>({ open: false, projectId: "", projectName: "" });
-
-  // 提示词编辑
-  const [promptDialogOpen, setPromptDialogOpen] = useState(false);
-  const DEFAULT_SYSTEM_PROMPT = `你是一个项目管理预警分析专家，擅长从项目数据中识别风险并给出可操作建议。使用中文回复。
-
-关键要求：你必须输出完整的 Markdown 分析报告（包含标题、段落、图标、表格），严禁只输出 JSON 数组。预警数据放在报告末尾的 \`\`\`json 代码块中。`;
-
-  const DEFAULT_USER_PROMPT = `请分析以下 \${projectCount} 个项目的数据，生成预警分析报告。
-
-\${projectData}
-
-请按以下结构输出分析报告（Markdown，适当使用 📊📈⚠️✅🔴🟡🟢 等图标增强可读性）：
-
-1. **📊 项目概览**：总体数据量、各项目基本情况
-2. **🔍 逐项分析**：每个项目逐一分析，包含：
-   - 项目名称
-   - 数据状态（总记录数、进度记录数、最新更新时间）
-   - 截止日期情况
-   - 风险等级评估（🔴严重 / 🟡警告 / 🟢正常）
-   - 具体风险描述和建议
-3. **📈 综合建议**：跨项目的共性问题和管理改进建议
-4. **⚠️ 预警汇总**：最后附一个 \`\`\`json 代码块，包含所有预警项的 JSON 数组，每项格式为：
-   {"project_id":"项目id","project_name":"项目名称","level":"error|warning|info","type":"英文代码","message":"中文描述（不超过30字）"}`;
-
-  const [customSystemPrompt, setCustomSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
-  const [customUserPrompt, setCustomUserPrompt] = useState(DEFAULT_USER_PROMPT);
 
   // 预警筛选
   const [warningLevelFilter, setWarningLevelFilter] = useState<Set<string>>(
@@ -252,7 +251,7 @@ export function ProjectDashboard({
             setAiGeneratedAt(json.data.generated_at || null);
             setAiGeneratedBy(json.data.generated_by || null);
             setAiScanStats(json.data.stats || null);
-            setAiRawResponse(json.data.raw_response || null);
+            if (json.data.raw_response) setAiResult(json.data.raw_response);
           }
         }
       } catch { /* ignore */ }
@@ -262,9 +261,14 @@ export function ProjectDashboard({
 
   // 生成新 AI 预警（可选传入自定义提示词）
   const generateAiWarnings = async (opts?: { systemPrompt?: string; userPrompt?: string }) => {
+    setAiDialogOpen(true);
+    setAiLoading(true);
+    setAiResult(null);
+    setAiError("");
+    setAiConversationHistory([]);
+    setAiFollowUpQuestion("");
     setAiGenerating(true);
-    const systemMsg = opts?.systemPrompt ?? (customSystemPrompt !== DEFAULT_SYSTEM_PROMPT ? customSystemPrompt : undefined);
-    const userMsg = opts?.userPrompt ?? (customUserPrompt !== DEFAULT_USER_PROMPT ? customUserPrompt : undefined);
+
     try {
       const projectIds = selectedIds.size > 0 ? Array.from(selectedIds) : undefined;
       const res = await fetch("/api/projects/dashboard-warnings", {
@@ -272,8 +276,8 @@ export function ProjectDashboard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           project_ids: projectIds,
-          system_message: systemMsg,
-          user_message: userMsg,
+          system_message: opts?.systemPrompt || undefined,
+          user_message: opts?.userPrompt || undefined,
         }),
       });
       if (!res.ok) {
@@ -287,10 +291,21 @@ export function ProjectDashboard({
         setAiGeneratedAt(json.data.generated_at || null);
         setAiGeneratedBy(json.data.generated_by || null);
         setAiScanStats(json.data.stats || null);
-        setAiRawResponse(json.data.raw_response || null);
-        setShowRaw(false);
-        // 展开全部级别筛选，确保 AI 生成的所有预警可见
         setWarningLevelFilter(new Set(["error", "warning", "info"]));
+
+        const rawResponse = json.data.raw_response || "";
+        setAiResult(rawResponse);
+
+        if (json.data.conversationHistory) {
+          setAiConversationHistory(json.data.conversationHistory);
+        } else {
+          setAiConversationHistory([
+            { role: "system", content: opts?.systemPrompt || "" },
+            { role: "user", content: opts?.userPrompt || "" },
+            { role: "assistant", content: rawResponse },
+          ]);
+        }
+
         const stats = json.data.stats;
         if (stats) {
           toast.success(`AI 扫描完成：${stats.projectCount} 个项目、${stats.tableCount} 张表、${stats.recordCount} 条记录 → ${newWarnings.length} 条预警`);
@@ -299,11 +314,40 @@ export function ProjectDashboard({
         }
       }
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "AI 预警生成失败");
+      const msg = e instanceof Error ? e.message : "生成失败";
+      setAiError(msg);
+      toast.error(msg);
     } finally {
+      setAiLoading(false);
       setAiGenerating(false);
     }
   };
+
+  // 追问
+  const handleAIFollowUp = useCallback(async () => {
+    const q = aiFollowUpQuestion.trim();
+    if (!q || aiConversationHistory.length === 0) return;
+    setAiFollowUpLoading(true);
+    setAiFollowUpQuestion("");
+    try {
+      const res = await fetch("/api/ai/analyze-project", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectSchema: "dashboard",
+          question: q,
+          conversationHistory: aiConversationHistory,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) { toast.error(json.error || "追问失败"); return; }
+      if (json.data?.analysis) {
+        setAiConversationHistory((prev) => [...prev, { role: "user", content: q }, { role: "assistant", content: json.data.analysis }]);
+        setAiResult(json.data.analysis);
+      }
+    } catch (e) { toast.error("追问失败: " + String(e)); }
+    finally { setAiFollowUpLoading(false); }
+  }, [aiFollowUpQuestion, aiConversationHistory]);
 
   // 选中项目变化时重新请求
   const handleSelectionChange = (newIds: Set<string>) => {
@@ -703,7 +747,7 @@ export function ProjectDashboard({
                 variant="outline"
                 size="sm"
                 className="h-7 text-xs gap-1"
-                onClick={() => generateAiWarnings()}
+                onClick={openAIPromptDialog}
                 disabled={aiGenerating}
               >
                 {aiGenerating ? (
@@ -722,7 +766,7 @@ export function ProjectDashboard({
                 variant="ghost"
                 size="sm"
                 className="h-7 w-7 p-0"
-                onClick={() => setPromptDialogOpen(true)}
+                onClick={openAIPromptDialog}
                 title="编辑 AI 提示词"
               >
                 <Settings className="w-3.5 h-3.5 text-muted-foreground" />
@@ -748,22 +792,7 @@ export function ProjectDashboard({
               ) : (
                 <Badge variant="secondary" className="text-[10px] bg-yellow-50 text-yellow-600">规则兜底</Badge>
               )}
-              {aiRawResponse && (
-                <button
-                  onClick={() => setShowRaw(!showRaw)}
-                  className="ml-auto text-[10px] text-gray-400 hover:text-gray-600 underline"
-                >
-                  {showRaw ? "收起原始响应" : "查看原始响应"}
-                </button>
-              )}
             </div>
-          )}
-
-          {/* 原始响应 */}
-          {showRaw && aiRawResponse && (
-            <pre className="bg-gray-900 text-gray-300 rounded-lg p-3 text-[11px] max-h-[200px] overflow-auto font-mono leading-relaxed">
-              {aiRawResponse}
-            </pre>
           )}
 
           {!isAiGenerated && aiWarnings === null && !aiGenerating ? (
@@ -1025,150 +1054,164 @@ export function ProjectDashboard({
         </Card>
       </div>
 
-      {/* ===== AI 提示词编辑对话框 ===== */}
-      <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+      {/* AI 提示词模板弹窗 */}
+      <AIPromptDialog
+        open={aiPromptDialogOpen}
+        onOpenChange={setAiPromptDialogOpen}
+        onSubmit={handleAIPromptSubmit}
+        projectSchema="dashboard"
+        promptType="global"
+      />
+
+      {/* AI 分析报告弹窗（和项目管理一致的 Markdown + 追问模式） */}
+      <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
-              <Settings className="w-4 h-4" />
-              AI 预警提示词编辑
+              <Sparkles className="w-5 h-5 text-teal-500" />
+              AI 预警分析报告
+              {aiGeneratedAt && (
+                <>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-xs font-normal text-gray-500">
+                    {new Date(aiGeneratedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </>
+              )}
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              修改后将替换默认提示词，用于下次生成预警。关闭对话框保留修改（不持久化）。
-            </DialogDescription>
           </DialogHeader>
-          <div className="flex-1 space-y-4 overflow-auto py-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium flex items-center gap-1">
-                <Info className="w-3 h-3" />
-                System Prompt（系统指令）
-              </Label>
-              <Textarea
-                value={customSystemPrompt}
-                onChange={(e) => setCustomSystemPrompt(e.target.value)}
-                className="min-h-[180px] text-xs font-mono"
-                placeholder="输入系统提示词..."
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium flex items-center gap-1">
-                <Info className="w-3 h-3" />
-                User Prompt（用户消息模板）
-              </Label>
-              <div className="text-[11px] text-muted-foreground mb-1">
-                可用变量：<code className="bg-gray-100 px-1 rounded">{'${projectCount}'}</code> 项目数量、<code className="bg-gray-100 px-1 rounded">{'${projectData}'}</code> 项目数据摘要
+
+          <div className="space-y-4 flex-1 overflow-y-auto min-h-0">
+            {aiLoading && (
+              <div className="flex flex-col items-center py-12">
+                <Sparkles className="w-12 h-12 text-teal-400 animate-pulse mb-4" />
+                <p className="text-sm text-gray-500 mb-2">AI 正在分析项目数据...</p>
+                {aiScanStats && (
+                  <p className="text-xs text-gray-400">
+                    正在读取 {aiScanStats.projectCount} 个项目、{aiScanStats.tableCount} 张表的数据
+                  </p>
+                )}
               </div>
-              <Textarea
-                value={customUserPrompt}
-                onChange={(e) => setCustomUserPrompt(e.target.value)}
-                className="min-h-[140px] text-xs font-mono"
-                placeholder="输入用户消息模板..."
-              />
-            </div>
+            )}
+
+            {aiError && !aiLoading && (
+              <div className="py-8 text-center">
+                <p className="text-red-500 text-sm">分析失败</p>
+                <p className="text-red-400 text-xs mt-1">{aiError}</p>
+                <Button variant="outline" size="sm" className="mt-3" onClick={openAIPromptDialog}>重试</Button>
+              </div>
+            )}
+
+            {aiResult && !aiLoading && (
+              <>
+                {/* 扫描统计 */}
+                {aiScanStats && (
+                  <div className="flex items-center gap-3 text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
+                    <span>{aiScanStats.projectCount} 个项目</span>
+                    <span>·</span>
+                    <span>{aiScanStats.tableCount} 张表</span>
+                    <span>·</span>
+                    <span>{aiScanStats.recordCount} 条记录</span>
+                    <span>·</span>
+                    <span className={aiScanStats.warningCount > 0 ? "text-orange-600 font-medium" : "text-emerald-600"}>
+                      {aiScanStats.warningCount} 条预警
+                    </span>
+                  </div>
+                )}
+
+                {/* 对话历史 */}
+                {aiConversationHistory.length > 3 ? (
+                  <div className="space-y-4">
+                    <div className="prose prose-sm max-w-none">
+                      <Markdown>{aiResult}</Markdown>
+                    </div>
+                    {aiConversationHistory.slice(3).map((msg, i) => (
+                      <div key={i} className={msg.role === "user" ? "flex justify-end" : ""}>
+                        <div className={msg.role === "user"
+                          ? "bg-teal-500 text-white rounded-2xl rounded-br-md px-4 py-2.5 max-w-[85%] text-sm"
+                          : "bg-gray-100 text-gray-700 rounded-2xl rounded-bl-md px-4 py-2.5 max-w-[85%] text-sm"
+                        }>
+                          {msg.role === "user" ? msg.content : <Markdown>{msg.content}</Markdown>}
+                        </div>
+                      </div>
+                    ))}
+                    {aiFollowUpLoading && (
+                      <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />AI 思考中...
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <Markdown>{aiResult}</Markdown>
+                )}
+
+                {/* 操作栏 */}
+                <div className="flex items-center gap-2 pt-2 border-t">
+                  <Button variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(aiResult); toast.success("已复制分析结果"); }}>
+                    <Copy className="w-3.5 h-3.5 mr-1" />复制结果
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={openAIPromptDialog}>
+                    <Loader2 className="w-3.5 h-3.5 mr-1" />重新分析
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
-          <DialogFooter className="gap-2 pt-2 border-t">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setCustomSystemPrompt(DEFAULT_SYSTEM_PROMPT);
-                setCustomUserPrompt(DEFAULT_USER_PROMPT);
-              }}
-            >
-              恢复默认
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => {
-                const sys = customSystemPrompt;
-                const usr = customUserPrompt;
-                setPromptDialogOpen(false);
-                setTimeout(() => {
-                  generateAiWarnings({ systemPrompt: sys, userPrompt: usr });
-                }, 100);
-              }}
-            >
-              <Sparkles className="w-3.5 h-3.5 mr-1" />
-              保存并用此提示词生成
-            </Button>
-          </DialogFooter>
+
+          {/* 追问输入框 */}
+          {aiResult && !aiLoading && aiConversationHistory.length > 3 && (
+            <div className="border-t pt-3 mt-2">
+              <div className="flex gap-2">
+                <Input
+                  value={aiFollowUpQuestion}
+                  onChange={(e) => setAiFollowUpQuestion(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAIFollowUp(); } }}
+                  placeholder="对分析结果追问..."
+                  className="flex-1 h-9 text-sm"
+                  disabled={aiFollowUpLoading}
+                />
+                <Button size="sm" onClick={handleAIFollowUp} disabled={aiFollowUpLoading || !aiFollowUpQuestion.trim()} className="bg-teal-500 hover:bg-teal-600 text-white">
+                  {aiFollowUpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "发送"}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
-      {/* ===== AI 分析详情对话框 ===== */}
+      {/* 预警详情小弹窗（点击查看预警时） */}
       <Dialog open={analysisDialog.open} onOpenChange={(v) => setAnalysisDialog((p) => ({ ...p, open: v }))}>
-        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
-              <Sparkles className="w-4 h-4 text-teal-500" />
-              AI 预警分析 · {analysisDialog.projectName}
+              <Shield className="w-4 h-4 text-orange-500" />
+              {analysisDialog.projectName} · 预警详情
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              以下为最近一次 AI 预警的完整分析结果
-              {aiGeneratedAt && ` · 生成时间：${new Date(aiGeneratedAt).toLocaleString("zh-CN")}`}
-            </DialogDescription>
           </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto space-y-3 min-h-0">
-            {/* 该项目相关预警 */}
-            <div className="space-y-1">
-              <h4 className="text-xs font-semibold text-gray-500">该项目预警</h4>
-              {displayWarnings.filter((w) => w.project_id === analysisDialog.projectId || w.project_name === analysisDialog.projectName).length > 0 ? (
-                displayWarnings.filter((w) => w.project_id === analysisDialog.projectId || w.project_name === analysisDialog.projectName).map((w, i) => (
-                  <div key={i} className={cn(
-                    "flex items-start gap-2 px-3 py-2 rounded-lg border text-sm",
-                    WARNING_LEVEL_CONFIG[w.level].bg,
-                    WARNING_LEVEL_CONFIG[w.level].border,
-                    WARNING_LEVEL_CONFIG[w.level].text,
-                  )}>
-                    <span className="shrink-0 mt-0.5">{WARNING_LEVEL_CONFIG[w.level].icon}</span>
-                    <span>{w.message}</span>
-                  </div>
-                ))
-              ) : (
-                <div className="text-sm text-emerald-600 bg-emerald-50 rounded-lg px-3 py-2">✓ 该项目状态良好，无预警</div>
-              )}
-            </div>
-
-            {/* AI 分析输出 */}
-            {aiRawResponse && (
-              <div className="space-y-1">
-                <h4 className="text-xs font-semibold text-gray-500">AI 分析输出</h4>
-                <div className="max-h-[45vh] overflow-y-auto border rounded-lg bg-white p-4">
-                  <Markdown>{aiRawResponse}</Markdown>
+          <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+            {displayWarnings.filter((w) => w.project_id === analysisDialog.projectId || w.project_name === analysisDialog.projectName).length > 0 ? (
+              displayWarnings.filter((w) => w.project_id === analysisDialog.projectId || w.project_name === analysisDialog.projectName).map((w, i) => (
+                <div key={i} className={cn(
+                  "flex items-start gap-2 px-3 py-2 rounded-lg border text-sm",
+                  WARNING_LEVEL_CONFIG[w.level].bg,
+                  WARNING_LEVEL_CONFIG[w.level].border,
+                  WARNING_LEVEL_CONFIG[w.level].text,
+                )}>
+                  <span className="shrink-0 mt-0.5">{WARNING_LEVEL_CONFIG[w.level].icon}</span>
+                  <span className="flex-1">{w.message}</span>
                 </div>
-              </div>
-            )}
-
-            {/* 无缓存提示 */}
-            {!aiRawResponse && !aiGenerating && (
-              <div className="text-sm text-muted-foreground bg-gray-50 rounded-lg p-4 text-center">
-                暂无 AI 分析记录，请点击「生成新预警」重新分析
-              </div>
-            )}
-            {aiGenerating && (
-              <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                AI 正在分析中...
-              </div>
+              ))
+            ) : (
+              <div className="text-sm text-emerald-600 bg-emerald-50 rounded-lg px-3 py-2 text-center">✓ 该项目状态良好</div>
             )}
           </div>
-
-          <DialogFooter className="gap-2 pt-2 border-t">
+          <DialogFooter>
             {onViewProject && (
-              <Button
-                size="sm"
-                onClick={() => {
-                  setAnalysisDialog((p) => ({ ...p, open: false }));
-                  onViewProject(analysisDialog.projectId);
-                }}
-              >
+              <Button size="sm" onClick={() => { setAnalysisDialog((p) => ({ ...p, open: false })); onViewProject(analysisDialog.projectId); }}>
                 查看项目详情
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={() => setAnalysisDialog((p) => ({ ...p, open: false }))}>
-              关闭
-            </Button>
+            <Button variant="outline" size="sm" onClick={() => setAnalysisDialog((p) => ({ ...p, open: false }))}>关闭</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
