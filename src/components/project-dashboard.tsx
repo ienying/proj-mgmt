@@ -172,7 +172,9 @@ export function ProjectDashboard({
 
   // 提示词编辑
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
-  const DEFAULT_SYSTEM_PROMPT = `你是一个项目管理预警分析专家，擅长从项目数据中识别风险并给出可操作建议。使用中文回复，报告要具体、可操作。`;
+  const DEFAULT_SYSTEM_PROMPT = `你是一个项目管理预警分析专家，擅长从项目数据中识别风险并给出可操作建议。使用中文回复。
+
+关键要求：你必须输出完整的 Markdown 分析报告（包含标题、段落、图标、表格），严禁只输出 JSON 数组。预警数据放在报告末尾的 \`\`\`json 代码块中。`;
 
   const DEFAULT_USER_PROMPT = `请分析以下 \${projectCount} 个项目的数据，生成预警分析报告。
 
