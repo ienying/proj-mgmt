@@ -35,6 +35,7 @@ import {
 import {
   LayoutDashboard,
   FolderKanban,
+  Building2,
   AlertTriangle,
   CheckCircle2,
   Clock,
@@ -778,42 +779,34 @@ export function ProjectDashboard({
 
           {/* 逐项目扑克牌卡片 */}
           {perProjectReports.length > 0 && (
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {perProjectReports.map((report) => {
+                const projInfo = (data?.projects || []).find(
+                  (p) => p.id === report.project_id || p.project_name === report.project_name
+                );
                 const pWarnings = (aiWarnings || []).filter(
                   (w) => w.project_id === report.project_id || w.project_name === report.project_name
                 );
-                const topWarnings = pWarnings.slice(0, 3);
                 const expanded = expandedProject === report.project_id;
                 return (
-                  <div key={report.project_id} className="bg-white rounded-xl border shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-                    {/* 卡片头部 */}
-                    <div className="px-4 py-3 bg-gradient-to-r from-teal-50 to-white flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-teal-100 flex items-center justify-center shrink-0">
-                          <Sparkles className="w-4 h-4 text-teal-600" />
-                        </div>
-                        <div className="min-w-0">
-                          <h5 className="text-sm font-semibold text-gray-900 truncate">{report.project_name}</h5>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            {topWarnings.length > 0 ? (
-                              topWarnings.map((w, i) => (
-                                <span key={i} className={cn(
-                                  "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
-                                  w.level === "error" ? "bg-red-50 text-red-600" : w.level === "warning" ? "bg-amber-50 text-amber-600" : "bg-blue-50 text-blue-600"
-                                )}>
-                                  {w.message.slice(0, 16)}{w.message.length > 16 ? "..." : ""}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">✓ 状态良好</span>
-                            )}
-                          </div>
-                        </div>
+                  <div key={report.project_id} className={cn(
+                    "bg-white rounded-xl border shadow-sm hover:shadow-md transition-all overflow-hidden",
+                    expanded && "ring-2 ring-teal-200 sm:col-span-2"
+                  )}>
+                    {/* 卡片头：项目名称 + 风险指示 */}
+                    <div className="px-4 py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={cn(
+                          "w-2.5 h-2.5 rounded-full shrink-0",
+                          pWarnings.some(w => w.level === "error") ? "bg-red-500" :
+                          pWarnings.some(w => w.level === "warning") ? "bg-amber-500" :
+                          pWarnings.length > 0 ? "bg-blue-500" : "bg-emerald-500"
+                        )} />
+                        <h5 className="text-sm font-semibold text-gray-900 truncate">{report.project_name}</h5>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <Button variant="ghost" size="sm" className="h-7 text-xs text-teal-600" onClick={() => setAiDialogOpen(true)}>
-                          完整报告 →
+                          查看报告 →
                         </Button>
                         <button
                           onClick={() => setExpandedProject(expanded ? null : report.project_id)}
@@ -823,13 +816,54 @@ export function ProjectDashboard({
                         </button>
                       </div>
                     </div>
-                    {/* 卡片展开内容 */}
+
+                    {/* 项目信息标签 */}
+                    {projInfo && (
+                      <div className="px-4 pb-2 flex flex-wrap gap-2">
+                        <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 bg-gray-50 rounded-md px-2 py-1">
+                          <Building2 className="w-3 h-3" />
+                          {projInfo.project_type || "-"}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 bg-gray-50 rounded-md px-2 py-1">
+                          <Users className="w-3 h-3" />
+                          经理 {projInfo.role_project_manager || "未指定"}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 bg-gray-50 rounded-md px-2 py-1">
+                          <Users className="w-3 h-3" />
+                          {projInfo.member_count} 人
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 bg-gray-50 rounded-md px-2 py-1">
+                          <FolderKanban className="w-3 h-3" />
+                          {projInfo.project_stage || "-"}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* 预警摘要标签 */}
+                    <div className="px-4 pb-3 flex flex-wrap gap-1.5">
+                      {pWarnings.length > 0 ? (
+                        pWarnings.slice(0, 3).map((w, i) => (
+                          <span key={i} className={cn(
+                            "text-[10px] px-2 py-0.5 rounded-full font-medium",
+                            w.level === "error" ? "bg-red-50 text-red-600 border border-red-100" :
+                            w.level === "warning" ? "bg-amber-50 text-amber-600 border border-amber-100" :
+                            "bg-blue-50 text-blue-600 border border-blue-100"
+                          )}>
+                            {w.message}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[10px] text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">✓ 状态良好</span>
+                      )}
+                    </div>
+
+                    {/* 展开内容 */}
                     {expanded && (
-                      <div className="px-4 py-3 border-t bg-white">
+                      <div className="px-4 py-3 border-t bg-gray-50">
                         <Markdown>{report.content.slice(0, 5000)}</Markdown>
                         {report.content.length > 5000 && (
                           <Button variant="link" size="sm" className="text-xs text-teal-600 p-0 mt-1" onClick={() => setAiDialogOpen(true)}>
-                            查看完整内容 →
+                            查看完整报告 →
                           </Button>
                         )}
                       </div>
