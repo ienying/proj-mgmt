@@ -29,10 +29,23 @@ interface WarningsRecord {
   }>;
   generated_at: string;
   generated_by: string | null;
+  raw_response?: string | null;
 }
 
 function safeSchema(schema: string) {
   return schema.includes("-") ? `"${schema}"` : schema;
+}
+
+function normalizeWarning(w: Record<string, unknown>) {
+  let level = String(w.level || "warning").toLowerCase();
+  if (!["error", "warning", "info"].includes(level)) level = "warning";
+  return {
+    project_id: String(w.project_id || ""),
+    project_name: String(w.project_name || ""),
+    level: level as "error" | "warning" | "info",
+    type: String(w.type || "ai_alert"),
+    message: String(w.message || ""),
+  };
 }
 
 const MODULE_NAME_MAP: Record<string, string> = {
@@ -59,6 +72,7 @@ export async function GET() {
             warnings: record.warnings,
             generated_at: record.generated_at,
             generated_by: record.generated_by,
+            raw_response: record.raw_response,
           }
         : null,
     });
@@ -238,25 +252,43 @@ ${projectDataText}`;
       message: string;
     }> = [];
 
-    try {
-      // 尝试提取 JSON 数组
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (Array.isArray(parsed)) {
-          warnings = parsed
-            .filter((w: Record<string, unknown>) => w.project_id && w.message)
-            .map((w: Record<string, unknown>) => ({
-              project_id: String(w.project_id || ""),
-              project_name: String(w.project_name || ""),
-              level: (["error", "warning", "info"].includes(String(w.level)) ? String(w.level) : "warning") as "error" | "warning" | "info",
-              type: String(w.type || "ai_alert"),
-              message: String(w.message || ""),
-            }));
-        }
+    const tryParse = (text: string): Record<string, unknown>[] | null => {
+      try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) return parsed;
+      } catch { /* not valid JSON */ }
+      return null;
+    };
+
+    // 策略 1: 提取 ```json ... ``` 代码块
+    const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) {
+      const result = tryParse(codeBlockMatch[1].trim());
+      if (result) warnings = result.map(normalizeWarning);
+    }
+
+    // 策略 2: 提取 [...] 数组（从第一个 [ 到最后一个 ]）
+    if (warnings.length === 0) {
+      const arrMatch = content.match(/\[[\s\S]*\]/);
+      if (arrMatch) {
+        const result = tryParse(arrMatch[0]);
+        if (result) warnings = result.map(normalizeWarning);
       }
-    } catch {
-      console.error("解析 AI 预警 JSON 失败，原始响应:", content.slice(0, 500));
+    }
+
+    // 策略 3: 按行查找 {...} 对象
+    if (warnings.length === 0) {
+      const objMatches = content.match(/\{[^}]+\}/g);
+      if (objMatches) {
+        const items = objMatches.map((m: string) => {
+          try { return JSON.parse(m); } catch { return null; }
+        }).filter(Boolean) as Record<string, unknown>[];
+        if (items.length > 0) warnings = items.map(normalizeWarning);
+      }
+    }
+
+    if (warnings.length === 0) {
+      console.error("AI 预警 JSON 解析失败，原始响应:", content.slice(0, 500));
     }
 
     // 如果 AI 没返回有效预警，生成基础规则预警作为兜底
@@ -278,13 +310,14 @@ ${projectDataText}`;
     const projectIdArr = projectSummaries.map((p) => p.id);
     const insertedBy = user_name || "当前用户";
     const warningsJson = JSON.stringify(warnings).replace(/'/g, "''");
+    const rawContent = content.replace(/'/g, "''");
     const idsStr = `{${projectIdArr.join(",")}}`;
     const safeUser = insertedBy.replace(/'/g, "''");
 
     try {
       await client.rpc("execute_sql", {
-        p_sql: `INSERT INTO design_public.dashboard_ai_warnings (project_ids, warnings, generated_by)
-                VALUES ('${idsStr}', '${warningsJson}'::jsonb, '${safeUser}')`,
+        p_sql: `INSERT INTO design_public.dashboard_ai_warnings (project_ids, warnings, raw_response, generated_by)
+                VALUES ('${idsStr}', '${warningsJson}'::jsonb, '${rawContent}', '${safeUser}')`,
       });
     } catch (insertErr) {
       console.error("存储 AI 预警失败:", insertErr);
@@ -296,12 +329,22 @@ ${projectDataText}`;
     });
     const latest = (latestRows as WarningsRecord[])?.[0];
 
+    const totalTables = projectSummaries.reduce((s, p) => s + p.tables.length, 0);
+    const totalRecords = projectSummaries.reduce((s, p) => s + p.total_records, 0);
+
     return NextResponse.json({
       data: {
         warnings,
         generated_at: latest?.generated_at || new Date().toISOString(),
         generated_by: insertedBy,
         tokens,
+        stats: {
+          projectCount: projectSummaries.length,
+          tableCount: totalTables,
+          recordCount: totalRecords,
+          warningCount: warnings.length,
+          hasParsedAI: warnings.length > 0,
+        },
       },
     });
   } catch (error: unknown) {

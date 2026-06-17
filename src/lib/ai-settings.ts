@@ -40,6 +40,29 @@ export async function ensureAITables() {
     });
   } catch { /* 表可能已存在 */ }
 
+  // 尝试创建 dashboard_ai_warnings 表
+  try {
+    await client.rpc("execute_sql", {
+      p_sql: `
+        CREATE TABLE IF NOT EXISTS design_public.dashboard_ai_warnings (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          project_ids TEXT[],
+          warnings JSONB NOT NULL DEFAULT '[]',
+          raw_response TEXT,
+          generated_at TIMESTAMPTZ DEFAULT NOW(),
+          generated_by TEXT
+        )
+      `,
+    });
+  } catch { /* 表可能已存在 */ }
+
+  // 补充 raw_response 列（旧表迁移）
+  try {
+    await client.rpc("execute_sql", {
+      p_sql: `ALTER TABLE design_public.dashboard_ai_warnings ADD COLUMN IF NOT EXISTS raw_response TEXT`,
+    });
+  } catch { /* 列可能已存在 */ }
+
   // 尝试创建 ai_prompt_templates 表
   try {
     await client.rpc("execute_sql", {

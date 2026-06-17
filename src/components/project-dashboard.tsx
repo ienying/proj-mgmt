@@ -162,6 +162,9 @@ export function ProjectDashboard({
   const [aiGeneratedAt, setAiGeneratedAt] = useState<string | null>(null);
   const [aiGeneratedBy, setAiGeneratedBy] = useState<string | null>(null);
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiScanStats, setAiScanStats] = useState<{ projectCount: number; tableCount: number; recordCount: number; warningCount: number; hasParsedAI: boolean } | null>(null);
+  const [aiRawResponse, setAiRawResponse] = useState<string | null>(null);
+  const [showRaw, setShowRaw] = useState(false);
 
   // 提示词编辑
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
@@ -243,6 +246,8 @@ JSON 格式示例：
             setAiWarnings(json.data.warnings || []);
             setAiGeneratedAt(json.data.generated_at || null);
             setAiGeneratedBy(json.data.generated_by || null);
+            setAiScanStats(json.data.stats || null);
+            setAiRawResponse(json.data.raw_response || null);
           }
         }
       } catch { /* ignore */ }
@@ -276,9 +281,17 @@ JSON 格式示例：
         setAiWarnings(newWarnings);
         setAiGeneratedAt(json.data.generated_at || null);
         setAiGeneratedBy(json.data.generated_by || null);
+        setAiScanStats(json.data.stats || null);
+        setAiRawResponse(json.data.raw_response || null);
+        setShowRaw(false);
         // 展开全部级别筛选，确保 AI 生成的所有预警可见
         setWarningLevelFilter(new Set(["error", "warning", "info"]));
-        toast.success(`AI 预警生成完成，共 ${newWarnings.length} 条`);
+        const stats = json.data.stats;
+        if (stats) {
+          toast.success(`AI 扫描完成：${stats.projectCount} 个项目、${stats.tableCount} 张表、${stats.recordCount} 条记录 → ${newWarnings.length} 条预警`);
+        } else {
+          toast.success(`AI 预警生成完成，共 ${newWarnings.length} 条`);
+        }
       }
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "AI 预警生成失败");
@@ -712,13 +725,55 @@ JSON 格式示例：
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          {displayWarnings.length === 0 ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              暂无预警信息{!isAiGenerated ? "，点击「生成新预警」使用 AI 分析" : "，所有项目状态良好"}
+        <CardContent className="space-y-2">
+          {/* 扫描统计 */}
+          {aiScanStats && (
+            <div className="flex items-center gap-3 text-xs text-muted-foreground bg-gray-50 rounded-lg px-3 py-1.5">
+              <span>扫描 {aiScanStats.projectCount} 个项目</span>
+              <span>·</span>
+              <span>{aiScanStats.tableCount} 张表</span>
+              <span>·</span>
+              <span>{aiScanStats.recordCount} 条记录</span>
+              <span>·</span>
+              <span className={aiScanStats.warningCount > 0 ? "text-orange-600 font-medium" : "text-emerald-600"}>
+                {aiScanStats.warningCount} 条预警
+              </span>
+              {aiScanStats.hasParsedAI ? (
+                <Badge variant="secondary" className="text-[10px] bg-teal-50 text-teal-600">AI 解析成功</Badge>
+              ) : (
+                <Badge variant="secondary" className="text-[10px] bg-yellow-50 text-yellow-600">规则兜底</Badge>
+              )}
+              {aiRawResponse && (
+                <button
+                  onClick={() => setShowRaw(!showRaw)}
+                  className="ml-auto text-[10px] text-gray-400 hover:text-gray-600 underline"
+                >
+                  {showRaw ? "收起原始响应" : "查看原始响应"}
+                </button>
+              )}
             </div>
-          ) : (
+          )}
+
+          {/* 原始响应 */}
+          {showRaw && aiRawResponse && (
+            <pre className="bg-gray-900 text-gray-300 rounded-lg p-3 text-[11px] max-h-[200px] overflow-auto font-mono leading-relaxed">
+              {aiRawResponse}
+            </pre>
+          )}
+
+          {!isAiGenerated && aiWarnings === null && !aiGenerating ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+              <CheckCircle2 className="w-4 h-4 text-blue-400" />
+              点击「生成新预警」使用 AI 分析
+            </div>
+          ) : displayWarnings.length === 0 ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              所有项目状态良好
+            </div>
+          ) : null}
+
+          {displayWarnings.length > 0 && (
             <div className="space-y-1.5 max-h-[300px] overflow-auto">
               {displayWarnings.map((w, i) => (
                 <div
