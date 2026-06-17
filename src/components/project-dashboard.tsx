@@ -853,7 +853,9 @@ export function ProjectDashboard({
                           </span>
                         ))
                       ) : (
-                        <span className="text-[10px] text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">✓ 状态良好</span>
+                        <span className="text-[10px] text-gray-500 truncate max-w-[280px]">
+                          {report.content.split("\n").filter(l => l.trim() && !l.startsWith("#") && !l.startsWith("```") && !l.startsWith("|")).slice(0, 2).join(" · ").slice(0, 60) || "查看报告了解详情"}
+                        </span>
                       )}
                     </div>
 
@@ -1248,7 +1250,7 @@ export function ProjectDashboard({
                 </div>
               ))
             ) : (
-              <div className="text-sm text-emerald-600 bg-emerald-50 rounded-lg px-3 py-2 text-center">✓ 该项目状态良好</div>
+              <div className="text-sm text-gray-500 bg-gray-50 rounded-lg px-3 py-2 text-center">暂无预警详情</div>
             )}
           </div>
           <DialogFooter>
