@@ -834,6 +834,31 @@ export function ProjectDashboard({
               ))}
             </div>
           )}
+          {/* 最新 AI 分析报告（持久化呈现在面板上） */}
+          {aiResult && (
+            <div className="mt-4 border-t pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-teal-500" />
+                  最新分析报告
+                  {aiGeneratedAt && (
+                    <span className="font-normal text-gray-400">
+                      {new Date(aiGeneratedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  )}
+                </h4>
+                <Button variant="ghost" size="sm" className="h-6 text-xs text-teal-600" onClick={() => setAiDialogOpen(true)}>
+                  查看完整报告 →
+                </Button>
+              </div>
+              <div className="max-h-[400px] overflow-y-auto border rounded-lg bg-white p-4">
+                <Markdown>{aiResult.slice(0, 8000)}</Markdown>
+                {aiResult.length > 8000 && (
+                  <p className="text-xs text-gray-400 mt-2 text-center">... 内容已截断，点击「查看完整报告」阅读全部并追问</p>
+                )}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1159,7 +1184,7 @@ export function ProjectDashboard({
           </div>
 
           {/* 追问输入框 */}
-          {aiResult && !aiLoading && aiConversationHistory.length > 3 && (
+          {aiResult && !aiLoading && aiConversationHistory.length >= 3 && (
             <div className="border-t pt-3 mt-2">
               <div className="flex gap-2">
                 <Input
