@@ -63,6 +63,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Markdown } from "@/components/markdown";
 
 interface TableStat {
   table_code: string;
@@ -1128,20 +1129,26 @@ JSON 格式示例：
               )}
             </div>
 
-            {/* 原始分析内容 */}
+            {/* AI 分析输出 */}
             {aiRawResponse && (
               <div className="space-y-1">
-                <h4 className="text-xs font-semibold text-gray-500">AI 原始分析</h4>
-                <pre className="bg-gray-900 text-gray-300 rounded-lg p-4 text-xs max-h-[40vh] overflow-auto font-mono leading-relaxed whitespace-pre-wrap">
-                  {aiRawResponse}
-                </pre>
+                <h4 className="text-xs font-semibold text-gray-500">AI 分析输出</h4>
+                <div className="max-h-[45vh] overflow-y-auto border rounded-lg bg-white p-4">
+                  <Markdown>{aiRawResponse}</Markdown>
+                </div>
               </div>
             )}
 
             {/* 无缓存提示 */}
-            {!aiRawResponse && (
+            {!aiRawResponse && !aiGenerating && (
               <div className="text-sm text-muted-foreground bg-gray-50 rounded-lg p-4 text-center">
-                暂无 AI 原始分析记录，请点击「生成新预警」重新分析
+                暂无 AI 分析记录，请点击「生成新预警」重新分析
+              </div>
+            )}
+            {aiGenerating && (
+              <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                AI 正在分析中...
               </div>
             )}
           </div>
