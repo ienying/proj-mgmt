@@ -201,30 +201,31 @@ export async function POST(request: NextRequest) {
     const projectDataText = lines;
     const projectCount = projectSummaries.length;
 
-    const DEFAULT_SYSTEM = `你是一个项目管理预警分析专家。你需要基于项目数据识别风险并生成预警。
+    const DEFAULT_SYSTEM = `你是一个项目管理预警分析专家，擅长从项目数据中识别风险并给出可操作建议。使用中文回复，报告要具体、可操作。`;
 
-分析维度：
-1. 进度风险：截止日期临近/已逾期、进度管理数据为空或极少
-2. 数据异常：长期未更新（>60天）、总记录数异常少
-3. 管理风险：缺少项目经理、无任何数据记录
+    const DEFAULT_USER = `请分析以下 ${projectCount} 个项目的数据，生成预警分析报告。
 
-输出要求：
-- 仅返回 JSON 数组，不要输出任何其他文字
-- 每个预警项包含：project_id（项目数据中的 [id:xxx] 部分，必须精确复制）、project_name（项目名称）、level（error/warning/info）、type（短代码英文）、message（中文描述，简洁明了，每条不超过30字）
-- 每个项目最多3条预警，优先输出最严重的
-- 如果项目状态良好，不要强行生成预警
+${projectDataText}
 
-JSON 格式示例：
-[{"project_id":"a1b2c3d4-...","project_name":"项目A","level":"error","type":"overdue","message":"已超过截止日期15天"}]`;
+请按以下结构输出分析报告（Markdown，适当使用 📊📈⚠️✅🔴🟡🟢 等图标增强可读性）：
+
+1. **📊 项目概览**：总体数据量、各项目基本情况
+2. **🔍 逐项分析**：每个项目逐一分析，包含：
+   - 项目名称
+   - 数据状态（总记录数、进度记录数、最新更新时间）
+   - 截止日期情况
+   - 风险等级评估（🔴严重 / 🟡警告 / 🟢正常）
+   - 具体风险描述和建议
+3. **📈 综合建议**：跨项目的共性问题和管理改进建议
+4. **⚠️ 预警汇总**：最后附一个 \`\`\`json 代码块，包含所有预警项的 JSON 数组，每项格式为：
+   {"project_id":"项目id","project_name":"项目名称","level":"error|warning|info","type":"英文代码","message":"中文描述（不超过30字）"}`;
 
     const effectiveSystem = system_message || DEFAULT_SYSTEM;
     const effectiveUser = user_message
       ? user_message
           .replace(/\$\{projectCount\}/g, String(projectCount))
           .replace(/\$\{projectData\}/g, projectDataText)
-      : `请分析以下 ${projectCount} 个项目的数据，生成预警：
-
-${projectDataText}`;
+      : DEFAULT_USER;
 
     // 5. 调用 AI
     const { content, tokens } = await chatCompletion(
@@ -337,6 +338,7 @@ ${projectDataText}`;
         warnings,
         generated_at: latest?.generated_at || new Date().toISOString(),
         generated_by: insertedBy,
+        raw_response: content,
         tokens,
         stats: {
           projectCount: projectSummaries.length,
