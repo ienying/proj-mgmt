@@ -49,6 +49,8 @@ import {
   Building2,
   Server,
   Flag,
+  Square,
+  CheckSquare,
 } from "lucide-react";
 import {
   DndContext,
@@ -399,6 +401,30 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
     } catch (error) {
       console.error("保存失败:", error);
       toast.error("保存失败: " + (error instanceof Error ? error.message : "未知错误"));
+    }
+  };
+
+  // 批量删除数据
+  const handleBatchDelete = async (ids: string[]) => {
+    try {
+      const res = await fetch("/api/dicts/batch-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: currentType, ids }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.error || "批量删除失败");
+      }
+      if (result.failed && result.failed.length > 0) {
+        toast.warning(`成功删除 ${result.deleted.length} 条，${result.failed.length} 条失败`);
+      } else {
+        toast.success(`成功删除 ${result.deleted.length} 条数据`);
+      }
+      await loadCurrentTypeData();
+    } catch (error) {
+      console.error("批量删除失败:", error);
+      toast.error("批量删除失败: " + (error instanceof Error ? error.message : "未知错误"));
     }
   };
 
@@ -771,6 +797,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
             handleSubmit={handleSubmit}
             activeTab={activeTab}
             productCategories={productCategories}
+            onBatchDelete={handleBatchDelete}
           />
         </TabsContent>
 
@@ -791,6 +818,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
             handleSubmit={handleSubmit}
             activeTab={activeTab}
             productCategories={productCategories}
+            onBatchDelete={handleBatchDelete}
           />
         </TabsContent>
 
@@ -811,6 +839,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
             handleSubmit={handleSubmit}
             activeTab={activeTab}
             productCategories={productCategories}
+            onBatchDelete={handleBatchDelete}
           />
         </TabsContent>
 
@@ -831,6 +860,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
             handleSubmit={handleSubmit}
             activeTab={activeTab}
             productCategories={productCategories}
+            onBatchDelete={handleBatchDelete}
           />
         </TabsContent>
 
@@ -851,6 +881,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
             handleSubmit={handleSubmit}
             activeTab={activeTab}
             productCategories={productCategories}
+            onBatchDelete={handleBatchDelete}
           />
         </TabsContent>
 
@@ -871,6 +902,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
             handleSubmit={handleSubmit}
             activeTab={activeTab}
             productCategories={productCategories}
+            onBatchDelete={handleBatchDelete}
           />
         </TabsContent>
 
@@ -937,6 +969,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
               setImportData([]);
               setImportResult(null);
             }}
+            onBatchDelete={handleBatchDelete}
           />
         </TabsContent>
 
@@ -957,6 +990,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
             handleSubmit={handleSubmit}
             activeTab={activeTab}
             productCategories={productCategories}
+            onBatchDelete={handleBatchDelete}
           />
         </TabsContent>
       </Tabs>
@@ -1713,15 +1747,19 @@ interface DataTableProps {
   productScopes?: DictItem[];
   onExport?: (data: DictItem[], productCategories: DictItem[], productVendors: DictItem[]) => void;
   onImport?: () => void;
+  onBatchDelete: (ids: string[]) => Promise<void>;
 }
 
 // 可拖拽行包装组件
-function SortableRow({ id, children }: { id: string; children: React.ReactNode }) {
+function SortableRow({ id, checkbox, children }: { id: string; checkbox?: React.ReactNode; children: React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
 
   return (
     <TableRow ref={setNodeRef} style={style} className={isDragging ? "bg-blue-50" : ""}>
+      <TableCell className="w-10">
+        {checkbox}
+      </TableCell>
       <TableCell className="w-10">
         <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground">
           <GripVertical className="h-4 w-4" />
@@ -1751,6 +1789,7 @@ function DataTable({
   productScopes,
   onExport,
   onImport,
+  onBatchDelete,
 }: DataTableProps) {
   // DnD sensors
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -1762,6 +1801,10 @@ function DataTable({
   const [vendorFilter, setVendorFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 20;
+
+  // 多选状态
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchDeleting, setBatchDeleting] = useState(false);
 
   // 根据筛选条件过滤数据
   const filteredData = data.filter((item: any) => {
@@ -1815,13 +1858,57 @@ function DataTable({
   const safePage = Math.min(currentPage, totalPages);
   const paginatedData = filteredData.slice((safePage - 1) * pageSize, safePage * pageSize);
 
+  // 多选操作
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const pageIds = paginatedData.map((i) => i.id);
+    const allSelected = pageIds.every((id) => selectedIds.has(id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        pageIds.forEach((id) => next.delete(id));
+      } else {
+        pageIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleBatchDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    if (!confirm(`确定要删除选中的 ${ids.length} 条数据吗？此操作不可撤销。`)) return;
+    setBatchDeleting(true);
+    try {
+      await onBatchDelete(ids);
+      clearSelection();
+    } finally {
+      setBatchDeleting(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3">
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">
-              共 {filteredData.length} 条数据 {hasActiveFilters && <span className="text-muted-foreground text-sm">（已筛选）</span>}
+              共 {filteredData.length} 条数据{hasActiveFilters && <span className="text-muted-foreground text-sm">（已筛选）</span>}
+              {selectedIds.size > 0 && (
+                <span className="text-muted-foreground text-sm ml-2">
+                  已选 {selectedIds.size} 条
+                </span>
+              )}
             </CardTitle>
             <div className="flex gap-2">
               {onImport && activeTab === "product-modules" && (
@@ -1834,6 +1921,17 @@ function DataTable({
                 <Button size="sm" variant="outline" onClick={() => onExport(filteredData, productCategories, productVendors || [])}>
                   <Download className="w-4 h-4 mr-1" />
                   导出
+                </Button>
+              )}
+              {selectedIds.size > 0 && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleBatchDelete}
+                  disabled={batchDeleting}
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  {batchDeleting ? "删除中..." : `删除选中 (${selectedIds.size})`}
                 </Button>
               )}
               <Button size="sm" onClick={onCreate}>
@@ -1938,6 +2036,19 @@ function DataTable({
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <button
+                        className="text-muted-foreground hover:text-foreground"
+                        onClick={toggleSelectAll}
+                      >
+                        {paginatedData.length > 0 &&
+                          paginatedData.every((i) => selectedIds.has(i.id)) ? (
+                          <CheckSquare className="h-4 w-4" />
+                        ) : (
+                          <Square className="h-4 w-4" />
+                        )}
+                      </button>
+                    </TableHead>
                     <TableHead className="w-10"></TableHead>
                 {activeTab === "product-modules" ? (
                   <>
@@ -1968,7 +2079,22 @@ function DataTable({
             </TableHeader>
             <TableBody>
               {paginatedData.map((item, index) => (
-                <SortableRow key={item.id} id={item.id}>
+                <SortableRow
+                  key={item.id}
+                  id={item.id}
+                  checkbox={
+                    <button
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => toggleSelect(item.id)}
+                    >
+                      {selectedIds.has(item.id) ? (
+                        <CheckSquare className="h-4 w-4" />
+                      ) : (
+                        <Square className="h-4 w-4" />
+                      )}
+                    </button>
+                  }
+                >
                   {activeTab === "product-modules" ? (
                     <>
                       <TableCell className="font-medium">{item.product_name || "-"}</TableCell>
