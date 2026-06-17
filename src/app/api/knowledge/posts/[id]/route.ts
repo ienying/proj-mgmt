@@ -7,7 +7,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     const client = await createServerClient();
     const { data: postData, error } = await client.rpc('dp_get_by_id', {
-      p_table: 'knowledge_posts',
+      p_table: 'design_info_square.knowledge_posts',
       p_id: id,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -16,19 +16,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     if (!post) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     // Get attachments
-    const { data: attData } = await client.rpc('dp_select', { p_table: 'knowledge_attachments' });
+    const { data: attData } = await client.rpc('dp_select', { p_table: 'design_info_square.knowledge_attachments' });
     const attachments = ((attData as Record<string, unknown>[]) || []).filter(
       (a) => String(a.post_id) === id
     );
 
     // Get read count
-    const { data: readData } = await client.rpc('dp_select', { p_table: 'knowledge_reads' });
+    const { data: readData } = await client.rpc('dp_select', { p_table: 'design_info_square.knowledge_reads' });
     const reads = ((readData as Record<string, unknown>[]) || []).filter(
       (r) => String(r.post_id) === id
     );
 
     // Get comment count
-    const { data: commentData } = await client.rpc('dp_select', { p_table: 'knowledge_comments' });
+    const { data: commentData } = await client.rpc('dp_select', { p_table: 'design_info_square.knowledge_comments' });
     const comments = ((commentData as Record<string, unknown>[]) || []).filter(
       (c) => String(c.post_id) === id
     );
@@ -55,7 +55,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     const client = await createServerClient();
     const { data, error } = await client.rpc('dp_update', {
-      p_table: 'knowledge_posts',
+      p_table: 'design_info_square.knowledge_posts',
       p_id: id,
       p_data: postData,
     });
@@ -64,20 +64,20 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     // Handle attachment updates if provided
     if (attachments && Array.isArray(attachments)) {
       // Delete existing attachments for this post
-      const { data: existingAtts } = await client.rpc('dp_select', { p_table: 'knowledge_attachments' });
+      const { data: existingAtts } = await client.rpc('dp_select', { p_table: 'design_info_square.knowledge_attachments' });
       const existing = ((existingAtts as Record<string, unknown>[]) || []).filter(
         (a) => String(a.post_id) === id
       );
       for (const att of existing) {
         await client.rpc('dp_delete', {
-          p_table: 'knowledge_attachments',
+          p_table: 'design_info_square.knowledge_attachments',
           p_id: String(att.id),
         });
       }
       // Insert new attachments
       for (const att of attachments) {
         await client.rpc('dp_insert', {
-          p_table: 'knowledge_attachments',
+          p_table: 'design_info_square.knowledge_attachments',
           p_data: {
             post_id: id,
             file_name: att.file_name,
@@ -102,7 +102,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     const { id } = await params;
     const client = await createServerClient();
     const { data, error } = await client.rpc('dp_delete', {
-      p_table: 'knowledge_posts',
+      p_table: 'design_info_square.knowledge_posts',
       p_id: id,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

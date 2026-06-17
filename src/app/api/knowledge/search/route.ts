@@ -9,7 +9,7 @@ export async function GET(request: Request) {
     const postType = searchParams.get('post_type');
 
     const client = await createServerClient();
-    const { data, error } = await client.rpc('dp_select', { p_table: 'knowledge_posts' });
+    const { data, error } = await client.rpc('dp_select', { p_table: 'design_info_square.knowledge_posts' });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     let items = ((data as Record<string, unknown>[]) || []).filter((i) => i.is_enabled !== false);

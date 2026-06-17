@@ -9,24 +9,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     // Check if already liked
     const client = await createServerClient();
-    const { data: existingLikes } = await client.rpc('dp_select', { p_table: 'knowledge_likes' });
+    const { data: existingLikes } = await client.rpc('dp_select', { p_table: 'design_info_square.knowledge_likes' });
     const likes = ((existingLikes as Record<string, unknown>[]) || []);
     const existing = likes.find(
       (l) => String(l.post_id) === id && String(l.user_id) === String(body.user_id) && l.action_type === 'like'
     );
 
-    const post = await client.rpc('dp_get_by_id', { p_table: 'knowledge_posts', p_id: id });
+    const post = await client.rpc('dp_get_by_id', { p_table: 'design_info_square.knowledge_posts', p_id: id });
     const postData = (post.data as Record<string, unknown>[])?.[0];
     const currentCount = (postData?.like_count as number) || 0;
 
     if (existing) {
       // Unlike: delete and decrement
       await client.rpc('dp_delete', {
-        p_table: 'knowledge_likes',
+        p_table: 'design_info_square.knowledge_likes',
         p_id: String(existing.id),
       });
       await client.rpc('dp_update', {
-        p_table: 'knowledge_posts',
+        p_table: 'design_info_square.knowledge_posts',
         p_id: id,
         p_data: { like_count: Math.max(0, currentCount - 1) },
       });
@@ -34,7 +34,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     } else {
       // Like: insert and increment
       await client.rpc('dp_insert', {
-        p_table: 'knowledge_likes',
+        p_table: 'design_info_square.knowledge_likes',
         p_data: {
           post_id: id,
           user_id: body.user_id,
@@ -42,7 +42,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         },
       });
       await client.rpc('dp_update', {
-        p_table: 'knowledge_posts',
+        p_table: 'design_info_square.knowledge_posts',
         p_id: id,
         p_data: { like_count: currentCount + 1 },
       });

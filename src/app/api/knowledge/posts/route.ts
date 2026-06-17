@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     const keyword = searchParams.get('keyword');
 
     const client = await createServerClient();
-    const { data, error } = await client.rpc('dp_select', { p_table: 'knowledge_posts' });
+    const { data, error } = await client.rpc('dp_select', { p_table: 'design_info_square.knowledge_posts' });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     let items = ((data as Record<string, unknown>[]) || [])
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
 
     // Media type filter: need to check attachments
     if (mediaType) {
-      const { data: attachments } = await client.rpc('dp_select', { p_table: 'knowledge_attachments' });
+      const { data: attachments } = await client.rpc('dp_select', { p_table: 'design_info_square.knowledge_attachments' });
       const atts = (attachments as Record<string, unknown>[]) || [];
       const postIdsWithMedia = new Set(
         atts.filter((a) => a.media_type === mediaType).map((a) => String(a.post_id))
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
 
     const client = await createServerClient();
     const { data, error } = await client.rpc('dp_insert', {
-      p_table: 'knowledge_posts',
+      p_table: 'design_info_square.knowledge_posts',
       p_data: postData,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     if (attachments && Array.isArray(attachments) && attachments.length > 0) {
       for (const att of attachments) {
         await client.rpc('dp_insert', {
-          p_table: 'knowledge_attachments',
+          p_table: 'design_info_square.knowledge_attachments',
           p_data: {
             post_id: typeof post === 'object' && post !== null ? post.id : undefined,
             file_name: att.file_name,

@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     const supabase = await createServerClient();
 
     const issueResult = await supabase.rpc("dp_select", { p_table: "issue_mgmt_issues" });
-    const knowledgeResult = await supabase.rpc("dp_select", { p_table: "knowledge_reads" });
+    const knowledgeResult = await supabase.rpc("dp_select", { p_table: "design_info_square.knowledge_reads" });
 
     // 计算工单角标
     const issues: any[] = issueResult.data || [];
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 
     // 计算信息广场未读角标
     // 先查所有帖子，再减去已读
-    const knowledgePostsResult = await supabase.rpc("dp_select", { p_table: "knowledge_posts" });
+    const knowledgePostsResult = await supabase.rpc("dp_select", { p_table: "design_info_square.knowledge_posts" });
     const posts: any[] = knowledgePostsResult.data || [];
     const reads: any[] = knowledgeResult.data || [];
     const readPostIds = new Set(

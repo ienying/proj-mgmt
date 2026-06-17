@@ -141,12 +141,12 @@ const { data, error } = await supabase.rpc('dp_delete', {
 | todo_center_overdue_logs | 待办中心-逾期预警 | overdue_days |
 | todo_task_defs | 待办任务-定义表 | assignee_ids(jsonb), project_ids(jsonb), periodic_config(jsonb), deadline_config(jsonb) |
 | todo_task_instances | 待办任务-实例表 | definition_id(uuid FK), status(varchar), period_label(varchar), is_late(bool) |
-| knowledge_categories | 知识分类标签 | category_type(varchar), icon, sort_order |
-| knowledge_posts | 知识帖子/公告/资料主表 | post_type(varchar), share_type(varchar), is_pinned(bool), tags(_text), view/like/comment_count(int4) |
-| knowledge_attachments | 知识附件表 | file_name, file_url, file_size(bigint), file_type, media_type(varchar), duration(int4?) |
-| knowledge_reads | 阅读记录表 | post_id+user_id UNIQUE |
-| knowledge_likes | 点赞/收藏表 | action_type(varchar: like/favorite), post_id+user_id+action_type UNIQUE |
-| knowledge_comments | 评论表 | parent_id(uuid自关联) |
+| design_info_square.knowledge_categories | 知识分类标签 | category_type(varchar), icon, sort_order |
+| design_info_square.knowledge_posts | 知识帖子/公告/资料主表 | category_id, is_pinned(bool), is_featured(bool), tags(text), like/read/favorite/comment_count(int4) |
+| design_info_square.knowledge_attachments | 知识附件表 | file_name, file_url, file_size, file_type |
+| design_info_square.knowledge_reads | 阅读记录表 | post_id, user_id, read_at |
+| design_info_square.knowledge_likes | 点赞/收藏表 | is_favorite(bool), post_id, user_id |
+| design_info_square.knowledge_comments | 评论表 | post_id, user_id, user_name, user_avatar |
 | case_center_config | 案例中心配置 | type(varchar), table_code(varchar), modules(jsonb), overview_metrics(jsonb) |
 | user_sessions | 用户会话表 | token(varchar), expires_at(timestamptz) |
 | project_member_permissions | 项目成员权限表 | project_id(uuid), user_id(uuid), permission_key(varchar) UNIQUE(project_id+user_id+permission_key) |

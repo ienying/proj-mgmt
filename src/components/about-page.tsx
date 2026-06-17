@@ -144,7 +144,7 @@ const DATABASE_TABLES = [
   { group: "规范管理", tables: ["data_table_definitions"] },
   { group: "待办任务（统一待办）", tables: ["todo_task_defs", "todo_task_instances"] },
   { group: "问题上报", tables: ["issue_mgmt_issues", "issue_mgmt_issue_attachments", "issue_mgmt_issue_processing_records", "issue_mgmt_issue_notifications", "issue_mgmt_issue_categories", "issue_mgmt_issue_urgency", "issue_mgmt_issue_warranty_status"] },
-  { group: "信息广场", tables: ["knowledge_categories", "knowledge_posts", "knowledge_attachments", "knowledge_reads", "knowledge_likes", "knowledge_comments"] },
+  { group: "信息广场", tables: ["design_info_square.knowledge_categories", "design_info_square.knowledge_posts", "design_info_square.knowledge_attachments", "design_info_square.knowledge_reads", "design_info_square.knowledge_likes", "design_info_square.knowledge_comments"] },
 
   { group: "基础数据", tables: ["product_module_types", "product_categories", "product_vendors", "product_scopes", "member_role_types"] },
 ];

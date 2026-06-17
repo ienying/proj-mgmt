@@ -539,7 +539,13 @@ CREATE INDEX IF NOT EXISTS todo_center_cc_user_idx ON todo_center_cc(user_id);
 -- Knowledge Center
 -- ============================================
 
-CREATE TABLE IF NOT EXISTS knowledge_categories (
+-- ============================================
+-- Knowledge Center (信息广场) — design_info_square schema
+-- ============================================
+
+CREATE SCHEMA IF NOT EXISTS design_info_square;
+
+CREATE TABLE IF NOT EXISTS design_info_square.knowledge_categories (
   id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(100) NOT NULL,
   icon VARCHAR(50) DEFAULT 'BookOpen',
@@ -552,7 +558,7 @@ CREATE TABLE IF NOT EXISTS knowledge_categories (
   updated_at TIMESTAMP WITH TIME ZONE
 );
 
-CREATE TABLE IF NOT EXISTS knowledge_posts (
+CREATE TABLE IF NOT EXISTS design_info_square.knowledge_posts (
   id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
   title VARCHAR(255) NOT NULL,
   content TEXT,
@@ -570,9 +576,9 @@ CREATE TABLE IF NOT EXISTS knowledge_posts (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE
 );
-CREATE INDEX IF NOT EXISTS knowledge_posts_category_idx ON knowledge_posts(category_id);
+CREATE INDEX IF NOT EXISTS knowledge_posts_category_idx ON design_info_square.knowledge_posts(category_id);
 
-CREATE TABLE IF NOT EXISTS knowledge_attachments (
+CREATE TABLE IF NOT EXISTS design_info_square.knowledge_attachments (
   id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
   post_id VARCHAR(36),
   file_name VARCHAR(255),
@@ -581,9 +587,9 @@ CREATE TABLE IF NOT EXISTS knowledge_attachments (
   file_type VARCHAR(100),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
-CREATE INDEX IF NOT EXISTS knowledge_attachments_post_idx ON knowledge_attachments(post_id);
+CREATE INDEX IF NOT EXISTS knowledge_attachments_post_idx ON design_info_square.knowledge_attachments(post_id);
 
-CREATE TABLE IF NOT EXISTS knowledge_comments (
+CREATE TABLE IF NOT EXISTS design_info_square.knowledge_comments (
   id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
   post_id VARCHAR(36) NOT NULL,
   content TEXT NOT NULL,
@@ -592,25 +598,25 @@ CREATE TABLE IF NOT EXISTS knowledge_comments (
   user_avatar VARCHAR(500),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
-CREATE INDEX IF NOT EXISTS knowledge_comments_post_idx ON knowledge_comments(post_id);
+CREATE INDEX IF NOT EXISTS knowledge_comments_post_idx ON design_info_square.knowledge_comments(post_id);
 
-CREATE TABLE IF NOT EXISTS knowledge_likes (
+CREATE TABLE IF NOT EXISTS design_info_square.knowledge_likes (
   id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
   post_id VARCHAR(36) NOT NULL,
   user_id VARCHAR(36) NOT NULL,
   is_favorite BOOLEAN DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
-CREATE INDEX IF NOT EXISTS knowledge_likes_post_idx ON knowledge_likes(post_id);
-CREATE INDEX IF NOT EXISTS knowledge_likes_user_idx ON knowledge_likes(user_id);
+CREATE INDEX IF NOT EXISTS knowledge_likes_post_idx ON design_info_square.knowledge_likes(post_id);
+CREATE INDEX IF NOT EXISTS knowledge_likes_user_idx ON design_info_square.knowledge_likes(user_id);
 
-CREATE TABLE IF NOT EXISTS knowledge_reads (
+CREATE TABLE IF NOT EXISTS design_info_square.knowledge_reads (
   id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
   post_id VARCHAR(36) NOT NULL,
   user_id VARCHAR(36) NOT NULL,
   read_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
-CREATE INDEX IF NOT EXISTS knowledge_reads_post_idx ON knowledge_reads(post_id);
+CREATE INDEX IF NOT EXISTS knowledge_reads_post_idx ON design_info_square.knowledge_reads(post_id);
 
 -- ============================================
 -- Issue Management
