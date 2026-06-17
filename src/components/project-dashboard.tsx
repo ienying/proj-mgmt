@@ -834,13 +834,13 @@ export function ProjectDashboard({
               ))}
             </div>
           )}
-          {/* 最新 AI 分析报告（持久化呈现在面板上） */}
+          {/* AI 分析摘要（默认显示） */}
           {aiResult && (
             <div className="mt-4 border-t pt-3">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-teal-500" />
-                  最新分析报告
+                  AI 分析已完成
                   {aiGeneratedAt && (
                     <span className="font-normal text-gray-400">
                       {new Date(aiGeneratedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
@@ -851,11 +851,10 @@ export function ProjectDashboard({
                   查看完整报告 →
                 </Button>
               </div>
-              <div className="max-h-[400px] overflow-y-auto border rounded-lg bg-white p-4">
-                <Markdown>{aiResult.slice(0, 8000)}</Markdown>
-                {aiResult.length > 8000 && (
-                  <p className="text-xs text-gray-400 mt-2 text-center">... 内容已截断，点击「查看完整报告」阅读全部并追问</p>
-                )}
+              {/* 摘要：提取前几行关键文字 */}
+              <div className="text-xs text-gray-600 leading-relaxed bg-gray-50 rounded-lg p-3 max-h-[120px] overflow-hidden relative">
+                {aiResult.split("\n").filter((l) => l.trim()).slice(0, 8).join("\n").slice(0, 600)}
+                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-50 to-transparent" />
               </div>
             </div>
           )}
