@@ -721,34 +721,13 @@ export function ProjectDashboard({
                   {aiGeneratedBy ? `（${aiGeneratedBy}）` : ""}
                 </span>
               )}
-              <Badge variant="secondary" className="text-xs">
-                {displayWarnings.length}
-              </Badge>
+              {perProjectReports.length > 0 && (
+                <Badge variant="secondary" className="text-xs bg-teal-50 text-teal-600">
+                  {perProjectReports.length} 个项目
+                </Badge>
+              )}
             </CardTitle>
             <div className="flex items-center gap-2">
-              {["error", "warning", "info"].map((level) => (
-                <label
-                  key={level}
-                  className={cn(
-                    "flex items-center gap-1 px-2 py-0.5 rounded-full text-xs cursor-pointer border",
-                    warningLevelFilter.has(level)
-                      ? WARNING_LEVEL_CONFIG[level].bg + " " + WARNING_LEVEL_CONFIG[level].text + " border-transparent"
-                      : "bg-gray-50 text-gray-400 border-gray-200"
-                  )}
-                >
-                  <Checkbox
-                    checked={warningLevelFilter.has(level)}
-                    onCheckedChange={(checked) => {
-                      const next = new Set(warningLevelFilter);
-                      if (checked) next.add(level);
-                      else next.delete(level);
-                      setWarningLevelFilter(next);
-                    }}
-                    className="w-3 h-3"
-                  />
-                  {level === "error" ? "严重" : level === "warning" ? "警告" : "信息"}
-                </label>
-              ))}
               <Button
                 variant="outline"
                 size="sm"
@@ -780,97 +759,75 @@ export function ProjectDashboard({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-2">
-          {/* 扫描统计 */}
-          {aiScanStats && (
-            <div className="flex items-center gap-3 text-xs text-muted-foreground bg-gray-50 rounded-lg px-3 py-1.5">
-              <span>扫描 {aiScanStats.projectCount} 个项目</span>
-              <span>·</span>
-              <span>{aiScanStats.tableCount} 张表</span>
-              <span>·</span>
-              <span>{aiScanStats.recordCount} 条记录</span>
-              <span>·</span>
-              <span className={aiScanStats.warningCount > 0 ? "text-orange-600 font-medium" : "text-emerald-600"}>
-                {aiScanStats.warningCount} 条预警
-              </span>
-              {aiScanStats.hasParsedAI ? (
-                <Badge variant="secondary" className="text-[10px] bg-teal-50 text-teal-600">AI 解析成功</Badge>
-              ) : (
-                <Badge variant="secondary" className="text-[10px] bg-yellow-50 text-yellow-600">规则兜底</Badge>
-              )}
+        <CardContent className="space-y-3">
+          {/* 加载中 */}
+          {aiGenerating && (
+            <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              AI 正在逐项目分析中...
             </div>
           )}
 
-          {!isAiGenerated && aiWarnings === null && !aiGenerating ? (
+          {/* 首次使用提示 */}
+          {!aiGenerating && perProjectReports.length === 0 && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-              <CheckCircle2 className="w-4 h-4 text-blue-400" />
-              点击「生成新预警」使用 AI 分析
-            </div>
-          ) : displayWarnings.length === 0 ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              所有项目状态良好
-            </div>
-          ) : null}
-
-          {displayWarnings.length > 0 && (
-            <div className="space-y-1.5 max-h-[300px] overflow-auto">
-              {displayWarnings.map((w, i) => (
-                <div
-                  key={`${w.project_id}-${w.type}-${i}`}
-                  className={cn(
-                    "flex items-start gap-2 px-3 py-2 rounded-lg border text-sm",
-                    WARNING_LEVEL_CONFIG[w.level].bg,
-                    WARNING_LEVEL_CONFIG[w.level].border,
-                    WARNING_LEVEL_CONFIG[w.level].text
-                  )}
-                >
-                  <span className="shrink-0 mt-0.5">{WARNING_LEVEL_CONFIG[w.level].icon}</span>
-                  <span className="font-medium shrink-0">{w.project_name}</span>
-                  <span className="opacity-75">{w.message}</span>
-                  <Button
-                    variant="link"
-                    size="sm"
-                    className="ml-auto text-xs h-auto p-0 underline shrink-0"
-                    onClick={() => setAnalysisDialog({ open: true, projectId: w.project_id, projectName: w.project_name })}
-                  >
-                    查看
-                  </Button>
-                </div>
-              ))}
+              <Sparkles className="w-4 h-4 text-teal-400" />
+              点击「生成新预警」开始 AI 分析
             </div>
           )}
-          {/* 逐项目分析报告 */}
+
+          {/* 逐项目扑克牌卡片 */}
           {perProjectReports.length > 0 && (
-            <div className="mt-4 border-t pt-3">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-teal-500" />
-                  项目分析报告
-                  {aiGeneratedAt && (
-                    <span className="font-normal text-gray-400">
-                      {new Date(aiGeneratedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                  )}
-                </h4>
-                <Button variant="ghost" size="sm" className="h-6 text-xs text-teal-600" onClick={() => setAiDialogOpen(true)}>
-                  查看完整报告 →
-                </Button>
-              </div>
-              <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                {perProjectReports.map((report) => (
-                  <div key={report.project_id} className="border rounded-lg overflow-hidden">
-                    <button
-                      className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 text-left"
-                      onClick={() => setExpandedProject(expandedProject === report.project_id ? null : report.project_id)}
-                    >
-                      <span className="text-sm font-medium text-gray-800">{report.project_name}</span>
-                      <ChevronDown className={cn("w-4 h-4 text-gray-400 transition-transform", expandedProject === report.project_id && "rotate-180")} />
-                    </button>
-                    {expandedProject === report.project_id && (
-                      <div className="p-3 bg-white border-t">
-                        <Markdown>{report.content.slice(0, 3000)}</Markdown>
-                        {report.content.length > 3000 && (
+            <div className="space-y-3">
+              {perProjectReports.map((report) => {
+                const pWarnings = (aiWarnings || []).filter(
+                  (w) => w.project_id === report.project_id || w.project_name === report.project_name
+                );
+                const topWarnings = pWarnings.slice(0, 3);
+                const expanded = expandedProject === report.project_id;
+                return (
+                  <div key={report.project_id} className="bg-white rounded-xl border shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                    {/* 卡片头部 */}
+                    <div className="px-4 py-3 bg-gradient-to-r from-teal-50 to-white flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-teal-100 flex items-center justify-center shrink-0">
+                          <Sparkles className="w-4 h-4 text-teal-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <h5 className="text-sm font-semibold text-gray-900 truncate">{report.project_name}</h5>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {topWarnings.length > 0 ? (
+                              topWarnings.map((w, i) => (
+                                <span key={i} className={cn(
+                                  "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
+                                  w.level === "error" ? "bg-red-50 text-red-600" : w.level === "warning" ? "bg-amber-50 text-amber-600" : "bg-blue-50 text-blue-600"
+                                )}>
+                                  {w.message.slice(0, 16)}{w.message.length > 16 ? "..." : ""}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">✓ 状态良好</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button variant="ghost" size="sm" className="h-7 text-xs text-teal-600" onClick={() => setAiDialogOpen(true)}>
+                          完整报告 →
+                        </Button>
+                        <button
+                          onClick={() => setExpandedProject(expanded ? null : report.project_id)}
+                          className="p-1 rounded hover:bg-gray-100"
+                        >
+                          <ChevronDown className={cn("w-4 h-4 text-gray-400 transition-transform", expanded && "rotate-180")} />
+                        </button>
+                      </div>
+                    </div>
+                    {/* 卡片展开内容 */}
+                    {expanded && (
+                      <div className="px-4 py-3 border-t bg-white">
+                        <Markdown>{report.content.slice(0, 5000)}</Markdown>
+                        {report.content.length > 5000 && (
                           <Button variant="link" size="sm" className="text-xs text-teal-600 p-0 mt-1" onClick={() => setAiDialogOpen(true)}>
                             查看完整内容 →
                           </Button>
@@ -878,8 +835,8 @@ export function ProjectDashboard({
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
           )}
         </CardContent>
