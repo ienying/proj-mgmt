@@ -178,75 +178,87 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 4. 组装项目数据文本（含 project_id 供 AI 精确引用）
-    const lines = projectSummaries.map((p) => {
-      const tablesStr = p.tables
-        .filter((t) => t.count > 0)
-        .map((t) => `${t.name}(${t.count}条)`)
-        .join("、") || "无数据";
-      const statusText = p.status === "active" ? "进行中" : p.status === "completed" ? "已完成" : p.status;
-      let line = `· [id:${p.id}] ${p.name}（${p.type}/${p.stage}/${statusText}/经理${p.manager}）：总记录${p.total_records}条，进度${p.schedule_records}条`;
-      if (p.end_date) {
-        const daysLeft = Math.ceil((new Date(p.end_date).getTime() - Date.now()) / 86400000);
-        line += `，截止${p.end_date.slice(0, 10)}（${daysLeft >= 0 ? `剩余${daysLeft}天` : `已逾期${Math.abs(daysLeft)}天`}）`;
-      }
-      if (p.updated_at) {
-        const daysSinceUpdate = Math.ceil((Date.now() - new Date(p.updated_at).getTime()) / 86400000);
-        line += `，${daysSinceUpdate}天前更新`;
-      }
-      line += `\n  数据表：${tablesStr}`;
-      return line;
-    }).join("\n\n");
-
-    const projectDataText = lines;
-    const projectCount = projectSummaries.length;
-
+    // 4. 逐项目独立分析
     const DEFAULT_SYSTEM = `你是一个项目管理预警分析专家，擅长从项目数据中识别风险并给出可操作建议。使用中文回复。
 
 关键要求：你必须输出完整的 Markdown 分析报告（包含标题、段落、图标、表格），严禁只输出 JSON 数组。预警数据放在报告末尾的 \`\`\`json 代码块中。`;
 
-    const DEFAULT_USER = `请分析以下 ${projectCount} 个项目的数据，生成预警分析报告。
+    const effectiveSystem = system_message || DEFAULT_SYSTEM;
 
-${projectDataText}
+    let allContent = "";
+    let totalTokens = 0;
+
+    // 并行逐项目调用 AI
+    const perProjectResults = await Promise.all(
+      projectSummaries.map(async (p) => {
+        const tablesStr = p.tables
+          .filter((t) => t.count > 0)
+          .map((t) => `${t.name}(${t.count}条)`)
+          .join("、") || "无数据";
+        const statusText = p.status === "active" ? "进行中" : p.status === "completed" ? "已完成" : p.status;
+        let line = `项目名称：${p.name}\n项目类型：${p.type}/${p.stage}/${statusText}\n项目经理：${p.manager}\n总记录：${p.total_records}条，进度记录：${p.schedule_records}条`;
+        if (p.end_date) {
+          const daysLeft = Math.ceil((new Date(p.end_date).getTime() - Date.now()) / 86400000);
+          line += `\n截止日期：${p.end_date.slice(0, 10)}（${daysLeft >= 0 ? `剩余${daysLeft}天` : `已逾期${Math.abs(daysLeft)}天`}）`;
+        }
+        if (p.updated_at) {
+          const daysSinceUpdate = Math.ceil((Date.now() - new Date(p.updated_at).getTime()) / 86400000);
+          line += `\n最近更新：${daysSinceUpdate}天前`;
+        }
+        line += `\n数据表：${tablesStr}`;
+
+        const perProjectUserPrompt = user_message
+          ? user_message
+              .replace(/\$\{projectCount\}/g, "1")
+              .replace(/\$\{projectData\}/g, line)
+          : `请分析以下项目的数据，生成预警分析报告。
+
+项目ID：${p.id}
+${line}
 
 请按以下结构输出分析报告（Markdown，适当使用 📊📈⚠️✅🔴🟡🟢 等图标增强可读性）：
 
-1. **📊 项目概览**：总体数据量、各项目基本情况
-2. **🔍 逐项分析**：每个项目逐一分析，包含：
-   - 项目名称
-   - 数据状态（总记录数、进度记录数、最新更新时间）
-   - 截止日期情况
-   - 风险等级评估（🔴严重 / 🟡警告 / 🟢正常）
-   - 具体风险描述和建议
-3. **📈 综合建议**：跨项目的共性问题和管理改进建议
-4. **⚠️ 预警汇总**：最后附一个 \`\`\`json 代码块，包含所有预警项的 JSON 数组，每项格式为：
-   {"project_id":"项目id","project_name":"项目名称","level":"error|warning|info","type":"英文代码","message":"中文描述（不超过30字）"}`;
+1. **📊 数据概览**：该项目的整体数据量、各表分布
+2. **🔍 关键发现**：数据中值得关注的模式、异常或亮点（至少2条）
+3. **📈 风险与建议**：具体的风险描述和管理改进建议
+4. **⚠️ 预警汇总**：最后附一个 \`\`\`json 代码块，包含该项目的预警项 JSON 数组，每项格式为：
+   {"project_id":"${p.id}","project_name":"${p.name}","level":"error|warning|info","type":"英文代码","message":"中文描述（不超过30字）"}`;
 
-    const effectiveSystem = system_message || DEFAULT_SYSTEM;
-    const effectiveUser = user_message
-      ? user_message
-          .replace(/\$\{projectCount\}/g, String(projectCount))
-          .replace(/\$\{projectData\}/g, projectDataText)
-      : DEFAULT_USER;
-
-    // 5. 调用 AI
-    const { content, tokens } = await chatCompletion(
-      [
-        { role: "system", content: effectiveSystem },
-        { role: "user", content: effectiveUser },
-      ],
-      { maxTokens: 8192 },
+        try {
+          const { content, tokens } = await chatCompletion(
+            [
+              { role: "system", content: effectiveSystem },
+              { role: "user", content: perProjectUserPrompt },
+            ],
+            { maxTokens: 4096 },
+          );
+          return { projectId: p.id, projectName: p.name, content, tokens };
+        } catch (e) {
+          return { projectId: p.id, projectName: p.name, content: `## ${p.name}\n\n⚠️ 分析失败：${String(e)}`, tokens: 0 };
+        }
+      })
     );
+
+    // 汇总
+    for (const r of perProjectResults) {
+      allContent += (allContent ? "\n\n---\n\n" : "") + `## 📋 ${r.projectName}\n\n` + r.content;
+      totalTokens += r.tokens;
+    }
+
+    // 汇总概述
+    const overview = `# 📊 AI 预警分析报告\n\n> 分析时间：${new Date().toLocaleString("zh-CN")}\n> 项目数量：${projectSummaries.length}\n> 总记录数：${projectSummaries.reduce((s, p) => s + p.total_records, 0)}\n\n---\n\n`;
+
+    const content = overview + allContent;
 
     logAIUsage({
       userId: "system",
       userName: user_name || "当前用户",
       feature: "dashboard-warnings",
-      tokensUsed: tokens,
+      tokensUsed: totalTokens,
       projectId: "dashboard",
     });
 
-    // 6. 解析 AI 返回的 JSON
+    // 6. 解析所有 AI 返回的 JSON（从各项目汇总内容中提取）
     let warnings: Array<{
       project_id: string;
       project_name: string;
@@ -341,7 +353,7 @@ ${projectDataText}
         generated_at: latest?.generated_at || new Date().toISOString(),
         generated_by: insertedBy,
         raw_response: content,
-        tokens,
+        tokens: totalTokens,
         stats: {
           projectCount: projectSummaries.length,
           tableCount: totalTables,
@@ -351,7 +363,7 @@ ${projectDataText}
         },
         conversationHistory: [
           { role: "system", content: effectiveSystem },
-          { role: "user", content: effectiveUser },
+          { role: "user", content: "逐项目独立分析" },
           { role: "assistant", content },
         ],
       },
