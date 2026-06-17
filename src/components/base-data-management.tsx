@@ -222,7 +222,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importData, setImportData] = useState<any[]>([]);
   const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ success: number; failed: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ success: number; failed: number; failedRows: any[] } | null>(null);
 
   // 只刷新当前选中类型的数据
   const loadCurrentTypeData = async () => {
@@ -1630,11 +1630,46 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
                   </div>
                 )}
                 {importResult.failed > 0 && (
-                  <div className="flex items-center justify-center gap-2 text-destructive">
-                    <AlertCircle className="w-6 h-6" />
-                    <span className="text-lg font-medium">
-                      失败 {importResult.failed} 条
-                    </span>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-center gap-2 text-destructive">
+                      <AlertCircle className="w-6 h-6" />
+                      <span className="text-lg font-medium">
+                        失败 {importResult.failed} 条
+                      </span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        import("xlsx").then((XLSX) => {
+                          const exportData = importResult.failedRows.map((row: any) => ({
+                            产品名称: row.product_name || "",
+                            模块名称: row.module_name || "",
+                            技术规格及配置要求: row.tech_specs || "",
+                            控标性说明: row.bidding_instructions || "",
+                            备注: row.remarks || "",
+                            软著名称: row.software_name || "",
+                            类别: row.category || "",
+                            厂商: row.vendor || "",
+                            范围: row.scope || "",
+                            失败原因: row._失败原因 || "",
+                          }));
+                          const ws = XLSX.utils.json_to_sheet(exportData);
+                          ws["!cols"] = [
+                            { wch: 20 }, { wch: 20 }, { wch: 30 },
+                            { wch: 20 }, { wch: 20 }, { wch: 20 },
+                            { wch: 15 }, { wch: 15 }, { wch: 15 },
+                            { wch: 25 },
+                          ];
+                          const wb = XLSX.utils.book_new();
+                          XLSX.utils.book_append_sheet(wb, ws, "失败数据");
+                          XLSX.writeFile(wb, "导入失败数据.xlsx");
+                        });
+                      }}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      下载失败数据（{importResult.failedRows.length} 条）
+                    </Button>
                   </div>
                 )}
               </div>
@@ -1653,30 +1688,32 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
                   
                   let successCount = 0;
                   let failedCount = 0;
-                  
+                  const failedRows: any[] = [];
+
                   try {
                     for (const row of importData) {
                       if (!row.product_name || !row.module_name) {
                         failedCount++;
+                        failedRows.push({ ...row, _失败原因: "产品名称或模块名称为空" });
                         continue;
                       }
-                      
+
                       // 查找类别 ID
                       let categoryId = "";
                       if (row.category) {
                         const cat = productCategories.find(c => c.name === row.category);
                         if (cat) categoryId = cat.id;
                       }
-                      
+
                       // 查找厂商名称
                       const vendorName = row.vendor || "";
-                      
+
                       // 查找范围
                       const scopeName = row.scope || "";
-                      
+
                       // 生成唯一编码
                       const code = `PM_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                      
+
                       try {
                         await apiFetch("/api/dicts/create", {
                           method: "POST",
@@ -1700,17 +1737,21 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
                       } catch (error) {
                         console.error("插入失败:", error, row);
                         failedCount++;
+                        failedRows.push({
+                          ...row,
+                          _失败原因: error instanceof Error ? error.message : "未知错误",
+                        });
                       }
                     }
-                    
-                    setImportResult({ success: successCount, failed: failedCount });
-                    
+
+                    setImportResult({ success: successCount, failed: failedCount, failedRows });
+
                     if (successCount > 0) {
                       await loadCurrentTypeData();
                     }
                   } catch (error) {
                     console.error("导入出错:", error);
-                    setImportResult({ success: 0, failed: importData.length });
+                    setImportResult({ success: 0, failed: importData.length, failedRows: importData.map(r => ({ ...r, _失败原因: "导入过程异常中断" })) });
                   } finally {
                     setImporting(false);
                   }
@@ -2103,7 +2144,7 @@ function DataTable({
                       <TableCell className="text-muted-foreground max-w-[100px] truncate">{item.bidding_instructions || "-"}</TableCell>
                       <TableCell className="text-muted-foreground max-w-[100px] truncate">{item.remarks || "-"}</TableCell>
                       <TableCell className="text-muted-foreground">{item.software_name || "-"}</TableCell>
-                      <TableCell className="text-muted-foreground">{item.category || "-"}</TableCell>
+                      <TableCell className="text-muted-foreground">{item.category_name || item.category || "-"}</TableCell>
                       <TableCell className="text-muted-foreground">{item.vendor || "-"}</TableCell>
                       <TableCell className="text-muted-foreground">{item.scope || "-"}</TableCell>
                       <TableCell>
