@@ -166,6 +166,9 @@ export function ProjectDashboard({
   const [aiRawResponse, setAiRawResponse] = useState<string | null>(null);
   const [showRaw, setShowRaw] = useState(false);
 
+  // 分析详情对话框
+  const [analysisDialog, setAnalysisDialog] = useState<{ open: boolean; projectId: string; projectName: string }>({ open: false, projectId: "", projectName: "" });
+
   // 提示词编辑
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
   const DEFAULT_SYSTEM_PROMPT = `你是一个项目管理预警分析专家。你需要基于项目数据识别风险并生成预警。
@@ -788,16 +791,14 @@ JSON 格式示例：
                   <span className="shrink-0 mt-0.5">{WARNING_LEVEL_CONFIG[w.level].icon}</span>
                   <span className="font-medium shrink-0">{w.project_name}</span>
                   <span className="opacity-75">{w.message}</span>
-                  {onViewProject && (
-                    <Button
-                      variant="link"
-                      size="sm"
-                      className="ml-auto text-xs h-auto p-0 underline shrink-0"
-                      onClick={() => onViewProject(w.project_id)}
-                    >
-                      查看
-                    </Button>
-                  )}
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="ml-auto text-xs h-auto p-0 underline shrink-0"
+                    onClick={() => setAnalysisDialog({ open: true, projectId: w.project_id, projectName: w.project_name })}
+                  >
+                    查看
+                  </Button>
                 </div>
               ))}
             </div>
@@ -1087,6 +1088,78 @@ JSON 格式示例：
             >
               <Sparkles className="w-3.5 h-3.5 mr-1" />
               保存并用此提示词生成
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== AI 分析详情对话框 ===== */}
+      <Dialog open={analysisDialog.open} onOpenChange={(v) => setAnalysisDialog((p) => ({ ...p, open: v }))}>
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Sparkles className="w-4 h-4 text-teal-500" />
+              AI 预警分析 · {analysisDialog.projectName}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              以下为最近一次 AI 预警的完整分析结果
+              {aiGeneratedAt && ` · 生成时间：${new Date(aiGeneratedAt).toLocaleString("zh-CN")}`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto space-y-3 min-h-0">
+            {/* 该项目相关预警 */}
+            <div className="space-y-1">
+              <h4 className="text-xs font-semibold text-gray-500">该项目预警</h4>
+              {displayWarnings.filter((w) => w.project_id === analysisDialog.projectId || w.project_name === analysisDialog.projectName).length > 0 ? (
+                displayWarnings.filter((w) => w.project_id === analysisDialog.projectId || w.project_name === analysisDialog.projectName).map((w, i) => (
+                  <div key={i} className={cn(
+                    "flex items-start gap-2 px-3 py-2 rounded-lg border text-sm",
+                    WARNING_LEVEL_CONFIG[w.level].bg,
+                    WARNING_LEVEL_CONFIG[w.level].border,
+                    WARNING_LEVEL_CONFIG[w.level].text,
+                  )}>
+                    <span className="shrink-0 mt-0.5">{WARNING_LEVEL_CONFIG[w.level].icon}</span>
+                    <span>{w.message}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-emerald-600 bg-emerald-50 rounded-lg px-3 py-2">✓ 该项目状态良好，无预警</div>
+              )}
+            </div>
+
+            {/* 原始分析内容 */}
+            {aiRawResponse && (
+              <div className="space-y-1">
+                <h4 className="text-xs font-semibold text-gray-500">AI 原始分析</h4>
+                <pre className="bg-gray-900 text-gray-300 rounded-lg p-4 text-xs max-h-[40vh] overflow-auto font-mono leading-relaxed whitespace-pre-wrap">
+                  {aiRawResponse}
+                </pre>
+              </div>
+            )}
+
+            {/* 无缓存提示 */}
+            {!aiRawResponse && (
+              <div className="text-sm text-muted-foreground bg-gray-50 rounded-lg p-4 text-center">
+                暂无 AI 原始分析记录，请点击「生成新预警」重新分析
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 pt-2 border-t">
+            {onViewProject && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setAnalysisDialog((p) => ({ ...p, open: false }));
+                  onViewProject(analysisDialog.projectId);
+                }}
+              >
+                查看项目详情
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setAnalysisDialog((p) => ({ ...p, open: false }))}>
+              关闭
             </Button>
           </DialogFooter>
         </DialogContent>
