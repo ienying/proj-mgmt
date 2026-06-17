@@ -178,6 +178,9 @@ export function ProjectDashboard({
   const [aiFollowUpLoading, setAiFollowUpLoading] = useState(false);
   const [aiCustomSystemMessage, setAiCustomSystemMessage] = useState("");
   const [aiCustomUserPrompt, setAiCustomUserPrompt] = useState("");
+  const [perProjectReports, setPerProjectReports] = useState<Array<{ project_id: string; project_name: string; content: string }>>([]);
+  const [expandedProject, setExpandedProject] = useState<string | null>(null);
+  const [selectedReportProject, setSelectedReportProject] = useState<string>("");
 
   // AI 按钮 → 打开提示词对话框
   const openAIPromptDialog = useCallback(() => {
@@ -252,6 +255,7 @@ export function ProjectDashboard({
             setAiGeneratedBy(json.data.generated_by || null);
             setAiScanStats(json.data.stats || null);
             if (json.data.raw_response) setAiResult(json.data.raw_response);
+            setPerProjectReports(json.data.perProjectReports || []);
           }
         }
       } catch { /* ignore */ }
@@ -295,6 +299,8 @@ export function ProjectDashboard({
 
         const rawResponse = json.data.raw_response || "";
         setAiResult(rawResponse);
+        setPerProjectReports(json.data.perProjectReports || []);
+        setExpandedProject(null);
 
         if (json.data.conversationHistory) {
           setAiConversationHistory(json.data.conversationHistory);
@@ -834,13 +840,13 @@ export function ProjectDashboard({
               ))}
             </div>
           )}
-          {/* AI 分析摘要（默认显示） */}
-          {aiResult && (
+          {/* 逐项目分析报告 */}
+          {perProjectReports.length > 0 && (
             <div className="mt-4 border-t pt-3">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-teal-500" />
-                  AI 分析已完成
+                  项目分析报告
                   {aiGeneratedAt && (
                     <span className="font-normal text-gray-400">
                       {new Date(aiGeneratedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
@@ -851,10 +857,28 @@ export function ProjectDashboard({
                   查看完整报告 →
                 </Button>
               </div>
-              {/* 摘要：提取前几行关键文字 */}
-              <div className="text-xs text-gray-600 leading-relaxed bg-gray-50 rounded-lg p-3 max-h-[120px] overflow-hidden relative">
-                {aiResult.split("\n").filter((l) => l.trim()).slice(0, 8).join("\n").slice(0, 600)}
-                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-50 to-transparent" />
+              <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                {perProjectReports.map((report) => (
+                  <div key={report.project_id} className="border rounded-lg overflow-hidden">
+                    <button
+                      className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 text-left"
+                      onClick={() => setExpandedProject(expandedProject === report.project_id ? null : report.project_id)}
+                    >
+                      <span className="text-sm font-medium text-gray-800">{report.project_name}</span>
+                      <ChevronDown className={cn("w-4 h-4 text-gray-400 transition-transform", expandedProject === report.project_id && "rotate-180")} />
+                    </button>
+                    {expandedProject === report.project_id && (
+                      <div className="p-3 bg-white border-t">
+                        <Markdown>{report.content.slice(0, 3000)}</Markdown>
+                        {report.content.length > 3000 && (
+                          <Button variant="link" size="sm" className="text-xs text-teal-600 p-0 mt-1" onClick={() => setAiDialogOpen(true)}>
+                            查看完整内容 →
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -1143,35 +1167,42 @@ export function ProjectDashboard({
                   </div>
                 )}
 
-                {/* 对话历史 */}
-                {aiConversationHistory.length > 3 ? (
-                  <div className="space-y-4">
-                    <div className="prose prose-sm max-w-none">
-                      <Markdown>{aiResult}</Markdown>
-                    </div>
-                    {aiConversationHistory.slice(3).map((msg, i) => (
-                      <div key={i} className={msg.role === "user" ? "flex justify-end" : ""}>
-                        <div className={msg.role === "user"
-                          ? "bg-teal-500 text-white rounded-2xl rounded-br-md px-4 py-2.5 max-w-[85%] text-sm"
-                          : "bg-gray-100 text-gray-700 rounded-2xl rounded-bl-md px-4 py-2.5 max-w-[85%] text-sm"
-                        }>
-                          {msg.role === "user" ? msg.content : <Markdown>{msg.content}</Markdown>}
-                        </div>
-                      </div>
+                {/* 逐项目 Tab 切换 */}
+                {perProjectReports.length > 1 && (
+                  <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5 overflow-x-auto">
+                    {perProjectReports.map((r) => (
+                      <button
+                        key={r.project_id}
+                        onClick={() => setSelectedReportProject(r.project_id)}
+                        className={cn(
+                          "px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors",
+                          selectedReportProject === r.project_id || (!selectedReportProject && perProjectReports[0].project_id === r.project_id)
+                            ? "bg-white text-gray-900 shadow-sm"
+                            : "text-gray-500 hover:text-gray-700"
+                        )}
+                      >
+                        {r.project_name}
+                      </button>
                     ))}
-                    {aiFollowUpLoading && (
-                      <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />AI 思考中...
-                      </div>
-                    )}
                   </div>
-                ) : (
-                  <Markdown>{aiResult}</Markdown>
                 )}
+
+                {/* 当前选中项目的分析 */}
+                {(() => {
+                  const activeReport = perProjectReports.find((r) => r.project_id === selectedReportProject) || perProjectReports[0];
+                  const activeContent = activeReport?.content || aiResult;
+                  return (
+                    <Markdown>{activeContent}</Markdown>
+                  );
+                })()}
 
                 {/* 操作栏 */}
                 <div className="flex items-center gap-2 pt-2 border-t">
-                  <Button variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(aiResult); toast.success("已复制分析结果"); }}>
+                  <Button variant="outline" size="sm" onClick={() => {
+                    const activeReport = perProjectReports.find((r) => r.project_id === selectedReportProject) || perProjectReports[0];
+                    navigator.clipboard.writeText(activeReport?.content || aiResult);
+                    toast.success("已复制分析结果");
+                  }}>
                     <Copy className="w-3.5 h-3.5 mr-1" />复制结果
                   </Button>
                   <Button variant="outline" size="sm" onClick={openAIPromptDialog}>

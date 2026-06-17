@@ -245,10 +245,16 @@ ${line}
       totalTokens += r.tokens;
     }
 
-    // 汇总概述
     const overview = `# 📊 AI 预警分析报告\n\n> 分析时间：${new Date().toLocaleString("zh-CN")}\n> 项目数量：${projectSummaries.length}\n> 总记录数：${projectSummaries.reduce((s, p) => s + p.total_records, 0)}\n\n---\n\n`;
-
     const content = overview + allContent;
+
+    // 逐项目结果数组（前端单独呈现）
+    const perProjectReports = perProjectResults.map((r) => ({
+      project_id: r.projectId,
+      project_name: r.projectName,
+      content: r.content,
+      tokens: r.tokens,
+    }));
 
     logAIUsage({
       userId: "system",
@@ -350,6 +356,7 @@ ${line}
     return NextResponse.json({
       data: {
         warnings,
+        perProjectReports,
         generated_at: latest?.generated_at || new Date().toISOString(),
         generated_by: insertedBy,
         raw_response: content,
