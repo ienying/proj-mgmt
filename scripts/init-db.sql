@@ -544,6 +544,7 @@ CREATE TABLE IF NOT EXISTS knowledge_categories (
   name VARCHAR(100) NOT NULL,
   icon VARCHAR(50) DEFAULT 'BookOpen',
   color VARCHAR(50) DEFAULT '#6366f1',
+  category_type VARCHAR(50) DEFAULT 'material',
   description TEXT,
   sort_order INTEGER DEFAULT 0,
   is_enabled BOOLEAN DEFAULT true,

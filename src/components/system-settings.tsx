@@ -42,6 +42,7 @@ import {
   Cpu,
   BarChart3,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1218,9 +1219,14 @@ function KnowledgeCategoryPanel() {
         setAddIcon("Folder");
         setAddType("material");
         loadCategories();
+        toast.success("分类已添加");
+      } else {
+        const json = await res.json().catch(() => null);
+        toast.error(json?.error || "新增分类失败，请稍后重试");
       }
     } catch (e) {
       console.error("新增分类失败", e);
+      toast.error("新增分类失败，请稍后重试");
     }
   };
 
@@ -1234,9 +1240,14 @@ function KnowledgeCategoryPanel() {
       if (res.ok) {
         setEditId(null);
         loadCategories();
+        toast.success("分类已更新");
+      } else {
+        const json = await res.json().catch(() => null);
+        toast.error(json?.error || "更新分类失败，请稍后重试");
       }
     } catch (e) {
       console.error("更新分类失败", e);
+      toast.error("更新分类失败，请稍后重试");
     }
   };
 

@@ -153,7 +153,7 @@ export function ProjectManagement({
   const [filterManager, setFilterManager] = useState("all");
   const [filterYear, setFilterYear] = useState("all");
   const [filterMonth, setFilterMonth] = useState("all");
-  const [showMoreFilters, setShowMoreFilters] = useState(false);
+
   const [projectTypes, setProjectTypes] = useState<ProjectType[]>([]);
   const [projectStages, setProjectStages] = useState<ProjectStage[]>([]);
   const [projectStatuses, setProjectStatuses] = useState<{name: string; code: string}[]>([]);
@@ -1091,16 +1091,46 @@ export function ProjectManagement({
                   {projectStages.filter(s => s.code).map((s: { name: string; code: string }) => <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 gap-1.5"
-                onClick={() => setShowMoreFilters(!showMoreFilters)}
-              >
-                <SlidersHorizontal className="w-3.5 h-3.5" />
-                更多筛选
-                <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showMoreFilters && "rotate-180")} />
-              </Button>
+              <Select value={filterDept === "all" ? "all" : filterDept} onValueChange={(v) => setFilterDept(v)}>
+                <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="所属部门" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部部门</SelectItem>
+                  {[...new Set(projects.map((p: Project) => p.department).filter(Boolean) as string[])].map((d: string) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterDeployMode === "all" ? "all" : filterDeployMode} onValueChange={(v) => setFilterDeployMode(v)}>
+                <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="部署模式" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部模式</SelectItem>
+                  {[...new Set(projects.map((p: Project) => p.deployment_mode).filter(Boolean) as string[])].map((m: string) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterManager === "all" ? "all" : filterManager} onValueChange={(v) => setFilterManager(v)}>
+                <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="项目经理" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部经理</SelectItem>
+                  {[...new Set(projects.map((p: Project) => p.role_project_manager).filter(Boolean) as string[])].map((m: string) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterYear === "all" ? "all" : filterYear} onValueChange={(v) => setFilterYear(v)}>
+                <SelectTrigger className="w-[110px] h-9"><SelectValue placeholder="年份" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部年份</SelectItem>
+                  {[...new Set(projects.map((p: Project) => p.created_at ? new Date(p.created_at).getFullYear().toString() : "").filter(Boolean) as string[])].sort().map((y: string) => <SelectItem key={y} value={y}>{y}年</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterMonth === "all" ? "all" : filterMonth} onValueChange={(v) => setFilterMonth(v)}>
+                <SelectTrigger className="w-[110px] h-9"><SelectValue placeholder="月份" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部月份</SelectItem>
+                  {Array.from({length: 12}, (_, i) => (i + 1).toString()).map((m: string) => <SelectItem key={m} value={m}>{m}月</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {(filterDept !== "all" || filterDeployMode !== "all" || filterManager !== "all" || filterYear !== "all" || filterMonth !== "all") && (
+                <Button variant="ghost" size="sm" className="h-9 text-gray-500" onClick={() => { setFilterDept("all"); setFilterDeployMode("all"); setFilterManager("all"); setFilterYear("all"); setFilterMonth("all"); }}>
+                  清除筛选
+                  </Button>
+                )}
               <div className="flex-1" />
               <Button
                 variant="outline"
@@ -1116,51 +1146,6 @@ export function ProjectManagement({
                 新建项目
               </Button>
             </div>
-            {/* 更多筛选条件（可折叠） */}
-            {showMoreFilters && (
-              <div className="flex items-center gap-3 flex-wrap pt-2 border-t border-gray-100">
-                <Select value={filterDept === "all" ? "all" : filterDept} onValueChange={(v) => setFilterDept(v)}>
-                  <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="所属部门" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部部门</SelectItem>
-                    {[...new Set(projects.map((p: Project) => p.department).filter(Boolean) as string[])].map((d: string) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={filterDeployMode === "all" ? "all" : filterDeployMode} onValueChange={(v) => setFilterDeployMode(v)}>
-                  <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="部署模式" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部模式</SelectItem>
-                    {[...new Set(projects.map((p: Project) => p.deployment_mode).filter(Boolean) as string[])].map((m: string) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={filterManager === "all" ? "all" : filterManager} onValueChange={(v) => setFilterManager(v)}>
-                  <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="项目经理" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部经理</SelectItem>
-                    {[...new Set(projects.map((p: Project) => p.role_project_manager).filter(Boolean) as string[])].map((m: string) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={filterYear === "all" ? "all" : filterYear} onValueChange={(v) => setFilterYear(v)}>
-                  <SelectTrigger className="w-[110px] h-9"><SelectValue placeholder="年份" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部年份</SelectItem>
-                    {[...new Set(projects.map((p: Project) => p.created_at ? new Date(p.created_at).getFullYear().toString() : "").filter(Boolean) as string[])].sort().map((y: string) => <SelectItem key={y} value={y}>{y}年</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={filterMonth === "all" ? "all" : filterMonth} onValueChange={(v) => setFilterMonth(v)}>
-                  <SelectTrigger className="w-[110px] h-9"><SelectValue placeholder="月份" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部月份</SelectItem>
-                    {Array.from({length: 12}, (_, i) => (i + 1).toString()).map((m: string) => <SelectItem key={m} value={m}>{m}月</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {(filterDept !== "all" || filterDeployMode !== "all" || filterManager !== "all" || filterYear !== "all" || filterMonth !== "all") && (
-                  <Button variant="ghost" size="sm" className="h-9 text-gray-500" onClick={() => { setFilterDept("all"); setFilterDeployMode("all"); setFilterManager("all"); setFilterYear("all"); setFilterMonth("all"); }}>
-                    清除筛选
-                  </Button>
-                )}
-              </div>
-            )}
           </div>
         </div>
         {/* 项目表单弹窗 */}

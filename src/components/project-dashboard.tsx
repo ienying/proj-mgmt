@@ -580,7 +580,7 @@ export function ProjectDashboard({
                   className="h-8 text-sm border-0 focus-visible:ring-0"
                 />
               </div>
-              <div className="max-h-[280px] overflow-auto p-1">
+              <div className="max-h-[520px] overflow-auto p-1">
                 <div
                   className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-sm"
                   onClick={() => handleSelectionChange(new Set())}
