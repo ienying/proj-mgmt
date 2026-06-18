@@ -18,6 +18,15 @@ const TOOLBAR_CONFIG: Partial<IToolbarConfig> = {
   ],
 };
 
+// wangeditor represents an empty document as <p><br></p> — normalize to ""
+function normalizeHtml(html: string): string {
+  const trimmed = html
+    .replace(/<p>\s*<br\s*\/?>\s*<\/p>/gi, "")
+    .replace(/<p>\s*<\/p>/gi, "")
+    .trim();
+  return trimmed.length === 0 ? "" : html;
+}
+
 export default function RichTextEditor({ value, onChange, placeholder }: RichTextEditorProps) {
   const [editor, setEditor] = useState<IDomEditor | null>(null);
 
@@ -34,7 +43,7 @@ export default function RichTextEditor({ value, onChange, placeholder }: RichTex
       />
       <Editor
         value={value}
-        onChange={(ed) => onChange(ed.getHtml())}
+        onChange={(ed) => onChange(normalizeHtml(ed.getHtml()))}
         onCreated={setEditor}
         defaultConfig={editorConfig}
         style={{ minHeight: 180 }}
