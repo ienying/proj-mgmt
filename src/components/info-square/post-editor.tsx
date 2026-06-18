@@ -1,14 +1,17 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { X, Upload, FileText, Plus, Eye, EyeOff, Save, Loader2 } from "lucide-react";
+import { X, Upload, FileText, Plus, Eye, EyeOff, Save, Loader2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Markdown } from "@/components/markdown";
+import { toast } from "sonner";
 import dynamic from "next/dynamic";
 
 const RichTextEditor = dynamic(() => import("@/components/rich-text-editor"), {
@@ -83,7 +86,9 @@ export default function PostEditor({
   const [allTags, setAllTags] = useState<TagDef[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isEditing = !!editPost;
@@ -172,6 +177,7 @@ export default function PostEditor({
 
   const handleSave = async () => {
     if (!title.trim()) return;
+    if (saving) return;
 
     const tags = tagStr.split(",").map((t) => t.trim()).filter(Boolean);
 
@@ -196,6 +202,7 @@ export default function PostEditor({
       })),
     };
 
+    setSaving(true);
     try {
       const url = isEditing
         ? `/api/knowledge/posts/${editPost!.id}`
@@ -209,11 +216,17 @@ export default function PostEditor({
       });
       const json = await res.json();
       if (json.data) {
+        toast.success(isEditing ? "更新成功" : "发布成功");
         onOpenChange(false);
         onSaved();
+      } else {
+        toast.error(json.error || "保存失败，请重试");
       }
     } catch (e) {
+      toast.error("网络错误，请检查网络后重试");
       console.error("Save failed:", e);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -236,8 +249,13 @@ export default function PostEditor({
             {showPreview ? <EyeOff className="w-4 h-4 mr-1" /> : <Eye className="w-4 h-4 mr-1" />}
             {showPreview ? "编辑" : "预览"}
           </Button>
-          <Button onClick={handleSave} disabled={!title.trim()}>
-            <Save className="w-4 h-4 mr-1" /> {isEditing ? "更新" : "发布"}
+          <Button onClick={handleSave} disabled={!title.trim() || saving}>
+            {saving ? (
+              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4 mr-1" />
+            )}
+            {saving ? "保存中..." : isEditing ? "更新" : "发布"}
           </Button>
         </div>
       </div>
@@ -330,12 +348,47 @@ export default function PostEditor({
 
           {/* Tags */}
           <div>
-            <Label className="text-xs font-semibold text-gray-500 uppercase">标签（用逗号分隔）</Label>
+            <Label className="text-xs font-semibold text-gray-500 uppercase">标签</Label>
+            {allTags.length > 0 && (
+              <Popover open={tagPickerOpen} onOpenChange={setTagPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="w-full mt-1 justify-between h-auto min-h-9 py-1.5">
+                    <span className="text-muted-foreground text-xs">
+                      {tagStr ? tagStr : "选择标签..."}
+                    </span>
+                    <ChevronDown className="w-3.5 h-3.5 ml-2 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-2" align="start">
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {allTags.map((tag) => {
+                      const selected = tagStr.split(",").map((t) => t.trim()).includes(tag.name);
+                      return (
+                        <div
+                          key={tag.id}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-100 cursor-pointer"
+                          onClick={() => {
+                            const current = tagStr.split(",").map((t) => t.trim()).filter(Boolean);
+                            const next = selected
+                              ? current.filter((t) => t !== tag.name)
+                              : [...current, tag.name];
+                            setTagStr(next.join(", "));
+                          }}
+                        >
+                          <Checkbox checked={selected} className="h-3.5 w-3.5" />
+                          <span className="text-sm">{tag.name}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
             <Input
               value={tagStr}
               onChange={(e) => setTagStr(e.target.value)}
-              placeholder="标签1, 标签2"
-              className="mt-1"
+              placeholder="或手动输入，用逗号分隔"
+              className="mt-1 text-xs"
             />
           </div>
 
