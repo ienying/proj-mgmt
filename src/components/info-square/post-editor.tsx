@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { Markdown } from "@/components/markdown";
 import { toast } from "sonner";
@@ -90,6 +91,8 @@ export default function PostEditor({
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
+  const [versionDialogOpen, setVersionDialogOpen] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState<Record<string, unknown> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isEditing = !!editPost;
@@ -97,6 +100,8 @@ export default function PostEditor({
 
   useEffect(() => {
     if (open) {
+      setShowPreview(false); // Always start in edit mode
+
       // Load categories
       fetch("/api/knowledge/categories")
         .then((r) => r.json())
@@ -219,31 +224,8 @@ export default function PostEditor({
     );
   };
 
-  const handleSave = async () => {
-    if (!title.trim()) return;
+  const doSave = async (payload: Record<string, unknown>) => {
     if (saving) return;
-
-    const tags = tagStr.split(",").map((t) => t.trim()).filter(Boolean);
-
-    const payload = {
-      title,
-      content,
-      content_type: contentType,
-      category_id: selectedCategoryId || categoryId,
-      is_pinned: isPinned,
-      tags,
-      created_by: currentUser?.id,
-      created_by_name: currentUser?.name,
-      attachments: uploadedFiles.map((f) => ({
-        file_name: f.file_name,
-        file_path: f.file_path,
-        file_size: f.file_size,
-        mime_type: f.mime_type,
-        file_type: f.file_type,
-        tags: f.tags || "",
-      })),
-    };
-
     setSaving(true);
     try {
       const url = isEditing
@@ -269,6 +251,38 @@ export default function PostEditor({
       console.error("Save failed:", e);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!title.trim()) return;
+
+    const tags = tagStr.split(",").map((t) => t.trim()).filter(Boolean);
+
+    const payload = {
+      title,
+      content,
+      content_type: contentType,
+      category_id: selectedCategoryId || categoryId,
+      is_pinned: isPinned,
+      tags,
+      created_by: currentUser?.id,
+      created_by_name: currentUser?.name,
+      attachments: uploadedFiles.map((f) => ({
+        file_name: f.file_name,
+        file_path: f.file_path,
+        file_size: f.file_size,
+        mime_type: f.mime_type,
+        file_type: f.file_type,
+        tags: f.tags || "",
+      })),
+    };
+
+    if (isEditing) {
+      setPendingPayload(payload);
+      setVersionDialogOpen(true);
+    } else {
+      await doSave(payload);
     }
   };
 
@@ -532,6 +546,33 @@ export default function PostEditor({
           </div>
         </div>
       </div>
+
+      {/* Version confirmation dialog */}
+      <Dialog open={versionDialogOpen} onOpenChange={setVersionDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>保存为新版本</DialogTitle>
+            <DialogDescription>
+              编辑后将保存为 v{nextVersion}，由 {currentUser?.name || "当前用户"} 提交。
+              确认保存？
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setVersionDialogOpen(false); setPendingPayload(null); }}>
+              取消
+            </Button>
+            <Button
+              onClick={() => {
+                setVersionDialogOpen(false);
+                if (pendingPayload) doSave(pendingPayload);
+                setPendingPayload(null);
+              }}
+            >
+              确认保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
