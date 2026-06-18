@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   X, ThumbsUp, Star, MessageCircle, Send, Download, Share2,
   FileText, User, Clock, Eye, Copy, Check, Maximize2, Minimize2,
-  Lock, Unlock, ChevronDown, ChevronRight
+  Lock, Unlock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -138,7 +138,7 @@ export default function PostDrawer({
   const [activeVersion, setActiveVersion] = useState<number>(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [tocCollapsed, setTocCollapsed] = useState(false);
+  const [tocOpen, setTocOpen] = useState(false);
 
   const loadDetail = useCallback(async () => {
     if (!post) return;
@@ -410,6 +410,18 @@ export default function PostDrawer({
                 </PopoverContent>
               </Popover>
 
+              {/* TOC toggle */}
+              {headings.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setTocOpen(!tocOpen)}
+                  className={tocOpen ? "bg-indigo-50 text-indigo-600" : ""}
+                >
+                  <FileText className="w-4 h-4" />
+                </Button>
+              )}
+
               {/* Fullscreen toggle */}
               <Button
                 variant="ghost"
@@ -430,65 +442,56 @@ export default function PostDrawer({
           </div>
 
           {/* Body */}
-          <div className="flex-1 flex overflow-hidden">
-            {/* TOC Sidebar */}
-            {headings.length > 0 && (
-              <div className={`${tocCollapsed ? "w-10" : "w-48"} shrink-0 border-r bg-gray-50 overflow-y-auto hidden md:block transition-all duration-200`}>
-                <button
-                  onClick={() => setTocCollapsed(!tocCollapsed)}
-                  className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-500 uppercase hover:bg-gray-100"
-                >
-                  {tocCollapsed ? (
-                    <ChevronRight className="w-3.5 h-3.5 mx-auto" />
-                  ) : (
-                    <>
-                      <span>目录</span>
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    </>
-                  )}
-                </button>
-                {!tocCollapsed && (
-                  <div className="px-3 pb-3">
-                    <nav className="space-y-1">
-                      {headings.map((h) => (
-                        <button
-                          key={h.id}
-                          onClick={() => handleScrollToHeading(h.id)}
-                          className={`block text-left text-xs w-full truncate hover:text-indigo-600 transition-colors ${
-                            h.level === 1
-                              ? "font-medium text-gray-700 pl-0"
-                              : h.level === 2
-                              ? "text-gray-600 pl-3"
-                              : "text-gray-500 pl-6"
-                          }`}
-                        >
-                          {h.text}
-                        </button>
-                      ))}
-                    </nav>
+          <div className="flex-1 flex overflow-hidden relative">
+            {/* Floating TOC Overlay */}
+            {headings.length > 0 && tocOpen && (
+              <div className="absolute right-4 top-4 w-60 max-h-[70vh] bg-white rounded-xl shadow-xl border border-gray-200 z-10 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b bg-gray-50">
+                  <span className="text-xs font-semibold text-gray-600 uppercase">目录</span>
+                  <button onClick={() => setTocOpen(false)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="overflow-y-auto max-h-[calc(70vh-40px)] p-3">
+                  <nav className="space-y-0.5">
+                    {headings.map((h) => (
+                      <button
+                        key={h.id}
+                        onClick={() => { handleScrollToHeading(h.id); setTocOpen(false); }}
+                        className={`block text-left text-xs w-full truncate hover:text-indigo-600 hover:bg-indigo-50 rounded px-2 py-1 transition-colors ${
+                          h.level === 1
+                            ? "font-medium text-gray-700"
+                            : h.level === 2
+                            ? "text-gray-600 pl-4"
+                            : "text-gray-500 pl-7"
+                        }`}
+                      >
+                        {h.text}
+                      </button>
+                    ))}
+                  </nav>
 
-                    {detail?.versions && detail.versions.length > 1 && (
-                      <div className="mt-4 pt-4 border-t">
-                        <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">版本历史</h4>
-                        <div className="space-y-1">
-                          {detail.versions.map((v) => (
-                            <button
-                              key={v.id}
-                              onClick={() => setActiveVersion(v.version)}
-                              className={`block text-left text-xs w-full px-2 py-1 rounded ${
-                                activeVersion === v.version
-                                  ? "bg-indigo-100 text-indigo-700"
-                                  : "text-gray-500 hover:bg-gray-100"
-                              }`}
-                            >
-                              v{v.version} - {formatDate(v.created_at)}
-                            </button>
-                          ))}
-                        </div>
+                  {detail?.versions && detail.versions.length > 1 && (
+                    <div className="mt-3 pt-3 border-t">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1.5 px-2">版本历史</h4>
+                      <div className="space-y-0.5">
+                        {detail.versions.map((v) => (
+                          <button
+                            key={v.id}
+                            onClick={() => { setActiveVersion(v.version); setTocOpen(false); }}
+                            className={`block text-left text-xs w-full px-2 py-1 rounded hover:bg-gray-100 ${
+                              activeVersion === v.version
+                                ? "bg-indigo-100 text-indigo-700"
+                                : "text-gray-500"
+                            }`}
+                          >
+                            v{v.version}{v.version === post.version ? " · 最新" : ""} — {formatDate(v.created_at)}
+                          </button>
+                        ))}
                       </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
