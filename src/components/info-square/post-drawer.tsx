@@ -299,8 +299,6 @@ export default function PostDrawer({
     ? detail.versions.find((v) => v.version === activeVersion)?.content || post.content
     : post.content;
 
-  const isAuthor = currentUser?.id === (post.created_by || post.author_id);
-  const isAdmin = currentUser?.role === "super_admin";
 
   return (
     <>
@@ -478,7 +476,10 @@ export default function PostDrawer({
             {/* Main Content */}
             <ScrollArea className="flex-1">
               <div className="p-6 space-y-6">
-                <div className="prose prose-sm max-w-none" id="post-content">
+                <div
+                  className="prose prose-sm max-w-none break-words [overflow-wrap:anywhere] [&_img]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_table]:block [&_table]:overflow-x-auto"
+                  id="post-content"
+                >
                   {post.content_type === "markdown" ? (
                     <Markdown>{displayContent || ""}</Markdown>
                   ) : (
@@ -567,7 +568,7 @@ export default function PostDrawer({
                     <Eye className="w-4 h-4 inline mr-1" />
                     {post.view_count}次浏览
                   </span>
-                  {(isAuthor || isAdmin) && (
+                  {currentUser?.id && (
                     <Button
                       variant="ghost"
                       size="sm"

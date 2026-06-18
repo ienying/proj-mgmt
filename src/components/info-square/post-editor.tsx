@@ -312,7 +312,7 @@ export default function PostEditor({
               {contentType === "markdown" ? (
                 <Markdown>{content}</Markdown>
               ) : (
-                <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: content }} />
+                <div className="prose max-w-none break-words [overflow-wrap:anywhere] [&_img]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_table]:block [&_table]:overflow-x-auto" dangerouslySetInnerHTML={{ __html: content }} />
               )}
             </div>
           ) : (
