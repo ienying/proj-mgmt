@@ -237,13 +237,38 @@ const MermaidChart = memo(function MermaidChart({ chart }: { chart: string }) {
   );
 });
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w一-鿿]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function getHeadingId(block: Block): string {
+  if (block.type === "h1" || block.type === "h2" || block.type === "h3" || block.type === "h4") {
+    return slugify(block.tokens.map((t) => t.text).join(""));
+  }
+  return "";
+}
+
+export function extractHeadings(md: string): { level: number; text: string; id: string }[] {
+  const blocks = parseBlocks(md);
+  return blocks
+    .filter((b) => b.type === "h1" || b.type === "h2" || b.type === "h3" || b.type === "h4")
+    .map((b) => ({
+      level: b.type === "h1" ? 1 : b.type === "h2" ? 2 : b.type === "h3" ? 3 : 4,
+      text: (b as { tokens: InlineToken[] }).tokens.map((t) => t.text).join(""),
+      id: getHeadingId(b),
+    }));
+}
+
 /* ---- 块级渲染 ---- */
 function RenderBlock({ block }: { block: Block }) {
   switch (block.type) {
-    case "h1": return <h1 className="text-xl font-bold text-gray-900 mt-6 mb-3 pb-1.5 border-b border-gray-200"><RenderInline tokens={block.tokens} /></h1>;
-    case "h2": return <h2 className="text-lg font-semibold text-gray-900 mt-5 mb-2"><RenderInline tokens={block.tokens} /></h2>;
-    case "h3": return <h3 className="text-base font-semibold text-gray-800 mt-4 mb-1.5"><RenderInline tokens={block.tokens} /></h3>;
-    case "h4": return <h4 className="text-sm font-semibold text-gray-700 mt-3 mb-1"><RenderInline tokens={block.tokens} /></h4>;
+    case "h1": return <h1 id={getHeadingId(block)} className="text-xl font-bold text-gray-900 mt-6 mb-3 pb-1.5 border-b border-gray-200"><RenderInline tokens={block.tokens} /></h1>;
+    case "h2": return <h2 id={getHeadingId(block)} className="text-lg font-semibold text-gray-900 mt-5 mb-2"><RenderInline tokens={block.tokens} /></h2>;
+    case "h3": return <h3 id={getHeadingId(block)} className="text-base font-semibold text-gray-800 mt-4 mb-1.5"><RenderInline tokens={block.tokens} /></h3>;
+    case "h4": return <h4 id={getHeadingId(block)} className="text-sm font-semibold text-gray-700 mt-3 mb-1"><RenderInline tokens={block.tokens} /></h4>;
     case "p": return <p className="text-sm text-gray-700 leading-relaxed my-2"><RenderInline tokens={block.tokens} /></p>;
     case "code":
       return <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 my-3 overflow-x-auto text-[13px] leading-relaxed font-mono"><code>{block.text}</code></pre>;

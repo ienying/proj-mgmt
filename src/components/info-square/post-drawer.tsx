@@ -1,0 +1,512 @@
+"use client";
+
+import React, { useEffect, useState, useCallback } from "react";
+import {
+  X, ThumbsUp, Star, MessageCircle, Send, Download, Share2,
+  FileText, User, Clock, Eye, Copy, Check
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Markdown } from "@/components/markdown";
+
+interface Attachment {
+  id: string;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  mime_type?: string;
+  file_type?: string;
+  tags?: string;
+  download_count?: number;
+}
+
+interface Comment {
+  id: string;
+  content: string;
+  author_id?: string;
+  author_name?: string;
+  user_id?: string;
+  user_name?: string;
+  created_at: string;
+}
+
+interface Version {
+  id: string;
+  version: number;
+  title: string;
+  content: string;
+  content_type: string;
+  created_at: string;
+  change_summary?: string;
+}
+
+interface Post {
+  id: string;
+  title: string;
+  content: string;
+  content_type: string;
+  version: number;
+  category_id?: string;
+  author_id?: string;
+  created_by?: string;
+  created_by_name?: string;
+  is_pinned: boolean;
+  tags?: string;
+  view_count: number;
+  like_count: number;
+  comment_count: number;
+  created_at: string;
+  share_token?: string;
+  _liked?: boolean;
+  _favorited?: boolean;
+}
+
+interface PostDrawerProps {
+  post: Post | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentUser?: { id?: string; name?: string; role?: string } | null;
+  onPostUpdated: () => void;
+  onEdit: (post: Post) => void;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + "B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + "KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + "MB";
+}
+
+function formatDate(dateStr: string): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`;
+}
+
+function extractHeadings(content: string, contentType: string): { level: number; text: string; id: string }[] {
+  if (contentType === "markdown") {
+    const re = /^(#{1,4})\s+(.+)$/gm;
+    const headings: { level: number; text: string; id: string }[] = [];
+    let m;
+    while ((m = re.exec(content)) !== null) {
+      headings.push({
+        level: m[1].length,
+        text: m[2].trim(),
+        id: "heading-" + headings.length,
+      });
+    }
+    return headings;
+  }
+  // Rich text: extract h1-h4 from HTML
+  const re = /<h([1-4])[^>]*>(.+?)<\/h\1>/gi;
+  const headings: { level: number; text: string; id: string }[] = [];
+  let m;
+  while ((m = re.exec(content)) !== null) {
+    const text = m[2].replace(/<[^>]+>/g, "").trim();
+    headings.push({
+      level: parseInt(m[1]),
+      text,
+      id: "heading-" + headings.length,
+    });
+  }
+  return headings;
+}
+
+export default function PostDrawer({
+  post,
+  open,
+  onOpenChange,
+  currentUser,
+  onPostUpdated,
+  onEdit,
+}: PostDrawerProps) {
+  const [detail, setDetail] = useState<{
+    attachments: Attachment[];
+    comments: Comment[];
+    versions: Version[];
+    _readCount: number;
+  } | null>(null);
+  const [newComment, setNewComment] = useState("");
+  const [shareUrl, setShareUrl] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [activeVersion, setActiveVersion] = useState<number>(0);
+
+  const loadDetail = useCallback(async () => {
+    if (!post) return;
+    try {
+      // Mark as read
+      fetch(`/api/knowledge/posts/${post.id}/read`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: currentUser?.id, user_name: currentUser?.name }),
+      });
+
+      const res = await fetch(`/api/knowledge/posts/${post.id}`);
+      const json = await res.json();
+      if (json.data) {
+        setDetail({
+          attachments: json.data.attachments || [],
+          comments: json.data.comments || [],
+          versions: json.data.versions || [],
+          _readCount: json.data._readCount || 0,
+        });
+        setActiveVersion(json.data.post?.version || post.version);
+      }
+
+      // Get share URL
+      const shareRes = await fetch(`/api/knowledge/posts/${post.id}/share`);
+      const shareJson = await shareRes.json();
+      if (shareJson.data?.share_url) {
+        setShareUrl(shareJson.data.share_url);
+      }
+    } catch (e) {
+      console.error("Failed to load post detail:", e);
+    }
+  }, [post, currentUser]);
+
+  useEffect(() => {
+    if (open && post) {
+      loadDetail();
+    }
+  }, [open, post, loadDetail]);
+
+  const handleLike = async () => {
+    if (!post) return;
+    try {
+      await fetch(`/api/knowledge/posts/${post.id}/like`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: currentUser?.id, user_name: currentUser?.name }),
+      });
+      onPostUpdated();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleFavorite = async () => {
+    if (!post) return;
+    try {
+      await fetch(`/api/knowledge/posts/${post.id}/favorite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: currentUser?.id, user_name: currentUser?.name }),
+      });
+      onPostUpdated();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleComment = async () => {
+    if (!newComment.trim() || !post) return;
+    try {
+      await fetch(`/api/knowledge/posts/${post.id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: newComment,
+          author_id: currentUser?.id,
+          author_name: currentUser?.name,
+        }),
+      });
+      setNewComment("");
+      loadDetail();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDownload = (att: Attachment) => {
+    window.open(
+      `/api/knowledge/download?file_path=${encodeURIComponent(att.file_path)}&post_id=${post?.id}&attachment_id=${att.id}&user_id=${currentUser?.id || ""}&user_name=${encodeURIComponent(currentUser?.name || "")}`,
+      "_blank"
+    );
+  };
+
+  const handlePreview = (att: Attachment) => {
+    window.open(
+      `/api/knowledge/download?file_path=${encodeURIComponent(att.file_path)}&preview=true`,
+      "_blank"
+    );
+  };
+
+  const handleCopyShare = async () => {
+    if (shareUrl) {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleScrollToHeading = (headingId: string) => {
+    const el = document.getElementById(headingId);
+    if (el) el.scrollIntoView({ behavior: "smooth" });
+  };
+
+  if (!post) return null;
+
+  const headings = extractHeadings(
+    activeVersion !== post.version && detail?.versions
+      ? detail.versions.find((v) => v.version === activeVersion)?.content || post.content
+      : post.content,
+    post.content_type
+  );
+
+  const displayContent = activeVersion !== post.version && detail?.versions
+    ? detail.versions.find((v) => v.version === activeVersion)?.content || post.content
+    : post.content;
+
+  const isAuthor = currentUser?.id === (post.created_by || post.author_id);
+  const isAdmin = currentUser?.role === "super_admin";
+
+  return (
+    <>
+      {/* Backdrop */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-black/20 z-40"
+          onClick={() => onOpenChange(false)}
+        />
+      )}
+
+      {/* Drawer */}
+      <div
+        className={`fixed right-0 top-0 h-full w-full max-w-2xl bg-white shadow-2xl z-50 transform transition-transform duration-300 ${
+          open ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div className="flex flex-col h-full">
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b">
+            <div className="flex-1 min-w-0">
+              <h3 className="text-lg font-semibold text-gray-900 truncate">{post.title}</h3>
+              <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
+                <span className="flex items-center gap-1">
+                  <User className="w-3 h-3" />
+                  {post.created_by_name || "匿名"}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {formatDate(post.created_at)}
+                </span>
+                <Badge variant="outline" className="text-xs">v{post.version}</Badge>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="ghost" size="sm" onClick={handleCopyShare}>
+                {copied ? <Check className="w-4 h-4 text-green-500" /> : <Share2 className="w-4 h-4" />}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* TOC Sidebar */}
+            {headings.length > 0 && (
+              <div className="w-48 shrink-0 border-r bg-gray-50 p-4 overflow-y-auto hidden md:block">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">目录</h4>
+                <nav className="space-y-1">
+                  {headings.map((h) => (
+                    <button
+                      key={h.id}
+                      onClick={() => handleScrollToHeading(h.id)}
+                      className={`block text-left text-xs w-full truncate hover:text-indigo-600 transition-colors ${
+                        h.level === 1
+                          ? "font-medium text-gray-700 pl-0"
+                          : h.level === 2
+                          ? "text-gray-600 pl-3"
+                          : "text-gray-500 pl-6"
+                      }`}
+                    >
+                      {h.text}
+                    </button>
+                  ))}
+                </nav>
+
+                {/* Version history */}
+                {detail?.versions && detail.versions.length > 1 && (
+                  <div className="mt-4 pt-4 border-t">
+                    <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">版本历史</h4>
+                    <div className="space-y-1">
+                      {detail.versions.map((v) => (
+                        <button
+                          key={v.id}
+                          onClick={() => setActiveVersion(v.version)}
+                          className={`block text-left text-xs w-full px-2 py-1 rounded ${
+                            activeVersion === v.version
+                              ? "bg-indigo-100 text-indigo-700"
+                              : "text-gray-500 hover:bg-gray-100"
+                          }`}
+                        >
+                          v{v.version} - {formatDate(v.created_at)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Main Content */}
+            <ScrollArea className="flex-1">
+              <div className="p-6 space-y-6">
+                {/* Content */}
+                <div className="prose prose-sm max-w-none" id="post-content">
+                  {post.content_type === "markdown" ? (
+                    <Markdown>{displayContent || ""}</Markdown>
+                  ) : (
+                    <div
+                      dangerouslySetInnerHTML={{
+                        __html: (displayContent || "").replace(
+                          /<h([1-4])>/g,
+                          (_, n) => `<h${n} id="heading-${n}">`
+                        ),
+                      }}
+                    />
+                  )}
+                </div>
+
+                {/* Tags */}
+                {post.tags && (
+                  <div className="flex gap-1.5 flex-wrap">
+                    {(typeof post.tags === "string"
+                      ? post.tags.split(",").filter(Boolean)
+                      : (post.tags as string[])
+                    ).map((tag, i) => (
+                      <Badge key={i} variant="outline" className="text-xs">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+
+                {/* Attachments */}
+                {detail?.attachments && detail.attachments.length > 0 && (
+                  <div className="border-t pt-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">附件</h4>
+                    <div className="space-y-2">
+                      {detail.attachments.map((att) => (
+                        <div
+                          key={att.id}
+                          className="flex items-center justify-between bg-gray-50 rounded-lg p-3"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+                            <span className="text-sm truncate">{att.file_name}</span>
+                            <span className="text-xs text-gray-400 shrink-0">
+                              {formatFileSize(att.file_size)}
+                            </span>
+                            {att.download_count !== undefined && (
+                              <span className="text-xs text-gray-400 shrink-0">
+                                <Download className="w-3 h-3 inline mr-0.5" />
+                                {att.download_count}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handlePreview(att)}
+                            >
+                              <Eye className="w-3 h-3 mr-1" /> 预览
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDownload(att)}
+                            >
+                              <Download className="w-3 h-3 mr-1" /> 下载
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="border-t pt-4 flex items-center gap-4">
+                  <Button variant="ghost" size="sm" onClick={handleLike}>
+                    <ThumbsUp
+                      className={`w-4 h-4 mr-1 ${
+                        post._liked ? "text-indigo-500 fill-indigo-500" : ""
+                      }`}
+                    />
+                    点赞 ({post.like_count})
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={handleFavorite}>
+                    <Star
+                      className={`w-4 h-4 mr-1 ${
+                        post._favorited ? "text-amber-500 fill-amber-500" : ""
+                      }`}
+                    />
+                    收藏
+                  </Button>
+                  <span className="text-sm text-gray-400">
+                    <MessageCircle className="w-4 h-4 inline mr-1" />
+                    评论 ({post.comment_count})
+                  </span>
+                  <span className="text-sm text-gray-400">
+                    <Eye className="w-4 h-4 inline mr-1" />
+                    {post.view_count}次浏览
+                  </span>
+                  {(isAuthor || isAdmin) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto"
+                      onClick={() => onEdit(post)}
+                    >
+                      编辑
+                    </Button>
+                  )}
+                </div>
+
+                {/* Comments */}
+                {detail?.comments && detail.comments.length > 0 && (
+                  <div className="border-t pt-4 space-y-3">
+                    <h4 className="text-sm font-medium text-gray-700">评论</h4>
+                    {detail.comments.map((c) => (
+                      <div key={c.id} className="bg-gray-50 rounded-lg p-3">
+                        <div className="flex items-center gap-2 text-sm mb-1">
+                          <span className="font-medium text-gray-700">
+                            {c.author_name || c.user_name || "匿名"}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {formatDate(c.created_at)}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600">{c.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* New comment */}
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="写下你的评论..."
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleComment();
+                    }}
+                  />
+                  <Button size="sm" onClick={handleComment}>
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </ScrollArea>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}

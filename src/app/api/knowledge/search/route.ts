@@ -1,27 +1,58 @@
-import { NextResponse } from 'next/server';
-import { createServerClient } from '@/storage/database/pg-client';
-
+import { NextResponse } from "next/server";
+import { createServerClient } from "@/storage/database/pg-client";
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const keyword = searchParams.get('keyword') || '';
-    const postType = searchParams.get('post_type');
+    const keyword = searchParams.get("keyword") || "";
+    const categoryId = searchParams.get("category_id");
+    const categoryType = searchParams.get("category_type");
 
     const client = await createServerClient();
-    const { data, error } = await client.rpc('dp_select', { p_table: 'design_info_square.knowledge_posts' });
+    const { data, error } = await client.rpc("dp_select", {
+      p_table: "design_info_square.knowledge_posts",
+    });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    let items = ((data as Record<string, unknown>[]) || []).filter((i) => i.is_enabled !== false);
+    let items = ((data as Record<string, unknown>[]) || []).filter(
+      (i) => i.is_deleted !== true && i.is_enabled !== false
+    );
 
-    if (postType) items = items.filter((i) => i.post_type === postType);
-    if (keyword) {
-      const kw = keyword.toLowerCase();
-      items = items.filter(
-        (i) =>
-          String(i.title || '').toLowerCase().includes(kw) ||
-          String(i.content || '').toLowerCase().includes(kw)
+    if (categoryId) items = items.filter((i) => i.category_id === categoryId);
+
+    if (categoryType) {
+      const { data: cats } = await client.rpc("dp_select", {
+        p_table: "design_info_square.knowledge_categories",
+      });
+      const catList = (cats as Record<string, unknown>[]) || [];
+      const matchingIds = new Set(
+        catList
+          .filter((c) => c.category_type === categoryType)
+          .map((c) => String(c.id))
       );
+      items = items.filter((i) => matchingIds.has(String(i.category_id || "")));
+    }
+
+    // Search across title, content, and attachment file names
+    if (keyword) {
+      const { data: attData } = await client.rpc("dp_select", {
+        p_table: "design_info_square.knowledge_attachments",
+      });
+      const allAtts = (attData as Record<string, unknown>[]) || [];
+      const kw = keyword.toLowerCase();
+
+      items = items.filter((i) => {
+        const titleMatch = String(i.title || "").toLowerCase().includes(kw);
+        const contentMatch = String(i.content || "").toLowerCase().includes(kw);
+        const postId = String(i.id);
+        const attachmentMatch = allAtts.some(
+          (a) =>
+            String(a.post_id) === postId &&
+            a.is_deleted !== true &&
+            String(a.file_name || "").toLowerCase().includes(kw)
+        );
+        return titleMatch || contentMatch || attachmentMatch;
+      });
     }
 
     items.sort((a, b) => {
@@ -30,7 +61,22 @@ export async function GET(request: Request) {
       return new Date(String(b.created_at)).getTime() - new Date(String(a.created_at)).getTime();
     });
 
-    return NextResponse.json({ data: items });
+    // Attach attachments
+    const { data: allAtts2 } = await client.rpc("dp_select", {
+      p_table: "design_info_square.knowledge_attachments",
+    });
+    const allAttachments = (allAtts2 as Record<string, unknown>[]) || [];
+    const enriched = items.map((post) => {
+      const pid = String(post.id);
+      return {
+        ...post,
+        attachments: allAttachments.filter(
+          (a) => String(a.post_id) === pid && a.is_deleted !== true
+        ),
+      };
+    });
+
+    return NextResponse.json({ data: enriched, total: enriched.length });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

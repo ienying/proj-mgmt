@@ -1168,16 +1168,18 @@ function KnowledgeCategoryPanel() {
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editIcon, setEditIcon] = useState("");
-  const [editType, setEditType] = useState("material");
+  const [editType, setEditType] = useState("tech_doc");
   const [addOpen, setAddOpen] = useState(false);
   const [addName, setAddName] = useState("");
   const [addIcon, setAddIcon] = useState("Folder");
-  const [addType, setAddType] = useState("material");
+  const [addType, setAddType] = useState("tech_doc");
 
   const typeLabels: Record<string, string> = {
-    announcement: "公告通知",
-    material: "共享资料",
-    share: "经验分享",
+    tech_doc: "技术文档",
+    product_manual: "产品手册",
+    ops_tool: "运维工具",
+    acceptance: "验收资料",
+    solution_template: "方案模板",
   };
 
   const loadCategories = async () => {
@@ -1217,7 +1219,7 @@ function KnowledgeCategoryPanel() {
         setAddOpen(false);
         setAddName("");
         setAddIcon("Folder");
-        setAddType("material");
+        setAddType("tech_doc");
         loadCategories();
         toast.success("分类已添加");
       } else {
@@ -1332,10 +1334,10 @@ function KnowledgeCategoryPanel() {
           <Plus className="h-4 w-4 mr-1" /> 新增分类
         </Button>
       </div>
-      <p className="text-sm text-gray-500">管理公告通知、共享资料、经验分享的分类标签，支持排序和启用/禁用。</p>
+      <p className="text-sm text-gray-500">管理信息广场五大分类：技术文档、产品手册、运维工具、验收资料、方案模板。</p>
 
       {/* 按类型分组展示 */}
-      {(["announcement", "material", "share"] as const).map((type) => {
+      {(["tech_doc", "product_manual", "ops_tool", "acceptance", "solution_template"] as const).map((type) => {
         const cats = categories.filter((c) => c.category_type === type);
         if (cats.length === 0) return null;
         return (
@@ -1358,9 +1360,11 @@ function KnowledgeCategoryPanel() {
                       <Select value={editType} onValueChange={setEditType}>
                         <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="announcement">公告通知</SelectItem>
-                          <SelectItem value="material">共享资料</SelectItem>
-                          <SelectItem value="share">经验分享</SelectItem>
+                          <SelectItem value="tech_doc">技术文档</SelectItem>
+                          <SelectItem value="product_manual">产品手册</SelectItem>
+                          <SelectItem value="ops_tool">运维工具</SelectItem>
+                          <SelectItem value="acceptance">验收资料</SelectItem>
+                          <SelectItem value="solution_template">方案模板</SelectItem>
                         </SelectContent>
                       </Select>
                       <Button size="sm" variant="ghost" onClick={() => handleUpdate(cat.id)} className="text-green-600 hover:text-green-700">保存</Button>
@@ -1412,9 +1416,11 @@ function KnowledgeCategoryPanel() {
               <Select value={addType} onValueChange={setAddType}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="announcement">公告通知</SelectItem>
-                  <SelectItem value="material">共享资料</SelectItem>
-                  <SelectItem value="share">经验分享</SelectItem>
+                  <SelectItem value="tech_doc">技术文档</SelectItem>
+                  <SelectItem value="product_manual">产品手册</SelectItem>
+                  <SelectItem value="ops_tool">运维工具</SelectItem>
+                  <SelectItem value="acceptance">验收资料</SelectItem>
+                  <SelectItem value="solution_template">方案模板</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1434,6 +1440,119 @@ function KnowledgeCategoryPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Attachment tag management */}
+      <AttachmentTagPanel />
+    </div>
+  );
+}
+
+// 附件标签管理子面板
+function AttachmentTagPanel() {
+  const [tags, setTags] = useState<Array<{ id: string; name: string; sort_order: number; is_enabled: boolean }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [newTagName, setNewTagName] = useState("");
+  const [editTagId, setEditTagId] = useState<string | null>(null);
+  const [editTagName, setEditTagName] = useState("");
+
+  const loadTags = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/knowledge/categories/tags");
+      const json = await res.json();
+      if (json.data) setTags(json.data);
+    } catch (e) { console.error("加载附件标签失败", e); }
+    setLoading(false);
+  };
+
+  useEffect(() => { loadTags(); }, []);
+
+  const handleAdd = async () => {
+    if (!newTagName.trim()) return;
+    try {
+      await fetch("/api/knowledge/categories/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newTagName.trim() }),
+      });
+      setNewTagName("");
+      loadTags();
+      toast.success("标签已添加");
+    } catch (e) { toast.error("添加标签失败"); }
+  };
+
+  const handleUpdate = async (id: string) => {
+    if (!editTagName.trim()) return;
+    try {
+      await fetch(`/api/knowledge/categories/tags/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editTagName.trim() }),
+      });
+      setEditTagId(null);
+      loadTags();
+      toast.success("标签已更新");
+    } catch (e) { toast.error("更新标签失败"); }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("确定删除此标签？")) return;
+    try {
+      await fetch(`/api/knowledge/categories/tags/${id}`, { method: "DELETE" });
+      loadTags();
+      toast.success("标签已删除");
+    } catch (e) { toast.error("删除标签失败"); }
+  };
+
+  if (loading) return null;
+
+  return (
+    <div className="border-t pt-6 mt-6">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-base font-semibold text-gray-800">附件标签管理</h4>
+        <div className="flex items-center gap-2">
+          <Input
+            value={newTagName}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTagName(e.target.value)}
+            placeholder="新标签名称"
+            className="h-8 w-36"
+            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") handleAdd(); }}
+          />
+          <Button size="sm" onClick={handleAdd} className="bg-indigo-600 hover:bg-indigo-700">
+            <Plus className="h-3 w-3 mr-1" /> 添加
+          </Button>
+        </div>
+      </div>
+      <p className="text-sm text-gray-500 mb-3">管理发布内容时可为附件选择的标签，用于分类和搜索。</p>
+      <div className="space-y-1">
+        {tags.map((tag) => (
+          <div key={tag.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border">
+            {editTagId === tag.id ? (
+              <>
+                <Input
+                  value={editTagName}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditTagName(e.target.value)}
+                  className="h-8 w-40"
+                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") handleUpdate(tag.id); }}
+                />
+                <Button size="sm" variant="ghost" onClick={() => handleUpdate(tag.id)} className="text-green-600">保存</Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditTagId(null)}>取消</Button>
+              </>
+            ) : (
+              <>
+                <span className="text-sm text-gray-700 flex-1">{tag.name}</span>
+                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { setEditTagId(tag.id); setEditTagName(tag.name); }}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-red-500" onClick={() => handleDelete(tag.id)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
+          </div>
+        ))}
+        {tags.length === 0 && <p className="text-sm text-gray-400 text-center py-4">暂无标签</p>}
+      </div>
     </div>
   );
 }
