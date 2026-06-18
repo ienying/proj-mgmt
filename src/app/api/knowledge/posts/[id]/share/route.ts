@@ -2,8 +2,15 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
 import { randomUUID } from "crypto";
 
+function buildShareUrl(request: Request, token: string): string {
+  const host = request.headers.get("host") || "localhost:5000";
+  const protocol = host.startsWith("localhost") || host.includes(":") ? "http" : "https";
+  const base = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
+  return `${base}/info-square/share/${token}`;
+}
+
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -20,9 +27,7 @@ export async function GET(
     if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const shareToken = post.share_token as string;
-    const shareUrl = shareToken
-      ? `${process.env.NEXT_PUBLIC_APP_URL || ""}/info-square/share/${shareToken}`
-      : null;
+    const shareUrl = shareToken ? buildShareUrl(request, shareToken) : null;
 
     return NextResponse.json({
       data: {
@@ -88,7 +93,7 @@ export async function POST(
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL || ""}/info-square/share/${shareToken}`;
+    const shareUrl = buildShareUrl(request, shareToken);
     return NextResponse.json({
       data: {
         share_token: shareToken,
