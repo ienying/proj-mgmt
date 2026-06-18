@@ -19,14 +19,6 @@ export async function GET(
     const post = (postData as Record<string, unknown>[])?.[0];
     if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    // Get attachments
-    const { data: attData } = await client.rpc("dp_select", {
-      p_table: "design_info_square.knowledge_attachments",
-    });
-    const attachments = ((attData as Record<string, unknown>[]) || []).filter(
-      (a) => String(a.post_id) === id && a.is_deleted !== true
-    );
-
     const shareToken = post.share_token as string;
     const shareUrl = shareToken
       ? `${process.env.NEXT_PUBLIC_APP_URL || ""}/info-square/share/${shareToken}`
@@ -36,7 +28,8 @@ export async function GET(
       data: {
         share_token: shareToken,
         share_url: shareUrl,
-        post: { ...post, attachments },
+        share_password: (post.share_password as string) || "",
+        has_password: !!(post.share_password as string),
       },
     });
   } catch (err) {
@@ -44,25 +37,49 @@ export async function GET(
   }
 }
 
-// POST: regenerate share token
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
+    const body = await request.json();
+    const password = (body.password as string) || "";
     const client = await createServerClient();
-    const newToken = randomUUID().replace(/-/g, "");
 
-    const { data, error } = await client.rpc("dp_update", {
+    // Get current post
+    const { data: current } = await client.rpc("dp_get_by_id", {
       p_table: "design_info_square.knowledge_posts",
       p_id: id,
-      p_data: { share_token: newToken },
+    });
+    const currentPost = (current as Record<string, unknown>[])?.[0];
+    if (!currentPost) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    // Regenerate share token when setting password for the first time
+    let shareToken = currentPost.share_token as string;
+    if (!shareToken) {
+      shareToken = randomUUID().replace(/-/g, "");
+    }
+
+    const { error } = await client.rpc("dp_update", {
+      p_table: "design_info_square.knowledge_posts",
+      p_id: id,
+      p_data: {
+        share_token: shareToken,
+        share_password: password || null,
+      },
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL || ""}/info-square/share/${newToken}`;
-    return NextResponse.json({ data: { share_token: newToken, share_url: shareUrl } });
+    const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL || ""}/info-square/share/${shareToken}`;
+    return NextResponse.json({
+      data: {
+        share_token: shareToken,
+        share_url: shareUrl,
+        has_password: !!password,
+        share_password: password,
+      },
+    });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

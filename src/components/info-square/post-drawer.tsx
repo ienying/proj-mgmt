@@ -3,13 +3,16 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   X, ThumbsUp, Star, MessageCircle, Send, Download, Share2,
-  FileText, User, Clock, Eye, Copy, Check
+  FileText, User, Clock, Eye, Copy, Check, Maximize2, Minimize2,
+  Lock, Unlock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Markdown } from "@/components/markdown";
+import { toast } from "sonner";
 
 interface Attachment {
   id: string;
@@ -98,7 +101,6 @@ function extractHeadings(content: string, contentType: string): { level: number;
     }
     return headings;
   }
-  // Rich text: extract h1-h4 from HTML
   const re = /<h([1-4])[^>]*>(.+?)<\/h\1>/gi;
   const headings: { level: number; text: string; id: string }[] = [];
   let m;
@@ -129,13 +131,16 @@ export default function PostDrawer({
   } | null>(null);
   const [newComment, setNewComment] = useState("");
   const [shareUrl, setShareUrl] = useState("");
+  const [sharePassword, setSharePassword] = useState("");
+  const [hasPassword, setHasPassword] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeVersion, setActiveVersion] = useState<number>(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const loadDetail = useCallback(async () => {
     if (!post) return;
     try {
-      // Mark as read
       fetch(`/api/knowledge/posts/${post.id}/read`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -154,11 +159,14 @@ export default function PostDrawer({
         setActiveVersion(json.data.post?.version || post.version);
       }
 
-      // Get share URL
       const shareRes = await fetch(`/api/knowledge/posts/${post.id}/share`);
       const shareJson = await shareRes.json();
       if (shareJson.data?.share_url) {
         setShareUrl(shareJson.data.share_url);
+        setHasPassword(!!shareJson.data.has_password);
+        if (shareJson.data.share_password) {
+          setSharePassword(shareJson.data.share_password);
+        }
       }
     } catch (e) {
       console.error("Failed to load post detail:", e);
@@ -232,12 +240,34 @@ export default function PostDrawer({
     );
   };
 
-  const handleCopyShare = async () => {
-    if (shareUrl) {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  const handleSetPassword = async (pwd: string) => {
+    if (!post) return;
+    try {
+      const res = await fetch(`/api/knowledge/posts/${post.id}/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pwd }),
+      });
+      const json = await res.json();
+      if (json.data) {
+        setShareUrl(json.data.share_url);
+        setSharePassword(pwd);
+        setHasPassword(!!pwd);
+        if (pwd) toast.success("分享密码已设置");
+        else toast.success("密码保护已取消");
+      }
+    } catch (e) {
+      toast.error("设置失败");
     }
+  };
+
+  const handleCopyShare = async () => {
+    if (!shareUrl) return;
+    const text = sharePassword ? `${shareUrl}\n访问密码: ${sharePassword}` : shareUrl;
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast.success(sharePassword ? "链接和密码已复制" : "链接已复制");
   };
 
   const handleScrollToHeading = (headingId: string) => {
@@ -263,23 +293,21 @@ export default function PostDrawer({
 
   return (
     <>
-      {/* Backdrop */}
       {open && (
         <div
-          className="fixed inset-0 bg-black/20 z-40"
+          className="fixed inset-0 bg-black/30 z-40 transition-opacity"
           onClick={() => onOpenChange(false)}
         />
       )}
 
-      {/* Drawer */}
       <div
-        className={`fixed right-0 top-0 h-full w-full max-w-2xl bg-white shadow-2xl z-50 transform transition-transform duration-300 ${
+        className={`fixed right-0 top-0 h-full bg-white shadow-2xl z-50 transform transition-all duration-300 ${
           open ? "translate-x-0" : "translate-x-full"
-        }`}
+        } ${isFullscreen ? "w-screen" : "w-[75vw]"}`}
       >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b">
+          <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
             <div className="flex-1 min-w-0">
               <h3 className="text-lg font-semibold text-gray-900 truncate">{post.title}</h3>
               <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
@@ -294,10 +322,79 @@ export default function PostDrawer({
                 <Badge variant="outline" className="text-xs">v{post.version}</Badge>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Button variant="ghost" size="sm" onClick={handleCopyShare}>
-                {copied ? <Check className="w-4 h-4 text-green-500" /> : <Share2 className="w-4 h-4" />}
+            <div className="flex items-center gap-1 shrink-0">
+              {/* Share button with popover */}
+              <Popover open={shareOpen} onOpenChange={setShareOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    <Share2 className="w-4 h-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-4" align="end">
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold text-gray-800">分享链接</h4>
+                    <div className="text-xs text-gray-600 bg-gray-50 rounded p-2 break-all">
+                      {shareUrl || "加载中..."}
+                    </div>
+
+                    {/* Password section */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-1 text-xs text-gray-500">
+                        {hasPassword ? (
+                          <Lock className="w-3 h-3 text-amber-500" />
+                        ) : (
+                          <Unlock className="w-3 h-3" />
+                        )}
+                        访问密码
+                        {hasPassword && <span className="text-amber-600">（已设置）</span>}
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          value={sharePassword}
+                          onChange={(e) => setSharePassword(e.target.value)}
+                          placeholder="留空则无需密码"
+                          className="h-8 text-xs"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs shrink-0"
+                          onClick={() => handleSetPassword(sharePassword)}
+                        >
+                          设置
+                        </Button>
+                      </div>
+                    </div>
+
+                    <Button size="sm" className="w-full" onClick={handleCopyShare}>
+                      {copied ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 mr-1" /> 已复制
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 mr-1" />
+                          {sharePassword ? "复制链接和密码" : "复制链接"}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Fullscreen toggle */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsFullscreen(!isFullscreen)}
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="w-4 h-4" />
+                ) : (
+                  <Maximize2 className="w-4 h-4" />
+                )}
               </Button>
+
               <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
                 <X className="w-5 h-5" />
               </Button>
@@ -328,7 +425,6 @@ export default function PostDrawer({
                   ))}
                 </nav>
 
-                {/* Version history */}
                 {detail?.versions && detail.versions.length > 1 && (
                   <div className="mt-4 pt-4 border-t">
                     <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">版本历史</h4>
@@ -355,7 +451,6 @@ export default function PostDrawer({
             {/* Main Content */}
             <ScrollArea className="flex-1">
               <div className="p-6 space-y-6">
-                {/* Content */}
                 <div className="prose prose-sm max-w-none" id="post-content">
                   {post.content_type === "markdown" ? (
                     <Markdown>{displayContent || ""}</Markdown>
@@ -371,7 +466,6 @@ export default function PostDrawer({
                   )}
                 </div>
 
-                {/* Tags */}
                 {post.tags && (
                   <div className="flex gap-1.5 flex-wrap">
                     {(typeof post.tags === "string"
@@ -385,7 +479,6 @@ export default function PostDrawer({
                   </div>
                 )}
 
-                {/* Attachments */}
                 {detail?.attachments && detail.attachments.length > 0 && (
                   <div className="border-t pt-4">
                     <h4 className="text-sm font-medium text-gray-700 mb-3">附件</h4>
@@ -409,18 +502,10 @@ export default function PostDrawer({
                             )}
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handlePreview(att)}
-                            >
+                            <Button variant="ghost" size="sm" onClick={() => handlePreview(att)}>
                               <Eye className="w-3 h-3 mr-1" /> 预览
                             </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDownload(att)}
-                            >
+                            <Button variant="outline" size="sm" onClick={() => handleDownload(att)}>
                               <Download className="w-3 h-3 mr-1" /> 下载
                             </Button>
                           </div>
@@ -430,7 +515,6 @@ export default function PostDrawer({
                   </div>
                 )}
 
-                {/* Actions */}
                 <div className="border-t pt-4 flex items-center gap-4">
                   <Button variant="ghost" size="sm" onClick={handleLike}>
                     <ThumbsUp
@@ -468,7 +552,6 @@ export default function PostDrawer({
                   )}
                 </div>
 
-                {/* Comments */}
                 {detail?.comments && detail.comments.length > 0 && (
                   <div className="border-t pt-4 space-y-3">
                     <h4 className="text-sm font-medium text-gray-700">评论</h4>
@@ -488,7 +571,6 @@ export default function PostDrawer({
                   </div>
                 )}
 
-                {/* New comment */}
                 <div className="flex gap-2">
                   <Input
                     placeholder="写下你的评论..."

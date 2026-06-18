@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { FileText, Download, Eye, Clock, User } from "lucide-react";
+import { FileText, Download, Eye, Clock, User, Lock, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Markdown } from "@/components/markdown";
 
 interface Attachment {
@@ -41,17 +42,38 @@ export default function ShareView({ token }: { token: string }) {
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [needPassword, setNeedPassword] = useState(false);
+  const [password, setPassword] = useState("");
+  const [pwError, setPwError] = useState("");
+  const [pwChecking, setPwChecking] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
-        // Find post by share_token
         const res = await fetch(`/api/knowledge/posts?keyword=&page_size=999`);
         const json = await res.json();
         if (json.data) {
           const found = json.data.find((p: Record<string, unknown>) => p.share_token === token);
           if (found) {
-            // Get full post detail
+            // Check if password protected
+            if (found.share_password) {
+              setNeedPassword(true);
+              setLoading(false);
+              // Store found post data for later use
+              setPost({
+                id: found.id as string,
+                title: found.title as string,
+                content: "",
+                content_type: (found.content_type as string) || "rich_text",
+                version: (found.version as number) || 1,
+                created_by_name: found.created_by_name as string,
+                created_at: found.created_at as string,
+                attachments: [],
+              });
+              return;
+            }
+
+            // No password — load full detail
             const detailRes = await fetch(`/api/knowledge/posts/${found.id}`);
             const detailJson = await detailRes.json();
             if (detailJson.data) {
@@ -77,6 +99,45 @@ export default function ShareView({ token }: { token: string }) {
     })();
   }, [token]);
 
+  const handlePasswordSubmit = async () => {
+    if (!password.trim() || !post) return;
+    setPwChecking(true);
+    setPwError("");
+
+    try {
+      const res = await fetch(`/api/knowledge/posts/${post.id}/verify-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const json = await res.json();
+
+      if (json.verified) {
+        // Load full post detail
+        const detailRes = await fetch(`/api/knowledge/posts/${post.id}`);
+        const detailJson = await detailRes.json();
+        if (detailJson.data) {
+          setPost((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  content: (detailJson.data.post as Record<string, unknown>).content as string,
+                  attachments: (detailJson.data.attachments || []) as Attachment[],
+                }
+              : prev
+          );
+          setNeedPassword(false);
+          setPassword("");
+        }
+      } else {
+        setPwError("密码错误，请重试");
+      }
+    } catch {
+      setPwError("验证失败，请重试");
+    }
+    setPwChecking(false);
+  };
+
   const handleDownload = (att: Attachment) => {
     window.open(
       `/api/knowledge/download?file_path=${encodeURIComponent(att.file_path)}&post_id=${post?.id}&attachment_id=${att.id}`,
@@ -92,21 +153,58 @@ export default function ShareView({ token }: { token: string }) {
     );
   }
 
-  if (error || !post) {
+  if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <FileText className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-          <p className="text-gray-500">{error || "内容未找到"}</p>
+          <p className="text-gray-500">{error}</p>
         </div>
       </div>
     );
   }
 
+  // Password gate
+  if (needPassword && post) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 w-full max-w-md mx-4">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Lock className="w-8 h-8 text-amber-600" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-1">{post.title}</h2>
+            <p className="text-sm text-gray-500">此内容已设置访问密码</p>
+          </div>
+          <div className="space-y-3">
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="请输入访问密码"
+              onKeyDown={(e) => { if (e.key === "Enter") handlePasswordSubmit(); }}
+              className="h-11"
+            />
+            {pwError && <p className="text-xs text-red-500">{pwError}</p>}
+            <Button
+              className="w-full h-11"
+              onClick={handlePasswordSubmit}
+              disabled={!password.trim() || pwChecking}
+            >
+              {pwChecking ? "验证中..." : "验证访问"}
+              {!pwChecking && <ArrowRight className="w-4 h-4 ml-1" />}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!post) return null;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Header */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-3">{post.title}</h1>
           <div className="flex items-center gap-4 text-sm text-gray-500">
@@ -122,7 +220,6 @@ export default function ShareView({ token }: { token: string }) {
           </div>
         </div>
 
-        {/* Content */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
           {post.content_type === "markdown" ? (
             <Markdown>{post.content || ""}</Markdown>
@@ -134,7 +231,6 @@ export default function ShareView({ token }: { token: string }) {
           )}
         </div>
 
-        {/* Attachments */}
         {post.attachments && post.attachments.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">附件</h3>
