@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Progress } from "@/components/ui/progress";
 import { Markdown } from "@/components/markdown";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
@@ -85,7 +86,7 @@ export default function PostEditor({
   const [categories, setCategories] = useState<Category[]>([]);
   const [allTags, setAllTags] = useState<TagDef[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<Attachment[]>([]);
-  const [uploading, setUploading] = useState(false);
+  const [activeUploads, setActiveUploads] = useState<{ fileName: string; progress: number }[]>([]);
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
@@ -139,29 +140,66 @@ export default function PostEditor({
     }
   }, [open, editPost, categoryId]);
 
+  const uploadSingleFile = (file: File): Promise<Attachment | null> => {
+    return new Promise((resolve) => {
+      const xhr = new XMLHttpRequest();
+      const formData = new FormData();
+      formData.append("files", file);
+      formData.append("category_type", categoryType || "tech_doc");
+
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          setActiveUploads((prev) =>
+            prev.map((u) => (u.fileName === file.name ? { ...u, progress: pct } : u))
+          );
+        }
+      });
+
+      xhr.addEventListener("load", () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const json = JSON.parse(xhr.responseText);
+            if (json.data) {
+              const result = Array.isArray(json.data) ? json.data[0] : json.data;
+              setActiveUploads((prev) => prev.filter((u) => u.fileName !== file.name));
+              setUploadedFiles((prev) => [...prev, result]);
+              resolve(result);
+              return;
+            }
+          } catch {}
+        }
+        toast.error(`${file.name} 上传失败`);
+        setActiveUploads((prev) => prev.filter((u) => u.fileName !== file.name));
+        resolve(null);
+      });
+
+      xhr.addEventListener("error", () => {
+        toast.error(`${file.name} 上传失败`);
+        setActiveUploads((prev) => prev.filter((u) => u.fileName !== file.name));
+        resolve(null);
+      });
+
+      xhr.open("POST", "/api/knowledge/upload");
+      xhr.send(formData);
+    });
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    setUploading(true);
-    const formData = new FormData();
-    Array.from(files).forEach((f) => formData.append("files", f));
-    formData.append("category_type", categoryType || "tech_doc");
+    const fileList = Array.from(files);
+    setActiveUploads((prev) => [
+      ...prev,
+      ...fileList.map((f) => ({ fileName: f.name, progress: 0 })),
+    ]);
 
-    try {
-      const res = await fetch("/api/knowledge/upload", {
-        method: "POST",
-        body: formData,
-      });
-      const json = await res.json();
-      if (json.data) {
-        const newFiles = Array.isArray(json.data) ? json.data : [json.data];
-        setUploadedFiles((prev) => [...prev, ...newFiles]);
-      }
-    } catch (e) {
-      console.error("Upload failed:", e);
+    // Upload sequentially to avoid overwhelming the server
+    for (const file of fileList) {
+      await uploadSingleFile(file);
     }
-    setUploading(false);
+
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -417,7 +455,7 @@ export default function PostEditor({
             >
               <Upload className="w-5 h-5 mx-auto text-gray-300 mb-1" />
               <p className="text-xs text-gray-500">
-                {uploading ? "上传中..." : "点击上传文件"}
+                {activeUploads.length > 0 ? "上传中..." : "点击上传文件"}
               </p>
               <p className="text-xs text-gray-400">文档、表格、图片、视频、压缩包</p>
               <input
@@ -429,6 +467,24 @@ export default function PostEditor({
                 accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,.zip,.rar,.7z,.tar,.gz,.mp4,.webm,.mov,.avi,.mkv,.jpg,.jpeg,.png,.gif,.webp"
               />
             </div>
+
+            {/* Active uploads with progress */}
+            {activeUploads.length > 0 && (
+              <div className="mt-2 space-y-2">
+                {activeUploads.map((u) => (
+                  <div key={u.fileName} className="bg-indigo-50 rounded border border-indigo-100 p-2 text-xs space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="truncate flex-1 flex items-center gap-1 text-indigo-700">
+                        <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                        {u.fileName}
+                      </span>
+                      <span className="text-indigo-500 shrink-0 ml-2">{u.progress}%</span>
+                    </div>
+                    <Progress value={u.progress} className="h-1.5" />
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Uploaded files list */}
             {uploadedFiles.length > 0 && (
