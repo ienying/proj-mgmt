@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Markdown } from "@/components/markdown";
 import { toast } from "sonner";
 
@@ -328,7 +329,25 @@ export default function PostDrawer({
                   <Clock className="w-3 h-3" />
                   {formatDate(post.created_at)}
                 </span>
-                <Badge variant="outline" className="text-xs">v{post.version}</Badge>
+                {detail?.versions && detail.versions.length > 1 ? (
+                  <Select
+                    value={String(activeVersion || post.version)}
+                    onValueChange={(v) => setActiveVersion(Number(v))}
+                  >
+                    <SelectTrigger className="h-5 px-1.5 py-0 text-[10px] w-auto gap-0.5 border-0 bg-gray-100 rounded-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {detail.versions.map((v) => (
+                        <SelectItem key={v.id} value={String(v.version)}>
+                          v{v.version}{v.version === post.version ? " (最新)" : ""} - {formatDate(v.created_at)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Badge variant="outline" className="text-xs">v{post.version}</Badge>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
@@ -475,9 +494,9 @@ export default function PostDrawer({
 
             {/* Main Content */}
             <ScrollArea className="flex-1 min-w-0">
-              <div className="p-6 space-y-6">
+              <div className="p-6 space-y-6 max-w-full overflow-x-hidden">
                 <div
-                  className="prose prose-sm max-w-none break-words min-w-0 [&_*]:max-w-full [&_img]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_table]:block [&_table]:overflow-x-auto"
+                  className="prose prose-sm max-w-none [overflow-wrap:break-word] [&_img]:max-w-full [&_img]:h-auto [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_iframe]:max-w-full [&_video]:max-w-full"
                   id="post-content"
                 >
                   {post.content_type === "markdown" ? (
