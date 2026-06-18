@@ -450,14 +450,14 @@ export default function PostEditor({
                       </button>
                     </div>
                     <Select
-                      value={file.tags || ""}
-                      onValueChange={(v) => handleUpdateFileTags(i, v)}
+                      value={file.tags || "__none__"}
+                      onValueChange={(v) => handleUpdateFileTags(i, v === "__none__" ? "" : v)}
                     >
                       <SelectTrigger className="h-6 text-xs">
                         <SelectValue placeholder="选择标签" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">无标签</SelectItem>
+                        <SelectItem value="__none__">无标签</SelectItem>
                         {allTags.map((tag) => (
                           <SelectItem key={tag.id} value={tag.name}>
                             {tag.name}
