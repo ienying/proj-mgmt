@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const knowledgeResult = await supabase.rpc("dp_select", { p_table: "design_info_square.knowledge_reads" });
 
     // 计算工单角标
-    const issues: any[] = issueResult.data || [];
+    const issues = (issueResult.data || []) as any[];
     const issueCount = issues.filter(
       (i: any) => i.handler_id === userId && (i.status === "pending" || i.status === "accepted" || i.status === "processing")
     ).length;
@@ -23,8 +23,8 @@ export async function GET(request: Request) {
     // 计算信息广场未读角标
     // 先查所有帖子，再减去已读
     const knowledgePostsResult = await supabase.rpc("dp_select", { p_table: "design_info_square.knowledge_posts" });
-    const posts: any[] = knowledgePostsResult.data || [];
-    const reads: any[] = knowledgeResult.data || [];
+    const posts = (knowledgePostsResult.data || []) as any[];
+    const reads = (knowledgeResult.data || []) as any[];
     const readPostIds = new Set(
       reads.filter((r: any) => r.user_id === userId).map((r: any) => r.post_id)
     );

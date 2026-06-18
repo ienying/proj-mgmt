@@ -443,12 +443,17 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      
+
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "创建失败");
+        const text = await res.text();
+        let errMsg = text;
+        try {
+          const errorData = JSON.parse(text);
+          errMsg = errorData.error || "创建失败";
+        } catch {}
+        throw new Error(errMsg);
       }
-      
+
       const result = await res.json();
       setStandards((prev) => [...prev, result.data]);
       toast.success("数据表创建成功");
@@ -464,12 +469,17 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, ...data }),
       });
-      
+
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "更新失败");
+        const text = await res.text();
+        let errMsg = text;
+        try {
+          const errorData = JSON.parse(text);
+          errMsg = errorData.error || "更新失败";
+        } catch {}
+        throw new Error(errMsg);
       }
-      
+
       setStandards((prev) =>
         prev.map((s) => (s.id === id ? { ...s, ...data } : s))
       );

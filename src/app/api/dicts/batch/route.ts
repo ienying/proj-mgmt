@@ -45,7 +45,7 @@ export async function GET(request: Request) {
         return;
       }
 
-      let result = data || [];
+      let result: unknown[] = (data as any[]) || [];
 
       // 产品模块关联类别名称
       if (type === "product_module_types" && Array.isArray(result)) {
@@ -58,7 +58,7 @@ export async function GET(request: Request) {
             categoriesMap[cat.id as string] = cat.name as string;
           });
         }
-        result = result.map((item: Record<string, unknown>) => ({
+        result = (result as Record<string, unknown>[]).map((item: Record<string, unknown>) => ({
           ...item,
           category_name: item.category
             ? categoriesMap[item.category as string] || "-"

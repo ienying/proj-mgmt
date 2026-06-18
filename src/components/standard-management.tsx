@@ -147,6 +147,7 @@ const COLUMN_TYPES = [
   { code: "archive", name: "压缩包" },
   { code: "video", name: "视频" },
   { code: "procurement_record", name: "采购模块记录" },
+  { code: "user", name: "用户" },
 ];
 
 interface StandardManagementProps {
@@ -538,6 +539,144 @@ function ProductModuleField({
   );
 }
 
+// 用户下拉选择字段组件（用于规范管理数据编辑）
+function UserField({
+  col,
+  value,
+  onChange,
+  users,
+  disabled,
+}: {
+  col: { name: string; multiple?: boolean; type?: string; display_mode?: string; options?: string[]; required?: boolean; description?: string; readonly?: boolean; label?: string };
+  value: string;
+  onChange: (val: string) => void;
+  users: Array<{ id: string; name: string; username: string }>;
+  disabled?: boolean;
+}) {
+  const [search, setSearch] = useState("");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const isMultiple = !!col.multiple;
+  const selectedIds = isMultiple ? value.split(",").filter(Boolean) : value ? [value] : [];
+  const filtered = users.filter((u) => {
+    const s = search.toLowerCase();
+    return u.name.toLowerCase().includes(s) || u.username.toLowerCase().includes(s);
+  });
+
+  const getUserDisplay = (id: string) => {
+    const u = users.find((u) => u.id === id);
+    return u ? `${u.name} (${u.username})` : id;
+  };
+
+  // 点击外部关闭
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [dropdownOpen]);
+
+  if (disabled) {
+    return (
+      <div className="w-full min-h-[36px] rounded-md border px-3 py-1 text-sm bg-muted cursor-not-allowed">
+        {selectedIds.length > 0 ? (
+          <span className="flex flex-wrap gap-1">
+            {selectedIds.map((id) => (
+              <span key={id} className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">{getUserDisplay(id)}</span>
+            ))}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={dropdownRef} className="relative w-full">
+      <button
+        type="button"
+        className="w-full min-h-[36px] rounded-md border px-3 py-1 text-left text-sm cursor-pointer hover:border-primary flex items-center justify-between"
+        onClick={() => setDropdownOpen(!dropdownOpen)}
+      >
+        <span className="flex flex-wrap gap-1">
+          {selectedIds.length > 0 ? (
+            selectedIds.map((id) => (
+              <span key={id} className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">{getUserDisplay(id)}</span>
+            ))
+          ) : (
+            <span className="text-muted-foreground">选择用户...</span>
+          )}
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+      </button>
+      {dropdownOpen && (
+        <div className="absolute z-[9999] top-full left-0 mt-1 w-72 rounded-md border bg-popover shadow-lg">
+          <div className="p-2 border-b">
+            <Input
+              placeholder="搜索用户..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8 text-sm"
+              autoFocus
+            />
+          </div>
+          <div className="max-h-48 overflow-y-auto px-1 pb-1">
+            {filtered.length === 0 ? (
+              <div className="px-2 py-4 text-center text-xs text-muted-foreground">无匹配用户</div>
+            ) : (
+              filtered.map((user) => {
+                const isSelected = selectedIds.includes(user.id);
+                return (
+                  <button
+                    key={user.id}
+                    type="button"
+                    className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent ${isSelected ? "bg-accent/50" : ""}`}
+                    onClick={() => {
+                      if (isMultiple) {
+                        const newIds = isSelected
+                          ? selectedIds.filter((id) => id !== user.id)
+                          : [...selectedIds, user.id];
+                        onChange(newIds.join(","));
+                      } else {
+                        onChange(user.id);
+                        setDropdownOpen(false);
+                        setSearch("");
+                      }
+                    }}
+                  >
+                    {isMultiple && <Checkbox checked={isSelected} />}
+                    <div className="flex flex-col items-start">
+                      <span>{user.name}</span>
+                      <span className="text-[10px] text-muted-foreground">{user.username}</span>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+          {isMultiple && selectedIds.length > 0 && (
+            <div className="border-t p-1">
+              <button
+                type="button"
+                className="w-full rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+                onClick={() => onChange("")}
+              >
+                清除选择
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function StandardManagement({
   definitions,
   projectTypes,
@@ -597,6 +736,25 @@ export function StandardManagement({
       } catch { /* ignore */ }
     };
     fetchModuleNames();
+  }, []);
+  const [userList, setUserList] = useState<Array<{ id: string; name: string; username: string }>>([]);
+
+  // 加载系统用户列表
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch("/api/users");
+        const json = await res.json();
+        if (json.data && Array.isArray(json.data)) {
+          setUserList(json.data.map((item: Record<string, unknown>) => ({
+            id: String(item.id),
+            name: String(item.name || ""),
+            username: String(item.username || ""),
+          })));
+        }
+      } catch { /* ignore */ }
+    };
+    fetchUsers();
   }, []);
   const [editingRecord, setEditingRecord] = useState<Record<string, unknown> | null>(null);
   const [recordFormData, setRecordFormData] = useState<Record<string, unknown>>({});
@@ -986,6 +1144,7 @@ export function StandardManagement({
         "压缩包": "archive", "archive": "archive",
         "视频": "video", "video": "video",
         "采购模块记录": "procurement_record", "procurement_record": "procurement_record",
+        "用户": "user", "user": "user",
       };
 
       const imported: ColumnConfig[] = jsonData.map((row) => {
@@ -1835,6 +1994,37 @@ export function StandardManagement({
                                     </TableCell>
                                   </TableRow>
                                 )}
+                                {(col.type as string) === 'user' && (
+                                  <TableRow>
+                                    <TableCell colSpan={5} className="py-2 px-3 bg-muted/30">
+                                      <div className="flex items-center gap-6">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs text-muted-foreground shrink-0">选择方式:</span>
+                                          <div className="flex gap-1">
+                                            <Button
+                                              type="button"
+                                              variant={!col.multiple ? "default" : "outline"}
+                                              size="sm"
+                                              className="h-6 text-xs px-2"
+                                              onClick={() => updateColumn(index, "multiple", false)}
+                                            >
+                                              单选
+                                            </Button>
+                                            <Button
+                                              type="button"
+                                              variant={col.multiple ? "default" : "outline"}
+                                              size="sm"
+                                              className="h-6 text-xs px-2"
+                                              onClick={() => updateColumn(index, "multiple", true)}
+                                            >
+                                              多选
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
                                 </Fragment>
                               ))}
                             </TableBody>
@@ -2267,6 +2457,16 @@ export function StandardManagement({
                         <TableCell key={col.name}>
                           {col.type === "boolean"
                             ? (record[col.name] ? "是" : "否")
+                            : (col.type as string) === "user"
+                            ? (() => {
+                                const raw = String(record[col.name] ?? "");
+                                if (!raw) return "-";
+                                const ids = raw.split(",").filter(Boolean);
+                                return ids.map((id) => {
+                                  const u = userList.find((u) => u.id === id);
+                                  return u ? u.name : id;
+                                }).join(", ") || "-";
+                              })()
                             : ["office", "pdf", "md", "image", "archive"].includes(col.type as string)
                             ? renderFileCellDisplay(String(record[col.name] ?? ""), col.type as string)
                             : String(record[col.name] ?? "-")}
@@ -2449,6 +2649,14 @@ export function StandardManagement({
                         value={String(recordFormData[col.name] || "")}
                         onChange={(val) => setRecordFormData((prev) => ({ ...prev, [col.name]: val }))}
                         moduleNames={productModuleNames}
+                        disabled={isReadonly}
+                      />
+                  ) : (col.type as string) === "user" ? (
+                      <UserField
+                        col={col}
+                        value={String(recordFormData[col.name] || "")}
+                        onChange={(val) => setRecordFormData((prev) => ({ ...prev, [col.name]: val }))}
+                        users={userList}
                         disabled={isReadonly}
                       />
                   ) : ["office", "pdf", "md", "image", "archive"].includes(col.type as string) ? (
