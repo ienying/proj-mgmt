@@ -9,7 +9,7 @@ const ALLOWED_EXTENSIONS = [
   ".mp4", ".webm", ".mov", ".avi", ".mkv",
 ];
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 
 export async function POST(request: Request) {
   try {

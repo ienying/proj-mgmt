@@ -21,6 +21,7 @@ app.prepare().then(() => {
       res.end('Internal server error');
     }
   });
+  server.timeout = 10 * 60 * 1000; // 10min upload timeout
   server.once('error', err => {
     console.error(err);
     process.exit(1);

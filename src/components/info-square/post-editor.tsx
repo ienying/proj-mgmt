@@ -169,13 +169,19 @@ export default function PostEditor({
             }
           } catch {}
         }
-        toast.error(`${file.name} 上传失败`);
+        // Extract server error message
+        let errMsg = `${file.name} 上传失败`;
+        try {
+          const json = JSON.parse(xhr.responseText);
+          if (json.error) errMsg = json.error;
+        } catch {}
+        toast.error(errMsg);
         setActiveUploads((prev) => prev.filter((u) => u.fileName !== file.name));
         resolve(null);
       });
 
       xhr.addEventListener("error", () => {
-        toast.error(`${file.name} 上传失败`);
+        toast.error(`${file.name} 网络错误，请重试`);
         setActiveUploads((prev) => prev.filter((u) => u.fileName !== file.name));
         resolve(null);
       });
