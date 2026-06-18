@@ -15,15 +15,20 @@ export function ChunkErrorHandler() {
   useEffect(() => {
     let hasReloaded = false;
 
+    let lastReloadTime = 0;
+    const RELOAD_COOLDOWN = 10000; // 10s cooldown between reloads
+
     const tryReload = () => {
       if (hasReloaded) return;
+      const now = Date.now();
+      if (now - lastReloadTime < RELOAD_COOLDOWN) return;
+      lastReloadTime = now;
       hasReloaded = true;
       console.warn('[ChunkErrorHandler] 检测到 chunk 加载失败，正在自动刷新页面...');
-      // 使用 replace 避免用户按后退键回到损坏的页面
       window.location.replace(window.location.href);
     };
 
-    // 匹配 chunk 加载失败的错误消息
+    // 仅匹配 Next.js / Turbopack 的 chunk 加载失败错误
     const isChunkError = (msg: string): boolean => {
       if (!msg) return false;
       const lower = msg.toLowerCase();
@@ -31,9 +36,7 @@ export function ChunkErrorHandler() {
         lower.includes('chunkloaderror') ||
         lower.includes('loading chunk') ||
         lower.includes('failed to load chunk') ||
-        lower.includes('loading css chunk') ||
-        lower.includes('dynamically imported module') ||
-        (lower.includes('import') && lower.includes('failed'))
+        lower.includes('loading css chunk')
       );
     };
 

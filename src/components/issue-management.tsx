@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
-const RichTextEditor = dynamic(() => import("./rich-text-editor"), { ssr: false });
+const RichTextEditor = dynamic(() => import("@/components/rich-text-editor"), { ssr: false });
 import {
   Plus, Search, Filter, FileText, AlertTriangle, CheckCircle2,
   Clock, XCircle, Archive, Send, Eye, Bell, BarChart3,

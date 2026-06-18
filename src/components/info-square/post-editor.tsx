@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { X, Upload, FileText, Plus, Eye, EyeOff, Save } from "lucide-react";
+import { X, Upload, FileText, Plus, Eye, EyeOff, Save, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Markdown } from "@/components/markdown";
 import dynamic from "next/dynamic";
 
-const RichTextEditor = dynamic(() => import("@/components/rich-text-editor"), { ssr: false });
+const RichTextEditor = dynamic(() => import("@/components/rich-text-editor"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-40 border border-gray-200 rounded-lg text-gray-400 text-sm">
+      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+      编辑器加载中...
+    </div>
+  ),
+});
 
 interface Category {
   id: string;
