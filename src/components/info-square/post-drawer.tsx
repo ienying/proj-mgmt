@@ -255,19 +255,29 @@ export default function PostDrawer({
         setHasPassword(!!pwd);
         if (pwd) toast.success("分享密码已设置");
         else toast.success("密码保护已取消");
+      } else {
+        toast.error(json.error || "设置失败，请重试");
       }
     } catch (e) {
-      toast.error("设置失败");
+      toast.error("网络错误，请重试");
     }
   };
 
   const handleCopyShare = async () => {
-    if (!shareUrl) return;
+    if (!shareUrl) {
+      toast.error("请先生成分享链接");
+      return;
+    }
     const text = sharePassword ? `${shareUrl}\n访问密码: ${sharePassword}` : shareUrl;
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    toast.success(sharePassword ? "链接和密码已复制" : "链接已复制");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast.success(sharePassword ? "链接和密码已复制" : "链接已复制");
+    } catch {
+      // Fallback for insecure context
+      toast.error("复制失败，请手动复制");
+    }
   };
 
   const handleScrollToHeading = (headingId: string) => {

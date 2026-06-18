@@ -61,7 +61,7 @@ export async function POST(
       shareToken = randomUUID().replace(/-/g, "");
     }
 
-    const { error } = await client.rpc("dp_update", {
+    let { error } = await client.rpc("dp_update", {
       p_table: "design_info_square.knowledge_posts",
       p_id: id,
       p_data: {
@@ -69,6 +69,23 @@ export async function POST(
         share_password: password || null,
       },
     });
+
+    // If column doesn't exist, create it and retry
+    if (error && error.message?.includes("share_password")) {
+      await client.rpc("execute_sql", {
+        p_sql: "ALTER TABLE design_info_square.knowledge_posts ADD COLUMN IF NOT EXISTS share_password VARCHAR(100)",
+      });
+      const retry = await client.rpc("dp_update", {
+        p_table: "design_info_square.knowledge_posts",
+        p_id: id,
+        p_data: {
+          share_token: shareToken,
+          share_password: password || null,
+        },
+      });
+      error = retry.error;
+    }
+
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL || ""}/info-square/share/${shareToken}`;
