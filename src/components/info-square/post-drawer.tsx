@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   X, ThumbsUp, Star, MessageCircle, Send, Download, Share2,
   FileText, User, Clock, Eye, Copy, Check, Maximize2, Minimize2,
-  Lock, Unlock
+  Lock, Unlock, ChevronDown, ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -137,6 +137,7 @@ export default function PostDrawer({
   const [activeVersion, setActiveVersion] = useState<number>(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [tocCollapsed, setTocCollapsed] = useState(false);
 
   const loadDetail = useCallback(async () => {
     if (!post) return;
@@ -415,44 +416,60 @@ export default function PostDrawer({
           <div className="flex-1 flex overflow-hidden">
             {/* TOC Sidebar */}
             {headings.length > 0 && (
-              <div className="w-48 shrink-0 border-r bg-gray-50 p-4 overflow-y-auto hidden md:block">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">目录</h4>
-                <nav className="space-y-1">
-                  {headings.map((h) => (
-                    <button
-                      key={h.id}
-                      onClick={() => handleScrollToHeading(h.id)}
-                      className={`block text-left text-xs w-full truncate hover:text-indigo-600 transition-colors ${
-                        h.level === 1
-                          ? "font-medium text-gray-700 pl-0"
-                          : h.level === 2
-                          ? "text-gray-600 pl-3"
-                          : "text-gray-500 pl-6"
-                      }`}
-                    >
-                      {h.text}
-                    </button>
-                  ))}
-                </nav>
-
-                {detail?.versions && detail.versions.length > 1 && (
-                  <div className="mt-4 pt-4 border-t">
-                    <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">版本历史</h4>
-                    <div className="space-y-1">
-                      {detail.versions.map((v) => (
+              <div className={`${tocCollapsed ? "w-10" : "w-48"} shrink-0 border-r bg-gray-50 overflow-y-auto hidden md:block transition-all duration-200`}>
+                <button
+                  onClick={() => setTocCollapsed(!tocCollapsed)}
+                  className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-500 uppercase hover:bg-gray-100"
+                >
+                  {tocCollapsed ? (
+                    <ChevronRight className="w-3.5 h-3.5 mx-auto" />
+                  ) : (
+                    <>
+                      <span>目录</span>
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </>
+                  )}
+                </button>
+                {!tocCollapsed && (
+                  <div className="px-3 pb-3">
+                    <nav className="space-y-1">
+                      {headings.map((h) => (
                         <button
-                          key={v.id}
-                          onClick={() => setActiveVersion(v.version)}
-                          className={`block text-left text-xs w-full px-2 py-1 rounded ${
-                            activeVersion === v.version
-                              ? "bg-indigo-100 text-indigo-700"
-                              : "text-gray-500 hover:bg-gray-100"
+                          key={h.id}
+                          onClick={() => handleScrollToHeading(h.id)}
+                          className={`block text-left text-xs w-full truncate hover:text-indigo-600 transition-colors ${
+                            h.level === 1
+                              ? "font-medium text-gray-700 pl-0"
+                              : h.level === 2
+                              ? "text-gray-600 pl-3"
+                              : "text-gray-500 pl-6"
                           }`}
                         >
-                          v{v.version} - {formatDate(v.created_at)}
+                          {h.text}
                         </button>
                       ))}
-                    </div>
+                    </nav>
+
+                    {detail?.versions && detail.versions.length > 1 && (
+                      <div className="mt-4 pt-4 border-t">
+                        <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">版本历史</h4>
+                        <div className="space-y-1">
+                          {detail.versions.map((v) => (
+                            <button
+                              key={v.id}
+                              onClick={() => setActiveVersion(v.version)}
+                              className={`block text-left text-xs w-full px-2 py-1 rounded ${
+                                activeVersion === v.version
+                                  ? "bg-indigo-100 text-indigo-700"
+                                  : "text-gray-500 hover:bg-gray-100"
+                              }`}
+                            >
+                              v{v.version} - {formatDate(v.created_at)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -30,7 +30,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       p_table: 'design_info_square.knowledge_posts',
       p_id: id,
     });
-    const post = (postData as Record<string, unknown>[])?.[0];
+    const post = postData as Record<string, unknown> | null;
     if (post) {
       await client.rpc('dp_update', {
         p_table: 'design_info_square.knowledge_posts',

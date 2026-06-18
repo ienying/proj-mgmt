@@ -16,7 +16,7 @@ export async function GET(
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const post = (postData as Record<string, unknown>[])?.[0];
+    const post = postData as Record<string, unknown> | null;
     if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     // Get attachments
@@ -98,7 +98,7 @@ export async function PUT(
       p_table: "design_info_square.knowledge_posts",
       p_id: id,
     });
-    const currentPost = (current as Record<string, unknown>[])?.[0];
+    const currentPost = current as Record<string, unknown> | null;
     if (!currentPost) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const oldVersion = (currentPost.version as number) || 1;
@@ -182,7 +182,7 @@ export async function PUT(
       }
     }
 
-    return NextResponse.json({ data: { ...((data as Record<string, unknown>[])?.[0] || data), version: newVersion } });
+    return NextResponse.json({ data: { ...(data as Record<string, unknown>), version: newVersion } });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
@@ -206,7 +206,7 @@ export async function DELETE(
       p_table: "design_info_square.knowledge_posts",
       p_id: id,
     });
-    const post = (postData as Record<string, unknown>[])?.[0];
+    const post = postData as Record<string, unknown> | null;
     if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     if (hard) {

@@ -16,7 +16,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
 
     const post = await client.rpc('dp_get_by_id', { p_table: 'design_info_square.knowledge_posts', p_id: id });
-    const postData = (post.data as Record<string, unknown>[])?.[0];
+    const postData = post.data as Record<string, unknown> | null;
     const currentCount = (postData?.like_count as number) || 0;
 
     if (existing) {

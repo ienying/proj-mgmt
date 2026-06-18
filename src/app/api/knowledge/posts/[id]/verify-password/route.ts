@@ -17,7 +17,7 @@ export async function POST(
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const post = (postData as Record<string, unknown>[])?.[0];
+    const post = postData as Record<string, unknown> | null;
     if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const storedPassword = (post.share_password as string) || "";

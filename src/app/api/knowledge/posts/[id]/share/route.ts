@@ -16,7 +16,7 @@ export async function GET(
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const post = (postData as Record<string, unknown>[])?.[0];
+    const post = postData as Record<string, unknown> | null;
     if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const shareToken = post.share_token as string;
@@ -52,7 +52,7 @@ export async function POST(
       p_table: "design_info_square.knowledge_posts",
       p_id: id,
     });
-    const currentPost = (current as Record<string, unknown>[])?.[0];
+    const currentPost = current as Record<string, unknown> | null;
     if (!currentPost) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     // Regenerate share token when setting password for the first time
