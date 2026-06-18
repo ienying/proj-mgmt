@@ -474,10 +474,10 @@ export default function PostDrawer({
             )}
 
             {/* Main Content */}
-            <ScrollArea className="flex-1">
+            <ScrollArea className="flex-1 min-w-0">
               <div className="p-6 space-y-6">
                 <div
-                  className="prose prose-sm max-w-none break-words [overflow-wrap:anywhere] [&_img]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_table]:block [&_table]:overflow-x-auto"
+                  className="prose prose-sm max-w-none break-words min-w-0 [&_*]:max-w-full [&_img]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_table]:block [&_table]:overflow-x-auto"
                   id="post-content"
                 >
                   {post.content_type === "markdown" ? (
