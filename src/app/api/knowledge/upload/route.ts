@@ -6,6 +6,7 @@ const ALLOWED_EXTENSIONS = [
   ".zip", ".rar", ".7z", ".tar", ".gz",
   ".jpg", ".jpeg", ".png", ".gif", ".webp",
   ".txt", ".csv", ".md",
+  ".mp4", ".webm", ".mov", ".avi", ".mkv",
 ];
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB

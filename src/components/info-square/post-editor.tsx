@@ -190,8 +190,6 @@ export default function PostEditor({
       tags,
       created_by: currentUser?.id,
       created_by_name: currentUser?.name,
-      author_id: currentUser?.id,
-      author_name: currentUser?.name,
       attachments: uploadedFiles.map((f) => ({
         file_name: f.file_name,
         file_path: f.file_path,
@@ -421,14 +419,14 @@ export default function PostEditor({
               <p className="text-xs text-gray-500">
                 {uploading ? "上传中..." : "点击上传文件"}
               </p>
-              <p className="text-xs text-gray-400">Word, Excel, PPT, PDF, 压缩包</p>
+              <p className="text-xs text-gray-400">文档、表格、图片、视频、压缩包</p>
               <input
                 ref={fileInputRef}
                 type="file"
                 multiple
                 className="hidden"
                 onChange={handleFileUpload}
-                accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,.zip,.rar,.7z,.tar,.gz"
+                accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,.zip,.rar,.7z,.tar,.gz,.mp4,.webm,.mov,.avi,.mkv,.jpg,.jpeg,.png,.gif,.webp"
               />
             </div>
 
