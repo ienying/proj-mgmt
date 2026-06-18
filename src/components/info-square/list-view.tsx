@@ -103,13 +103,14 @@ export default function ListView({
     loadPosts();
   };
 
-  const handleDelete = async (postId: string) => {
-    if (!confirm("确定要删除此内容吗？")) return;
+  const handleDelete = async (post: Post) => {
+    if (!confirm("确定要删除此内容吗？此操作不可撤销。")) return;
+    const isAuthor = currentUser?.id === post.created_by || currentUser?.id === post.author_id;
     const isAdmin = currentUser?.role === "super_admin";
-    const hard = isAdmin ? "true" : "false";
+    const hard = (isAuthor || isAdmin) ? "true" : "false";
     try {
       await fetch(
-        `/api/knowledge/posts/${postId}?hard=${hard}&user_id=${currentUser?.id || ""}&user_role=${currentUser?.role || ""}`,
+        `/api/knowledge/posts/${post.id}?hard=${hard}&user_id=${currentUser?.id || ""}&user_role=${currentUser?.role || ""}`,
         { method: "DELETE" }
       );
       loadPosts();
@@ -229,7 +230,7 @@ export default function ListView({
                     className="h-7 w-7 p-0"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDelete(post.id);
+                      handleDelete(post);
                     }}
                   >
                     <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-500" />
