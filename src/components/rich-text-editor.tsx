@@ -29,6 +29,26 @@ function normalizeHtml(html: string): string {
   return trimmed.length === 0 ? "" : html;
 }
 
+async function uploadImageFile(file: File): Promise<string | null> {
+  try {
+    const formData = new FormData();
+    formData.append("files", file);
+    formData.append("category_type", "tech_doc");
+    const res = await fetch("/api/knowledge/upload", { method: "POST", body: formData });
+    const json = await res.json();
+    if (json.data) {
+      const d = Array.isArray(json.data) ? json.data[0] : json.data;
+      return `/api/knowledge/download?file_path=${encodeURIComponent(d.file_path)}&preview=true`;
+    }
+  } catch {}
+  return null;
+}
+
+function stripImagesFromHtml(html: string): string {
+  // Remove <img> tags (Word images have broken file:// src)
+  return html.replace(/<img[^>]*\/?>/gi, "");
+}
+
 export default function RichTextEditor({ value, onChange, placeholder, onEditorCreated, onFileUploaded }: RichTextEditorProps) {
   const [editor, setEditor] = useState<IDomEditor | null>(null);
 
@@ -37,28 +57,67 @@ export default function RichTextEditor({ value, onChange, placeholder, onEditorC
     onEditorCreated?.(ed);
   }, [onEditorCreated]);
 
+  const uploadAndInsert = async (file: File) => {
+    const url = await uploadImageFile(file);
+    if (url && editor) {
+      editor.insertNode({ type: "image", src: url, alt: file.name, href: "" });
+    }
+  };
+
   const editorConfig: Partial<IEditorConfig> = {
     placeholder: placeholder || "请输入内容...",
     MENU_CONF: {
       uploadImage: {
         async customUpload(file: File, insertFn: (url: string, alt?: string, href?: string) => void) {
-          try {
-            const formData = new FormData();
-            formData.append("files", file);
-            formData.append("category_type", "tech_doc");
-            const res = await fetch("/api/knowledge/upload", { method: "POST", body: formData });
-            const json = await res.json();
-            if (json.data) {
-              const d = Array.isArray(json.data) ? json.data[0] : json.data;
-              const url = `/api/knowledge/download?file_path=${encodeURIComponent(d.file_path)}&preview=true`;
-              insertFn(url, file.name, url);
-              onFileUploaded?.(d.file_path as string);
-            }
-          } catch {
-            // silently fail, image won't be inserted
+          const url = await uploadImageFile(file);
+          if (url) {
+            insertFn(url, file.name, url);
+            // Track for cleanup
+            const params = new URLSearchParams(url.split("?")[1] || "");
+            const fp = params.get("file_path");
+            if (fp) onFileUploaded?.(fp);
           }
         },
       },
+    },
+    // Handle paste — intercept Word paste to upload embedded images
+    customPaste(ed: IDomEditor, event: ClipboardEvent) {
+      const clipboard = event.clipboardData;
+      if (!clipboard) return false;
+
+      const items = Array.from(clipboard.items);
+      const imageFiles: File[] = [];
+      const html = clipboard.getData("text/html");
+      const plainText = clipboard.getData("text/plain");
+
+      // Extract image files from clipboard (Word places them here)
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) imageFiles.push(file);
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        // Paste text/HTML without broken Word images first
+        const cleanedHtml = html ? stripImagesFromHtml(html) : "";
+        const contentToPaste = cleanedHtml || plainText;
+        if (contentToPaste) {
+          ed.dangerouslyInsertHtml(contentToPaste);
+        }
+
+        // Upload and insert each image asynchronously
+        (async () => {
+          for (const file of imageFiles) {
+            await uploadAndInsert(file);
+          }
+        })();
+
+        return false; // Prevent default paste
+      }
+
+      // No images — let default paste handle it
+      return; // returning undefined lets default paste run
     },
   };
 
