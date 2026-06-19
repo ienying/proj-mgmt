@@ -93,7 +93,25 @@ export default function PostEditor({
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [versionDialogOpen, setVersionDialogOpen] = useState(false);
   const [pendingPayload, setPendingPayload] = useState<Record<string, unknown> | null>(null);
+  const [editorInstance, setEditorInstance] = useState<import("@wangeditor/editor").IDomEditor | null>(null);
+  const [tocOpen, setTocOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editorAreaRef = useRef<HTMLDivElement>(null);
+
+  // Extract headings from rich text HTML
+  const headings = (() => {
+    if (contentType !== "rich_text") return [];
+    const re = /<h([1-4])[^>]*>(.+?)<\/h\1>/gi;
+    const result: { level: number; text: string }[] = [];
+    let m;
+    while ((m = re.exec(content)) !== null) {
+      result.push({
+        level: parseInt(m[1]),
+        text: m[2].replace(/<[^>]+>/g, "").trim(),
+      });
+    }
+    return result;
+  })();
 
   const isEditing = !!editPost;
   const nextVersion = editPost ? editPost.version + 1 : 1;
@@ -373,11 +391,76 @@ export default function PostEditor({
                   </div>
                 </div>
               ) : (
-                <RichTextEditor
-                  value={content}
-                  onChange={setContent}
-                  placeholder="请输入内容..."
-                />
+                <div ref={editorAreaRef} className="relative">
+                  <RichTextEditor
+                    value={content}
+                    onChange={setContent}
+                    placeholder="请输入内容..."
+                    onEditorCreated={setEditorInstance}
+                  />
+
+                  {/* Live TOC */}
+                  {headings.length > 0 && (
+                    <>
+                      <button
+                        onClick={() => setTocOpen(!tocOpen)}
+                        className={`absolute top-2 right-2 z-10 p-1.5 rounded-lg text-xs shadow border transition-colors ${
+                          tocOpen ? "bg-indigo-500 text-white border-indigo-500" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                        }`}
+                      >
+                        目录 ({headings.length})
+                      </button>
+                      {tocOpen && (
+                        <div className="absolute top-10 right-2 z-10 w-52 max-h-64 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
+                          <div className="text-xs font-semibold text-gray-500 px-3 py-2 border-b bg-gray-50 flex items-center justify-between">
+                            <span>文档目录</span>
+                            <button onClick={() => setTocOpen(false)} className="text-gray-400 hover:text-gray-600">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <div className="overflow-y-auto max-h-52 p-2">
+                            {headings.map((h, i) => (
+                              <button
+                                key={i}
+                                onClick={() => {
+                                  const el = editorAreaRef.current?.querySelector(
+                                    `h${h.level}`
+                                  ) as HTMLElement;
+                                  if (editorInstance) {
+                                    const all = editorAreaRef.current?.querySelectorAll(`h${h.level}`);
+                                    if (all) {
+                                      let idx = 0;
+                                      let target: Element | null = null;
+                                      for (const node of Array.from(all)) {
+                                        if (node.textContent?.trim() === h.text) {
+                                          if (idx === headings.filter((x, j) => j < i && x.level === h.level && x.text === h.text).length) {
+                                            target = node;
+                                            break;
+                                          }
+                                          idx++;
+                                        }
+                                      }
+                                      if (target) {
+                                        (target as HTMLElement).scrollIntoView({ behavior: "smooth", block: "start" });
+                                        // Also focus editor after scroll
+                                        setTimeout(() => editorInstance?.focus(), 100);
+                                      }
+                                    }
+                                  }
+                                }}
+                                className={`block text-left text-xs w-full truncate rounded px-2 py-1 hover:bg-indigo-50 hover:text-indigo-600 transition-colors ${
+                                  h.level === 1 ? "font-medium text-gray-700" : h.level === 2 ? "text-gray-600 pl-3" : "text-gray-500 pl-5"
+                                }`}
+                              >
+                                {h.text}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               )}
             </div>
           )}
