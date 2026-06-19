@@ -313,7 +313,7 @@ export default function PostDrawer({
       <div
         className={`fixed right-0 top-0 h-full bg-white shadow-2xl z-50 transform transition-all duration-300 ${
           open ? "translate-x-0" : "translate-x-full"
-        } ${isFullscreen ? "w-screen" : "w-[75vw]"}`}
+        } ${isFullscreen ? "w-screen" : "w-[60vw]"}`}
       >
         <div className="flex flex-col h-full">
           {/* Header */}
