@@ -241,7 +241,7 @@ export default function ListView({
                     className="h-7 w-7 p-0"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onPostClick(post);
+                      if (onEdit) onEdit(post);
                     }}
                   >
                     <Edit className="w-3.5 h-3.5 text-gray-400 hover:text-indigo-500" />
