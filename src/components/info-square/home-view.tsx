@@ -353,8 +353,6 @@ export default function HomeView({ onEnterCategory }: HomeViewProps) {
           </div>
         </div>
       </div>
-
-      </div>
       )}
 
       {/* Rotating Info Banner */}
