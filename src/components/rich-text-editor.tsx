@@ -61,13 +61,15 @@ export default function RichTextEditor({ value, onChange, placeholder, onEditorC
     // Direct DOM paste listener for Word image paste support
     const el = ed.getEditableContainer();
     if (el) {
-      el.addEventListener("paste", (e: ClipboardEvent) => {
+      const pasteHandler = (e: ClipboardEvent) => {
         const clipboard = e.clipboardData;
         if (!clipboard) return;
 
         const items = Array.from(clipboard.items);
         const imageFiles: File[] = [];
+        const html = clipboard.getData("text/html");
 
+        // 1. Extract image files from clipboard (Word → separate file items)
         for (const item of items) {
           if (item.type.startsWith("image/")) {
             const file = item.getAsFile();
@@ -75,37 +77,67 @@ export default function RichTextEditor({ value, onChange, placeholder, onEditorC
           }
         }
 
-        if (imageFiles.length > 0) {
-          e.preventDefault();
-          e.stopPropagation();
+        // 2. Extract base64 images from HTML (Word → inline base64)
+        const base64Images: Array<{ dataUri: string; blob: Blob; name: string }> = [];
+        if (html) {
+          const imgRe = /<img[^>]+src="(data:image\/[^"]+)"[^>]*\/?>/gi;
+          let m;
+          let idx = 0;
+          while ((m = imgRe.exec(html)) !== null) {
+            const dataUri = m[1];
+            const parts = dataUri.split(",");
+            if (parts.length === 2) {
+              const mime = parts[0].split(":")[1]?.split(";")[0] || "image/png";
+              const binary = atob(parts[1]);
+              const bytes = new Uint8Array(binary.length);
+              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+              const blob = new Blob([bytes], { type: mime });
+              const ext = mime.split("/")[1] || "png";
+              base64Images.push({ dataUri, blob, name: `paste-${idx}.${ext}` });
+              idx++;
+            }
+          }
+        }
 
-          // Paste text/HTML without broken Word images first
-          const html = clipboard.getData("text/html");
+        const hasImages = imageFiles.length > 0 || base64Images.length > 0;
+        if (hasImages) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+
+          // Paste text/HTML without images first
+          let cleanedHtml = html ? stripImagesFromHtml(html) : "";
+          // Also strip base64 images from HTML
+          cleanedHtml = cleanedHtml.replace(/<img[^>]+src="data:image\/[^"]+"[^>]*\/?>/gi, "");
           const plainText = clipboard.getData("text/plain");
-          const cleanedHtml = html ? stripImagesFromHtml(html) : "";
           const contentToPaste = cleanedHtml || plainText;
           if (contentToPaste) {
             ed.dangerouslyInsertHtml(contentToPaste);
           }
 
-          // Upload and insert each image
+          // Upload and insert all images
           (async () => {
-            for (const file of imageFiles) {
+            const allFiles = [
+              ...imageFiles,
+              ...base64Images.map((b) => new File([b.blob], b.name, { type: b.blob.type })),
+            ];
+            for (const file of allFiles) {
               const url = await uploadImageFile(file);
               if (url) {
-                // Track for cleanup
                 const params = new URLSearchParams(url.split("?")[1] || "");
                 const fp = params.get("file_path");
                 if (fp && !uploadedPaths.has(fp)) {
                   uploadedPaths.add(fp);
                   onFileUploaded?.(fp);
                 }
-                ed.insertNode({ type: "image" as any, src: url, alt: file.name, href: "" });
+                ed.dangerouslyInsertHtml(
+                  `<p><img src="${url}" alt="${file.name}" style="max-width:100%"/></p>`
+                );
               }
             }
           })();
         }
-      });
+      };
+      el.addEventListener("paste", pasteHandler, true); // capture phase to run before wangeditor
     }
   }, [onEditorCreated, onFileUploaded]);
 
