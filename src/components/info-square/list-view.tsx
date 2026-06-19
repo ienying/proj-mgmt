@@ -47,6 +47,7 @@ interface ListViewProps {
   categoryId: string;
   categoryName: string;
   categoryType: string;
+  isDraft?: boolean;
   onBack: () => void;
   onPostClick: (post: Post) => void;
   onPublish: () => void;
@@ -69,6 +70,7 @@ export default function ListView({
   currentUser,
   categoryId,
   categoryName,
+  isDraft,
   onBack,
   onPostClick,
   onPublish,
@@ -82,7 +84,9 @@ export default function ListView({
   const loadPosts = useCallback(async () => {
     setLoading(true);
     try {
-      let url = `/api/knowledge/posts?category_id=${categoryId}&page_size=50`;
+      let url = isDraft
+        ? `/api/knowledge/posts?status=draft&page_size=50`
+        : `/api/knowledge/posts?category_id=${categoryId}&page_size=50`;
       if (searchKeyword) url += `&keyword=${encodeURIComponent(searchKeyword)}`;
       const res = await fetch(url);
       const json = await res.json();

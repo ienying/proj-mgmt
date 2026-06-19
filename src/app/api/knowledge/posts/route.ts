@@ -10,6 +10,7 @@ export async function GET(request: Request) {
     const keyword = searchParams.get("keyword");
     const isPinned = searchParams.get("is_pinned");
     const authorId = searchParams.get("author_id");
+    const statusFilter = searchParams.get("status");
     const page = parseInt(searchParams.get("page") || "1");
     const pageSize = parseInt(searchParams.get("page_size") || "50");
 
@@ -39,6 +40,9 @@ export async function GET(request: Request) {
     }
     if (isPinned === "true") items = items.filter((i) => i.is_pinned === true);
     if (authorId) items = items.filter((i) => i.created_by === authorId);
+    if (statusFilter === "draft") items = items.filter((i) => i.status === "draft");
+    else if (statusFilter === "published") items = items.filter((i) => i.status !== "draft");
+    else items = items.filter((i) => i.status !== "draft"); // default: only published
     if (keyword) {
       const kw = keyword.toLowerCase();
       items = items.filter(

@@ -281,8 +281,9 @@ export default function PostEditor({
       });
       const json = await res.json();
       if (json.data) {
-        orphanedFilesRef.current = []; // images now referenced by post content
-        toast.success(isEditing ? "更新成功" : "发布成功");
+        orphanedFilesRef.current = [];
+        var isDraft = payload.status === "draft";
+        toast.success(isDraft ? "草稿已保存" : isEditing ? "更新成功" : "发布成功");
         onOpenChange(false);
         onSaved();
       } else {
@@ -328,6 +329,35 @@ export default function PostEditor({
     }
   };
 
+  const handleSaveDraft = async () => {
+    if (!title.trim()) return;
+    if (saving) return;
+
+    var tags = tagStr.split(",").map(function (t) { return t.trim(); }).filter(Boolean);
+    var payload: Record<string, unknown> = {
+      title: title,
+      content: content,
+      content_type: contentType,
+      category_id: selectedCategoryId || categoryId,
+      is_pinned: isPinned,
+      tags: tags,
+      status: "draft",
+      created_by: currentUser?.id,
+      created_by_name: currentUser?.name,
+      attachments: uploadedFiles.map(function (f) {
+        return {
+          file_name: f.file_name,
+          file_path: f.file_path,
+          file_size: f.file_size,
+          mime_type: f.mime_type,
+          file_type: f.file_type,
+          tags: f.tags || "",
+        };
+      }),
+    };
+    await doSave(payload);
+  };
+
   if (!open) return null;
 
   return (
@@ -347,6 +377,11 @@ export default function PostEditor({
             {showPreview ? <EyeOff className="w-4 h-4 mr-1" /> : <Eye className="w-4 h-4 mr-1" />}
             {showPreview ? "编辑" : "预览"}
           </Button>
+          {!isEditing && (
+            <Button variant="outline" onClick={handleSaveDraft} disabled={!title.trim() || saving}>
+              <Save className="w-4 h-4 mr-1" /> 存草稿
+            </Button>
+          )}
           <Button onClick={handleSave} disabled={!title.trim() || saving}>
             {saving ? (
               <Loader2 className="w-4 h-4 mr-1 animate-spin" />

@@ -31,12 +31,13 @@ interface Post {
 }
 
 export default function KnowledgeCenter({ currentUser }: KnowledgeCenterProps) {
-  const [view, setView] = useState<"home" | "list">("home");
+  const [view, setView] = useState<"home" | "list" | "drafts">("home");
   const [selectedCategory, setSelectedCategory] = useState<{
     id: string;
     name: string;
     type: string;
   } | null>(null);
+  const [isDraftView, setIsDraftView] = useState(false);
   const [drawerPost, setDrawerPost] = useState<Post | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -51,6 +52,12 @@ export default function KnowledgeCenter({ currentUser }: KnowledgeCenterProps) {
   const handleBack = () => {
     setView("home");
     setSelectedCategory(null);
+    setIsDraftView(false);
+  };
+
+  const handleEnterDrafts = () => {
+    setIsDraftView(true);
+    setView("drafts");
   };
 
   const handlePostClick = (post: Post) => {
@@ -85,6 +92,19 @@ export default function KnowledgeCenter({ currentUser }: KnowledgeCenterProps) {
             currentUser={currentUser}
             onEnterCategory={handleEnterCategory}
             onPostClick={handlePostClick}
+            onEnterDrafts={handleEnterDrafts}
+          />
+        ) : view === "drafts" ? (
+          <ListView
+            currentUser={currentUser}
+            categoryId=""
+            categoryName="我的草稿"
+            categoryType="tech_doc"
+            isDraft={true}
+            onBack={handleBack}
+            onPostClick={handlePostClick}
+            onPublish={handlePublish}
+            onEdit={handleEdit}
           />
         ) : selectedCategory ? (
           <ListView

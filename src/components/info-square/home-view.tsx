@@ -64,6 +64,7 @@ interface HomeViewProps {
   currentUser?: { id?: string; name?: string; role?: string } | null;
   onEnterCategory: (categoryId: string, categoryName: string, categoryType: string) => void;
   onPostClick: (post: Post) => void;
+  onEnterDrafts: () => void;
 }
 
 const ICON_MAP: Record<string, React.ReactNode> = {
@@ -119,19 +120,21 @@ function formatDate(dateStr: string): string {
   return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`;
 }
 
-export default function HomeView({ onEnterCategory, onPostClick }: HomeViewProps) {
+export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts }: HomeViewProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [postCounts, setPostCounts] = useState<Record<string, number>>({});
+  const [draftCount, setDraftCount] = useState(0);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [searchCategory, setSearchCategory] = useState("all");
   const [statsOpen, setStatsOpen] = useState(false);
   const [statsData, setStatsData] = useState<StatsData | null>(null);
   const loadData = useCallback(async () => {
     try {
-      const [catRes, postsRes, statsRes] = await Promise.all([
+      const [catRes, postsRes, statsRes, draftsRes] = await Promise.all([
         fetch("/api/knowledge/categories"),
         fetch("/api/knowledge/posts?page_size=999"),
         fetch("/api/knowledge/stats"),
+        fetch("/api/knowledge/posts?status=draft&page_size=999"),
       ]);
       const catJson = await catRes.json();
       const cats = (catJson.data || []) as Category[];
@@ -147,6 +150,8 @@ export default function HomeView({ onEnterCategory, onPostClick }: HomeViewProps
 
       const statsJson = await statsRes.json();
       if (statsJson.data) setStatsData(statsJson.data);
+      const draftsJson = await draftsRes.json();
+      setDraftCount(draftsJson.total || draftsJson.data?.length || 0);
     } catch (e) {
       console.error("Failed to load home data:", e);
     }
@@ -331,8 +336,8 @@ export default function HomeView({ onEnterCategory, onPostClick }: HomeViewProps
           })}
         </div>
 
-        {/* Bottom Row: 方案模板 + 验收资料 + 信息统计 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Bottom Row: 方案模板 + 验收资料 + 信息统计 + 我的草稿 */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {bottomCats.map((cat) => {
             const colors = COLOR_MAP[cat.category_type] || COLOR_MAP.tech_doc;
             return (
@@ -362,24 +367,38 @@ export default function HomeView({ onEnterCategory, onPostClick }: HomeViewProps
             );
           })}
 
-          {/* 信息统计 Card */}
+          {/* 信息统计 Card - compact */}
           <div
             onClick={() => { setStatsOpen(true); loadData(); }}
-            className="group cursor-pointer bg-white/60 backdrop-blur-xl rounded-3xl border border-white/30 hover:border-violet-300/60 shadow-lg hover:shadow-xl hover:-translate-y-2 transition-all duration-500 overflow-hidden"
+            className="group cursor-pointer bg-white/60 backdrop-blur-xl rounded-2xl border border-white/30 hover:border-violet-300/60 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-500 overflow-hidden"
           >
-            <div className="p-8 text-center">
-              <div className="w-20 h-20 bg-gradient-to-br from-violet-100/80 to-purple-100/80 backdrop-blur-sm rounded-3xl flex items-center justify-center mx-auto mb-5 group-hover:scale-110 transition-transform duration-500">
-                <BarChart3 className="w-10 h-10 text-violet-600" />
+            <div className="p-5 text-center">
+              <div className="w-14 h-14 bg-gradient-to-br from-violet-100/80 to-purple-100/80 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform duration-500">
+                <BarChart3 className="w-7 h-7 text-violet-600" />
               </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">信息统计</h3>
-              <p className="text-sm text-gray-500 mb-4">各分类发布数量、贡献人数、阅读下载等多维度统计</p>
-              <div className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-violet-100/60 text-violet-700 text-sm font-medium">
-                <span className="text-lg font-bold">{statsData?.total_posts || 0}</span>
-                <span>篇总内容</span>
+              <h3 className="text-base font-bold text-gray-800 mb-1">信息统计</h3>
+              <p className="text-xs text-gray-500 mb-3 line-clamp-2">发布数量、贡献人数、阅读下载等统计</p>
+              <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-violet-100/60 text-violet-700 text-xs font-medium">
+                <span className="text-base font-bold">{statsData?.total_posts || 0}</span>
+                <span>篇内容</span>
               </div>
-              <div className="mt-5 flex items-center justify-center text-sm text-gray-400 group-hover:text-gray-600 transition-colors duration-300">
-                <span>查看统计</span>
-                <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1.5 transition-transform duration-300" />
+            </div>
+          </div>
+
+          {/* 我的草稿 Card */}
+          <div
+            onClick={onEnterDrafts}
+            className="group cursor-pointer bg-white/60 backdrop-blur-xl rounded-2xl border border-white/30 hover:border-amber-300/60 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-500 overflow-hidden"
+          >
+            <div className="p-5 text-center">
+              <div className="w-14 h-14 bg-gradient-to-br from-amber-100/80 to-yellow-100/80 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform duration-500">
+                <FileEdit className="w-7 h-7 text-amber-600" />
+              </div>
+              <h3 className="text-base font-bold text-gray-800 mb-1">我的草稿</h3>
+              <p className="text-xs text-gray-500 mb-3">未发布的内容草稿</p>
+              <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-100/60 text-amber-700 text-xs font-medium">
+                <span className="text-base font-bold">{draftCount}</span>
+                <span>篇草稿</span>
               </div>
             </div>
           </div>
