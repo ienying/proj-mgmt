@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import InfoBanner from "./info-banner";
-import { useRouter } from "next/navigation";
 
 interface Category {
   id: string;
@@ -109,8 +108,6 @@ export default function HomeView({ onEnterCategory }: HomeViewProps) {
   const [searchCategory, setSearchCategory] = useState("all");
   const [statsOpen, setStatsOpen] = useState(false);
   const [statsData, setStatsData] = useState<StatsData | null>(null);
-  const router = useRouter();
-
   const loadData = useCallback(async () => {
     try {
       const [catRes, postsRes, statsRes] = await Promise.all([
@@ -141,12 +138,30 @@ export default function HomeView({ onEnterCategory }: HomeViewProps) {
     loadData();
   }, [loadData]);
 
-  const handleSearch = () => {
+  const [searchResults, setSearchResults] = useState<Array<Record<string, unknown>> | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  const handleSearch = async () => {
     if (!searchKeyword.trim()) return;
-    const params = new URLSearchParams();
-    params.set("keyword", searchKeyword);
-    if (searchCategory !== "all") params.set("category_id", searchCategory);
-    router.push(`?search=${encodeURIComponent(searchKeyword)}&cat=${searchCategory}`);
+    setSearchLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("keyword", searchKeyword);
+      if (searchCategory !== "all") params.set("category_id", searchCategory);
+      const res = await fetch(`/api/knowledge/search?${params.toString()}`);
+      const json = await res.json();
+      if (json.data) {
+        setSearchResults(json.data);
+      }
+    } catch {
+      setSearchResults([]);
+    }
+    setSearchLoading(false);
+  };
+
+  const clearSearch = () => {
+    setSearchResults(null);
+    setSearchKeyword("");
   };
 
   // Arrange cards: top row 3, bottom row 3 (方案模板, 验收资料, 信息统计)
@@ -184,7 +199,73 @@ export default function HomeView({ onEnterCategory }: HomeViewProps) {
         </Button>
       </div>
 
+      {/* Search Results */}
+      {searchResults !== null && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-800">
+              搜索 "{searchKeyword}" — {searchResults.length} 条结果
+            </h3>
+            <Button variant="ghost" size="sm" onClick={clearSearch}>
+              <X className="w-4 h-4 mr-1" /> 返回首页
+            </Button>
+          </div>
+          {searchLoading ? (
+            <div className="text-center py-16 text-gray-400">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto mb-3" />
+              搜索中...
+            </div>
+          ) : searchResults.length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              <Search className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <p>未找到相关内容</p>
+              <p className="text-xs mt-1">试试其他关键词</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {searchResults.map((item: Record<string, unknown>) => {
+                const catName = categories.find((c) => c.id === item.category_id)?.name || "";
+                const snippet = String(item.content || "").replace(/<[^>]+>/g, "").substring(0, 200);
+                return (
+                  <div
+                    key={String(item.id)}
+                    onClick={() => {
+                      const cat = categories.find((c) => c.id === item.category_id);
+                      if (cat) onEnterCategory(cat.id, cat.name, cat.category_type);
+                    }}
+                    className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-md hover:border-indigo-200 cursor-pointer transition-all"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-gray-900 mb-1 truncate">{String(item.title || "")}</h4>
+                        <p className="text-sm text-gray-500 line-clamp-2 mb-2">{snippet}</p>
+                        <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap">
+                          {catName && (
+                            <span className="bg-gray-100 rounded-full px-2 py-0.5 text-gray-600">{catName}</span>
+                          )}
+                          <span className="flex items-center gap-1">
+                            <User className="w-3 h-3" />
+                            {String(item.created_by_name || "匿名")}
+                          </span>
+                          <span>{formatDate(String(item.created_at || ""))}</span>
+                          <span className="flex items-center gap-1">
+                            <Eye className="w-3 h-3" />
+                            {String(item.view_count || 0)}
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-300 shrink-0 mt-1" />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Card Grid */}
+      {searchResults === null && (
       <div className="space-y-6">
         {/* Top Row: 3 cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -272,6 +353,9 @@ export default function HomeView({ onEnterCategory }: HomeViewProps) {
           </div>
         </div>
       </div>
+
+      </div>
+      )}
 
       {/* Rotating Info Banner */}
       <InfoBanner />
