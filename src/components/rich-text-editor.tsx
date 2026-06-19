@@ -20,137 +20,187 @@ const TOOLBAR_CONFIG: Partial<IToolbarConfig> = {
   ],
 };
 
-// wangeditor represents an empty document as <p><br></p> — normalize to ""
 function normalizeHtml(html: string): string {
-  const trimmed = html
+  var trimmed = html
     .replace(/<p>\s*<br\s*\/?>\s*<\/p>/gi, "")
     .replace(/<p>\s*<\/p>/gi, "")
     .trim();
   return trimmed.length === 0 ? "" : html;
 }
 
-async function uploadImageFile(file: File): Promise<string | null> {
-  try {
-    const formData = new FormData();
+function uploadImageFile(file: File): Promise<string | null> {
+  return new Promise(function (resolve) {
+    var formData = new FormData();
     formData.append("files", file);
     formData.append("category_type", "tech_doc");
-    const res = await fetch("/api/knowledge/upload", { method: "POST", body: formData });
-    const json = await res.json();
-    if (json.data) {
-      const d = Array.isArray(json.data) ? json.data[0] : json.data;
-      return `/api/knowledge/download?file_path=${encodeURIComponent(d.file_path)}&preview=true`;
-    }
-  } catch {}
-  return null;
+    fetch("/api/knowledge/upload", { method: "POST", body: formData })
+      .then(function (res) { return res.json(); })
+      .then(function (json) {
+        if (json.data) {
+          var d = Array.isArray(json.data) ? json.data[0] : json.data;
+          resolve("/api/knowledge/download?file_path=" + encodeURIComponent(d.file_path) + "&preview=true");
+        } else {
+          resolve(null);
+        }
+      })
+      .catch(function () { resolve(null); });
+  });
 }
 
 function stripImagesFromHtml(html: string): string {
-  // Remove <img> tags (Word images have broken file:// src)
   return html.replace(/<img[^>]*\/?>/gi, "");
 }
 
-const uploadedPaths = new Set<string>();
+// Convert base64 data URI to Blob
+function dataUriToBlob(dataUri: string): Blob | null {
+  try {
+    var parts = dataUri.split(",");
+    if (parts.length !== 2) return null;
+    var mimeInfo = parts[0].split(":")[1];
+    if (!mimeInfo) return null;
+    var mime = mimeInfo.split(";")[0];
+    var binary = atob(parts[1]);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  } catch (e) {
+    return null;
+  }
+}
 
-export default function RichTextEditor({ value, onChange, placeholder, onEditorCreated, onFileUploaded }: RichTextEditorProps) {
-  const [editor, setEditor] = useState<IDomEditor | null>(null);
+var uploadedPaths = new Set<string>();
 
-  const handleCreated = useCallback((ed: IDomEditor) => {
+export default function RichTextEditor(props: RichTextEditorProps) {
+  var value = props.value;
+  var onChange = props.onChange;
+  var placeholder = props.placeholder;
+  var onEditorCreated = props.onEditorCreated;
+  var onFileUploaded = props.onFileUploaded;
+
+  var _editorState = useState<IDomEditor | null>(null);
+  var editor = _editorState[0];
+  var setEditor = _editorState[1];
+
+  var handleCreated = useCallback(function (ed: IDomEditor) {
     setEditor(ed);
-    onEditorCreated?.(ed);
+    if (onEditorCreated) onEditorCreated(ed);
 
-    // Direct DOM paste listener for Word image paste support
-    const el = ed.getEditableContainer();
-    if (el) {
-      const pasteHandler = (e: ClipboardEvent) => {
-        const clipboard = e.clipboardData;
-        if (!clipboard) return;
+    // Attach paste handler directly to editor DOM for Word image support
+    var el = ed.getEditableContainer();
+    if (!el) return;
 
-        const items = Array.from(clipboard.items);
-        const imageFiles: File[] = [];
+    el.addEventListener("paste", function (e: ClipboardEvent) {
+      var clipboard = e.clipboardData;
+      if (!clipboard) return;
 
-        for (const item of items) {
-          if (item.type.startsWith("image/")) {
-            const file = item.getAsFile();
-            if (file) imageFiles.push(file);
+      var html = clipboard.getData("text/html");
+      var plainText = clipboard.getData("text/plain");
+      var items = Array.from(clipboard.items);
+
+      // Collect image/* files from clipboard
+      var imageFiles: File[] = [];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf("image/") === 0) {
+          var f = items[i].getAsFile();
+          if (f) imageFiles.push(f);
+        }
+      }
+
+      // Extract base64 images from HTML
+      var base64Files: File[] = [];
+      if (html) {
+        var re = /<img[^>]+src="(data:image\/[^"]+)"[^>]*\/?>/gi;
+        var m;
+        var bn = 0;
+        while ((m = re.exec(html)) !== null) {
+          var blob = dataUriToBlob(m[1]);
+          if (blob) {
+            var ext = (blob.type.split("/")[1] || "png");
+            base64Files.push(new File([blob], "paste-" + bn + "." + ext, { type: blob.type }));
+            bn++;
           }
         }
+      }
 
-        if (imageFiles.length === 0) return; // no images, let default handle it
+      // Check for file:// images (Word local references)
+      var hasFileImages = html ? /<img[^>]+src="file:\/\//i.test(html) : false;
 
-        e.preventDefault();
-        e.stopImmediatePropagation();
+      var hasImages = imageFiles.length > 0 || base64Files.length > 0 || hasFileImages;
+      if (!hasImages) return;
 
-        const html = clipboard.getData("text/html");
-        const plainText = clipboard.getData("text/plain");
-        const cleanedHtml = html ? stripImagesFromHtml(html) : "";
-        const textContent = cleanedHtml || plainText;
+      e.preventDefault();
+      e.stopImmediatePropagation();
 
-        // Defer all editor manipulation to after event loop
-        const imageCount = imageFiles.length;
-        const htmlContent = textContent;
-        // Take snapshot of files before they expire
-        const snapshots: Array<{ file: File }> = [];
-        for (var i = 0; i < imageFiles.length; i++) {
-          snapshots.push({ file: imageFiles[i] });
+      // Build clean content without images
+      var cleanedHtml = html ? stripImagesFromHtml(html) : "";
+      cleanedHtml = cleanedHtml.replace(/<img[^>]+src="data:image\/[^"]+"[^>]*\/?>/gi, "");
+      var textContent = cleanedHtml || plainText;
+
+      // Combine all files to upload
+      var uploads: File[] = [];
+      for (var u = 0; u < imageFiles.length; u++) uploads.push(imageFiles[u]);
+      for (var u2 = 0; u2 < base64Files.length; u2++) uploads.push(base64Files[u2]);
+
+      setTimeout(function () {
+        // Insert text first
+        if (textContent) {
+          try { ed.dangerouslyInsertHtml(textContent); } catch (e) {}
         }
 
-        setTimeout(function () {
-          // Insert the text/HTML content first
-          if (htmlContent) {
-            try { ed.dangerouslyInsertHtml(htmlContent); } catch (e) {}
-          }
+        if (uploads.length === 0) return;
 
-          // Upload and insert each image
-          var idx = 0;
-          function uploadNext() {
-            if (idx >= snapshots.length) return;
-            var snapshot = snapshots[idx];
-            idx++;
-            uploadImageFile(snapshot.file).then(function (url) {
-              if (url) {
-                var params = new URLSearchParams(url.split("?")[1] || "");
-                var fp = params.get("file_path");
-                if (fp && !uploadedPaths.has(fp)) {
-                  uploadedPaths.add(fp);
-                  onFileUploaded?.(fp);
-                }
-                try {
-                  ed.dangerouslyInsertHtml(
-                    '<p><img src="' + url + '" alt="' + snapshot.file.name + '" style="max-width:100%"/></p>'
-                  );
-                } catch (e) {}
+        // Upload and insert images one by one
+        var ui = 0;
+        function uploadNext() {
+          if (ui >= uploads.length) return;
+          var file = uploads[ui];
+          ui++;
+          uploadImageFile(file).then(function (url) {
+            if (url) {
+              var qs = url.split("?")[1] || "";
+              var params = new URLSearchParams(qs);
+              var fp = params.get("file_path");
+              if (fp && !uploadedPaths.has(fp)) {
+                uploadedPaths.add(fp);
+                if (onFileUploaded) onFileUploaded(fp);
               }
-              uploadNext();
-            });
-          }
-          uploadNext();
-        }, 100);
-      };
-      el.addEventListener("paste", pasteHandler, true);
-    }
+              try {
+                ed.dangerouslyInsertHtml(
+                  '<p><img src="' + url + '" alt="' + file.name + '" style="max-width:100%"/></p>'
+                );
+              } catch (e) {}
+            }
+            uploadNext();
+          });
+        }
+        uploadNext();
+      }, 100);
+    }, true); // capture phase
   }, [onEditorCreated, onFileUploaded]);
 
-  const editorConfig: Partial<IEditorConfig> = {
+  var editorConfig: Partial<IEditorConfig> = {
     placeholder: placeholder || "请输入内容...",
     MENU_CONF: {
       uploadImage: {
-        async customUpload(file: File, insertFn: (url: string, alt?: string, href?: string) => void) {
-          const url = await uploadImageFile(file);
-          if (url) {
-            insertFn(url, file.name, url);
-            const params = new URLSearchParams(url.split("?")[1] || "");
-            const fp = params.get("file_path");
-            if (fp && !uploadedPaths.has(fp)) {
-              uploadedPaths.add(fp);
-              onFileUploaded?.(fp);
+        customUpload: function (file: File, insertFn: (url: string, alt?: string, href?: string) => void) {
+          uploadImageFile(file).then(function (url) {
+            if (url) {
+              insertFn(url, file.name, url);
+              var qs = url.split("?")[1] || "";
+              var params = new URLSearchParams(qs);
+              var fp = params.get("file_path");
+              if (fp && !uploadedPaths.has(fp)) {
+                uploadedPaths.add(fp);
+                if (onFileUploaded) onFileUploaded(fp);
+              }
             }
-          }
+          });
         },
-      },
+      } as any,
     },
   };
 
-  const handleContainerClick = () => {
+  var handleContainerClick = function () {
     if (editor) editor.focus();
   };
 
@@ -166,7 +216,7 @@ export default function RichTextEditor({ value, onChange, placeholder, onEditorC
       />
       <Editor
         value={value}
-        onChange={(ed) => onChange(normalizeHtml(ed.getHtml()))}
+        onChange={function (ed) { onChange(normalizeHtml(ed.getHtml())); }}
         onCreated={handleCreated}
         defaultConfig={editorConfig}
         style={{ minHeight: 180 }}
