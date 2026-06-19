@@ -10,6 +10,7 @@ interface RichTextEditorProps {
   onChange: (v: string) => void;
   placeholder?: string;
   onEditorCreated?: (editor: IDomEditor) => void;
+  onFileUploaded?: (filePath: string) => void;
 }
 
 const TOOLBAR_CONFIG: Partial<IToolbarConfig> = {
@@ -28,7 +29,7 @@ function normalizeHtml(html: string): string {
   return trimmed.length === 0 ? "" : html;
 }
 
-export default function RichTextEditor({ value, onChange, placeholder, onEditorCreated }: RichTextEditorProps) {
+export default function RichTextEditor({ value, onChange, placeholder, onEditorCreated, onFileUploaded }: RichTextEditorProps) {
   const [editor, setEditor] = useState<IDomEditor | null>(null);
 
   const handleCreated = useCallback((ed: IDomEditor) => {
@@ -51,6 +52,7 @@ export default function RichTextEditor({ value, onChange, placeholder, onEditorC
               const d = Array.isArray(json.data) ? json.data[0] : json.data;
               const url = `/api/knowledge/download?file_path=${encodeURIComponent(d.file_path)}&preview=true`;
               insertFn(url, file.name, url);
+              onFileUploaded?.(d.file_path as string);
             }
           } catch {
             // silently fail, image won't be inserted

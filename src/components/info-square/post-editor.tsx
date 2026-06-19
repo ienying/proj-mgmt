@@ -95,8 +95,28 @@ export default function PostEditor({
   const [pendingPayload, setPendingPayload] = useState<Record<string, unknown> | null>(null);
   const [editorInstance, setEditorInstance] = useState<import("@wangeditor/editor").IDomEditor | null>(null);
   const [tocOpen, setTocOpen] = useState(false);
+  const orphanedFilesRef = useRef<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorAreaRef = useRef<HTMLDivElement>(null);
+
+  // Track auto-uploaded image paths for cleanup if editor closes without saving
+  const handleFileUploaded = (filePath: string) => {
+    orphanedFilesRef.current.push(filePath);
+  };
+
+  // Cleanup orphaned files on unsaved close
+  const handleClose = () => {
+    const orphaned = orphanedFilesRef.current;
+    if (orphaned.length > 0) {
+      fetch("/api/knowledge/cleanup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_paths: orphaned }),
+      }).catch(() => {});
+    }
+    orphanedFilesRef.current = [];
+    onOpenChange(false);
+  };
 
   // Extract headings from rich text HTML
   const headings = (() => {
@@ -118,6 +138,7 @@ export default function PostEditor({
 
   useEffect(() => {
     if (open) {
+      orphanedFilesRef.current = [];
       setShowPreview(false); // Always start in edit mode
 
       // Load categories
@@ -258,6 +279,7 @@ export default function PostEditor({
       });
       const json = await res.json();
       if (json.data) {
+        orphanedFilesRef.current = []; // images now referenced by post content
         toast.success(isEditing ? "更新成功" : "发布成功");
         onOpenChange(false);
         onSaved();
@@ -311,7 +333,7 @@ export default function PostEditor({
       {/* Top bar */}
       <div className="flex items-center justify-between px-6 py-3 border-b bg-white sticky top-0 z-10">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+          <Button variant="ghost" size="sm" onClick={handleClose}>
             <X className="w-4 h-4 mr-1" /> 关闭
           </Button>
           <h2 className="text-lg font-semibold">
@@ -397,6 +419,7 @@ export default function PostEditor({
                     onChange={setContent}
                     placeholder="请输入内容..."
                     onEditorCreated={setEditorInstance}
+                    onFileUploaded={handleFileUploaded}
                   />
 
                   {/* Live TOC */}
