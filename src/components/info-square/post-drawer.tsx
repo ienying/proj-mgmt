@@ -9,7 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Markdown } from "@/components/markdown";
@@ -496,10 +495,10 @@ export default function PostDrawer({
             )}
 
             {/* Main Content */}
-            <ScrollArea className="flex-1 min-w-0 h-full">
-              <div className="p-6 space-y-6 max-w-full">
+            <div className="flex-1 min-w-0 overflow-y-auto">
+              <div className="p-6 space-y-6">
                 <div
-                  className="prose prose-sm max-w-none [overflow-wrap:break-word] [&_img]:max-w-full [&_img]:h-auto [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_iframe]:max-w-full [&_video]:max-w-full [&>*]:max-w-full"
+                  className="prose prose-sm max-w-none [overflow-wrap:break-word] [&_img]:max-w-full [&_img]:h-auto [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_iframe]:max-w-full [&_video]:max-w-full"
                   id="post-content"
                 >
                   {post.content_type === "markdown" ? (
@@ -635,7 +634,7 @@ export default function PostDrawer({
                   </Button>
                 </div>
               </div>
-            </ScrollArea>
+            </div>
           </div>
         </div>
       </div>
