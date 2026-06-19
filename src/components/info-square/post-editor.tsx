@@ -90,6 +90,8 @@ export default function PostEditor({
   const [activeUploads, setActiveUploads] = useState<{ fileName: string; progress: number }[]>([]);
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  // Ensure preview is reset on every open
+  useEffect(() => { if (open) setShowPreview(false); }, [open]);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [versionDialogOpen, setVersionDialogOpen] = useState(false);
   const [pendingPayload, setPendingPayload] = useState<Record<string, unknown> | null>(null);
