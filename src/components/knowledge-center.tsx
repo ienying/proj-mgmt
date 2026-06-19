@@ -95,6 +95,7 @@ export default function KnowledgeCenter({ currentUser }: KnowledgeCenterProps) {
             onBack={handleBack}
             onPostClick={handlePostClick}
             onPublish={handlePublish}
+            onEdit={handleEdit}
           />
         ) : null}
       </div>
