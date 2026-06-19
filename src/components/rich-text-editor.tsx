@@ -68,7 +68,6 @@ export default function RichTextEditor({ value, onChange, placeholder, onEditorC
         const items = Array.from(clipboard.items);
         const imageFiles: File[] = [];
 
-        // Extract image files from clipboard (Word puts images as file items)
         for (const item of items) {
           if (item.type.startsWith("image/")) {
             const file = item.getAsFile();
@@ -76,49 +75,53 @@ export default function RichTextEditor({ value, onChange, placeholder, onEditorC
           }
         }
 
-        if (imageFiles.length === 0) return; // no images, let default paste handle it
+        if (imageFiles.length === 0) return; // no images, let default handle it
 
         e.preventDefault();
         e.stopImmediatePropagation();
 
-        // Paste text/HTML without broken Word images
         const html = clipboard.getData("text/html");
         const plainText = clipboard.getData("text/plain");
         const cleanedHtml = html ? stripImagesFromHtml(html) : "";
-        const contentToPaste = cleanedHtml || plainText;
-        if (contentToPaste) {
-          ed.dangerouslyInsertHtml(contentToPaste);
-        }
+        const textContent = cleanedHtml || plainText;
 
-        // Upload and insert each image
-        (async () => {
-          for (const file of imageFiles) {
-            const url = await uploadImageFile(file);
-            if (url) {
-              const params = new URLSearchParams(url.split("?")[1] || "");
-              const fp = params.get("file_path");
-              if (fp && !uploadedPaths.has(fp)) {
-                uploadedPaths.add(fp);
-                onFileUploaded?.(fp);
-              }
-              // Use insertNode with children (Slate requirement)
-              try {
-                ed.insertNode({
-                  type: "image",
-                  src: url,
-                  alt: file.name,
-                  href: "",
-                  children: [{ text: "" }],
-                } as any);
-              } catch {
-                // fallback: direct DOM manipulation
-                ed.dangerouslyInsertHtml("<img src=\"" + url + "\"/>");
-              }
+        // Defer all editor manipulation to after event loop
+        const imageFilesCopy = [...imageFiles];
+        setTimeout(async () => {
+          // First, insert the text/HTML content
+          if (textContent) {
+            try {
+              ed.dangerouslyInsertHtml(textContent);
+            } catch {
+              try { ed.insertText(textContent.replace(/<[^>]+>/g, "")); } catch {}
             }
           }
-        })();
+
+          // Then upload and insert each image
+          for (const file of imageFilesCopy) {
+            const url = await uploadImageFile(file);
+            if (!url) continue;
+
+            const params = new URLSearchParams(url.split("?")[1] || "");
+            const fp = params.get("file_path");
+            if (fp && !uploadedPaths.has(fp)) {
+              uploadedPaths.add(fp);
+              onFileUploaded?.(fp);
+            }
+
+            // Build simple img HTML and insert
+            const imgHtml = '<p><img src="' + url + '" alt="' + file.name + '" style="max-width:100%"/></p>';
+            try {
+              ed.dangerouslyInsertHtml(imgHtml);
+            } catch {
+              // fallback: restore selection and insert text + image tag
+              ed.focus();
+              try { ed.insertText(" "); } catch {}
+            }
+          }
+        }, 50);
       };
-      el.addEventListener("paste", pasteHandler, true); // capture phase to run before wangeditor
+      el.addEventListener("paste", pasteHandler, true);
     }
   }, [onEditorCreated, onFileUploaded]);
 
