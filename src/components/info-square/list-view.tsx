@@ -72,6 +72,7 @@ export default function ListView({
   onBack,
   onPostClick,
   onPublish,
+  onEdit,
 }: ListViewProps) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(false);
