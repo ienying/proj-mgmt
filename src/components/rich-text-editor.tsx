@@ -49,20 +49,65 @@ function stripImagesFromHtml(html: string): string {
   return html.replace(/<img[^>]*\/?>/gi, "");
 }
 
+const uploadedPaths = new Set<string>();
+
 export default function RichTextEditor({ value, onChange, placeholder, onEditorCreated, onFileUploaded }: RichTextEditorProps) {
   const [editor, setEditor] = useState<IDomEditor | null>(null);
 
   const handleCreated = useCallback((ed: IDomEditor) => {
     setEditor(ed);
     onEditorCreated?.(ed);
-  }, [onEditorCreated]);
 
-  const uploadAndInsert = async (file: File) => {
-    const url = await uploadImageFile(file);
-    if (url && editor) {
-      editor.insertNode({ type: "image", src: url, alt: file.name, href: "" });
+    // Direct DOM paste listener for Word image paste support
+    const el = ed.getEditableContainer();
+    if (el) {
+      el.addEventListener("paste", (e: ClipboardEvent) => {
+        const clipboard = e.clipboardData;
+        if (!clipboard) return;
+
+        const items = Array.from(clipboard.items);
+        const imageFiles: File[] = [];
+
+        for (const item of items) {
+          if (item.type.startsWith("image/")) {
+            const file = item.getAsFile();
+            if (file) imageFiles.push(file);
+          }
+        }
+
+        if (imageFiles.length > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          // Paste text/HTML without broken Word images first
+          const html = clipboard.getData("text/html");
+          const plainText = clipboard.getData("text/plain");
+          const cleanedHtml = html ? stripImagesFromHtml(html) : "";
+          const contentToPaste = cleanedHtml || plainText;
+          if (contentToPaste) {
+            ed.dangerouslyInsertHtml(contentToPaste);
+          }
+
+          // Upload and insert each image
+          (async () => {
+            for (const file of imageFiles) {
+              const url = await uploadImageFile(file);
+              if (url) {
+                // Track for cleanup
+                const params = new URLSearchParams(url.split("?")[1] || "");
+                const fp = params.get("file_path");
+                if (fp && !uploadedPaths.has(fp)) {
+                  uploadedPaths.add(fp);
+                  onFileUploaded?.(fp);
+                }
+                ed.insertNode({ type: "image" as any, src: url, alt: file.name, href: "" });
+              }
+            }
+          })();
+        }
+      });
     }
-  };
+  }, [onEditorCreated, onFileUploaded]);
 
   const editorConfig: Partial<IEditorConfig> = {
     placeholder: placeholder || "请输入内容...",
@@ -72,52 +117,15 @@ export default function RichTextEditor({ value, onChange, placeholder, onEditorC
           const url = await uploadImageFile(file);
           if (url) {
             insertFn(url, file.name, url);
-            // Track for cleanup
             const params = new URLSearchParams(url.split("?")[1] || "");
             const fp = params.get("file_path");
-            if (fp) onFileUploaded?.(fp);
+            if (fp && !uploadedPaths.has(fp)) {
+              uploadedPaths.add(fp);
+              onFileUploaded?.(fp);
+            }
           }
         },
       },
-    },
-    // Handle paste — intercept Word paste to upload embedded images
-    customPaste(ed: IDomEditor, event: ClipboardEvent) {
-      const clipboard = event.clipboardData;
-      if (!clipboard) return false;
-
-      const items = Array.from(clipboard.items);
-      const imageFiles: File[] = [];
-      const html = clipboard.getData("text/html");
-      const plainText = clipboard.getData("text/plain");
-
-      // Extract image files from clipboard (Word places them here)
-      for (const item of items) {
-        if (item.type.startsWith("image/")) {
-          const file = item.getAsFile();
-          if (file) imageFiles.push(file);
-        }
-      }
-
-      if (imageFiles.length > 0) {
-        // Paste text/HTML without broken Word images first
-        const cleanedHtml = html ? stripImagesFromHtml(html) : "";
-        const contentToPaste = cleanedHtml || plainText;
-        if (contentToPaste) {
-          ed.dangerouslyInsertHtml(contentToPaste);
-        }
-
-        // Upload and insert each image asynchronously
-        (async () => {
-          for (const file of imageFiles) {
-            await uploadAndInsert(file);
-          }
-        })();
-
-        return false; // Prevent default paste
-      }
-
-      // No images — let default paste handle it
-      return; // returning undefined lets default paste run
     },
   };
 
