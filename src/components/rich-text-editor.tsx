@@ -101,9 +101,19 @@ export default function RichTextEditor({ value, onChange, placeholder, onEditorC
                 uploadedPaths.add(fp);
                 onFileUploaded?.(fp);
               }
-              ed.dangerouslyInsertHtml(
-                "<p><img src=\"" + url + "\" alt=\"" + file.name + "\" style=\"max-width:100%\"/></p>"
-              );
+              // Use insertNode with children (Slate requirement)
+              try {
+                ed.insertNode({
+                  type: "image",
+                  src: url,
+                  alt: file.name,
+                  href: "",
+                  children: [{ text: "" }],
+                } as any);
+              } catch {
+                // fallback: direct DOM manipulation
+                ed.dangerouslyInsertHtml("<img src=\"" + url + "\"/>");
+              }
             }
           }
         })();
