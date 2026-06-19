@@ -51,6 +51,25 @@ function stripImagesFromHtml(html: string): string {
   return html.replace(/<img[^>]*\/?>/gi, "");
 }
 
+function proxyDownloadImage(externalUrl: string): Promise<string | null> {
+  return new Promise(function (resolve) {
+    fetch("/api/knowledge/proxy-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: externalUrl }),
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (json) {
+        if (json.data && json.data.file_path) {
+          resolve("/api/knowledge/download?file_path=" + encodeURIComponent(json.data.file_path) + "&preview=true");
+        } else {
+          resolve(null);
+        }
+      })
+      .catch(function () { resolve(null); });
+  });
+}
+
 function dataUriToBlob(dataUri: string): Blob | null {
   try {
     var parts = dataUri.split(",");
@@ -94,7 +113,7 @@ export default function RichTextEditor(props: RichTextEditorProps) {
       var html = clipboard.getData("text/html");
       var plainText = clipboard.getData("text/plain");
 
-      // Collect ALL possible image files from the clipboard
+      // 1. Collect ALL possible image files from clipboard items
       var imageFiles: File[] = [];
       var seen = new Set<string>();
 
@@ -107,7 +126,6 @@ export default function RichTextEditor(props: RichTextEditorProps) {
         }
       }
 
-      // 1. Clipboard items (all types, not just image/*)
       var items = Array.from(clipboard.items);
       for (var i = 0; i < items.length; i++) {
         if (items[i].kind === "file") {
@@ -139,21 +157,31 @@ export default function RichTextEditor(props: RichTextEditorProps) {
         }
       }
 
-      // 4. Check for file:// images (Word local references, can't render)
+      // 4. Extract external http(s) image URLs (e.g. from 语雀/飞书 docs)
+      var externalUrls: string[] = [];
+      if (html) {
+        var extRe = /<img[^>]+src="(https?:\/\/[^"]+)"[^>]*\/?>/gi;
+        var em;
+        while ((em = extRe.exec(html)) !== null) {
+          externalUrls.push(em[1]);
+        }
+      }
+
+      // 5. Check for file:// images (Word local references)
       var hasFileImages = html ? /<img[^>]+src="file:\/\//i.test(html) : false;
 
-      var hasImages = imageFiles.length > 0 || base64Files.length > 0 || hasFileImages;
+      var hasImages = imageFiles.length > 0 || base64Files.length > 0 || externalUrls.length > 0 || hasFileImages;
       if (!hasImages) return;
 
       e.preventDefault();
       e.stopImmediatePropagation();
 
-      // Build clean content without broken images
+      // Build clean content without images
       var cleanedHtml = html ? stripImagesFromHtml(html) : "";
       cleanedHtml = cleanedHtml.replace(/<img[^>]+src="data:image\/[^"]+"[^>]*\/?>/gi, "");
       var textContent = cleanedHtml || plainText;
 
-      // Combine all files to upload
+      // Collect file uploads
       var uploads: File[] = [];
       for (var u = 0; u < imageFiles.length; u++) uploads.push(imageFiles[u]);
       for (var u2 = 0; u2 < base64Files.length; u2++) uploads.push(base64Files[u2]);
@@ -163,32 +191,51 @@ export default function RichTextEditor(props: RichTextEditorProps) {
           try { ed.dangerouslyInsertHtml(textContent); } catch (e) {}
         }
 
-        if (uploads.length === 0) return;
-
+        var proxyUrls = externalUrls.slice();
         var ui = 0;
-        function uploadNext() {
-          if (ui >= uploads.length) return;
-          var file = uploads[ui];
-          ui++;
-          uploadImageFile(file).then(function (url) {
-            if (url) {
-              var qs = url.split("?")[1] || "";
-              var params = new URLSearchParams(qs);
-              var fp = params.get("file_path");
-              if (fp && !uploadedPaths.has(fp)) {
-                uploadedPaths.add(fp);
-                if (onFileUploaded) onFileUploaded(fp);
+
+        function insertNext() {
+          // File uploads first
+          if (ui < uploads.length) {
+            var file = uploads[ui];
+            ui++;
+            uploadImageFile(file).then(function (url) {
+              if (url) {
+                var qs = url.split("?")[1] || "";
+                var params = new URLSearchParams(qs);
+                var fp = params.get("file_path");
+                if (fp && !uploadedPaths.has(fp)) {
+                  uploadedPaths.add(fp);
+                  if (onFileUploaded) onFileUploaded(fp);
+                }
+                try {
+                  ed.dangerouslyInsertHtml(
+                    '<p><img src="' + url + '" alt="' + file.name + '" style="max-width:100%"/></p>'
+                  );
+                } catch (e) {}
               }
-              try {
-                ed.dangerouslyInsertHtml(
-                  '<p><img src="' + url + '" alt="' + file.name + '" style="max-width:100%"/></p>'
-                );
-              } catch (e) {}
+              insertNext();
+            });
+            return;
+          }
+
+          // External URL proxy downloads
+          if (proxyUrls.length > 0) {
+            var extUrl = proxyUrls.shift();
+            if (extUrl) {
+              proxyDownloadImage(extUrl).then(function (localUrl) {
+                var finalUrl = localUrl || extUrl;
+                try {
+                  ed.dangerouslyInsertHtml(
+                    '<p><img src="' + finalUrl + '" style="max-width:100%"/></p>'
+                  );
+                } catch (e) {}
+                insertNext();
+              });
             }
-            uploadNext();
-          });
+          }
         }
-        uploadNext();
+        insertNext();
       }, 100);
     }, true);
   }, [onEditorCreated, onFileUploaded]);
