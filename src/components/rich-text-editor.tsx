@@ -86,40 +86,45 @@ export default function RichTextEditor({ value, onChange, placeholder, onEditorC
         const textContent = cleanedHtml || plainText;
 
         // Defer all editor manipulation to after event loop
-        const imageFilesCopy = [...imageFiles];
-        setTimeout(async () => {
-          // First, insert the text/HTML content
-          if (textContent) {
-            try {
-              ed.dangerouslyInsertHtml(textContent);
-            } catch {
-              try { ed.insertText(textContent.replace(/<[^>]+>/g, "")); } catch {}
-            }
+        const imageCount = imageFiles.length;
+        const htmlContent = textContent;
+        // Take snapshot of files before they expire
+        const snapshots: Array<{ file: File }> = [];
+        for (var i = 0; i < imageFiles.length; i++) {
+          snapshots.push({ file: imageFiles[i] });
+        }
+
+        setTimeout(function () {
+          // Insert the text/HTML content first
+          if (htmlContent) {
+            try { ed.dangerouslyInsertHtml(htmlContent); } catch (e) {}
           }
 
-          // Then upload and insert each image
-          for (const file of imageFilesCopy) {
-            const url = await uploadImageFile(file);
-            if (!url) continue;
-
-            const params = new URLSearchParams(url.split("?")[1] || "");
-            const fp = params.get("file_path");
-            if (fp && !uploadedPaths.has(fp)) {
-              uploadedPaths.add(fp);
-              onFileUploaded?.(fp);
-            }
-
-            // Build simple img HTML and insert
-            const imgHtml = '<p><img src="' + url + '" alt="' + file.name + '" style="max-width:100%"/></p>';
-            try {
-              ed.dangerouslyInsertHtml(imgHtml);
-            } catch {
-              // fallback: restore selection and insert text + image tag
-              ed.focus();
-              try { ed.insertText(" "); } catch {}
-            }
+          // Upload and insert each image
+          var idx = 0;
+          function uploadNext() {
+            if (idx >= snapshots.length) return;
+            var snapshot = snapshots[idx];
+            idx++;
+            uploadImageFile(snapshot.file).then(function (url) {
+              if (url) {
+                var params = new URLSearchParams(url.split("?")[1] || "");
+                var fp = params.get("file_path");
+                if (fp && !uploadedPaths.has(fp)) {
+                  uploadedPaths.add(fp);
+                  onFileUploaded?.(fp);
+                }
+                try {
+                  ed.dangerouslyInsertHtml(
+                    '<p><img src="' + url + '" alt="' + snapshot.file.name + '" style="max-width:100%"/></p>'
+                  );
+                } catch (e) {}
+              }
+              uploadNext();
+            });
           }
-        }, 50);
+          uploadNext();
+        }, 100);
       };
       el.addEventListener("paste", pasteHandler, true);
     }
