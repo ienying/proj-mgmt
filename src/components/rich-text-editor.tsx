@@ -13,7 +13,7 @@ interface RichTextEditorProps {
   onFileUploaded?: (filePath: string) => void;
 }
 
-const TOOLBAR_CONFIG: Partial<IToolbarConfig> = {
+var TOOLBAR_CONFIG: Partial<IToolbarConfig> = {
   excludeKeys: [
     "group-video", "insertLink", "editLink", "unLink", "viewLink",
     "codeBlock", "blockquote",
@@ -51,7 +51,6 @@ function stripImagesFromHtml(html: string): string {
   return html.replace(/<img[^>]*\/?>/gi, "");
 }
 
-// Convert base64 data URI to Blob
 function dataUriToBlob(dataUri: string): Blob | null {
   try {
     var parts = dataUri.split(",");
@@ -85,7 +84,6 @@ export default function RichTextEditor(props: RichTextEditorProps) {
     setEditor(ed);
     if (onEditorCreated) onEditorCreated(ed);
 
-    // Attach paste handler directly to editor DOM for Word image support
     var el = ed.getEditableContainer();
     if (!el) return;
 
@@ -95,18 +93,37 @@ export default function RichTextEditor(props: RichTextEditorProps) {
 
       var html = clipboard.getData("text/html");
       var plainText = clipboard.getData("text/plain");
-      var items = Array.from(clipboard.items);
 
-      // Collect image/* files from clipboard
+      // Collect ALL possible image files from the clipboard
       var imageFiles: File[] = [];
-      for (var i = 0; i < items.length; i++) {
-        if (items[i].type.indexOf("image/") === 0) {
-          var f = items[i].getAsFile();
-          if (f) imageFiles.push(f);
+      var seen = new Set<string>();
+
+      function addFile(f: File) {
+        var key = f.name + "|" + f.size + "|" + f.type;
+        if (seen.has(key)) return;
+        seen.add(key);
+        if (f.type.indexOf("image/") === 0) {
+          imageFiles.push(f);
         }
       }
 
-      // Extract base64 images from HTML
+      // 1. Clipboard items (all types, not just image/*)
+      var items = Array.from(clipboard.items);
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].kind === "file") {
+          var f = items[i].getAsFile();
+          if (f) addFile(f);
+        }
+      }
+
+      // 2. DataTransfer.files (Word sometimes puts images here)
+      if (clipboard.files && clipboard.files.length > 0) {
+        for (var fi = 0; fi < clipboard.files.length; fi++) {
+          addFile(clipboard.files[fi]);
+        }
+      }
+
+      // 3. Extract base64 images from HTML
       var base64Files: File[] = [];
       if (html) {
         var re = /<img[^>]+src="(data:image\/[^"]+)"[^>]*\/?>/gi;
@@ -122,7 +139,7 @@ export default function RichTextEditor(props: RichTextEditorProps) {
         }
       }
 
-      // Check for file:// images (Word local references)
+      // 4. Check for file:// images (Word local references, can't render)
       var hasFileImages = html ? /<img[^>]+src="file:\/\//i.test(html) : false;
 
       var hasImages = imageFiles.length > 0 || base64Files.length > 0 || hasFileImages;
@@ -131,7 +148,7 @@ export default function RichTextEditor(props: RichTextEditorProps) {
       e.preventDefault();
       e.stopImmediatePropagation();
 
-      // Build clean content without images
+      // Build clean content without broken images
       var cleanedHtml = html ? stripImagesFromHtml(html) : "";
       cleanedHtml = cleanedHtml.replace(/<img[^>]+src="data:image\/[^"]+"[^>]*\/?>/gi, "");
       var textContent = cleanedHtml || plainText;
@@ -142,14 +159,12 @@ export default function RichTextEditor(props: RichTextEditorProps) {
       for (var u2 = 0; u2 < base64Files.length; u2++) uploads.push(base64Files[u2]);
 
       setTimeout(function () {
-        // Insert text first
         if (textContent) {
           try { ed.dangerouslyInsertHtml(textContent); } catch (e) {}
         }
 
         if (uploads.length === 0) return;
 
-        // Upload and insert images one by one
         var ui = 0;
         function uploadNext() {
           if (ui >= uploads.length) return;
@@ -175,7 +190,7 @@ export default function RichTextEditor(props: RichTextEditorProps) {
         }
         uploadNext();
       }, 100);
-    }, true); // capture phase
+    }, true);
   }, [onEditorCreated, onFileUploaded]);
 
   var editorConfig: Partial<IEditorConfig> = {
