@@ -43,9 +43,27 @@ interface StatsData {
   total_contributors: number;
 }
 
+interface Post {
+  id: string;
+  title: string;
+  content: string;
+  content_type: string;
+  version: number;
+  category_id?: string;
+  created_by?: string;
+  created_by_name?: string;
+  is_pinned: boolean;
+  tags?: string;
+  view_count: number;
+  like_count: number;
+  comment_count: number;
+  created_at: string;
+}
+
 interface HomeViewProps {
   currentUser?: { id?: string; name?: string; role?: string } | null;
   onEnterCategory: (categoryId: string, categoryName: string, categoryType: string) => void;
+  onPostClick: (post: Post) => void;
 }
 
 const ICON_MAP: Record<string, React.ReactNode> = {
@@ -101,7 +119,7 @@ function formatDate(dateStr: string): string {
   return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`;
 }
 
-export default function HomeView({ onEnterCategory }: HomeViewProps) {
+export default function HomeView({ onEnterCategory, onPostClick }: HomeViewProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [postCounts, setPostCounts] = useState<Record<string, number>>({});
   const [searchKeyword, setSearchKeyword] = useState("");
@@ -230,8 +248,22 @@ export default function HomeView({ onEnterCategory }: HomeViewProps) {
                   <div
                     key={String(item.id)}
                     onClick={() => {
-                      const cat = categories.find((c) => c.id === item.category_id);
-                      if (cat) onEnterCategory(cat.id, cat.name, cat.category_type);
+                      onPostClick({
+                        id: String(item.id),
+                        title: String(item.title || ""),
+                        content: String(item.content || ""),
+                        content_type: String(item.content_type || "rich_text"),
+                        version: Number(item.version || 1),
+                        category_id: String(item.category_id || ""),
+                        created_by: String(item.created_by || ""),
+                        created_by_name: String(item.created_by_name || ""),
+                        is_pinned: Boolean(item.is_pinned),
+                        tags: String(item.tags || ""),
+                        view_count: Number(item.view_count || 0),
+                        like_count: Number(item.like_count || 0),
+                        comment_count: Number(item.comment_count || 0),
+                        created_at: String(item.created_at || ""),
+                      });
                     }}
                     className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-md hover:border-indigo-200 cursor-pointer transition-all"
                   >

@@ -84,6 +84,7 @@ export default function KnowledgeCenter({ currentUser }: KnowledgeCenterProps) {
           <HomeView
             currentUser={currentUser}
             onEnterCategory={handleEnterCategory}
+            onPostClick={handlePostClick}
           />
         ) : selectedCategory ? (
           <ListView
