@@ -51,6 +51,10 @@ function stripImagesFromHtml(html: string): string {
   return html.replace(/<img[^>]*\/?>/gi, "");
 }
 
+function stripMdImages(text: string): string {
+  return text.replace(/!\[[^\]]*\]\(https?:\/\/[^)]+\)/gi, "");
+}
+
 function proxyDownloadImage(externalUrl: string): Promise<string | null> {
   return new Promise(function (resolve) {
     fetch("/api/knowledge/proxy-image", {
@@ -86,6 +90,37 @@ function dataUriToBlob(dataUri: string): Blob | null {
   }
 }
 
+// Extract all unique http(s) image URLs from text (HTML <img> + Markdown ![]())
+function extractExternalImageUrls(html: string, plainText: string): string[] {
+  var urls: string[] = [];
+  var seen: Record<string, boolean> = {};
+
+  function add(url: string) {
+    if (!seen[url]) { seen[url] = true; urls.push(url); }
+  }
+
+  // HTML <img src="http...">
+  if (html) {
+    var re = /<img[^>]+src="(https?:\/\/[^"]+)"[^>]*\/?>/gi;
+    var m;
+    while ((m = re.exec(html)) !== null) add(m[1]);
+  }
+
+  // Markdown ![]() in both plain text and HTML
+  var mdRe = /!\[[^\]]*\]\((https?:\/\/[^)]+)\)/gi;
+  if (plainText) {
+    var m2;
+    while ((m2 = mdRe.exec(plainText)) !== null) add(m2[1]);
+  }
+  if (html) {
+    mdRe.lastIndex = 0;
+    var m3;
+    while ((m3 = mdRe.exec(html)) !== null) add(m3[1]);
+  }
+
+  return urls;
+}
+
 var uploadedPaths = new Set<string>();
 
 export default function RichTextEditor(props: RichTextEditorProps) {
@@ -113,42 +148,30 @@ export default function RichTextEditor(props: RichTextEditorProps) {
       var html = clipboard.getData("text/html");
       var plainText = clipboard.getData("text/plain");
 
-      // 1. Collect ALL possible image files from clipboard items
+      // 1. Collect image files from clipboard items
       var imageFiles: File[] = [];
       var seen = new Set<string>();
-
       function addFile(f: File) {
         var key = f.name + "|" + f.size + "|" + f.type;
         if (seen.has(key)) return;
         seen.add(key);
-        if (f.type.indexOf("image/") === 0) {
-          imageFiles.push(f);
-        }
+        if (f.type.indexOf("image/") === 0) imageFiles.push(f);
       }
-
       var items = Array.from(clipboard.items);
       for (var i = 0; i < items.length; i++) {
-        if (items[i].kind === "file") {
-          var f = items[i].getAsFile();
-          if (f) addFile(f);
-        }
+        if (items[i].kind === "file") { var f = items[i].getAsFile(); if (f) addFile(f); }
       }
-
-      // 2. DataTransfer.files (Word sometimes puts images here)
       if (clipboard.files && clipboard.files.length > 0) {
-        for (var fi = 0; fi < clipboard.files.length; fi++) {
-          addFile(clipboard.files[fi]);
-        }
+        for (var fi = 0; fi < clipboard.files.length; fi++) addFile(clipboard.files[fi]);
       }
 
-      // 3. Extract base64 images from HTML
+      // 2. Extract base64 images from HTML
       var base64Files: File[] = [];
       if (html) {
-        var re = /<img[^>]+src="(data:image\/[^"]+)"[^>]*\/?>/gi;
-        var m;
-        var bn = 0;
-        while ((m = re.exec(html)) !== null) {
-          var blob = dataUriToBlob(m[1]);
+        var b64re = /<img[^>]+src="(data:image\/[^"]+)"[^>]*\/?>/gi;
+        var bm; var bn = 0;
+        while ((bm = b64re.exec(html)) !== null) {
+          var blob = dataUriToBlob(bm[1]);
           if (blob) {
             var ext = (blob.type.split("/")[1] || "png");
             base64Files.push(new File([blob], "paste-" + bn + "." + ext, { type: blob.type }));
@@ -157,17 +180,10 @@ export default function RichTextEditor(props: RichTextEditorProps) {
         }
       }
 
-      // 4. Extract external http(s) image URLs (e.g. from 语雀/飞书 docs)
-      var externalUrls: string[] = [];
-      if (html) {
-        var extRe = /<img[^>]+src="(https?:\/\/[^"]+)"[^>]*\/?>/gi;
-        var em;
-        while ((em = extRe.exec(html)) !== null) {
-          externalUrls.push(em[1]);
-        }
-      }
+      // 3. Extract external image URLs (HTML <img> + Markdown ![]())
+      var externalUrls = extractExternalImageUrls(html || "", plainText || "");
 
-      // 5. Check for file:// images (Word local references)
+      // 4. Check for file:// images
       var hasFileImages = html ? /<img[^>]+src="file:\/\//i.test(html) : false;
 
       var hasImages = imageFiles.length > 0 || base64Files.length > 0 || externalUrls.length > 0 || hasFileImages;
@@ -176,10 +192,11 @@ export default function RichTextEditor(props: RichTextEditorProps) {
       e.preventDefault();
       e.stopImmediatePropagation();
 
-      // Build clean content without images
+      // Build clean text content
       var cleanedHtml = html ? stripImagesFromHtml(html) : "";
       cleanedHtml = cleanedHtml.replace(/<img[^>]+src="data:image\/[^"]+"[^>]*\/?>/gi, "");
-      var textContent = cleanedHtml || plainText;
+      cleanedHtml = stripMdImages(cleanedHtml);
+      var textContent = cleanedHtml || stripMdImages(plainText || "");
 
       // Collect file uploads
       var uploads: File[] = [];
@@ -195,10 +212,8 @@ export default function RichTextEditor(props: RichTextEditorProps) {
         var ui = 0;
 
         function insertNext() {
-          // File uploads first
           if (ui < uploads.length) {
-            var file = uploads[ui];
-            ui++;
+            var file = uploads[ui]; ui++;
             uploadImageFile(file).then(function (url) {
               if (url) {
                 var qs = url.split("?")[1] || "";
@@ -208,28 +223,18 @@ export default function RichTextEditor(props: RichTextEditorProps) {
                   uploadedPaths.add(fp);
                   if (onFileUploaded) onFileUploaded(fp);
                 }
-                try {
-                  ed.dangerouslyInsertHtml(
-                    '<p><img src="' + url + '" alt="' + file.name + '" style="max-width:100%"/></p>'
-                  );
-                } catch (e) {}
+                try { ed.dangerouslyInsertHtml('<p><img src="' + url + '" alt="' + file.name + '" style="max-width:100%"/></p>'); } catch (e) {}
               }
               insertNext();
             });
             return;
           }
-
-          // External URL proxy downloads
           if (proxyUrls.length > 0) {
             var extUrl = proxyUrls.shift();
             if (extUrl) {
               proxyDownloadImage(extUrl).then(function (localUrl) {
                 var finalUrl = localUrl || extUrl;
-                try {
-                  ed.dangerouslyInsertHtml(
-                    '<p><img src="' + finalUrl + '" style="max-width:100%"/></p>'
-                  );
-                } catch (e) {}
+                try { ed.dangerouslyInsertHtml('<p><img src="' + finalUrl + '" style="max-width:100%"/></p>'); } catch (e) {}
                 insertNext();
               });
             }
@@ -262,27 +267,12 @@ export default function RichTextEditor(props: RichTextEditorProps) {
     },
   };
 
-  var handleContainerClick = function () {
-    if (editor) editor.focus();
-  };
+  var handleContainerClick = function () { if (editor) editor.focus(); };
 
   return (
-    <div
-      className="border border-gray-300 rounded-lg overflow-hidden focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-200"
-      onClick={handleContainerClick}
-    >
-      <Toolbar
-        editor={editor}
-        defaultConfig={TOOLBAR_CONFIG}
-        style={{ borderBottom: "1px solid #e5e7eb" }}
-      />
-      <Editor
-        value={value}
-        onChange={function (ed) { onChange(normalizeHtml(ed.getHtml())); }}
-        onCreated={handleCreated}
-        defaultConfig={editorConfig}
-        style={{ minHeight: 180 }}
-      />
+    <div className="border border-gray-300 rounded-lg overflow-hidden focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-200" onClick={handleContainerClick}>
+      <Toolbar editor={editor} defaultConfig={TOOLBAR_CONFIG} style={{ borderBottom: "1px solid #e5e7eb" }} />
+      <Editor value={value} onChange={function (ed) { onChange(normalizeHtml(ed.getHtml())); }} onCreated={handleCreated} defaultConfig={editorConfig} style={{ minHeight: 180 }} />
     </div>
   );
 }
