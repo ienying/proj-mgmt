@@ -13,6 +13,15 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   X,
   Plus,
@@ -30,6 +39,9 @@ import {
   Server,
   Link,
   AlertTriangle,
+  Search,
+  Download,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -149,6 +161,74 @@ const sectionFocusStyles = `
     border-color: #f97316;
   }
 `;
+
+// 可搜索的人员选择器（Popover + Command）
+function SearchableUserSelect({
+  value,
+  onChange,
+  users,
+  placeholder,
+}: {
+  value: string;
+  onChange: (name: string) => void;
+  users: { id: string; name: string }[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filtered = search
+    ? users.filter((u) => u.name.toLowerCase().includes(search.toLowerCase()))
+    : users;
+
+  const selectedUser = users.find((u) => u.name === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          className="w-full justify-between text-sm font-normal"
+        >
+          {selectedUser?.name || (
+            <span className="text-muted-foreground">{placeholder || "搜索选择人员..."}</span>
+          )}
+          <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[250px] p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="搜索人员..."
+            value={search}
+            onValueChange={setSearch}
+            className="h-9"
+          />
+          <CommandList className="max-h-[200px]">
+            <CommandEmpty className="py-2 text-center text-sm">未找到匹配人员</CommandEmpty>
+            <CommandGroup>
+              {filtered.map((u) => (
+                <CommandItem
+                  key={u.id}
+                  value={u.id}
+                  onSelect={() => {
+                    onChange(u.name);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className="text-sm"
+                >
+                  {u.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 // Section 颜色配置
 const SECTION_COLORS: Record<string, { title: string; focus: string; bg: string }> = {
@@ -307,6 +387,10 @@ export function ProjectForm({
   const [procurementAmount, setProcurementAmount] = useState("");
   const [softwareAmount, setSoftwareAmount] = useState("");
   const [hardwareAmount, setHardwareAmount] = useState("");
+  const [procurementSearch, setProcurementSearch] = useState("");
+
+  // 采购模块 Excel 导入文件引用
+  const procurementFileRef = useRef<HTMLInputElement>(null);
 
   // 系统信息
   const [tenantId, setTenantId] = useState("");
@@ -951,14 +1035,12 @@ export function ProjectForm({
                 ].map((r) => (
                   <div key={r.l} className="space-y-1.5">
                     <Label>{r.l}</Label>
-                    <Select value={r.v} onValueChange={r.s}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="选择人员" /></SelectTrigger>
-                      <SelectContent>
-                        {users.filter(u => u.name).map((u: { id: string; name: string }) => (
-                          <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableUserSelect
+                      value={r.v}
+                      onChange={r.s}
+                      users={users.filter((u) => u.name)}
+                      placeholder="选择人员"
+                    />
                   </div>
                 ))}
               </div>
@@ -1360,32 +1442,141 @@ export function ProjectForm({
                 </div>
               </div>
               <div className="border-t pt-4">
-                <label className="text-sm font-medium text-slate-600 mb-2 block">采购模块 <span className="text-red-500">*</span></label>
-                {productModules.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-3">
-                    {productModules.map((module) => (
-                      <label
-                        key={module.module_code}
-                        className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
-                          selectedModules.includes(module.module_code)
-                            ? "border-blue-500 bg-blue-50"
-                            : "hover:bg-slate-50"
-                        }`}
-                      >
-                        <Checkbox
-                          checked={selectedModules.includes(module.module_code)}
-                          onCheckedChange={() => toggleModule(module.module_code)}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate">{module.module_name}</div>
-                          <div className="text-xs text-slate-400 truncate">{module.product_name}</div>
-                        </div>
-                      </label>
-                    ))}
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-sm font-medium text-slate-600">
+                    采购模块 <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const XLSX = await import("xlsx");
+                          const ws = XLSX.utils.aoa_to_sheet([["模块名称"]]);
+                          ws["!cols"] = [{ wch: 30 }];
+                          const wb = XLSX.utils.book_new();
+                          XLSX.utils.book_append_sheet(wb, ws, "采购模块");
+                          XLSX.writeFile(wb, "采购模块导入模板.xlsx");
+                          toast.success("模板下载成功");
+                        } catch (e) {
+                          toast.error("下载失败: " + String(e));
+                        }
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium text-cyan-700 bg-cyan-50 hover:bg-cyan-100 transition-colors border border-cyan-200"
+                    >
+                      <Download className="h-3.5 w-3.5" />下载模板
+                    </button>
+                    <label className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium text-cyan-700 bg-cyan-50 hover:bg-cyan-100 transition-colors border border-cyan-200 cursor-pointer">
+                      <Upload className="h-3.5 w-3.5" />导入Excel
+                      <input
+                        ref={procurementFileRef}
+                        type="file"
+                        accept=".xlsx,.xls"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            const XLSX_dyn = await import("xlsx");
+                            const data = await file.arrayBuffer();
+                            const wb = XLSX_dyn.read(data, { type: "array" });
+                            const sheetName = wb.SheetNames[0];
+                            const ws = wb.Sheets[sheetName];
+                            const rows = XLSX_dyn.utils.sheet_to_json<Record<string, string>>(ws, { defval: "" });
+
+                            if (rows.length === 0) {
+                              toast.error("Excel 文件中没有数据");
+                              return;
+                            }
+
+                            const matchedCodes: string[] = [];
+                            let unmatched = 0;
+
+                            for (const row of rows) {
+                              const name = (row["模块名称"] || "").toString().trim();
+                              if (!name) {
+                                unmatched++;
+                                continue;
+                              }
+                              const matched = productModules.find(
+                                (m) => m.module_name === name
+                              );
+                              if (matched) {
+                                matchedCodes.push(matched.module_code);
+                              } else {
+                                unmatched++;
+                              }
+                            }
+
+                            if (matchedCodes.length > 0) {
+                              setSelectedModules((prev) => {
+                                const existing = new Set(prev);
+                                matchedCodes.forEach((c) => existing.add(c));
+                                return Array.from(existing);
+                              });
+                            }
+
+                            toast.success(
+                              `导入完成：匹配 ${matchedCodes.length} 个模块${unmatched > 0 ? `，${unmatched} 行未匹配` : ""}`
+                            );
+                          } catch (err) {
+                            toast.error("导入失败: " + String(err));
+                          }
+                          if (procurementFileRef.current) {
+                            procurementFileRef.current.value = "";
+                          }
+                        }}
+                      />
+                    </label>
                   </div>
-                ) : (
-                  <div className="text-center py-6 text-slate-400 text-sm">暂无可选模块</div>
-                )}
+                </div>
+                <div className="mb-3">
+                  <Input
+                    placeholder="搜索模块名称或产品名称..."
+                    value={procurementSearch}
+                    onChange={(e) => setProcurementSearch(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                {(() => {
+                  const filtered = procurementSearch
+                    ? productModules.filter(
+                        (m) =>
+                          m.module_name.toLowerCase().includes(procurementSearch.toLowerCase()) ||
+                          m.product_name.toLowerCase().includes(procurementSearch.toLowerCase())
+                      )
+                    : productModules;
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="text-center py-6 text-slate-400 text-sm">
+                        {procurementSearch ? "未找到匹配模块" : "暂无可选模块"}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="grid grid-cols-3 gap-3">
+                      {filtered.map((module) => (
+                        <label
+                          key={module.module_code}
+                          className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                            selectedModules.includes(module.module_code)
+                              ? "border-blue-500 bg-blue-50"
+                              : "hover:bg-slate-50"
+                          }`}
+                        >
+                          <Checkbox
+                            checked={selectedModules.includes(module.module_code)}
+                            onCheckedChange={() => toggleModule(module.module_code)}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">{module.module_name}</div>
+                            <div className="text-xs text-slate-400 truncate">{module.product_name}</div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             </Section>
 
