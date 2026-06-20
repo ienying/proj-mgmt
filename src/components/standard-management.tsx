@@ -691,6 +691,8 @@ export function StandardManagement({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedProjectType, setSelectedProjectType] = useState<string>("all");
   const [selectedModule, setSelectedModule] = useState<string>("all");
+  const [selectedStage, setSelectedStage] = useState<string>("all");
+  const [searchName, setSearchName] = useState("");
 
   // 规范定义列表拖拽排序
   const [dragDefIndex, setDragDefIndex] = useState<number | null>(null);
@@ -979,6 +981,15 @@ export function StandardManagement({
       if (!modules.includes(selectedModule)) {
         return false;
       }
+    }
+    if (selectedStage !== "all" && !def.apply_project_stages.includes(selectedStage)) {
+      return false;
+    }
+    if (searchName) {
+      const keyword = searchName.toLowerCase();
+      const nameMatch = def.table_name?.toLowerCase().includes(keyword);
+      const codeMatch = def.table_code?.toLowerCase().includes(keyword);
+      if (!nameMatch && !codeMatch) return false;
     }
     return true;
   });
@@ -2183,7 +2194,16 @@ export function StandardManagement({
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="space-y-1">
+            <Label className="text-xs">名称</Label>
+            <Input
+              value={searchName}
+              onChange={(e) => setSearchName(e.target.value)}
+              placeholder="搜索表代码/名称..."
+              className="w-[180px] h-9"
+            />
+          </div>
           <div className="space-y-1">
             <Label className="text-xs">项目类型</Label>
             <Select value={selectedProjectType} onValueChange={setSelectedProjectType}>
@@ -2195,6 +2215,22 @@ export function StandardManagement({
                 {projectTypes.map((type) => (
                   <SelectItem key={type.code} value={type.code}>
                     {type.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">适用阶段</Label>
+            <Select value={selectedStage} onValueChange={setSelectedStage}>
+              <SelectTrigger className="w-full min-w-[120px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部阶段</SelectItem>
+                {projectStages.map((stage) => (
+                  <SelectItem key={stage.code} value={stage.code}>
+                    {stage.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -2216,6 +2252,54 @@ export function StandardManagement({
               </SelectContent>
             </Select>
           </div>
+        </div>
+      </div>
+
+      {/* 统计卡片 */}
+      <div className="px-6 pt-3">
+        <div className="grid grid-cols-4 gap-3">
+          <Card className="shadow-sm">
+            <CardContent className="p-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">总表数</p>
+                <p className="text-xl font-bold">{definitions.length}</p>
+              </div>
+              <Database className="w-5 h-5 text-muted-foreground opacity-50" />
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm">
+            <CardContent className="p-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">覆盖模块</p>
+                <p className="text-xl font-bold">
+                  {new Set(definitions.flatMap(d => Array.isArray(d.module_type) ? d.module_type : d.module_type ? [d.module_type] : [])).size}
+                </p>
+              </div>
+              <Layers className="w-5 h-5 text-muted-foreground opacity-50" />
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm">
+            <CardContent className="p-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">覆盖类型</p>
+                <p className="text-xl font-bold">
+                  {new Set(definitions.flatMap(d => d.apply_project_types || [])).size}
+                </p>
+              </div>
+              <Settings className="w-5 h-5 text-muted-foreground opacity-50" />
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm">
+            <CardContent className="p-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">覆盖阶段</p>
+                <p className="text-xl font-bold">
+                  {new Set(definitions.flatMap(d => d.apply_project_stages || [])).size}
+                </p>
+              </div>
+              <RefreshCw className="w-5 h-5 text-muted-foreground opacity-50" />
+            </CardContent>
+          </Card>
         </div>
       </div>
 
