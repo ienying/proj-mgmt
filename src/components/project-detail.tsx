@@ -130,6 +130,7 @@ interface ColumnConfig {
   required: boolean;
   readonly?: boolean;
   options?: string[];
+  quick_inputs?: string[]; // 文本类型的快捷语列表
   multiple?: boolean;
   display_mode?: "dropdown" | "checkbox" | "project" | "system";
   max_size?: string; // 视频最大文件大小: "100MB" / "500MB" / "1GB"
@@ -1275,6 +1276,26 @@ export function ProjectDetail({
             className="h-7 text-sm"
             autoFocus
           />
+        ) : col.type === "text" && (col.quick_inputs || []).length > 0 ? (
+          <div className="flex items-center gap-1 flex-1">
+            {(col.quick_inputs || []).map((phrase) => (
+              <button
+                key={phrase}
+                type="button"
+                onClick={() => { setEditValue(phrase); saveEdit(phrase); }}
+                className="inline-flex items-center gap-1 bg-green-50 text-green-700 text-[10px] px-2 py-0.5 rounded-full border border-green-200 hover:bg-green-100 hover:border-green-300 transition-colors whitespace-nowrap"
+              >
+                {phrase}
+              </button>
+            ))}
+            <Input
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") cancelEdit(); }}
+              className="h-7 text-sm flex-1"
+              autoFocus
+            />
+          </div>
         ) : (
           <Input
             value={editValue}
@@ -4065,14 +4086,35 @@ export function ProjectDetail({
                     value={newRowData[col.name] || ""}
                     onChange={(e) => setNewRowData(prev => ({ ...prev, [col.name]: e.target.value }))}
                     placeholder={`请输入${col.label || col.name}`}
-                    
+
                   />
+                ) : col.type === "text" && (col.quick_inputs || []).length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      {(col.quick_inputs || []).map((phrase) => (
+                        <button
+                          key={phrase}
+                          type="button"
+                          onClick={() => setNewRowData(prev => ({ ...prev, [col.name]: phrase }))}
+                          className="inline-flex items-center gap-1 bg-green-50 text-green-700 text-xs px-2.5 py-1 rounded-full border border-green-200 hover:bg-green-100 hover:border-green-300 transition-colors"
+                        >
+                          {phrase}
+                        </button>
+                      ))}
+                    </div>
+                    <Input
+                      value={newRowData[col.name] || ""}
+                      onChange={(e) => setNewRowData(prev => ({ ...prev, [col.name]: e.target.value }))}
+                      placeholder={`请输入${col.label || col.name}`}
+
+                    />
+                  </div>
                 ) : (
                   <Input
                     value={newRowData[col.name] || ""}
                     onChange={(e) => setNewRowData(prev => ({ ...prev, [col.name]: e.target.value }))}
                     placeholder={`请输入${col.label || col.name}`}
-                    
+
                   />
                 )}
               </div>

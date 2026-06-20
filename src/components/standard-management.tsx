@@ -98,6 +98,7 @@ export interface ColumnConfig {
   readonly_reason?: string;
   description?: string;
   options?: string[]; // 单选/多选类型的选项列表
+  quick_inputs?: string[]; // 文本类型的快捷语列表
   display_mode?: "dropdown" | "checkbox" | "project" | "system"; // 单选展示方式 或 采购模块数据来源
   multiple?: boolean; // 采购模块选择是否多选
   label?: string;
@@ -1081,6 +1082,25 @@ export function StandardManagement({
     }));
   };
 
+  const addColumnQuickInput = (colIndex: number, phrase: string) => {
+    if (!phrase.trim()) return;
+    setFormData((prev) => ({
+      ...prev,
+      columns_config: prev.columns_config?.map((col, i) =>
+        i === colIndex ? { ...col, quick_inputs: [...(col.quick_inputs || []), phrase.trim()] } : col
+      ),
+    }));
+  };
+
+  const removeColumnQuickInput = (colIndex: number, qiIndex: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      columns_config: prev.columns_config?.map((col, i) =>
+        i === colIndex ? { ...col, quick_inputs: (col.quick_inputs || []).filter((_, qii) => qii !== qiIndex) } : col
+      ),
+    }));
+  };
+
   // 导出列配置为 Excel
   const handleExportColumns = async () => {
     const cols = formData.columns_config || [];
@@ -1098,6 +1118,7 @@ export function StandardManagement({
         "只读": col.readonly ? "是" : "否",
         "描述": col.description || "",
         "选项": (col.options || []).join(", "),
+        "快捷语": (col.quick_inputs || []).join(", "),
       }));
       const worksheet = xlsxLib.utils.json_to_sheet(exportData);
       const workbook = xlsxLib.utils.book_new();
@@ -1152,6 +1173,8 @@ export function StandardManagement({
         const type = typeMap[rawType] || rawType;
         const optionsStr = String(row["选项"] ?? row["options"] ?? "");
         const options = optionsStr ? optionsStr.split(/[,，]/).map((s: string) => s.trim()).filter(Boolean) : [];
+        const quickInputsStr = String(row["快捷语"] ?? row["quick_inputs"] ?? "");
+        const quickInputs = quickInputsStr ? quickInputsStr.split(/[,，]/).map((s: string) => s.trim()).filter(Boolean) : [];
 
         return {
           name: String(row["列名"] ?? row["name"] ?? ""),
@@ -1160,6 +1183,7 @@ export function StandardManagement({
           readonly: String(row["只读"] ?? row["readonly"] ?? "") === "是",
           description: String(row["描述"] ?? row["description"] ?? "") || undefined,
           options: options.length > 0 ? options : undefined,
+          quick_inputs: quickInputs.length > 0 ? quickInputs : undefined,
         };
       }).filter((col) => col.name);
 
@@ -1883,6 +1907,58 @@ export function StandardManagement({
                                     </TableCell>
                                   </TableRow>
                                 )}
+                                {col.type === "text" && (
+                                  <TableRow
+                                    key={`qi-${index}`}
+                                    className={`${dragColIndex === index ? "opacity-40 bg-muted/20" : ""} ${dragOverColIndex === index && dragColIndex !== index ? "ring-2 ring-primary ring-inset" : ""} transition-all`}
+                                    onDragOver={(e) => {
+                                      e.preventDefault();
+                                      e.dataTransfer.dropEffect = "move";
+                                      setDragOverColIndex(index);
+                                    }}
+                                    onDrop={(e) => {
+                                      e.preventDefault();
+                                      if (dragColIndex !== null && dragColIndex !== index) {
+                                        moveColumn(dragColIndex, index);
+                                      }
+                                      setDragColIndex(null);
+                                      setDragOverColIndex(null);
+                                    }}
+                                  >
+                                    <TableCell colSpan={7} className="bg-muted/30 px-4 py-3">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-xs text-muted-foreground shrink-0">快捷语:</span>
+                                        {(col.quick_inputs || []).map((phrase, qi) => (
+                                          <span key={qi} className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">
+                                            {phrase}
+                                            <button
+                                              type="button"
+                                              onClick={() => removeColumnQuickInput(index, qi)}
+                                              className="hover:text-destructive"
+                                            >
+                                              <X className="w-3 h-3" />
+                                            </button>
+                                          </span>
+                                        ))}
+                                        <input
+                                          type="text"
+                                          placeholder="输入快捷语后回车"
+                                          className="h-6 text-xs border-b border-dashed border-muted-foreground/30 bg-transparent outline-none focus:border-primary w-32"
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                              e.preventDefault();
+                                              const val = (e.target as HTMLInputElement).value;
+                                              if (val.trim()) {
+                                                addColumnQuickInput(index, val);
+                                                (e.target as HTMLInputElement).value = "";
+                                              }
+                                            }
+                                          }}
+                                        />
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
                                 {(col.type as string) === "procurement_module" && (
                                   <TableRow
                                     key={`pm-${index}`}
@@ -2547,14 +2623,31 @@ export function StandardManagement({
                       title={isReadonly ? (col.readonly_reason || "只读字段，不可编辑") : ""}
                     />
                   ) : col.type === "text" ? (
-                    <Input
-                      value={String(recordFormData[col.name] || "")}
-                      onChange={(e) => setRecordFormData((prev) => ({ ...prev, [col.name]: e.target.value }))}
-                      placeholder={col.description || `请输入${col.name}`}
-                      disabled={isReadonly}
-                      className={isReadonly ? "bg-muted cursor-not-allowed" : ""}
-                      title={isReadonly ? (col.readonly_reason || "只读字段，不可编辑") : ""}
-                    />
+                    <div className="space-y-2">
+                      {(col.quick_inputs || []).length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {(col.quick_inputs || []).map((phrase) => (
+                            <button
+                              key={phrase}
+                              type="button"
+                              disabled={isReadonly}
+                              onClick={() => setRecordFormData((prev) => ({ ...prev, [col.name]: phrase }))}
+                              className="inline-flex items-center gap-1 bg-green-50 text-green-700 text-xs px-2.5 py-1 rounded-full border border-green-200 hover:bg-green-100 hover:border-green-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {phrase}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <Input
+                        value={String(recordFormData[col.name] || "")}
+                        onChange={(e) => setRecordFormData((prev) => ({ ...prev, [col.name]: e.target.value }))}
+                        placeholder={col.description || `请输入${col.name}`}
+                        disabled={isReadonly}
+                        className={isReadonly ? "bg-muted cursor-not-allowed" : ""}
+                        title={isReadonly ? (col.readonly_reason || "只读字段，不可编辑") : ""}
+                      />
+                    </div>
                   ) : col.type === "number" ? (
                     <Input
                       type="number"
