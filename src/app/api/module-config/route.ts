@@ -23,7 +23,8 @@ export async function POST(request: Request) {
       for (const item of body.items) {
         if (item._delete_all) {
           const { data: existing } = await supabase.rpc('dp_select', { p_table: 'project_type_stage_modules' });
-          const toDelete = (existing || []).filter(
+          const arr = (existing as Array<Record<string, unknown>>) || [];
+          const toDelete = arr.filter(
             (r: Record<string, unknown>) => r.project_type_code === item.project_type_code && r.project_stage_code === item.project_stage_code
           );
           for (const r of toDelete) {
@@ -96,7 +97,7 @@ export async function PUT(request: Request) {
 
       // 删除该类型+阶段的旧配置
       const { data: existing } = await supabase.rpc('dp_select', { p_table: 'project_type_stage_modules' });
-      const toDelete = (existing || []).filter(
+      const toDelete = ((existing as Array<Record<string, unknown>>) || []).filter(
         (r: Record<string, unknown>) => r.project_type_code === project_type_code && r.project_stage_code === project_stage_code
       );
       for (const r of toDelete) {

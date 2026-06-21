@@ -141,8 +141,9 @@ export default function RichTextEditor(props: RichTextEditorProps) {
     var el = ed.getEditableContainer();
     if (!el) return;
 
-    el.addEventListener("paste", function (e: ClipboardEvent) {
-      var clipboard = e.clipboardData;
+    el.addEventListener("paste", function (e: Event) {
+      const clipboardEvent = e as ClipboardEvent;
+      var clipboard = clipboardEvent.clipboardData;
       if (!clipboard) return;
 
       var html = clipboard.getData("text/html");

@@ -61,7 +61,8 @@ function buildSetClause(data: Record<string, unknown>, startIndex = 0): { setCla
 // Public API matching the old Supabase client pattern: client.rpc("method", params)
 // This minimizes changes across all route files.
 class PgRpcClient {
-  async rpc(method: string, params: Record<string, unknown>): Promise<RpcResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async rpc(method: string, params: Record<string, unknown>): Promise<RpcResult<any>> {
     switch (method) {
       case 'dp_select':
         return this.dpSelect(params.p_table as string);
@@ -99,7 +100,7 @@ class PgRpcClient {
 
   private async dpSelect(table: string): Promise<RpcResult<Record<string, unknown>[]>> {
     const t = table.includes('.') ? table : `"${table}"`;
-    return query<Record<string, unknown>>(`SELECT * FROM ${t}`);
+    return query<Record<string, unknown>[]>(`SELECT * FROM ${t}`);
   }
 
   private async dpInsert(table: string, data: Record<string, unknown>): Promise<RpcResult<Record<string, unknown>>> {
@@ -134,7 +135,7 @@ class PgRpcClient {
   private async executeSql(sql: string): Promise<RpcResult<Record<string, unknown>[]>> {
     // Handle potential multiple statements (uncommon but the old execute_sql supported it)
     const trimmed = sql.trim();
-    return query<Record<string, unknown>>(trimmed);
+    return query<Record<string, unknown>[]>(trimmed);
   }
 
   private async queryToJsonb(sql: string): Promise<RpcResult<Record<string, unknown>[]>> {
@@ -208,7 +209,7 @@ class PgQueryBuilder {
     if (this._order) {
       sql += ` ORDER BY "${this._order.col}" ${this._order.dir}`;
     }
-    return query<Record<string, unknown>>(sql, params);
+    return query<Record<string, unknown>[]>(sql, params);
   }
 
   // Make the query builder thenable (acts like a Promise)

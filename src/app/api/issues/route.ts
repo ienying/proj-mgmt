@@ -144,7 +144,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const issueId = data?.id || (Array.isArray(data) ? data[0]?.id : null);
+    const result = data as Record<string, unknown> | Array<Record<string, unknown>> | null;
+    const issueId = (result && !Array.isArray(result) ? result.id : Array.isArray(result) ? result[0]?.id : null) as string | null;
 
     // 2. 创建处理流水记录 - 提交
     if (issueId) {

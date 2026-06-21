@@ -1,99 +1,148 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import {
+  ResponsiveContainer,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Area,
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  Legend,
+} from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-} from "recharts";
-import {
-  LayoutDashboard,
-  FolderKanban,
-  Building2,
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  TrendingUp,
-  Users,
-  Search,
-  ChevronDown,
-  FileText,
-  Shield,
-  Download,
-  Loader2,
-  ArrowRight,
-  Sparkles,
-  Settings,
-  Info,
-  Copy,
-} from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Markdown } from "@/components/markdown";
-import { AIPromptDialog } from "@/components/ai-prompt-dialog";
+import {
+  Search,
+  ChevronDown,
+  Sparkles,
+  Settings,
+  Loader2,
+  X,
+  Check,
+} from "lucide-react";
 
-interface TableStat {
-  table_code: string;
-  table_name: string;
+/* ============================================================
+   Types
+   ============================================================ */
+
+interface KpiData {
+  total_projects: number;
+  customer_type: string | null;
+  total_requirements: number;
+  high_risk_remaining: number;
+  total_tasks: number;
+  stakeholders: number;
+  procurement_items: number;
+}
+
+interface DomainScore {
   module: string;
-  record_count: number;
+  label: string;
+  icon: string;
+  avg: number;
 }
 
-interface ProjectStatsItem {
-  id: string;
+interface ProjectDomainHealth {
+  project_id: string;
   project_name: string;
-  project_code: string;
-  project_type: string;
-  project_stage: string;
-  status: string;
-  role_project_manager: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  member_count: number;
-  stats: {
-    total_records: number;
-    schedule_records: number;
-    table_stats: TableStat[];
-  };
+  scores: Record<string, number>;
+  composite: number;
 }
 
-interface Warning {
+interface HealthRankItem {
+  rank: number;
+  project_id: string;
+  project_name: string;
+  project_type: string;
+  score: number;
+}
+
+interface WeakArea {
+  module: string;
+  label: string;
+  icon: string;
+  avg_score: number;
+  lowest_project: string;
+  lowest_score: number;
+}
+
+interface ReqStats {
+  total: number;
+  completion_rate: number;
+  in_development: number;
+  pending_confirmation: number;
+  backlog: number;
+  avg_processing_days: number;
+  completion_velocity: number;
+}
+
+interface ReqDetail {
+  id: string;
+  title: string;
+  type: string;
+  priority: string;
+  status: string;
+  source: string;
+  date: string;
+}
+
+interface DashboardFullData {
+  kpi: KpiData;
+  domain_averages: DomainScore[];
+  project_domain_health: ProjectDomainHealth[];
+  health_ranking: HealthRankItem[];
+  weak_areas: WeakArea[];
+  project_type_distribution: Array<{ type: string; count: number }>;
+  requirements: {
+    stats: ReqStats;
+    backlog: {
+      backlog_count: number;
+      pending_confirmation: number;
+      avg_processing_days: number;
+      completion_velocity: number;
+    };
+    cumulative_trend: Array<{ month: string; completed: number; total: number }>;
+    status_distribution: Array<{ status: string; count: number }>;
+    category_distribution: Array<{ category: string; count: number }>;
+    detail_list: ReqDetail[];
+  };
+  departments: string[];
+  projects: Array<{
+    id: string;
+    project_name: string;
+    project_code: string;
+    project_type: string;
+    project_stage: string;
+    status: string;
+    role_project_manager: string | null;
+    customer_info?: { company_name?: string };
+  }>;
+}
+
+interface AIWarning {
   project_id: string;
   project_name: string;
   level: "error" | "warning" | "info";
@@ -101,32 +150,23 @@ interface Warning {
   message: string;
 }
 
-interface DashboardData {
-  projects: ProjectStatsItem[];
-  warnings: Warning[];
-  summary: {
-    total_projects: number;
-    active_projects: number;
-    completed_projects: number;
-    total_records_all: number;
-    total_schedule_records: number;
-    total_warnings: number;
-    total_errors: number;
-  };
-}
+/* ============================================================
+   Constants
+   ============================================================ */
 
-const MODULE_NAME_MAP: Record<string, string> = {
-  scope: "范围管理",
-  schedule: "进度管理",
-  quality: "质量管理",
-  cost: "成本管理",
-  collaboration: "协同管理",
-  communication: "沟通管理",
-  risk: "风险管理",
-  procurement: "采购管理",
-  resource: "资源管理",
-  document: "资料管理",
-};
+const NINE_DOMAINS = [
+  { module: "scope", label: "范围管理", icon: "🎯", cls: "k9-scope", color: "#3d6cb9" },
+  { module: "schedule", label: "进度管理", icon: "⏱", cls: "k9-schedule", color: "#f59e0b" },
+  { module: "quality", label: "质量管理", icon: "✅", cls: "k9-quality", color: "#10b981" },
+  { module: "cost", label: "成本管理", icon: "💰", cls: "k9-cost", color: "#ec4899" },
+  { module: "communication", label: "沟通管理", icon: "💬", cls: "k9-communication", color: "#3b82f6" },
+  { module: "risk", label: "风险管理", icon: "⚠️", cls: "k9-risk", color: "#ef4444" },
+  { module: "procurement", label: "采购管理", icon: "📦", cls: "k9-procurement", color: "#0891b2" },
+  { module: "resource", label: "资源管理", icon: "👥", cls: "k9-resource", color: "#7c3aed" },
+  { module: "document", label: "资料管理", icon: "📁", cls: "k9-document", color: "#6b7280" },
+] as const;
+
+const WA_CLASSES = ["wa-doc", "wa-risk", "wa-cost", "wa-scope", "wa-schedule", "wa-procurement"] as const;
 
 const STATUS_LABELS: Record<string, string> = {
   active: "进行中",
@@ -135,202 +175,274 @@ const STATUS_LABELS: Record<string, string> = {
   planning: "规划中",
 };
 
-const CHART_COLORS = [
-  "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
-  "#06b6d4", "#ec4899", "#f97316", "#14b8a6", "#6366f1",
-];
+const CHART_COLORS = ["#22d3a0", "#3b82f6", "#f59e0b", "#ef4444"];
 
-const WARNING_LEVEL_CONFIG: Record<string, { bg: string; text: string; border: string; icon: string }> = {
-  error: { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", icon: "🔴" },
-  warning: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", icon: "🟡" },
-  info: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", icon: "ℹ️" },
-};
+/* ============================================================
+   Helpers
+   ============================================================ */
+
+function scoreColor(v: number) {
+  if (v >= 90) return "#10b981";
+  if (v >= 70) return "#f59e0b";
+  return "#ef4444";
+}
+
+/* ============================================================
+   Sub-components
+   ============================================================ */
+
+function KpiCard({
+  value,
+  label,
+  variant,
+}: {
+  value: number | string;
+  label: string;
+  variant: 1 | 2 | 3 | 4 | 5 | 6;
+}) {
+  return (
+    <div className={`tk tk-k${variant}`}>
+      <div className="tk-val">{value}</div>
+      <div className="tk-label">{label}</div>
+    </div>
+  );
+}
+
+function DomainCell({
+  icon,
+  label,
+  score,
+  cls,
+  projectScores,
+}: {
+  icon: string;
+  label: string;
+  score: number;
+  cls: string;
+  projectScores: Array<{ name: string; pct: number }>;
+}) {
+  return (
+    <div className={`k9 ${cls}`}>
+      <div className="k9-icon">{icon}</div>
+      <div className="k9-val" style={{ color: scoreColor(score) }}>
+        {score}%
+      </div>
+      <div className="k9-label">{label}</div>
+      <div className="k9-bars">
+        {projectScores.slice(0, 2).map((ps, i) => (
+          <div key={i} className="k9-bar">
+            <div
+              className="k9-bar-fill"
+              style={{ width: `${ps.pct}%`, background: scoreColor(ps.pct) }}
+            />
+          </div>
+        ))}
+        {projectScores.length > 0 && (
+          <div style={{ fontSize: 8, color: "var(--text3)", marginTop: 1 }}>
+            {projectScores.slice(0, 2).map((ps) => ps.name).join(" · ")}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WarningPill({ level, text }: { level: "error" | "warning"; text: string }) {
+  return <span className={`db-warn-pill ${level}`}>{level === "error" ? "●" : "●"} {text}</span>;
+}
+
+function HealthRankCard({
+  item,
+  isGold,
+}: {
+  item: HealthRankItem;
+  isGold: boolean;
+}) {
+  return (
+    <div className={`rank-card ${isGold ? "gold" : "silver"}`}>
+      <div className={`rank-badge ${isGold ? "gold" : "silver"}`}>
+        {isGold ? "🥇" : "🥈"}
+      </div>
+      <div>
+        <div className="rank-name">{item.project_name}</div>
+        <div className="rank-type">{item.project_type}</div>
+      </div>
+      <div className="rank-score" style={{ color: isGold ? "#d97706" : "#6b7280" }}>
+        {item.score}%
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Main Component
+   ============================================================ */
 
 export function ProjectDashboard({
   onViewProject,
 }: {
   onViewProject?: (projectId: string) => void;
 }) {
-  const [data, setData] = useState<DashboardData | null>(null);
+  /* ---- state ---- */
+  const [data, setData] = useState<DashboardFullData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 多选项目
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
+  const [deptModalOpen, setDeptModalOpen] = useState(false);
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [deptFilter, setDeptFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [formulaModal, setFormulaModal] = useState<{
+    open: boolean;
+    title: string;
+    formulas: Array<{ metric: string; formula: string; source: string }>;
+  }>({ open: false, title: "", formulas: [] });
 
-  // AI 预警
-  const [aiWarnings, setAiWarnings] = useState<Warning[] | null>(null);
-  const [aiGeneratedAt, setAiGeneratedAt] = useState<string | null>(null);
-  const [aiGeneratedBy, setAiGeneratedBy] = useState<string | null>(null);
+  /* AI */
+  const [aiWarnings, setAiWarnings] = useState<AIWarning[] | null>(null);
   const [aiGenerating, setAiGenerating] = useState(false);
-  const [aiScanStats, setAiScanStats] = useState<{ projectCount: number; tableCount: number; recordCount: number; warningCount: number; hasParsedAI: boolean } | null>(null);
-
-  // AI 分析对话框（和项目管理一致的交互模式）
-  const [aiPromptDialogOpen, setAiPromptDialogOpen] = useState(false);
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState<string | null>(null);
-  const [aiError, setAiError] = useState("");
-  const [aiConversationHistory, setAiConversationHistory] = useState<Array<{ role: string; content: string }>>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiConversationHistory, setAiConversationHistory] = useState<
+    Array<{ role: string; content: string }>
+  >([]);
   const [aiFollowUpQuestion, setAiFollowUpQuestion] = useState("");
   const [aiFollowUpLoading, setAiFollowUpLoading] = useState(false);
-  const [aiCustomSystemMessage, setAiCustomSystemMessage] = useState("");
-  const [aiCustomUserPrompt, setAiCustomUserPrompt] = useState("");
-  const [perProjectReports, setPerProjectReports] = useState<Array<{ project_id: string; project_name: string; content: string }>>([]);
-  const [expandedProject, setExpandedProject] = useState<string | null>(null);
-  const [selectedReportProject, setSelectedReportProject] = useState<string>("");
 
-  // AI 按钮 → 打开提示词对话框
-  const openAIPromptDialog = useCallback(() => {
-    setAiPromptDialogOpen(true);
+  /* real-time clock */
+  const [clock, setClock] = useState("");
+  useEffect(() => {
+    const tick = () => {
+      const d = new Date();
+      setClock(
+        d.toLocaleString("zh-CN", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        })
+      );
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
   }, []);
 
-  // 提示词对话框 → 执行分析
-  const handleAIPromptSubmit = useCallback((result: { systemMessage: string; userPrompt: string; templateId?: string }) => {
-    setAiCustomSystemMessage(result.systemMessage);
-    setAiCustomUserPrompt(result.userPrompt);
-    setAiPromptDialogOpen(false);
-    generateAiWarnings({ systemPrompt: result.systemMessage, userPrompt: result.userPrompt });
-  }, []);
-
-  // 分析详情对话框
-  const [analysisDialog, setAnalysisDialog] = useState<{ open: boolean; projectId: string; projectName: string }>({ open: false, projectId: "", projectName: "" });
-
-  // 预警筛选
-  const [warningLevelFilter, setWarningLevelFilter] = useState<Set<string>>(
-    new Set(["error", "warning"])
-  );
-
-  // 表格排序
-  const [sortField, setSortField] = useState<string>("schedule_records");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-
+  /* ---- fetch ---- */
   const fetchData = useCallback(async (ids?: string[]) => {
-    if (!data) {
-      setLoading(true);
-    } else {
-      setRefreshing(true);
-    }
+    setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
-      if (ids && ids.length > 0) {
-        params.set("project_ids", ids.join(","));
-      }
-      const res = await fetch(`/api/projects/dashboard-stats?${params}`);
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "加载失败");
-      }
+      if (ids && ids.length > 0) params.set("project_ids", ids.join(","));
+      if (deptFilter !== "all") params.set("department", deptFilter);
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      const res = await fetch(`/api/projects/dashboard-full?${params}`);
+      if (!res.ok) throw new Error((await res.json()).error || "加载失败");
       const json = await res.json();
       setData(json.data);
-      // 初次加载时选中所有项目
       if (!ids) {
-        setSelectedIds(new Set(json.data.projects.map((p: ProjectStatsItem) => p.id)));
+        setSelectedIds(new Set(json.data.projects.map((p: { id: string }) => p.id)));
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "加载失败");
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
-  }, [data]);
+  }, [deptFilter, statusFilter]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // 加载缓存的 AI 预警
+  /* Load cached AI warnings */
   useEffect(() => {
-    const loadCachedWarnings = async () => {
+    (async () => {
       try {
         const res = await fetch("/api/projects/dashboard-warnings");
         if (res.ok) {
           const json = await res.json();
           if (json.data) {
             setAiWarnings(json.data.warnings || []);
-            setAiGeneratedAt(json.data.generated_at || null);
-            setAiGeneratedBy(json.data.generated_by || null);
-            setAiScanStats(json.data.stats || null);
             if (json.data.raw_response) setAiResult(json.data.raw_response);
-            setPerProjectReports(json.data.perProjectReports || []);
           }
         }
-      } catch { /* ignore */ }
-    };
-    loadCachedWarnings();
+      } catch {}
+    })();
   }, []);
 
-  // 生成新 AI 预警（可选传入自定义提示词）
-  const generateAiWarnings = async (opts?: { systemPrompt?: string; userPrompt?: string }) => {
+  /* ---- handlers ---- */
+  const handleProjectToggle = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (!data) return;
+    setSelectedIds(new Set(data.projects.map((p) => p.id)));
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedIds(new Set());
+  };
+
+  const applyProjectSelection = () => {
+    if (selectedIds.size === 0) {
+      fetchData();
+    } else {
+      fetchData(Array.from(selectedIds));
+    }
+    setProjectModalOpen(false);
+  };
+
+  const generateAiWarnings = async () => {
     setAiDialogOpen(true);
     setAiLoading(true);
     setAiResult(null);
-    setAiError("");
-    setAiConversationHistory([]);
-    setAiFollowUpQuestion("");
     setAiGenerating(true);
-
     try {
       const projectIds = selectedIds.size > 0 ? Array.from(selectedIds) : undefined;
       const res = await fetch("/api/projects/dashboard-warnings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          project_ids: projectIds,
-          system_message: opts?.systemPrompt || undefined,
-          user_message: opts?.userPrompt || undefined,
-        }),
+        body: JSON.stringify({ project_ids: projectIds }),
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "生成失败");
-      }
+      if (!res.ok) throw new Error((await res.json()).error || "生成失败");
       const json = await res.json();
       if (json.data) {
-        const newWarnings = json.data.warnings || [];
-        setAiWarnings(newWarnings);
-        setAiGeneratedAt(json.data.generated_at || null);
-        setAiGeneratedBy(json.data.generated_by || null);
-        setAiScanStats(json.data.stats || null);
-        setWarningLevelFilter(new Set(["error", "warning", "info"]));
-
-        const rawResponse = json.data.raw_response || "";
-        setAiResult(rawResponse);
-        setPerProjectReports(json.data.perProjectReports || []);
-        setExpandedProject(null);
-
+        setAiWarnings(json.data.warnings || []);
+        setAiResult(json.data.raw_response || "");
         if (json.data.conversationHistory) {
           setAiConversationHistory(json.data.conversationHistory);
-        } else {
-          setAiConversationHistory([
-            { role: "system", content: opts?.systemPrompt || "" },
-            { role: "user", content: opts?.userPrompt || "" },
-            { role: "assistant", content: rawResponse },
-          ]);
         }
-
         const stats = json.data.stats;
         if (stats) {
-          toast.success(`AI 扫描完成：${stats.projectCount} 个项目、${stats.tableCount} 张表、${stats.recordCount} 条记录 → ${newWarnings.length} 条预警`);
+          toast.success(
+            `AI 扫描：${stats.projectCount} 个项目、${stats.tableCount} 张表 → ${stats.warningCount} 条预警`
+          );
         } else {
-          toast.success(`AI 预警生成完成，共 ${newWarnings.length} 条`);
+          toast.success(`AI 预警生成完成，共 ${json.data.warnings?.length || 0} 条`);
         }
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "生成失败";
-      setAiError(msg);
-      toast.error(msg);
+      toast.error(e instanceof Error ? e.message : "生成失败");
     } finally {
       setAiLoading(false);
       setAiGenerating(false);
     }
   };
 
-  // 追问
   const handleAIFollowUp = useCallback(async () => {
     const q = aiFollowUpQuestion.trim();
     if (!q || aiConversationHistory.length === 0) return;
@@ -347,28 +459,28 @@ export function ProjectDashboard({
         }),
       });
       const json = await res.json();
-      if (!res.ok || json.error) { toast.error(json.error || "追问失败"); return; }
+      if (!res.ok || json.error) {
+        toast.error(json.error || "追问失败");
+        return;
+      }
       if (json.data?.analysis) {
-        setAiConversationHistory((prev) => [...prev, { role: "user", content: q }, { role: "assistant", content: json.data.analysis }]);
+        setAiConversationHistory((prev) => [
+          ...prev,
+          { role: "user", content: q },
+          { role: "assistant", content: json.data.analysis },
+        ]);
         setAiResult(json.data.analysis);
       }
-    } catch (e) { toast.error("追问失败: " + String(e)); }
-    finally { setAiFollowUpLoading(false); }
+    } catch (e) {
+      toast.error("追问失败: " + String(e));
+    } finally {
+      setAiFollowUpLoading(false);
+    }
   }, [aiFollowUpQuestion, aiConversationHistory]);
 
-  // 选中项目变化时重新请求
-  const handleSelectionChange = (newIds: Set<string>) => {
-    setSelectedIds(newIds);
-    if (newIds.size === 0) {
-      // 全不选视为查全部
-      fetchData();
-    } else {
-      fetchData(Array.from(newIds));
-    }
-  };
-
-  // 过滤项目列表（用于搜索）
+  /* ---- computed ---- */
   const allProjects = data?.projects || [];
+
   const filteredProjects = useMemo(() => {
     if (!searchQuery.trim()) return allProjects;
     const q = searchQuery.toLowerCase();
@@ -380,144 +492,43 @@ export function ProjectDashboard({
     );
   }, [allProjects, searchQuery]);
 
-  // 选中的项目数据
-  const selectedProjects = useMemo(() => {
-    if (selectedIds.size === 0) return allProjects;
-    return allProjects.filter((p) => selectedIds.has(p.id));
-  }, [allProjects, selectedIds]);
+  const kpi = data?.kpi;
 
-  // 计算选中项目的汇总
-  const selectedSummary = useMemo(() => {
-    const projects = selectedProjects;
-    return {
-      total_projects: projects.length,
-      active_projects: projects.filter((p) => p.status === "active").length,
-      total_records: projects.reduce((s, p) => s + p.stats.total_records, 0),
-      total_schedule_records: projects.reduce((s, p) => s + p.stats.schedule_records, 0),
-      total_members: projects.reduce((s, p) => s + p.member_count, 0),
-    };
-  }, [selectedProjects]);
-
-  // 过滤预警：优先使用 AI 预警，兜底用规则预警
-  const displayWarnings = useMemo(() => {
-    const source = aiWarnings ?? data?.warnings ?? [];
-    let warnings = source;
-    if (selectedIds.size > 0) {
-      // 构建 name→id 回退映射（AI 可能返回名称而非精确 ID）
-      const nameToId = new Map<string, string>();
-      if (data?.projects) {
-        for (const p of data.projects) {
-          nameToId.set(p.project_name, p.id);
-        }
-      }
-      warnings = warnings.filter((w) => {
-        if (selectedIds.has(w.project_id)) return true;
-        // fallback: 用项目名称匹配
-        const idByName = nameToId.get(w.project_name);
-        if (idByName && selectedIds.has(idByName)) return true;
-        return false;
-      });
-    }
-    if (warningLevelFilter.size === 0) return warnings;
-    return warnings.filter((w) => warningLevelFilter.has(w.level));
-  }, [data, aiWarnings, selectedIds, warningLevelFilter]);
-
-  const isAiGenerated = aiWarnings !== null;
-
-  // 排序后的选中项目
-  const sortedProjects = useMemo(() => {
-    const projects = [...selectedProjects];
-    projects.sort((a, b) => {
-      let valA: number, valB: number;
-      switch (sortField) {
-        case "schedule_records":
-          valA = a.stats.schedule_records;
-          valB = b.stats.schedule_records;
-          break;
-        case "total_records":
-          valA = a.stats.total_records;
-          valB = b.stats.total_records;
-          break;
-        case "member_count":
-          valA = a.member_count;
-          valB = b.member_count;
-          break;
-        default:
-          return 0;
-      }
-      return sortDir === "desc" ? valB - valA : valA - valB;
-    });
-    return projects;
-  }, [selectedProjects, sortField, sortDir]);
-
-  const handleSort = (field: string) => {
-    if (sortField === field) {
-      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
-    } else {
-      setSortField(field);
-      setSortDir("desc");
-    }
-  };
-
-  // 图表数据
-  const barChartData = useMemo(() => {
-    const top10 = sortedProjects.slice(0, 10);
-    return top10.map((p) => ({
-      name: p.project_name.length > 8 ? p.project_name.slice(0, 8) + "..." : p.project_name,
-      fullName: p.project_name,
-      进度管理记录: p.stats.schedule_records,
-      总记录数: p.stats.total_records,
+  /* Project domain health for radar */
+  const radarData = useMemo(() => {
+    if (!data?.domain_averages) return [];
+    return data.domain_averages.map((d) => ({
+      domain: d.label,
+      ...Object.fromEntries(
+        (data.project_domain_health || []).slice(0, 2).map((p, i) => [
+          p.project_name.slice(0, 6),
+          p.scores[d.module] || 0,
+        ])
+      ),
+      [d.label]: d.avg,
     }));
-  }, [sortedProjects]);
+  }, [data]);
 
-  const typePieData = useMemo(() => {
-    const map = new Map<string, number>();
-    selectedProjects.forEach((p) => {
-      const t = p.project_type || "未知";
-      map.set(t, (map.get(t) || 0) + 1);
-    });
-    return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
-  }, [selectedProjects]);
+  const radarProjects = (data?.project_domain_health || []).slice(0, 2);
 
-  const stagePieData = useMemo(() => {
-    const map = new Map<string, number>();
-    selectedProjects.forEach((p) => {
-      const s = p.project_stage || "未知";
-      map.set(s, (map.get(s) || 0) + 1);
-    });
-    return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
-  }, [selectedProjects]);
+  /* Weak areas with chart data */
+  const weakAreas = data?.weak_areas || [];
 
-  const handleExport = () => {
-    if (sortedProjects.length === 0) {
-      toast.info("没有可导出的数据");
-      return;
-    }
-    const headers = ["项目名称", "项目编号", "项目经理", "项目类型", "项目阶段", "状态", "进度管理记录数", "总记录数", "成员数"];
-    const rows = sortedProjects.map((p) => [
-      p.project_name,
-      p.project_code,
-      p.role_project_manager || "-",
-      p.project_type,
-      p.project_stage,
-      STATUS_LABELS[p.status] || p.status,
-      p.stats.schedule_records,
-      p.stats.total_records,
-      p.member_count,
-    ]);
-    const csv = [headers, ...rows]
-      .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `项目看板统计_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("导出成功");
-  };
+  /* Req detail search */
+  const [reqSearch, setReqSearch] = useState("");
+  const reqDetails = data?.requirements.detail_list || [];
+  const filteredReqs = useMemo(() => {
+    if (!reqSearch.trim()) return reqDetails;
+    const q = reqSearch.toLowerCase();
+    return reqDetails.filter(
+      (r) =>
+        r.title.toLowerCase().includes(q) ||
+        r.id.toLowerCase().includes(q) ||
+        r.type.toLowerCase().includes(q)
+    );
+  }, [reqDetails, reqSearch]);
 
+  /* ---- loading / error states ---- */
   if (loading && !data) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -530,7 +541,6 @@ export function ProjectDashboard({
   if (error && !data) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
-        <AlertTriangle className="w-10 h-10 text-red-400" />
         <p className="text-sm text-red-600">{error}</p>
         <Button variant="outline" size="sm" onClick={() => fetchData()}>
           重试
@@ -541,726 +551,752 @@ export function ProjectDashboard({
 
   if (!data) return null;
 
+  /* ============================================================
+     RENDER
+     ============================================================ */
   return (
-    <div className="p-6 space-y-5 overflow-auto">
-      {/* ===== Header ===== */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <LayoutDashboard className="w-7 h-7 text-teal-500" />
-            项目看板
-            {refreshing && (
-              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground ml-1" />
-            )}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            全局项目概览与数据统计
-          </p>
+    <div className="db" style={{ padding: "0 14px 24px", background: "var(--bg)", minHeight: "100%" }}>
+      {/* ========== Header ========== */}
+      <div className="db-header">
+        <div className="flex items-center gap-4">
+          <div className="db-pulse" />
+          <button className="btn-sm" onClick={() => setProjectModalOpen(true)}>
+            🔍 切换项目
+          </button>
+          <button className="btn-sm" onClick={() => setDeptModalOpen(true)}>
+            🏢 {deptFilter === "all" ? "部门筛选" : deptFilter}
+          </button>
+          <button className="btn-sm" onClick={() => setStatusModalOpen(true)}>
+            📊 {statusFilter === "all" ? "项目状态" : STATUS_LABELS[statusFilter] || statusFilter}
+          </button>
+          <span className="btn-sm" style={{ cursor: "default" }}>
+            📅 时间筛选
+          </span>
         </div>
-        <div className="flex items-center gap-2">
-          {/* 项目搜索多选 */}
-          <Popover open={searchOpen} onOpenChange={setSearchOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5 min-w-[200px] justify-between">
-                <Search className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                <span className="text-sm truncate">
-                  {selectedIds.size === 0 || selectedIds.size === allProjects.length
-                    ? `全部项目 (${allProjects.length})`
-                    : `已选 ${selectedIds.size} 个项目`}
-                </span>
-                <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[340px] p-0" align="end">
-              <div className="p-2 border-b">
-                <Input
-                  placeholder="搜索项目名称/编号/项目经理..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-8 text-sm border-0 focus-visible:ring-0"
-                />
-              </div>
-              <div className="max-h-[520px] overflow-auto p-1">
-                <div
-                  className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-sm"
-                  onClick={() => handleSelectionChange(new Set())}
-                >
-                  <Checkbox checked={selectedIds.size === 0 || selectedIds.size === allProjects.length} />
-                  <span className="font-medium">全部项目</span>
-                </div>
-                <div className="border-t my-1" />
-                {filteredProjects.map((p) => (
-                  <label
-                    key={p.id}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-sm"
-                  >
-                    <Checkbox
-                      checked={selectedIds.has(p.id)}
-                      onCheckedChange={(checked) => {
-                        const next = new Set(selectedIds);
-                        if (checked) {
-                          next.add(p.id);
-                        } else {
-                          next.delete(p.id);
-                        }
-                        handleSelectionChange(next);
-                      }}
-                    />
-                    <span className="truncate flex-1">{p.project_name}</span>
-                    <span className="text-xs text-muted-foreground shrink-0">{p.project_code}</span>
-                  </label>
-                ))}
-                {filteredProjects.length === 0 && (
-                  <div className="px-2 py-3 text-sm text-muted-foreground text-center">
-                    无匹配项目
-                  </div>
-                )}
-              </div>
-              {selectedIds.size > 0 && selectedIds.size < allProjects.length && (
-                <div className="border-t p-2 flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs flex-1"
-                    onClick={() => handleSelectionChange(new Set())}
-                  >
-                    查看全部
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs flex-1"
-                    onClick={() => handleSelectionChange(new Set())}
-                  >
-                    清除选择
-                  </Button>
-                </div>
-              )}
-            </PopoverContent>
-          </Popover>
 
-          <Button variant="outline" size="sm" onClick={handleExport} className="gap-1.5">
-            <Download className="w-3.5 h-3.5" />
-            导出
-          </Button>
-        </div>
-      </div>
-
-      {/* ===== 板块 1：统计卡片 ===== */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        <Card className="shadow-sm">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-              <FolderKanban className="w-5 h-5 text-blue-600" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-2xl font-bold">{selectedSummary.total_projects}</div>
-              <div className="text-xs text-muted-foreground">项目总数</div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
-              <TrendingUp className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-2xl font-bold">{selectedSummary.active_projects}</div>
-              <div className="text-xs text-muted-foreground">进行中</div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
-              <FileText className="w-5 h-5 text-violet-600" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-2xl font-bold">{selectedSummary.total_records}</div>
-              <div className="text-xs text-muted-foreground">总记录数</div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
-              <Clock className="w-5 h-5 text-amber-600" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-2xl font-bold">{selectedSummary.total_schedule_records}</div>
-              <div className="text-xs text-muted-foreground">进度管理记录</div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-teal-100 flex items-center justify-center shrink-0">
-              <Users className="w-5 h-5 text-teal-600" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-2xl font-bold">{selectedSummary.total_members}</div>
-              <div className="text-xs text-muted-foreground">成员总数</div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ===== 板块 2：AI 预警信息 ===== */}
-      <Card className="shadow-sm">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Shield className="w-4 h-4 text-orange-500" />
-              AI 预警分析
-              {isAiGenerated && aiGeneratedAt && (
-                <span className="text-xs text-muted-foreground font-normal">
-                  上次生成：{new Date(aiGeneratedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                  {aiGeneratedBy ? `（${aiGeneratedBy}）` : ""}
-                </span>
-              )}
-              {perProjectReports.length > 0 && (
-                <Badge variant="secondary" className="text-xs bg-teal-50 text-teal-600">
-                  {perProjectReports.length} 个项目
-                </Badge>
-              )}
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs gap-1"
-                onClick={openAIPromptDialog}
-                disabled={aiGenerating}
-              >
-                {aiGenerating ? (
-                  <>
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    AI 分析中...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3 h-3" />
-                    生成新预警
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0"
-                onClick={openAIPromptDialog}
-                title="编辑 AI 提示词"
-              >
-                <Settings className="w-3.5 h-3.5 text-muted-foreground" />
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {/* 加载中 */}
-          {aiGenerating && (
-            <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              AI 正在逐项目分析中...
-            </div>
-          )}
-
-          {/* 首次使用提示 */}
-          {!aiGenerating && perProjectReports.length === 0 && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-              <Sparkles className="w-4 h-4 text-teal-400" />
-              点击「生成新预警」开始 AI 分析
-            </div>
-          )}
-
-          {/* 逐项目扑克牌卡片 */}
-          {perProjectReports.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {perProjectReports.map((report) => {
-                const projInfo = (data?.projects || []).find(
-                  (p) => p.id === report.project_id || p.project_name === report.project_name
-                );
-                const pWarnings = (aiWarnings || []).filter(
-                  (w) => w.project_id === report.project_id || w.project_name === report.project_name
-                );
-                const expanded = expandedProject === report.project_id;
-                return (
-                  <div key={report.project_id} className={cn(
-                    "bg-white rounded-xl border shadow-sm hover:shadow-md transition-all overflow-hidden",
-                    expanded && "ring-2 ring-teal-200 sm:col-span-2"
-                  )}>
-                    {/* 卡片头：项目名称 + 风险指示 */}
-                    <div className="px-4 py-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className={cn(
-                          "w-2.5 h-2.5 rounded-full shrink-0",
-                          pWarnings.some(w => w.level === "error") ? "bg-red-500" :
-                          pWarnings.some(w => w.level === "warning") ? "bg-amber-500" :
-                          pWarnings.length > 0 ? "bg-blue-500" : "bg-emerald-500"
-                        )} />
-                        <h5 className="text-sm font-semibold text-gray-900 truncate">{report.project_name}</h5>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button variant="ghost" size="sm" className="h-7 text-xs text-teal-600" onClick={() => setAiDialogOpen(true)}>
-                          查看报告 →
-                        </Button>
-                        <button
-                          onClick={() => setExpandedProject(expanded ? null : report.project_id)}
-                          className="p-1 rounded hover:bg-gray-100"
-                        >
-                          <ChevronDown className={cn("w-4 h-4 text-gray-400 transition-transform", expanded && "rotate-180")} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* 项目信息标签 */}
-                    {projInfo && (
-                      <div className="px-4 pb-2 flex flex-wrap gap-2">
-                        <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 bg-gray-50 rounded-md px-2 py-1">
-                          <Building2 className="w-3 h-3" />
-                          {projInfo.project_type || "-"}
-                        </span>
-                        <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 bg-gray-50 rounded-md px-2 py-1">
-                          <Users className="w-3 h-3" />
-                          经理 {projInfo.role_project_manager || "未指定"}
-                        </span>
-                        <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 bg-gray-50 rounded-md px-2 py-1">
-                          <Users className="w-3 h-3" />
-                          {projInfo.member_count} 人
-                        </span>
-                        <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 bg-gray-50 rounded-md px-2 py-1">
-                          <FolderKanban className="w-3 h-3" />
-                          {projInfo.project_stage || "-"}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* 预警摘要标签 */}
-                    <div className="px-4 pb-3 flex flex-wrap gap-1.5">
-                      {pWarnings.length > 0 ? (
-                        pWarnings.slice(0, 3).map((w, i) => (
-                          <span key={i} className={cn(
-                            "text-[10px] px-2 py-0.5 rounded-full font-medium",
-                            w.level === "error" ? "bg-red-50 text-red-600 border border-red-100" :
-                            w.level === "warning" ? "bg-amber-50 text-amber-600 border border-amber-100" :
-                            "bg-blue-50 text-blue-600 border border-blue-100"
-                          )}>
-                            {w.message}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-[10px] text-gray-500 truncate max-w-[280px]">
-                          {report.content.split("\n").filter(l => l.trim() && !l.startsWith("#") && !l.startsWith("```") && !l.startsWith("|")).slice(0, 2).join(" · ").slice(0, 60) || "查看报告了解详情"}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* 展开内容 */}
-                    {expanded && (
-                      <div className="px-4 py-3 border-t bg-gray-50">
-                        <Markdown>{report.content.slice(0, 5000)}</Markdown>
-                        {report.content.length > 5000 && (
-                          <Button variant="link" size="sm" className="text-xs text-teal-600 p-0 mt-1" onClick={() => setAiDialogOpen(true)}>
-                            查看完整报告 →
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* ===== 板块 3：项目统计对比表 ===== */}
-        <Card className="shadow-sm lg:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Table className="w-4 h-4" />
-              项目统计对比
-              <span className="text-xs text-muted-foreground font-normal">
-                （共 {sortedProjects.length} 个项目）
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-auto max-h-[500px]">
-              <Table>
-                <TableHeader className="sticky top-0 bg-white z-10">
-                  <TableRow>
-                    <TableHead className="min-w-[140px]">项目名称</TableHead>
-                    <TableHead className="min-w-[80px]">项目经理</TableHead>
-                    <TableHead className="min-w-[60px]">类型</TableHead>
-                    <TableHead className="min-w-[60px]">阶段</TableHead>
-                    <TableHead className="min-w-[60px]">状态</TableHead>
-                    <TableHead
-                      className="min-w-[110px] cursor-pointer select-none"
-                      onClick={() => handleSort("schedule_records")}
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        进度记录
-                        {sortField === "schedule_records" && (
-                          <span className="text-blue-500">{sortDir === "desc" ? "↓" : "↑"}</span>
-                        )}
-                      </span>
-                    </TableHead>
-                    <TableHead
-                      className="min-w-[80px] cursor-pointer select-none"
-                      onClick={() => handleSort("total_records")}
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        总记录
-                        {sortField === "total_records" && (
-                          <span className="text-blue-500">{sortDir === "desc" ? "↓" : "↑"}</span>
-                        )}
-                      </span>
-                    </TableHead>
-                    <TableHead
-                      className="min-w-[60px] cursor-pointer select-none"
-                      onClick={() => handleSort("member_count")}
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        成员
-                        {sortField === "member_count" && (
-                          <span className="text-blue-500">{sortDir === "desc" ? "↓" : "↑"}</span>
-                        )}
-                      </span>
-                    </TableHead>
-                    <TableHead className="min-w-[60px]">操作</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedProjects.map((p) => (
-                    <TableRow key={p.id} className="hover:bg-gray-50/50">
-                      <TableCell className="font-medium text-sm">
-                        <div className="truncate max-w-[150px]" title={p.project_name}>
-                          {p.project_name}
-                        </div>
-                        <div className="text-xs text-muted-foreground">{p.project_code}</div>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {p.role_project_manager || <span className="text-red-400">未指定</span>}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{p.project_type}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{p.project_stage}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="secondary"
-                          className={cn(
-                            "text-xs",
-                            p.status === "active" && "bg-emerald-100 text-emerald-700",
-                            p.status === "completed" && "bg-blue-100 text-blue-700",
-                            p.status === "suspended" && "bg-amber-100 text-amber-700"
-                          )}
-                        >
-                          {STATUS_LABELS[p.status] || p.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm font-medium">{p.stats.schedule_records}</TableCell>
-                      <TableCell className="text-sm">{p.stats.total_records}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{p.member_count}</TableCell>
-                      <TableCell>
-                        {onViewProject && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs gap-1"
-                            onClick={() => onViewProject(p.id)}
-                          >
-                            详情
-                            <ArrowRight className="w-3 h-3" />
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {sortedProjects.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-8">
-                        暂无项目数据
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* ===== 板块 4a：进度管理记录柱状图 ===== */}
-        <Card className="shadow-sm">
-          <CardHeader className="pb-1">
-            <CardTitle className="text-sm">各项目进度管理记录数（Top 10）</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {barChartData.length === 0 ? (
-              <div className="flex items-center justify-center h-[260px] text-sm text-muted-foreground">
-                暂无数据
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={barChartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-30} textAnchor="end" height={60} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip
-                    formatter={(value: number, name: string) => [value, name]}
-                    labelFormatter={(label: string, payload: unknown[]) => {
-                      const item = (payload as Array<{ payload: { fullName: string } }>)?.[0];
-                      return item?.payload?.fullName || label;
-                    }}
-                    contentStyle={{ fontSize: 12 }}
-                  />
-                  <Bar dataKey="进度管理记录" fill="#10b981" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* ===== 板块 4b：项目类型/阶段分布 ===== */}
-        <Card className="shadow-sm">
-          <CardHeader className="pb-1">
-            <CardTitle className="text-sm">项目类型与阶段分布</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {typePieData.length === 0 && stagePieData.length === 0 ? (
-              <div className="flex items-center justify-center h-[260px] text-sm text-muted-foreground">
-                暂无数据
-              </div>
-            ) : (
-              <div className="flex gap-2 h-[260px]">
-                <div className="flex-1">
-                  <div className="text-xs text-muted-foreground text-center mb-1">按类型</div>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <PieChart>
-                      <Pie
-                        data={typePieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={30}
-                        outerRadius={70}
-                        paddingAngle={2}
-                        dataKey="value"
-                      >
-                        {typePieData.map((_, i) => (
-                          <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value: number) => [`${value} 个`, "项目数"]} contentStyle={{ fontSize: 12 }} />
-                      <Legend
-                        formatter={(value: string) => (
-                          <span className="text-xs">{value}</span>
-                        )}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex-1">
-                  <div className="text-xs text-muted-foreground text-center mb-1">按阶段</div>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <PieChart>
-                      <Pie
-                        data={stagePieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={30}
-                        outerRadius={70}
-                        paddingAngle={2}
-                        dataKey="value"
-                      >
-                        {stagePieData.map((_, i) => (
-                          <Cell key={i} fill={CHART_COLORS[(i + 3) % CHART_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value: number) => [`${value} 个`, "项目数"]} contentStyle={{ fontSize: 12 }} />
-                      <Legend
-                        formatter={(value: string) => (
-                          <span className="text-xs">{value}</span>
-                        )}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* AI 提示词模板弹窗 */}
-      <AIPromptDialog
-        open={aiPromptDialogOpen}
-        onOpenChange={setAiPromptDialogOpen}
-        onSubmit={handleAIPromptSubmit}
-        projectSchema="dashboard"
-        promptType="global"
-      />
-
-      {/* AI 分析报告弹窗（和项目管理一致的 Markdown + 追问模式） */}
-      <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <Sparkles className="w-5 h-5 text-teal-500" />
-              AI 预警分析报告
-              {aiGeneratedAt && (
-                <>
-                  <span className="text-gray-300">·</span>
-                  <span className="text-xs font-normal text-gray-500">
-                    {new Date(aiGeneratedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                </>
-              )}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 flex-1 overflow-y-auto min-h-0">
-            {aiLoading && (
-              <div className="flex flex-col items-center py-12">
-                <Sparkles className="w-12 h-12 text-teal-400 animate-pulse mb-4" />
-                <p className="text-sm text-gray-500 mb-2">AI 正在分析项目数据...</p>
-                {aiScanStats && (
-                  <p className="text-xs text-gray-400">
-                    正在读取 {aiScanStats.projectCount} 个项目、{aiScanStats.tableCount} 张表的数据
-                  </p>
-                )}
-              </div>
-            )}
-
-            {aiError && !aiLoading && (
-              <div className="py-8 text-center">
-                <p className="text-red-500 text-sm">分析失败</p>
-                <p className="text-red-400 text-xs mt-1">{aiError}</p>
-                <Button variant="outline" size="sm" className="mt-3" onClick={openAIPromptDialog}>重试</Button>
-              </div>
-            )}
-
-            {aiResult && !aiLoading && (
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={generateAiWarnings}
+            disabled={aiGenerating}
+          >
+            {aiGenerating ? (
               <>
-                {/* 扫描统计 */}
-                {aiScanStats && (
-                  <div className="flex items-center gap-3 text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
-                    <span>{aiScanStats.projectCount} 个项目</span>
-                    <span>·</span>
-                    <span>{aiScanStats.tableCount} 张表</span>
-                    <span>·</span>
-                    <span>{aiScanStats.recordCount} 条记录</span>
-                    <span>·</span>
-                    <span className={aiScanStats.warningCount > 0 ? "text-orange-600 font-medium" : "text-emerald-600"}>
-                      {aiScanStats.warningCount} 条预警
-                    </span>
-                  </div>
-                )}
-
-                {/* 逐项目 Tab 切换 */}
-                {perProjectReports.length > 1 && (
-                  <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5 overflow-x-auto">
-                    {perProjectReports.map((r) => (
-                      <button
-                        key={r.project_id}
-                        onClick={() => setSelectedReportProject(r.project_id)}
-                        className={cn(
-                          "px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors",
-                          selectedReportProject === r.project_id || (!selectedReportProject && perProjectReports[0].project_id === r.project_id)
-                            ? "bg-white text-gray-900 shadow-sm"
-                            : "text-gray-500 hover:text-gray-700"
-                        )}
-                      >
-                        {r.project_name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* 当前选中项目的分析 */}
-                {(() => {
-                  const activeReport = perProjectReports.find((r) => r.project_id === selectedReportProject) || perProjectReports[0];
-                  const activeContent = activeReport?.content || aiResult;
-                  return (
-                    <Markdown>{activeContent}</Markdown>
-                  );
-                })()}
-
-                {/* 操作栏 */}
-                <div className="flex items-center gap-2 pt-2 border-t">
-                  <Button variant="outline" size="sm" onClick={() => {
-                    const activeReport = perProjectReports.find((r) => r.project_id === selectedReportProject) || perProjectReports[0];
-                    navigator.clipboard.writeText(activeReport?.content || aiResult);
-                    toast.success("已复制分析结果");
-                  }}>
-                    <Copy className="w-3.5 h-3.5 mr-1" />复制结果
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={openAIPromptDialog}>
-                    <Loader2 className="w-3.5 h-3.5 mr-1" />重新分析
-                  </Button>
-                </div>
+                <Loader2 className="w-3 h-3 animate-spin" /> AI 分析中...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-3 h-3" /> 生成新预警
               </>
             )}
+          </Button>
+          <span className="db-clock">{clock}</span>
+        </div>
+      </div>
+
+      {/* ========== KPI Row ========== */}
+      <div className="kpi6" style={{ marginTop: 10 }}>
+        <KpiCard
+          value={selectedIds.size === 1 ? (allProjects.find((p) => selectedIds.has(p.id))?.customer_info?.company_name || "未分类") : kpi?.total_projects ?? 0}
+          label={selectedIds.size === 1 ? "客户类型" : "项目总数"}
+          variant={1}
+        />
+        <KpiCard value={kpi?.total_requirements ?? 0} label="需求总数" variant={2} />
+        <KpiCard value={kpi?.high_risk_remaining ?? 0} label="高风险残留" variant={3} />
+        <KpiCard value={kpi?.total_tasks ?? 0} label="任务总数" variant={4} />
+        <KpiCard value={kpi?.stakeholders ?? 0} label="干系人" variant={5} />
+        <KpiCard value={kpi?.procurement_items ?? 0} label="采购项" variant={6} />
+      </div>
+
+      {/* ========== Main 2-column layout ========== */}
+      <div className="main2" style={{ marginBottom: 10 }}>
+        {/* ---- LEFT PANEL ---- */}
+        <div className="db-panel">
+          {/* 9-domain grid */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>9 大领域指标</span>
+            <button
+              className="db-gear"
+              onClick={() =>
+                setFormulaModal({
+                  open: true,
+                  title: "9 大领域指标 · 计算公式",
+                  formulas: NINE_DOMAINS.map((d) => ({
+                    metric: d.label,
+                    formula: `${d.label} = 已完成数 / 总数 × 100%`,
+                    source: `${d.label}表`,
+                  })),
+                })
+              }
+            >
+              ⚙
+            </button>
+          </div>
+          <div className="k93">
+            {NINE_DOMAINS.map((d) => {
+              const avg = data.domain_averages.find((a) => a.module === d.module)?.avg || 0;
+              const projectScores = (data.project_domain_health || [])
+                .slice(0, 2)
+                .map((p) => ({ name: p.project_name.slice(0, 6), pct: p.scores[d.module] || 0 }));
+              return (
+                <DomainCell
+                  key={d.module}
+                  icon={d.icon}
+                  label={d.label}
+                  score={avg}
+                  cls={d.cls}
+                  projectScores={projectScores}
+                />
+              );
+            })}
           </div>
 
-          {/* 追问输入框 */}
-          {aiResult && !aiLoading && aiConversationHistory.length >= 3 && (
-            <div className="border-t pt-3 mt-2">
-              <div className="flex gap-2">
-                <Input
-                  value={aiFollowUpQuestion}
-                  onChange={(e) => setAiFollowUpQuestion(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAIFollowUp(); } }}
-                  placeholder="对分析结果追问..."
-                  className="flex-1 h-9 text-sm"
-                  disabled={aiFollowUpLoading}
-                />
-                <Button size="sm" onClick={handleAIFollowUp} disabled={aiFollowUpLoading || !aiFollowUpQuestion.trim()} className="bg-teal-500 hover:bg-teal-600 text-white">
-                  {aiFollowUpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "发送"}
-                </Button>
-              </div>
+          {/* Warning pills */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
+            {aiWarnings ? (
+              aiWarnings.slice(0, 6).map((w, i) => (
+                <WarningPill key={i} level={w.level === "info" ? "warning" : w.level} text={w.message.slice(0, 18)} />
+              ))
+            ) : (
+              <>
+                <WarningPill level="error" text="金沙一中 进度滞后" />
+                <WarningPill level="warning" text="叙永教育 资源不足" />
+              </>
+            )}
+            {data.project_type_distribution.length === 0 && (
+              <span style={{ fontSize: 10, color: "var(--text3)", padding: "4px 0" }}>
+                点击「生成新预警」开始 AI 分析
+              </span>
+            )}
+          </div>
+
+          {/* Project type distribution */}
+          {data.project_type_distribution.length > 0 && (
+            <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+              {data.project_type_distribution.map((t, i) => (
+                <div key={t.type} className={`db-type-card ${i === 0 ? "blue" : "green"}`}>
+                  <div>
+                    <div className="db-type-val">{t.count}</div>
+                    <div className="db-type-label">{t.type}</div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
+        </div>
+
+        {/* ---- RIGHT PANEL ---- */}
+        <div className="side">
+          <div className="side-inner">
+            {/* Radar chart */}
+            <div className="db-panel" style={{ position: "relative" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>9 维能力雷达</div>
+              <button
+                className="db-gear"
+                style={{ position: "absolute", top: 10, right: 10 }}
+                onClick={() =>
+                  setFormulaModal({
+                    open: true,
+                    title: "9 维能力雷达 · 计算公式",
+                    formulas: [
+                      { metric: "综合得分", formula: "(范围% + 进度% + 质量% + 成本% + 风险关闭% + 采购% + 资源% + 资料%) / 8", source: "各模块管理表" },
+                      ...NINE_DOMAINS.map((d) => ({
+                        metric: d.label,
+                        formula: `${d.label} = 已完成数 / 总数 × 100%`,
+                        source: `${d.label}表`,
+                      })),
+                    ],
+                  })
+                }
+              >
+                ⚙
+              </button>
+              <ResponsiveContainer width="100%" height={220}>
+                <RadarChart data={radarData.length > 0 ? radarData : [
+                  { domain: "范围", "项目A": 80, "项目B": 72 },
+                  { domain: "进度", "项目A": 75, "项目B": 68 },
+                  { domain: "质量", "项目A": 81, "项目B": 74 },
+                  { domain: "成本", "项目A": 70, "项目B": 65 },
+                  { domain: "沟通", "项目A": 71, "项目B": 67 },
+                  { domain: "风险", "项目A": 59, "项目B": 55 },
+                  { domain: "采购", "项目A": 79, "项目B": 71 },
+                  { domain: "资源", "项目A": 85, "项目B": 78 },
+                  { domain: "资料", "项目A": 77, "项目B": 72 },
+                ]}>
+                  <PolarGrid stroke="#e5e7eb" />
+                  <PolarAngleAxis dataKey="domain" tick={{ fontSize: 10, fill: "#5f6570" }} />
+                  <PolarRadiusAxis
+                    angle={30}
+                    domain={[0, 100]}
+                    tick={{ fontSize: 8, fill: "#949aa8" }}
+                    tickCount={5}
+                    stroke="#e5e7eb"
+                  />
+                  {radarProjects.length > 0 ? (
+                    radarProjects.map((p, i) => (
+                      <Radar
+                        key={p.project_id}
+                        name={p.project_name.slice(0, 6)}
+                        dataKey={p.project_name.slice(0, 6)}
+                        stroke={i === 0 ? "#4da3ff" : "#22d3a0"}
+                        fill={i === 0 ? "#4da3ff" : "#22d3a0"}
+                        fillOpacity={0.08}
+                        strokeWidth={2}
+                      />
+                    ))
+                  ) : (
+                    <>
+                      <Radar name="项目A" dataKey="项目A" stroke="#4da3ff" fill="#4da3ff" fillOpacity={0.08} strokeWidth={2} />
+                      <Radar name="项目B" dataKey="项目B" stroke="#22d3a0" fill="#22d3a0" fillOpacity={0.08} strokeWidth={2} />
+                    </>
+                  )}
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Health ranking */}
+            <div className="db-panel">
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700 }}>健康度排行</span>
+                <button
+                  className="db-gear"
+                  onClick={() =>
+                    setFormulaModal({
+                      open: true,
+                      title: "健康度排行 · 计算公式",
+                      formulas: [
+                        { metric: "综合得分", formula: "= (范围% + 进度% + 质量% + 成本% + 风险关闭% + 采购% + 资源% + 资料%) / 8", source: "各模块管理表" },
+                        { metric: "排序规则", formula: "按综合得分降序排列，取前2名", source: "-" },
+                      ],
+                    })
+                  }
+                >
+                  ⚙
+                </button>
+              </div>
+              {(data.health_ranking.length > 0
+                ? data.health_ranking.slice(0, 2)
+                : [
+                    { rank: 1, project_id: "1", project_name: "叙永智慧教育", project_type: "SaaS/托管", score: 76 },
+                    { rank: 2, project_id: "2", project_name: "金沙一中", project_type: "私有化部署", score: 71 },
+                  ]
+              ).map((item, i) => (
+                <HealthRankCard key={item.project_id} item={item} isGold={i === 0} />
+              ))}
+            </div>
+          </div>
+
+          {/* Weak areas */}
+          <div className="db-panel">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 700 }}>薄弱环节 · 差距分析</span>
+              <button
+                className="db-gear"
+                onClick={() =>
+                  setFormulaModal({
+                    open: true,
+                    title: "薄弱环节 · 计算公式",
+                    formulas: [
+                      { metric: "识别规则", formula: "取9领域中双项目均值最低的6项，升序排列", source: "-" },
+                      { metric: "差距计算", formula: "标注最低项目数值与均值差距", source: "-" },
+                    ],
+                  })
+                }
+              >
+                ⚙
+              </button>
+            </div>
+            <div className="wa6">
+              {(weakAreas.length > 0
+                ? weakAreas
+                : [
+                    { module: "document", label: "资料管理", icon: "📁", avg_score: 68, lowest_project: "叙永教育", lowest_score: 65 },
+                    { module: "risk", label: "风险控制", icon: "⚠️", avg_score: 67, lowest_project: "金沙一中", lowest_score: 64 },
+                    { module: "cost", label: "成本回款", icon: "💰", avg_score: 70, lowest_project: "叙永教育", lowest_score: 66 },
+                    { module: "scope", label: "范围确认", icon: "🎯", avg_score: 80, lowest_project: "叙永教育", lowest_score: 78 },
+                    { module: "schedule", label: "任务执行", icon: "⏱", avg_score: 80, lowest_project: "金沙一中", lowest_score: 78 },
+                    { module: "procurement", label: "采购到货", icon: "📦", avg_score: 79, lowest_project: "叙永教育", lowest_score: 76 },
+                  ]
+              ).map((wa, i) => (
+                <div key={wa.module} className={`wa-card ${WA_CLASSES[i % WA_CLASSES.length]}`}>
+                  <div className="wa-label">{wa.label}</div>
+                  <div className="wa-score">{wa.avg_score}%</div>
+                  <div className="wa-gap">
+                    最低 {wa.lowest_project} {wa.lowest_score}%
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ========== Divider ========== */}
+      <div className="dv">
+        <div className="dl" />
+        <div className="dt">范围管理 · 需求追踪</div>
+        <div className="dl" />
+      </div>
+
+      {/* ========== Requirement Stats Row ========== */}
+      <div className="r4">
+        <div className="rt rt-k1">
+          <div className="rt-val">{data.requirements.stats.total}</div>
+          <div className="rt-label">需求总数</div>
+        </div>
+        <div className="rt rt-k2">
+          <div className="rt-val">{data.requirements.stats.completion_rate}%</div>
+          <div className="rt-label">完成率</div>
+        </div>
+        <div className="rt rt-k3">
+          <div className="rt-val">{data.requirements.stats.in_development}</div>
+          <div className="rt-label">开发中</div>
+        </div>
+        <div className="rt rt-k4">
+          <div className="rt-val">{data.requirements.stats.pending_confirmation}</div>
+          <div className="rt-label">待确认</div>
+        </div>
+      </div>
+
+      {/* ========== Backlog Analysis Row ========== */}
+      <div className="r4">
+        <div className="blc blc-backlog">
+          <div className="blc-val">{data.requirements.backlog.backlog_count}</div>
+          <div className="blc-label">积压需求</div>
+        </div>
+        <div className="blc blc-pending">
+          <div className="blc-val">{data.requirements.backlog.pending_confirmation}</div>
+          <div className="blc-label">待确认</div>
+        </div>
+        <div className="blc blc-cycle">
+          <div className="blc-val">{data.requirements.backlog.avg_processing_days}d</div>
+          <div className="blc-label">平均处理周期</div>
+        </div>
+        <div className="blc blc-velocity">
+          <div className="blc-val">{data.requirements.backlog.completion_velocity}/月</div>
+          <div className="blc-label">完成速率</div>
+        </div>
+      </div>
+
+      {/* ========== Charts Row ========== */}
+      <div className="r3">
+        {/* Line chart */}
+        <div className="r3-panel">
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>📈 需求累计完成趋势</div>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={data.requirements.cumulative_trend.length > 0
+                  ? data.requirements.cumulative_trend
+                  : [
+                      { month: "2025-01", completed: 3, total: 8 },
+                      { month: "2025-02", completed: 6, total: 14 },
+                      { month: "2025-03", completed: 10, total: 19 },
+                      { month: "2025-04", completed: 14, total: 22 },
+                      { month: "2025-05", completed: 17, total: 25 },
+                      { month: "2025-06", completed: 20, total: 28 },
+                    ]
+                }
+                margin={{ top: 8, right: 8, left: -16, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                <YAxis domain={[0, "auto"]} tick={{ fontSize: 10 }} allowDecimals={false} />
+                <Tooltip contentStyle={{ fontSize: 12 }} />
+                <Legend
+                  iconType="circle"
+                  wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="completed"
+                  name="已完成"
+                  stroke="#4da3ff"
+                  strokeWidth={2}
+                  dot={{ r: 4, fill: "#4da3ff" }}
+                  activeDot={{ r: 5 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="total"
+                  name="总需求"
+                  stroke="#22d3a0"
+                  strokeWidth={2}
+                  dot={{ r: 4, fill: "#22d3a0" }}
+                  activeDot={{ r: 5 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Doughnut chart */}
+        <div className="r3-panel">
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>📊 需求状态分布</div>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data.requirements.status_distribution}
+                  cx="50%"
+                  cy="45%"
+                  innerRadius={40}
+                  outerRadius={70}
+                  paddingAngle={0}
+                  dataKey="count"
+                  nameKey="status"
+                  stroke="none"
+                >
+                  {data.requirements.status_distribution.map((_, i) => (
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ fontSize: 12 }} />
+                <Legend
+                  iconType="circle"
+                  wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Horizontal bar chart */}
+        <div className="r3-panel">
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>📋 需求分类分布</div>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={data.requirements.category_distribution}
+                layout="vertical"
+                margin={{ top: 4, right: 8, left: 8, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10 }} />
+                <YAxis
+                  type="category"
+                  dataKey="category"
+                  tick={{ fontSize: 10 }}
+                  width={60}
+                />
+                <Tooltip contentStyle={{ fontSize: 12 }} />
+                <Bar
+                  dataKey="count"
+                  fill="rgba(77,163,255,0.7)"
+                  radius={[0, 4, 4, 0]}
+                  barSize={20}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* ========== Requirement Detail Table ========== */}
+      <div className="db-panel">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 700 }}>需求明细列表</span>
+          <button
+            className="db-gear"
+            onClick={() =>
+              setFormulaModal({
+                open: true,
+                title: "需求追踪 · 计算公式",
+                formulas: [
+                  { metric: "需求总数", formula: "COUNT(需求登记表)", source: "需求登记表" },
+                  { metric: "完成率", formula: "状态='已完成' / 总数 × 100%", source: "需求登记表" },
+                  { metric: "开发中", formula: "COUNT(状态='开发中')", source: "需求登记表" },
+                  { metric: "待确认", formula: "COUNT(状态='待确认')", source: "需求登记表" },
+                  { metric: "积压需求", formula: "等同于开发中数量", source: "需求登记表" },
+                  { metric: "平均处理周期", formula: "AVG(完成日期 - 提出日期)", source: "需求登记表" },
+                  { metric: "完成速率", formula: "已完成数 / 活跃月数", source: "需求登记表" },
+                ],
+              })
+            }
+          >
+            ⚙
+          </button>
+        </div>
+
+        <div className="db-search-wrap">
+          <span className="db-search-icon">🔍</span>
+          <input
+            className="db-search"
+            placeholder="搜索需求 ID / 标题 / 类型..."
+            value={reqSearch}
+            onChange={(e) => setReqSearch(e.target.value)}
+          />
+        </div>
+
+        <div className="db-table-wrap">
+          <table className="db-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>标题</th>
+                <th>类型</th>
+                <th>优先级</th>
+                <th>状态</th>
+                <th>来源</th>
+                <th>日期</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredReqs.map((r) => (
+                <tr key={r.id}>
+                  <td className="mono">{r.id}</td>
+                  <td>{r.title}</td>
+                  <td>{r.type}</td>
+                  <td>
+                    <span
+                      className={cn(
+                        "db-tag",
+                        r.priority === "高" ? "high" : r.priority === "中" ? "medium" : "low"
+                      )}
+                    >
+                      {r.priority}
+                    </span>
+                  </td>
+                  <td>
+                    <span
+                      className={cn(
+                        "db-status",
+                        r.status === "已完成"
+                          ? "done"
+                          : r.status === "开发中"
+                            ? "dev"
+                            : r.status === "待确认"
+                              ? "pending"
+                              : "rejected"
+                      )}
+                    >
+                      {r.status}
+                    </span>
+                  </td>
+                  <td>{r.source}</td>
+                  <td>{r.date}</td>
+                </tr>
+              ))}
+              {filteredReqs.length === 0 && (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: "center", color: "var(--text3)", padding: 24 }}>
+                    无匹配需求记录
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ============================================================
+         MODALS
+         ============================================================ */}
+
+      {/* Project switch modal */}
+      <Dialog open={projectModalOpen} onOpenChange={setProjectModalOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col" style={{ borderRadius: 14 }}>
+          <DialogHeader>
+            <DialogTitle style={{ fontSize: 15 }}>切换项目</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              placeholder="搜索项目名称/编号/经理..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-9 text-sm"
+            />
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="text-xs" onClick={handleSelectAll}>
+                ☑ 全选
+              </Button>
+              <Button variant="outline" size="sm" className="text-xs" onClick={handleDeselectAll}>
+                ☐ 取消
+              </Button>
+              <span className="text-xs text-muted-foreground ml-auto">已选 {selectedIds.size} 项</span>
+            </div>
+            <div className="max-h-[380px] overflow-y-auto space-y-1">
+              {filteredProjects.map((p) => (
+                <label
+                  key={p.id}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-sm"
+                >
+                  <div
+                    className={cn("db-check", selectedIds.has(p.id) && "checked")}
+                    onClick={() => handleProjectToggle(p.id)}
+                  >
+                    {selectedIds.has(p.id) && <Check className="w-3 h-3" />}
+                  </div>
+                  <span className="flex-1 truncate">{p.project_name}</span>
+                  <span className="text-xs text-muted-foreground">{p.project_code}</span>
+                </label>
+              ))}
+              {filteredProjects.length === 0 && (
+                <div className="text-center text-sm text-muted-foreground py-4">无匹配项目</div>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-3 border-t mt-2">
+            <Button variant="outline" size="sm" onClick={() => setProjectModalOpen(false)}>
+              取消
+            </Button>
+            <Button size="sm" onClick={applyProjectSelection}>
+              确认
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
-      {/* 预警详情小弹窗（点击查看预警时） */}
-      <Dialog open={analysisDialog.open} onOpenChange={(v) => setAnalysisDialog((p) => ({ ...p, open: v }))}>
-        <DialogContent className="max-w-lg">
+      {/* Department filter modal */}
+      <Dialog open={deptModalOpen} onOpenChange={setDeptModalOpen}>
+        <DialogContent className="max-w-sm" style={{ borderRadius: 14 }}>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <Shield className="w-4 h-4 text-orange-500" />
-              {analysisDialog.projectName} · 预警详情
-            </DialogTitle>
+            <DialogTitle style={{ fontSize: 15 }}>部门筛选</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2 max-h-[50vh] overflow-y-auto">
-            {displayWarnings.filter((w) => w.project_id === analysisDialog.projectId || w.project_name === analysisDialog.projectName).length > 0 ? (
-              displayWarnings.filter((w) => w.project_id === analysisDialog.projectId || w.project_name === analysisDialog.projectName).map((w, i) => (
-                <div key={i} className={cn(
-                  "flex items-start gap-2 px-3 py-2 rounded-lg border text-sm",
-                  WARNING_LEVEL_CONFIG[w.level].bg,
-                  WARNING_LEVEL_CONFIG[w.level].border,
-                  WARNING_LEVEL_CONFIG[w.level].text,
-                )}>
-                  <span className="shrink-0 mt-0.5">{WARNING_LEVEL_CONFIG[w.level].icon}</span>
-                  <span className="flex-1">{w.message}</span>
+          <div className="space-y-1 max-h-[340px] overflow-y-auto">
+            <label
+              className="flex items-center gap-3 px-3 py-2 rounded cursor-pointer hover:bg-gray-50 text-sm"
+              onClick={() => {
+                setDeptFilter("all");
+                setDeptModalOpen(false);
+              }}
+            >
+              <div className={cn("db-check", deptFilter === "all" && "checked")}>
+                {deptFilter === "all" && <Check className="w-3 h-3" />}
+              </div>
+              全部部门
+            </label>
+            {data.departments.map((dept) => (
+              <label
+                key={dept}
+                className="flex items-center gap-3 px-3 py-2 rounded cursor-pointer hover:bg-gray-50 text-sm"
+                onClick={() => {
+                  setDeptFilter(dept);
+                  setDeptModalOpen(false);
+                }}
+              >
+                <div className={cn("db-check", deptFilter === dept && "checked")}>
+                  {deptFilter === dept && <Check className="w-3 h-3" />}
                 </div>
-              ))
-            ) : (
-              <div className="text-sm text-gray-500 bg-gray-50 rounded-lg px-3 py-2 text-center">暂无预警详情</div>
+                {dept}
+              </label>
+            ))}
+            {data.departments.length === 0 && (
+              <div className="text-center text-sm text-muted-foreground py-4">暂无部门数据</div>
             )}
           </div>
-          <DialogFooter>
-            {onViewProject && (
-              <Button size="sm" onClick={() => { setAnalysisDialog((p) => ({ ...p, open: false })); onViewProject(analysisDialog.projectId); }}>
-                查看项目详情
-              </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Status filter modal */}
+      <Dialog open={statusModalOpen} onOpenChange={setStatusModalOpen}>
+        <DialogContent className="max-w-sm" style={{ borderRadius: 14 }}>
+          <DialogHeader>
+            <DialogTitle style={{ fontSize: 15 }}>项目状态筛选</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1 max-h-[340px] overflow-y-auto">
+            {[
+              { value: "all", label: "全部状态" },
+              { value: "active", label: "进行中" },
+              { value: "planning", label: "规划中" },
+              { value: "completed", label: "已完成" },
+              { value: "suspended", label: "已暂停" },
+            ].map((s) => (
+              <label
+                key={s.value}
+                className="flex items-center gap-3 px-3 py-2 rounded cursor-pointer hover:bg-gray-50 text-sm"
+                onClick={() => {
+                  setStatusFilter(s.value);
+                  setStatusModalOpen(false);
+                }}
+              >
+                <div className={cn("db-check", statusFilter === s.value && "checked")}>
+                  {statusFilter === s.value && <Check className="w-3 h-3" />}
+                </div>
+                {s.label}
+              </label>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Formula modal */}
+      <Dialog open={formulaModal.open} onOpenChange={(v) => setFormulaModal((p) => ({ ...p, open: v }))}>
+        <DialogContent className="max-w-lg max-h-[75vh] flex flex-col" style={{ borderRadius: 14 }}>
+          <DialogHeader>
+            <DialogTitle style={{ fontSize: 15 }}>{formulaModal.title}</DialogTitle>
+          </DialogHeader>
+          <div className="overflow-y-auto flex-1">
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: "var(--card2)" }}>
+                  <th style={{ padding: "8px 12px", textAlign: "left", borderBottom: "1px solid var(--border)", fontWeight: 600 }}>指标</th>
+                  <th style={{ padding: "8px 12px", textAlign: "left", borderBottom: "1px solid var(--border)", fontWeight: 600 }}>公式</th>
+                  <th style={{ padding: "8px 12px", textAlign: "left", borderBottom: "1px solid var(--border)", fontWeight: 600 }}>数据来源</th>
+                </tr>
+              </thead>
+              <tbody>
+                {formulaModal.formulas.map((f, i) => (
+                  <tr key={i}>
+                    <td style={{ padding: "7px 12px", borderBottom: "1px solid #f0f1f5", fontWeight: 500 }}>{f.metric}</td>
+                    <td style={{ padding: "7px 12px", borderBottom: "1px solid #f0f1f5", fontFamily: "var(--font-mono)", fontSize: 11 }}>{f.formula}</td>
+                    <td style={{ padding: "7px 12px", borderBottom: "1px solid #f0f1f5", color: "var(--text3)", fontSize: 11 }}>{f.source}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI analysis dialog */}
+      <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col" style={{ borderRadius: 14 }}>
+          <DialogHeader>
+            <DialogTitle style={{ fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
+              <Sparkles className="w-5 h-5 text-teal-500" />
+              AI 预警分析报告
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {aiLoading && (
+              <div className="flex flex-col items-center py-12">
+                <Sparkles className="w-12 h-12 text-teal-400 animate-pulse mb-4" />
+                <p className="text-sm text-muted-foreground">AI 正在分析项目数据...</p>
+              </div>
             )}
-            <Button variant="outline" size="sm" onClick={() => setAnalysisDialog((p) => ({ ...p, open: false }))}>关闭</Button>
-          </DialogFooter>
+            {aiResult && !aiLoading && (
+              <div className="text-sm whitespace-pre-wrap font-mono text-muted-foreground">
+                {aiResult.slice(0, 8000)}
+              </div>
+            )}
+          </div>
+          {aiResult && !aiLoading && aiConversationHistory.length >= 3 && (
+            <div className="border-t pt-3 mt-2 flex gap-2">
+              <Input
+                value={aiFollowUpQuestion}
+                onChange={(e) => setAiFollowUpQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleAIFollowUp();
+                  }
+                }}
+                placeholder="对分析结果追问..."
+                className="flex-1 h-9 text-sm"
+                disabled={aiFollowUpLoading}
+              />
+              <Button
+                size="sm"
+                onClick={handleAIFollowUp}
+                disabled={aiFollowUpLoading || !aiFollowUpQuestion.trim()}
+              >
+                {aiFollowUpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "发送"}
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

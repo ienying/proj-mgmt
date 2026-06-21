@@ -88,6 +88,8 @@ export interface TableDefinition {
   sort_order: number;
   is_active: boolean;
   allow_add?: boolean;
+  allow_delete?: boolean;
+  readonly_mode?: "and" | "or";
 }
 
 export interface ColumnConfig {

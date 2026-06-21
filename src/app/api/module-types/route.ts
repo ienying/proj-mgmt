@@ -6,7 +6,7 @@ export async function GET() {
     const supabase = await createServerClient();
     const { data, error } = await supabase.rpc('dp_select', { p_table: 'project_module_types' });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    const sorted = (data || []).sort((a: Record<string, unknown>, b: Record<string, unknown>) => (a.sort_order as number) - (b.sort_order as number));
+    const sorted = ((data as Array<Record<string, unknown>>) || []).sort((a: Record<string, unknown>, b: Record<string, unknown>) => (a.sort_order as number) - (b.sort_order as number));
     return NextResponse.json({ data: sorted });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

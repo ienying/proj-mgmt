@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       // 表不存在(42P01)时静默返回空数据，其他错误才记录日志
-      if (error.code !== '42P01') {
+      if ((error as { code?: string }).code !== '42P01') {
         console.error("查询表数据失败:", error);
       }
       return NextResponse.json({ data: [] });
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ data: result?.[0] || data }, { status: 201 });
+    return NextResponse.json({ data: (result as Array<Record<string, unknown>>)?.[0] || data }, { status: 201 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -149,7 +149,7 @@ export async function PUT(request: NextRequest) {
       // 引用同步失败不影响主更新流程
     }
 
-    return NextResponse.json({ data: result?.[0] || data });
+    return NextResponse.json({ data: (result as Array<Record<string, unknown>>)?.[0] || data });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -229,8 +229,9 @@ async function syncEditReferences(
     const { data: currentRows } = await client.rpc("execute_sql", {
       p_sql: `SELECT * FROM ${safeSchema}."${tableCode}" WHERE id = '${rowId}'`,
     });
-    if (!currentRows || currentRows.length === 0) return;
-    const currentRow = currentRows[0];
+    const rows = currentRows as Array<Record<string, unknown>>;
+    if (!rows || rows.length === 0) return;
+    const currentRow = rows[0];
 
     for (const ref of currentDef.references_config) {
       // 检查是否有更新的列在 column_mapping 中
@@ -242,10 +243,10 @@ async function syncEditReferences(
       if (!matchValue) continue;
 
       // 在源表中找匹配行
-      const { data: sourceRows } = await client.rpc("execute_sql", {
+      const srcRows = (await client.rpc("execute_sql", {
         p_sql: `SELECT * FROM ${safeSchema}."${ref.source_table_code}" WHERE "${ref.match_condition.source_column}" = '${String(matchValue).replace(/'/g, "''")}'`,
-      });
-      if (!sourceRows || sourceRows.length === 0) continue;
+      })).data as Array<Record<string, unknown>>;
+      if (!srcRows || srcRows.length === 0) continue;
 
       // 同步到源表
       const updates: Record<string, unknown> = {};
@@ -260,7 +261,7 @@ async function syncEditReferences(
           return `"${key}" = '${String(value).replace(/'/g, "''")}'`;
         });
         await client.rpc("execute_sql", {
-          p_sql: `UPDATE ${safeSchema}."${ref.source_table_code}" SET ${setClauses.join(", ")}, updated_at = NOW() WHERE id = '${sourceRows[0].id}'`,
+          p_sql: `UPDATE ${safeSchema}."${ref.source_table_code}" SET ${setClauses.join(", ")}, updated_at = NOW() WHERE id = '${srcRows[0].id}'`,
         });
       }
     }
@@ -277,19 +278,19 @@ async function syncEditReferences(
       if (mappedCols.length === 0) continue;
 
       // 获取被更新行的匹配字段值
-      const { data: sourceRows } = await client.rpc("execute_sql", {
+      const sRows = (await client.rpc("execute_sql", {
         p_sql: `SELECT * FROM ${safeSchema}."${tableCode}" WHERE id = '${rowId}'`,
-      });
-      if (!sourceRows || sourceRows.length === 0) continue;
-      const sourceRow = sourceRows[0];
+      })).data as Array<Record<string, unknown>>;
+      if (!sRows || sRows.length === 0) continue;
+      const sourceRow = sRows[0];
       const matchValue = sourceRow[ref.match_condition.source_column];
       if (!matchValue) continue;
 
       // 在目标表中找匹配行
-      const { data: targetRows } = await client.rpc("execute_sql", {
+      const tgtRows = (await client.rpc("execute_sql", {
         p_sql: `SELECT * FROM ${safeSchema}."${def.table_code}" WHERE "${ref.match_condition.target_column}" = '${String(matchValue).replace(/'/g, "''")}'`,
-      });
-      if (!targetRows || targetRows.length === 0) continue;
+      })).data as Array<Record<string, unknown>>;
+      if (!tgtRows || tgtRows.length === 0) continue;
 
       // 同步到目标表
       const updates: Record<string, unknown> = {};
@@ -304,7 +305,7 @@ async function syncEditReferences(
           return `"${key}" = '${String(value).replace(/'/g, "''")}'`;
         });
         await client.rpc("execute_sql", {
-          p_sql: `UPDATE ${safeSchema}."${def.table_code}" SET ${setClauses.join(", ")}, updated_at = NOW() WHERE id = '${targetRows[0].id}'`,
+          p_sql: `UPDATE ${safeSchema}."${def.table_code}" SET ${setClauses.join(", ")}, updated_at = NOW() WHERE id = '${tgtRows[0].id}'`,
         });
       }
     }
