@@ -11,14 +11,15 @@ import {
   Video, Paperclip, CheckCircle, ClipboardList, Inbox,
   Users, BarChart2, TrendingUp, ArrowRight,
   Edit3, FolderOpen, FolderTree, UserCheck, Layers, Timer,
-  Building2, Package, AlertCircle
+  Building2, Package, AlertCircle, QrCode, Copy, Check
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger
 } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
@@ -59,6 +60,12 @@ interface Issue {
   creator_id: string;
   created_at: string;
   updated_at: string;
+  source?: string;
+  customer_name?: string;
+  contact_person?: string;
+  contact_title?: string;
+  contact_info?: string;
+  evidence_files?: { url: string; name: string; size: number; type: string }[];
 }
 
 interface Category {
@@ -219,6 +226,16 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
   const [formFiles, setFormFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 当前用户的待办任务实例（用于判断外部工单）
+  const [userTodos, setUserTodos] = useState<Record<string, unknown>[]>([]);
+
+  // 扫码提报入口
+  const [showQrDialog, setShowQrDialog] = useState(false);
+  const [qrCopied, setQrCopied] = useState(false);
+  const submissionUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/external/submit`
+    : "/external/submit";
+
   // 待办中心子Tab
   const [todoSubTab, setTodoSubTab] = useState("pending");
 
@@ -291,12 +308,26 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
     }
   }, []);
 
+  const loadUserTodos = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/issues/my-external-todos?user_id=${currentUser.id}`);
+      if (res.ok) {
+        const d = await res.json();
+        const todos = (d.data?.issue_ids || []).map((id: string) => ({ source_id: id } as Record<string, unknown>));
+        setUserTodos(todos);
+      }
+    } catch (e) {
+      console.error("加载外部待办失败:", e);
+    }
+  }, [currentUser.id]);
+
   useEffect(() => {
     loadDicts();
     loadIssues();
     loadRecords();
     loadNotifications();
-  }, [loadDicts, loadIssues, loadRecords, loadNotifications]);
+    loadUserTodos();
+  }, [loadDicts, loadIssues, loadRecords, loadNotifications, loadUserTodos]);
 
   // 辅助函数
   const getCategoryName = (catId: string) => {
@@ -315,7 +346,17 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
 
   // 筛选逻辑
   const myReports = issues.filter(i => i.creator_id === currentUser.id);
-  const myHandleIssues = issues.filter(i => i.handler_id === currentUser.id && ["pending", "accepted", "processing"].includes(i.status));
+  // 当前用户有 pending todo 的外部工单 source_id 集合
+  const userExternalIssueIds = new Set(
+    userTodos.map((t: Record<string, unknown>) => String(t.source_id))
+  );
+  const myHandleIssues = issues.filter(i => {
+    // 标准内部工单：当前用户是 handler
+    if (i.handler_id === currentUser.id && ["pending", "accepted", "processing"].includes(i.status)) return true;
+    // 外部工单：source=external 且无 handler 且当前用户是 pending 接收人
+    if (i.source === "external" && !i.handler_id && i.status === "pending" && userExternalIssueIds.has(i.id)) return true;
+    return false;
+  });
 
   const filteredIssues = issues.filter(i => {
     if (issueStatusFilter !== "all" && i.status !== issueStatusFilter) return false;
@@ -330,7 +371,11 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
   });
 
   // 待办中心数据
-  const todoPending = issues.filter(i => i.handler_id === currentUser.id && ["pending", "accepted", "processing"].includes(i.status));
+  const todoPending = issues.filter(i => {
+    if (i.handler_id === currentUser.id && ["pending", "accepted", "processing"].includes(i.status)) return true;
+    if (i.source === "external" && !i.handler_id && i.status === "pending" && userExternalIssueIds.has(i.id)) return true;
+    return false;
+  });
   const todoDone = records.filter(r => r.operator_id === currentUser.id).map(r => {
     const issue = issues.find(i => i.id === r.issue_id);
     return { ...r, issue };
@@ -531,6 +576,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         <div className="p-4 pt-3">
           <div className="flex items-start justify-between mb-2">
             <div className="flex items-center gap-2 flex-1 min-w-0">
+              {issue.source === "external" && <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-500 text-white leading-none">外部</span>}
               {issue.is_major && <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500 text-white leading-none">重大</span>}
               <h4 className="font-medium text-sm truncate cursor-pointer hover:text-blue-600 transition-colors"
                 onClick={() => { setSelectedIssue(issue); setShowDetailDialog(true); }}>
@@ -1443,11 +1489,62 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
     <div className="h-full flex flex-col bg-gray-50">
       {/* 页面标题 */}
       <div className="p-6">
-        <h2 className="text-2xl font-semibold flex items-center gap-2">
-          <AlertCircle className="w-6 h-6" />
-          问题上报
-        </h2>
-        <p className="text-sm text-muted-foreground mt-1">上报问题、跟踪处理、统计分析</p>
+        <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold flex items-center gap-2">
+            <AlertCircle className="w-6 h-6" />
+            问题上报
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">上报问题、跟踪处理、统计分析</p>
+        </div>
+
+        {/* 扫码提报按钮 */}
+        <Dialog open={showQrDialog} onOpenChange={setShowQrDialog}>
+          <DialogTrigger asChild>
+            <Button variant="outline" size="sm" className="shrink-0 gap-1.5">
+              <QrCode className="w-4 h-4" />
+              扫码提报
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <QrCode className="w-4 h-4 text-blue-500" />
+                扫码提报入口
+              </DialogTitle>
+              <DialogDescription>
+                将以下链接或二维码分享给外部客户，客户无需登录即可提交工单。
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col items-center gap-4 py-4">
+              <div className="bg-white border rounded-lg p-3">
+                <QRCodeSVG value={submissionUrl} size={200} level="M" marginSize={4} />
+              </div>
+              <div className="flex items-center gap-2 w-full">
+                <Input
+                  value={submissionUrl}
+                  readOnly
+                  className="h-8 text-xs font-mono bg-gray-50 flex-1"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 shrink-0"
+                  onClick={() => {
+                    navigator.clipboard.writeText(submissionUrl).then(() => {
+                      setQrCopied(true);
+                      setTimeout(() => setQrCopied(false), 2000);
+                    });
+                  }}
+                >
+                  {qrCopied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span className="ml-1 text-xs">{qrCopied ? "已复制" : "复制"}</span>
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
       </div>
 
       {/* Tab 栏 — 胶囊式 */}

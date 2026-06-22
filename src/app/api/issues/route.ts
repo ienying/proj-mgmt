@@ -51,6 +51,11 @@ export async function GET(request: NextRequest) {
       issues = issues.filter((i) => String(i.urgency_id) === urgencyId);
     }
 
+    const source = searchParams.get("source");
+    if (source) {
+      issues = issues.filter((i) => String(i.source || "internal") === source);
+    }
+
     const search = searchParams.get("search");
     if (search) {
       const s = search.toLowerCase();

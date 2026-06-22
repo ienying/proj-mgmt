@@ -20,6 +20,23 @@ export async function GET(request: Request) {
       (i: any) => i.handler_id === userId && (i.status === "pending" || i.status === "accepted" || i.status === "processing")
     ).length;
 
+    // 额外统计外部工单待办：source=external 且无 handler，当前用户是接收人之一
+    const todoResult = await supabase.rpc("dp_select", { p_table: "todo_task_instances" });
+    const todos = (todoResult.data || []) as any[];
+    const userExternalTodos = todos.filter(
+      (t: any) =>
+        String(t.source_type) === "issue" &&
+        String(t.assignee_id) === userId &&
+        String(t.status) === "pending"
+    );
+    const userExternalSourceIds = new Set(userExternalTodos.map((t: any) => String(t.source_id)));
+    const externalCount = issues.filter(
+      (i: any) =>
+        String(i.source) === "external" &&
+        !i.handler_id &&
+        userExternalSourceIds.has(String(i.id))
+    ).length;
+
     // 计算信息广场未读角标
     // 先查所有帖子，再减去已读
     const knowledgePostsResult = await supabase.rpc("dp_select", { p_table: "design_info_square.knowledge_posts" });
@@ -34,7 +51,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       data: {
-        issues: issueCount,
+        issues: issueCount + externalCount,
         messages: unreadCount,
       },
     });
