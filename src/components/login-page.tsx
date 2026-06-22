@@ -75,9 +75,6 @@ export function LoginPage() {
           <h1 className="text-2xl font-bold text-white tracking-tight">
             项目管理平台
           </h1>
-          <p className="text-blue-200/60 mt-1 text-sm">
-            元素科技 Enterprise Platform
-          </p>
         </div>
 
         {/* Login Card */}
@@ -170,10 +167,6 @@ export function LoginPage() {
           </form>
         </div>
 
-        {/* Footer */}
-        <p className="text-center text-blue-200/30 text-xs mt-6">
-          默认管理员账号: super_admin / yuansu0718
-        </p>
       </div>
     </div>
   );

@@ -55,27 +55,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setToken(null);
             setUser(null);
           }
-        } else {
-          // Try loading from localStorage as fallback
-          const storedUser = localStorage.getItem(USER_KEY);
-          if (storedUser) {
-            try {
-              setUser(JSON.parse(storedUser));
-            } catch {
-              localStorage.removeItem(USER_KEY);
-            }
-          }
         }
       } catch {
-        // Network error, try cached user
-        const storedUser = localStorage.getItem(USER_KEY);
-        if (storedUser) {
-          try {
-            setUser(JSON.parse(storedUser));
-          } catch {
-            // ignore
-          }
-        }
+        // Network error - clear auth state, user needs to login again
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
+        setToken(null);
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
