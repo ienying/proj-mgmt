@@ -6,7 +6,6 @@ import { CustomerList } from "./case-center/customer-list";
 import { CustomerDetail } from "./case-center/customer-detail";
 import { CustomerForm } from "./case-center/customer-form";
 import { ProductCases } from "./case-center/product-cases";
-import { cn } from "@/lib/utils";
 
 type SubView =
   | "customer-list"
@@ -76,47 +75,54 @@ export default function CaseCenter({ currentUser }: CaseCenterProps) {
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      {/* 顶部导航：详情页显示返回按钮，否则显示 Tab 切换 */}
-      {isDetailView ? (
-        <div className="shrink-0 px-4 py-2 border-b border-slate-200 bg-white">
-          <button
-            onClick={handleBackToList}
-            className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            返回用户画像列表
-          </button>
+      {/* 页面标题 + Metro 磁贴 */}
+      <div className="shrink-0 bg-white">
+        <div className="px-6 pt-4 pb-1">
+          <h2 className="text-2xl font-semibold flex items-center gap-2">
+            <Building2 className="w-6 h-6" />
+            案例中心
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">客户案例与产品案例管理</p>
         </div>
-      ) : (
-        <div className="shrink-0 px-4 py-2 border-b border-slate-200 bg-white">
-          <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
+
+        {/* 详情页返回按钮 或 Metro 磁贴 */}
+        {isDetailView ? (
+          <div className="px-6 pb-2">
             <button
-              onClick={() => handleTabChange("customer")}
-              className={cn(
-                "flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-all",
-                activeTab === "customer"
-                  ? "bg-white text-teal-600 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              )}
+              onClick={handleBackToList}
+              className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 transition-colors"
             >
-              <Building2 className="w-4 h-4" />
-              用户画像
-            </button>
-            <button
-              onClick={() => handleTabChange("product")}
-              className={cn(
-                "flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-all",
-                activeTab === "product"
-                  ? "bg-white text-teal-600 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              <Package className="w-4 h-4" />
-              产品案例
+              <ArrowLeft className="w-4 h-4" />
+              返回用户画像列表
             </button>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="px-3 pb-2 grid grid-cols-2 gap-1.5">
+            {[
+              { key: "customer" as TopTab, label: "用户画像", icon: <Building2 className="w-4 h-4" />, color: "#2672ec" },
+              { key: "product" as TopTab, label: "产品案例", icon: <Package className="w-4 h-4" />, color: "#00aba9" },
+            ].map(tile => (
+              <button
+                key={tile.key}
+                onClick={() => handleTabChange(tile.key)}
+                className={`
+                  relative flex items-center justify-center gap-1.5 rounded-lg text-white text-center py-1.5
+                  transition-all duration-150 select-none cursor-pointer overflow-hidden
+                  ${activeTab === tile.key ? "ring-2 ring-white/60 ring-offset-1 ring-offset-gray-200 scale-[0.95]" : "hover:scale-[1.03]"}
+                `}
+                style={{ backgroundColor: tile.color }}
+              >
+                <span className="opacity-90 shrink-0">{tile.icon}</span>
+                <div className="flex flex-col items-start leading-tight min-w-0">
+                  <span className="font-medium text-[10px] truncate">{tile.label}</span>
+                  <span className="font-bold text-sm leading-none invisible">—</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* 内容区 */}
       <div className="flex-1 overflow-y-auto">
         {subView === "customer-list" && (

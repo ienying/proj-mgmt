@@ -1569,7 +1569,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
   return (
     <div className="h-full flex flex-col bg-gray-50">
       {/* 页面标题 + Metro 磁贴 */}
-      <div className="shrink-0 bg-gray-50 border-b">
+      <div className="shrink-0 bg-gray-50">
         <div className="px-6 pt-4 pb-1 flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-semibold flex items-center gap-2">
