@@ -3,9 +3,9 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   // outputFile tracingRoot: path.resolve(__dirname, '../../'),  // Uncomment and add 'import path from "path"' if needed
   /* config options here */
-  allowedDevOrigins: ['*.dev.coze.site'],
+  allowedDevOrigins: ['*.dev.coze.site', '192.168.*.*', '127.0.0.1'],
   onDemandEntries: {
-    maxInactiveAge: 60 * 1000,
+    maxInactiveAge: 0,
     pagesBufferLength: 10,
   },
   images: {

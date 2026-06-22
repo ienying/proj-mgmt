@@ -4,10 +4,10 @@ import { useEffect } from 'react';
 
 /**
  * 全局 ChunkLoadError 处理器
- * 
+ *
  * Next.js Turbopack 开发模式下，热更新后旧 chunk 文件名会失效，
  * 浏览器仍在请求旧文件导致 ChunkLoadError。
- * 
+ *
  * 该组件通过多种方式监听错误，检测到 chunk 加载失败时自动刷新页面，
  * 让浏览器加载最新的 chunk 文件。
  */
@@ -16,7 +16,7 @@ export function ChunkErrorHandler() {
     let hasReloaded = false;
 
     let lastReloadTime = 0;
-    const RELOAD_COOLDOWN = 10000; // 10s cooldown between reloads
+    const RELOAD_COOLDOWN = 60000; // 60s cooldown between reloads
 
     const tryReload = () => {
       if (hasReloaded) return;
@@ -29,15 +29,18 @@ export function ChunkErrorHandler() {
     };
 
     // 仅匹配 Next.js / Turbopack 的 chunk 加载失败错误
+    // 额外要求包含 /_next/static/ 路径，避免匹配第三方库的无关错误
     const isChunkError = (msg: string): boolean => {
       if (!msg) return false;
       const lower = msg.toLowerCase();
-      return (
+      const hasChunkKeyword = (
         lower.includes('chunkloaderror') ||
         lower.includes('loading chunk') ||
         lower.includes('failed to load chunk') ||
         lower.includes('loading css chunk')
       );
+      const hasNextPath = lower.includes('/_next/static/');
+      return hasChunkKeyword && hasNextPath;
     };
 
     // 方式1: window.error 事件
@@ -55,8 +58,8 @@ export function ChunkErrorHandler() {
       if (hasReloaded) return;
       const reason = e.reason;
       const msg = (
-        reason?.message || 
-        reason?.toString?.() || 
+        reason?.message ||
+        reason?.toString?.() ||
         (typeof reason === 'string' ? reason : '')
       ).toString();
       if (isChunkError(msg)) {
@@ -68,28 +71,9 @@ export function ChunkErrorHandler() {
     window.addEventListener('error', handleError);
     window.addEventListener('unhandledrejection', handleRejection);
 
-    // 方式3: 拦截 Next.js RSC 的 chunk 加载失败
-    // Next.js 内部使用 dynamic import，失败时会抛出错误
-    // 但这个错误可能被 React 内部 catch 掉，不会触发上面两个事件
-    // 通过 monkey-patch console.error 来捕获
-    const originalConsoleError = console.error;
-    console.error = (...args: unknown[]) => {
-      if (hasReloaded) {
-        originalConsoleError.apply(console, args);
-        return;
-      }
-      const msg = args.map(a => (typeof a === 'string' ? a : a?.toString?.() || '')).join(' ');
-      if (isChunkError(msg)) {
-        tryReload();
-        return; // 不输出这个错误，直接刷新
-      }
-      originalConsoleError.apply(console, args);
-    };
-
     return () => {
       window.removeEventListener('error', handleError);
       window.removeEventListener('unhandledrejection', handleRejection);
-      console.error = originalConsoleError;
     };
   }, []);
 
