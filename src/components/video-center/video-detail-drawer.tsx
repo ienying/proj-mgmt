@@ -274,27 +274,28 @@ export default function VideoDetailDrawer({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-xl p-0">
+        <SheetHeader className="p-4 pb-2 border-b shrink-0">
+          <SheetTitle className="text-lg truncate pr-2">
+            {loading ? "加载中..." : fullVideo ? (editing ? "编辑视频信息" : fullVideo.title) : "视频详情"}
+          </SheetTitle>
+        </SheetHeader>
         {loading ? (
-          <div className="flex items-center justify-center h-full text-gray-400">
+          <div className="flex items-center justify-center flex-1 text-gray-400">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mr-3" />
             加载中...
           </div>
         ) : fullVideo ? (
-          <div className="flex flex-col h-full">
-            <SheetHeader className="p-4 pb-2 border-b shrink-0">
-              <div className="flex items-center justify-between">
-                <SheetTitle className="text-lg truncate pr-2">
-                  {editing ? "编辑视频信息" : fullVideo.title}
-                </SheetTitle>
-                <div className="flex items-center gap-1 shrink-0">
-                  {canDelete() && (
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onDelete(fullVideo)}>
-                      <Trash2 className="w-4 h-4 text-red-500" />
-                    </Button>
-                  )}
-                </div>
+          <div className="flex flex-col flex-1">
+            <div className="flex items-center justify-between px-4 pb-2">
+              <div />
+              <div className="flex items-center gap-1">
+                {canDelete() && (
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onDelete(fullVideo)}>
+                    <Trash2 className="w-4 h-4 text-red-500" />
+                  </Button>
+                )}
               </div>
-            </SheetHeader>
+            </div>
 
             <ScrollArea className="flex-1">
               <div className="p-4 space-y-6">

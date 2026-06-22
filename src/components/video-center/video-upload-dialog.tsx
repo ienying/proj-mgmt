@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -8,8 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, X, Loader2, FileText, Paperclip } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Upload, X, Loader2, FileText, Paperclip, Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 interface VideoUploadDialogProps {
@@ -30,6 +32,8 @@ export default function VideoUploadDialog({
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [moduleName, setModuleName] = useState("");
+  const [moduleOpen, setModuleOpen] = useState(false);
+  const [moduleSearch, setModuleSearch] = useState("");
   const [tags, setTags] = useState("");
   const [description, setDescription] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -37,16 +41,49 @@ export default function VideoUploadDialog({
   const [uploadProgress, setUploadProgress] = useState(0);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const attachInputRef = useRef<HTMLInputElement>(null);
+  const xhrRef = useRef<XMLHttpRequest | null>(null);
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setVideoFile(null);
     setTitle("");
     setModuleName("");
+    setModuleOpen(false);
+    setModuleSearch("");
     setTags("");
     setDescription("");
     setAttachments([]);
     setUploadProgress(0);
-  };
+  }, []);
+
+  // Abort upload and cleanup
+  const abortUpload = useCallback(() => {
+    if (xhrRef.current) {
+      xhrRef.current.abort();
+      xhrRef.current = null;
+    }
+    setUploading(false);
+    setUploadProgress(0);
+    toast.info("上传已取消");
+  }, []);
+
+  // Handle dialog close — abort if uploading
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        if (uploading) {
+          abortUpload();
+        }
+        resetForm();
+      }
+      onOpenChange(open);
+    },
+    [uploading, abortUpload, resetForm, onOpenChange]
+  );
+
+  // Filter modules for searchable dropdown
+  const filteredModules = moduleSearch
+    ? modules.filter((m) => m.toLowerCase().includes(moduleSearch.toLowerCase()))
+    : modules;
 
   const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -67,7 +104,6 @@ export default function VideoUploadDialog({
     }
 
     setVideoFile(file);
-    // Auto-fill title from filename (without extension)
     if (!title) {
       const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
       setTitle(nameWithoutExt);
@@ -100,23 +136,28 @@ export default function VideoUploadDialog({
     setUploading(true);
     setUploadProgress(0);
 
+    // Track uploaded file path for potential cleanup on error
+    let uploadedPath: string | null = null;
+
     try {
-      // 1. Upload video file
+      // 1. Upload video file with abort support
       const videoForm = new FormData();
       videoForm.append("file", videoFile);
 
       const uploadResult = await new Promise<{ url: string; file_name: string; file_path: string; file_size: number }>(
         (resolve, reject) => {
           const xhr = new XMLHttpRequest();
+          xhrRef.current = xhr;
           xhr.open("POST", "/api/video-center/upload");
 
           xhr.upload.onprogress = (event) => {
             if (event.lengthComputable) {
-              setUploadProgress(Math.round((event.loaded / event.total) * 80)); // 80% for video
+              setUploadProgress(Math.round((event.loaded / event.total) * 80));
             }
           };
 
           xhr.onload = () => {
+            xhrRef.current = null;
             if (xhr.status >= 200 && xhr.status < 300) {
               const data = JSON.parse(xhr.responseText);
               if (data.data) resolve(data.data);
@@ -129,10 +170,22 @@ export default function VideoUploadDialog({
               }
             }
           };
-          xhr.onerror = () => reject(new Error("网络错误"));
+
+          xhr.onerror = () => {
+            xhrRef.current = null;
+            reject(new Error("网络错误，请检查网络连接后重试"));
+          };
+
+          xhr.onabort = () => {
+            xhrRef.current = null;
+            reject(new Error("ABORTED"));
+          };
+
           xhr.send(videoForm);
         }
       );
+
+      uploadedPath = uploadResult.file_path;
 
       // 2. Create video record
       const videoRes = await fetch("/api/video-center/videos", {
@@ -143,7 +196,7 @@ export default function VideoUploadDialog({
           file_name: uploadResult.file_name,
           file_path: uploadResult.file_path,
           file_size: uploadResult.file_size,
-          module_name: moduleName && moduleName !== "none" ? moduleName : null,
+          module_name: moduleName || null,
           tags: tags || null,
           description: description || null,
           created_by: currentUser?.id || null,
@@ -152,24 +205,26 @@ export default function VideoUploadDialog({
       });
       const videoJson = await videoRes.json();
       if (videoJson.error) {
-        toast.error(videoJson.error);
-        setUploading(false);
-        return;
+        throw new Error(videoJson.error);
       }
 
       const videoId = (videoJson.data as Record<string, unknown>)?.id as string;
       setUploadProgress(90);
 
-      // 3. Upload attachments if any (route handles DB insert)
+      // 3. Upload attachments if any
       if (attachments.length > 0 && videoId) {
         const attachForm = new FormData();
         attachForm.append("video_id", videoId);
         attachments.forEach((f) => attachForm.append("files", f));
 
-        await fetch("/api/video-center/upload-attachment", {
+        const attachRes = await fetch("/api/video-center/upload-attachment", {
           method: "POST",
           body: attachForm,
         });
+        const attachJson = await attachRes.json();
+        if (attachJson.error) {
+          toast.warning("配套文件上传失败: " + attachJson.error);
+        }
       }
 
       setUploadProgress(100);
@@ -177,14 +232,34 @@ export default function VideoUploadDialog({
       resetForm();
       onSuccess();
     } catch (error) {
-      toast.error("上传失败: " + (error instanceof Error ? error.message : String(error)));
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg === "ABORTED") return; // Already handled by abortUpload
+
+      toast.error("上传失败: " + msg);
+
+      // Cleanup orphaned file on disk if video was uploaded but DB record failed
+      if (uploadedPath) {
+        try {
+          await fetch(`/api/video-center/upload?file=${encodeURIComponent(uploadedPath)}`, { method: "DELETE" });
+        } catch { /* best effort */ }
+      }
     } finally {
+      xhrRef.current = null;
       setUploading(false);
     }
   };
 
+  const handleCancel = () => {
+    if (uploading) {
+      abortUpload();
+      return;
+    }
+    resetForm();
+    onOpenChange(false);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(open) => { if (!open) resetForm(); onOpenChange(open); }}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -206,6 +281,7 @@ export default function VideoUploadDialog({
               accept="video/mp4,video/webm,video/quicktime,video/x-msvideo,.mp4,.webm,.mov,.avi"
               className="hidden"
               onChange={handleVideoSelect}
+              disabled={uploading}
             />
             {videoFile ? (
               <div className="flex items-center gap-2 mt-1.5 p-3 bg-purple-50 rounded-lg border border-purple-200">
@@ -214,14 +290,16 @@ export default function VideoUploadDialog({
                   <p className="text-sm font-medium text-purple-900 truncate">{videoFile.name}</p>
                   <p className="text-xs text-purple-600">{(videoFile.size / (1024 * 1024)).toFixed(1)} MB</p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 shrink-0"
-                  onClick={() => setVideoFile(null)}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
+                {!uploading && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0"
+                    onClick={() => setVideoFile(null)}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
             ) : (
               <Button
@@ -229,6 +307,7 @@ export default function VideoUploadDialog({
                 variant="outline"
                 className="w-full mt-1.5 h-20 border-dashed"
                 onClick={() => videoInputRef.current?.click()}
+                disabled={uploading}
               >
                 <Upload className="w-5 h-5 mr-2" />
                 点击选择视频文件
@@ -245,23 +324,68 @@ export default function VideoUploadDialog({
               onChange={(e) => setTitle(e.target.value)}
               placeholder="自动从文件名读取，可修改"
               className="mt-1.5"
+              disabled={uploading}
             />
           </div>
 
-          {/* Module dropdown */}
+          {/* Searchable Module dropdown */}
           <div>
-            <Label htmlFor="vc-module">产品模块</Label>
-            <Select value={moduleName} onValueChange={setModuleName}>
-              <SelectTrigger id="vc-module" className="mt-1.5">
-                <SelectValue placeholder="选择产品模块（可选）" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">不选择模块</SelectItem>
-                {modules.map((m) => (
-                  <SelectItem key={m} value={m}>{m}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>产品模块</Label>
+            <Popover open={moduleOpen} onOpenChange={setModuleOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className={cn(
+                    "w-full mt-1.5 justify-between font-normal",
+                    !moduleName && "text-muted-foreground"
+                  )}
+                  disabled={uploading}
+                >
+                  {moduleName || "选择产品模块（可选）"}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command shouldFilter={false}>
+                  <CommandInput
+                    placeholder="搜索产品模块..."
+                    value={moduleSearch}
+                    onValueChange={setModuleSearch}
+                  />
+                  <CommandList>
+                    <CommandEmpty>未找到匹配的模块</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="none"
+                        onSelect={() => {
+                          setModuleName("");
+                          setModuleSearch("");
+                          setModuleOpen(false);
+                        }}
+                      >
+                        <Check className={cn("mr-2 h-4 w-4", !moduleName ? "opacity-100" : "opacity-0")} />
+                        不选择模块
+                      </CommandItem>
+                      {filteredModules.map((m) => (
+                        <CommandItem
+                          key={m}
+                          value={m}
+                          onSelect={() => {
+                            setModuleName(m);
+                            setModuleSearch("");
+                            setModuleOpen(false);
+                          }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", moduleName === m ? "opacity-100" : "opacity-0")} />
+                          {m}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Tags */}
@@ -273,6 +397,7 @@ export default function VideoUploadDialog({
               onChange={(e) => setTags(e.target.value)}
               placeholder="多个标签用逗号分隔，如: 培训,入门,操作指南"
               className="mt-1.5"
+              disabled={uploading}
             />
           </div>
 
@@ -286,6 +411,7 @@ export default function VideoUploadDialog({
               placeholder="视频内容简介（可选）"
               rows={3}
               className="mt-1.5"
+              disabled={uploading}
             />
           </div>
 
@@ -300,6 +426,7 @@ export default function VideoUploadDialog({
               accept=".ppt,.pptx,.doc,.docx,.pdf,.md,.zip,.rar,.7z,.tar,.gz,.xls,.xlsx,.txt,.csv"
               className="hidden"
               onChange={handleAddAttachments}
+              disabled={uploading}
             />
             {attachments.length > 0 && (
               <div className="space-y-1.5 mb-2">
@@ -308,14 +435,16 @@ export default function VideoUploadDialog({
                     <Paperclip className="w-4 h-4 text-gray-400 shrink-0" />
                     <span className="flex-1 truncate">{f.name}</span>
                     <span className="text-xs text-gray-400">{(f.size / 1024).toFixed(0)} KB</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 shrink-0"
-                      onClick={() => removeAttachment(i)}
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
+                    {!uploading && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0"
+                        onClick={() => removeAttachment(i)}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -326,6 +455,7 @@ export default function VideoUploadDialog({
               size="sm"
               className="w-full"
               onClick={() => attachInputRef.current?.click()}
+              disabled={uploading}
             >
               <Paperclip className="w-4 h-4 mr-1.5" />
               添加配套文件
@@ -345,6 +475,7 @@ export default function VideoUploadDialog({
                   style={{ width: `${uploadProgress}%` }}
                 />
               </div>
+              <p className="text-xs text-gray-400 mt-1.5">上传中请勿关闭页面，关闭将取消上传</p>
             </div>
           )}
 
@@ -352,10 +483,9 @@ export default function VideoUploadDialog({
           <div className="flex justify-end gap-3 pt-2">
             <Button
               variant="outline"
-              onClick={() => { resetForm(); onOpenChange(false); }}
-              disabled={uploading}
+              onClick={handleCancel}
             >
-              取消
+              {uploading ? "取消上传" : "取消"}
             </Button>
             <Button
               onClick={handleUpload}

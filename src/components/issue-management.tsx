@@ -11,9 +11,11 @@ import {
   Video, Paperclip, CheckCircle, ClipboardList, Inbox,
   Users, BarChart2, TrendingUp, ArrowRight,
   Edit3, FolderOpen, FolderTree, UserCheck, Layers, Timer,
-  Building2, Package, AlertCircle, QrCode, Copy, Check
+  Building2, Package, AlertCircle, QrCode, Copy, Check, ChevronsUpDown
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,6 +50,8 @@ interface Issue {
   handler_phone: string | null;
   category_id: string;
   product_module_id: string | null;
+  product_module_ids?: string[];
+  product_module_names?: string[];
   is_major: boolean;
   urgency_id: string;
   warranty_status_id: string | null;
@@ -177,6 +181,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
   const [warrantyList, setWarrantyList] = useState<WarrantyStatus[]>([]);
   const [users, setUsers] = useState<UserItem[]>([]);
   const [productModules, setProductModules] = useState<ProductModule[]>([]);
+  const [departments, setDepartments] = useState<{ code: string; name: string }[]>([]);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [records, setRecords] = useState<ProcessingRecord[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -187,7 +192,6 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
   const [createStep, setCreateStep] = useState(1);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [showActionDialog, setShowActionDialog] = useState(false);
-  const [showModuleDialog, setShowModuleDialog] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [actionType, setActionType] = useState("");
   const [actionComment, setActionComment] = useState("");
@@ -212,8 +216,8 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
     notify_users: [] as { id: string; name: string }[],
     category_id: undefined as string | undefined,
     sub_category_id: undefined as string | undefined,
-    product_module_id: undefined as string | undefined,
-    product_module_name: "",
+    product_module_ids: [] as string[],
+    product_module_names: [] as string[],
     is_major: false,
     urgency_id: undefined as string | undefined,
     warranty_status_id: undefined as string | undefined,
@@ -271,6 +275,15 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         const d = await projRes.json();
         setProjects((d.data || []).map((p: Record<string, unknown>) => ({
           id: p.id as string, project_name: p.project_name as string, project_code: p.project_code as string || "",
+        })));
+      }
+      const deptRes = await fetch("/api/dicts?type=departments");
+      if (deptRes.ok) {
+        const d = await deptRes.json();
+        const deptList = (d.data || []).filter((dd: Record<string, unknown>) => dd.is_enabled);
+        setDepartments(deptList.map((dd: Record<string, unknown>) => ({
+          code: dd.code as string,
+          name: dd.name as string,
         })));
       }
     } catch (e) {
@@ -407,7 +420,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
       handler_id: undefined, handler_name: "", handler_phone: "",
       notify_users: [],
       category_id: undefined, sub_category_id: undefined,
-      product_module_id: undefined, product_module_name: "",
+      product_module_ids: [], product_module_names: [],
       is_major: false, urgency_id: undefined, warranty_status_id: undefined,
       description: "", is_first_report: true, has_similar_history: false,
       remarks: "", expected_handle_time: "",
@@ -434,7 +447,9 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         handler_name: form.handler_name || null,
         handler_phone: form.handler_phone || null,
         category_id: categoryId,
-        product_module_id: form.product_module_id || null,
+        product_module_id: form.product_module_ids.length > 0 ? form.product_module_ids[0] : null,
+        product_module_ids: form.product_module_ids,
+        product_module_names: form.product_module_names,
         is_major: form.is_major,
         urgency_id: form.urgency_id,
         warranty_status_id: form.warranty_status_id || null,
@@ -599,7 +614,11 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
               {getUrgencyName(issue.urgency_id)}
             </span>
             {issue.warranty_status_id && <span className="flex items-center gap-1"><Shield className="w-3 h-3 text-gray-400" />{getWarrantyName(issue.warranty_status_id)}</span>}
-            {issue.product_module_id && <span className="flex items-center gap-1"><Package className="w-3 h-3 text-gray-400" />产品模块</span>}
+            {issue.product_module_names && issue.product_module_names.length > 0 ? (
+              <span className="flex items-center gap-1"><Package className="w-3 h-3 text-gray-400" />{issue.product_module_names.join('、')}</span>
+            ) : issue.product_module_id ? (
+              <span className="flex items-center gap-1"><Package className="w-3 h-3 text-gray-400" />产品模块</span>
+            ) : null}
           </div>
           {issue.description && (
             <p className="text-xs text-gray-400 line-clamp-2 mb-2 pl-0.5">{issue.description.replace(/<[^>]*>/g, "")}</p>
@@ -731,7 +750,12 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                   </div>
                   <div>
                     <label className="text-xs font-medium text-gray-600 mb-1 block">报修部门</label>
-                    <Input value={form.department} readOnly className="bg-gray-100/80 text-gray-500" />
+                    <Select value={form.department} onValueChange={v => setForm(f => ({ ...f, department: v }))}>
+                      <SelectTrigger className="w-full bg-gray-50/80"><SelectValue placeholder="选择部门" /></SelectTrigger>
+                      <SelectContent>
+                        {departments.map(d => <SelectItem key={d.code} value={d.name}>{d.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
@@ -779,15 +803,34 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className="text-xs font-medium text-gray-600 mb-1 block">指定处理人</label>
-                    <Select value={form.handler_id} onValueChange={v => {
-                      const u = users.find(u => u.id === v);
-                      setForm(f => ({ ...f, handler_id: v, handler_name: u?.name || "", handler_phone: u?.phone || "" }));
-                    }}>
-                      <SelectTrigger className="w-full bg-gray-50/80"><SelectValue placeholder="搜索选择" /></SelectTrigger>
-                      <SelectContent>
-                        {users.filter(u => u.name).map(u => <SelectItem key={u.id} value={u.id}>{u.name}{u.department ? ` (${u.department})` : ""}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-gray-50/80 px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] data-[state=open]:border-ring">
+                          <span className={form.handler_name ? "text-foreground" : "text-muted-foreground"}>
+                            {form.handler_name || "搜索选择"}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[280px] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="搜索用户名..." />
+                          <CommandList>
+                            <CommandEmpty>无匹配用户</CommandEmpty>
+                            <CommandGroup>
+                              {users.filter(u => u.name).map(u => (
+                                <CommandItem key={u.id} value={u.name} onSelect={() => {
+                                  setForm(f => ({ ...f, handler_id: u.id, handler_name: u.name, handler_phone: u.phone || "" }));
+                                }}>
+                                  {u.name}
+                                  {u.department && <span className="ml-2 text-xs text-muted-foreground">{u.department}</span>}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   <div>
                     <label className="text-xs font-medium text-gray-600 mb-1 block">处理人电话 <span className="text-gray-400 font-normal">自动带出</span></label>
@@ -809,18 +852,31 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                         <button type="button" className="text-blue-400 hover:text-red-500 ml-0.5" onClick={() => setForm(f => ({ ...f, notify_users: f.notify_users.filter(n => n.id !== nu.id) }))}>×</button>
                       </span>
                     ))}
-                    <Select value="" onValueChange={v => {
-                      const u = users.find(u => u.id === v);
-                      if (u && !form.notify_users.some(n => n.id === v)) {
-                        setForm(f => ({ ...f, notify_users: [...f.notify_users, { id: v, name: u.name }] }));
-                      }
-                    }}>
-                      <SelectTrigger className="w-36 h-7 text-xs"><SelectValue placeholder="+ 添加告知人" /></SelectTrigger>
-                      <SelectContent>
-                        {users.filter(u => u.name && !form.notify_users.some(n => n.id === u.id))
-                          .map(u => <SelectItem key={u.id} value={u.id}>{u.name}{u.department ? ` (${u.department})` : ""}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md border border-input bg-gray-50/80 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+                          + 添加告知人
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[260px] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="搜索用户名..." />
+                          <CommandList>
+                            <CommandEmpty>无匹配用户</CommandEmpty>
+                            <CommandGroup>
+                              {users.filter(u => u.name && !form.notify_users.some(n => n.id === u.id)).map(u => (
+                                <CommandItem key={u.id} value={u.name} onSelect={() => {
+                                  setForm(f => ({ ...f, notify_users: [...f.notify_users, { id: u.id, name: u.name }] }));
+                                }}>
+                                  {u.name}
+                                  {u.department && <span className="ml-2 text-xs text-muted-foreground">{u.department}</span>}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </div>
               </div>
@@ -855,10 +911,51 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                     )}
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">对应产品模块</label>
-                    <div className="flex gap-2">
-                      <Input value={form.product_module_name} readOnly className="flex-1 bg-gray-100/80" placeholder="点击选择" />
-                      <Button type="button" variant="outline" size="sm" onClick={() => setShowModuleDialog(true)} className="bg-gray-50/80">选择</Button>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">对应产品模块 <span className="text-gray-400 font-normal">可多选</span></label>
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                      {form.product_module_names.map((name, idx) => (
+                        <span key={idx} className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 text-xs px-2 py-0.5 rounded border border-amber-100">
+                          {name}
+                          <button type="button" className="text-amber-400 hover:text-red-500 ml-0.5" onClick={() => {
+                            setForm(f => ({
+                              ...f,
+                              product_module_ids: f.product_module_ids.filter((_, i) => i !== idx),
+                              product_module_names: f.product_module_names.filter((_, i) => i !== idx),
+                            }));
+                          }}>×</button>
+                        </span>
+                      ))}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md border border-input bg-gray-50/80 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+                            + 选择模块
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[280px] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="搜索模块名称..." />
+                            <CommandList>
+                              <CommandEmpty>无匹配模块</CommandEmpty>
+                              <CommandGroup>
+                                {productModules.filter(m => !form.product_module_ids.includes(m.id)).map(m => (
+                                  <CommandItem key={m.id} value={m.module_name} onSelect={() => {
+                                    setForm(f => ({
+                                      ...f,
+                                      product_module_ids: [...f.product_module_ids, m.id],
+                                      product_module_names: [...f.product_module_names, m.module_name],
+                                    }));
+                                  }}>
+                                    <div className="flex flex-col">
+                                      <span>{m.module_name}</span>
+                                      {m.product_name && <span className="text-[10px] text-muted-foreground">{m.product_name}</span>}
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
                   <div>
@@ -993,31 +1090,6 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
       </Dialog>
     );
   };
-
-  /* ─── 渲染：产品模块选择弹窗 ─── */
-  const renderModuleDialog = () => (
-    <Dialog open={showModuleDialog} onOpenChange={setShowModuleDialog}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>选择产品模块</DialogTitle>
-          <DialogDescription>从基础数据中选择产品模块</DialogDescription>
-        </DialogHeader>
-        <div className="max-h-[50vh] overflow-y-auto space-y-1">
-          {productModules.length === 0 && <p className="text-sm text-gray-400 text-center py-4">暂无产品模块数据</p>}
-          {productModules.map(m => (
-            <div key={m.id} className={`p-2 rounded border cursor-pointer text-sm hover:bg-blue-50 ${form.product_module_id === m.id ? "border-blue-400 bg-blue-50" : "border-gray-200"}`}
-              onClick={() => {
-                setForm(f => ({ ...f, product_module_id: m.id, product_module_name: m.module_name }));
-                setShowModuleDialog(false);
-              }}>
-              <span className="font-medium">{m.module_name}</span>
-              {m.product_name && <span className="text-gray-400 ml-2">{m.product_name}</span>}
-            </div>
-          ))}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
 
   /* ─── 渲染：问题详情弹窗 ─── */
   const renderDetailDialog = () => {
@@ -1593,7 +1665,6 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
 
       {/* 弹窗 */}
       {renderCreateDialog()}
-      {renderModuleDialog()}
       {renderDetailDialog()}
       {renderActionDialog()}
     </div>

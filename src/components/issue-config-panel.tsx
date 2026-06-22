@@ -26,8 +26,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Edit, Trash2, ChevronRight, ChevronDown, AlertTriangle, Clock, ShieldCheck, Users } from "lucide-react";
+import { Plus, Edit, Trash2, ChevronRight, ChevronDown, AlertTriangle, Clock, ShieldCheck, Users, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
 interface CategoryItem {
   id: string;
@@ -504,6 +506,7 @@ function ExternalReceiversConfig() {
   const [receivers, setReceivers] = useState<Array<{ id: string; user_id: string; user_name: string; is_enabled: boolean }>>([]);
   const [users, setUsers] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
+  const [addOpen, setAddOpen] = useState(false);
 
   const loadReceivers = async () => {
     try {
@@ -584,18 +587,34 @@ function ExternalReceiversConfig() {
             <h3 className="text-sm font-semibold text-slate-900">外部工单接收人</h3>
             <span className="text-xs text-slate-400">{receivers.length} 人</span>
           </div>
-          <Select onValueChange={handleAdd} value="">
-            <SelectTrigger className="h-7 w-40 text-xs">
-              <SelectValue placeholder="+ 添加接收人" />
-            </SelectTrigger>
-            <SelectContent>
-              {users
-                .filter((u) => !receivers.some((r) => r.user_id === u.id))
-                .map((u) => (
-                  <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+          <Popover open={addOpen} onOpenChange={setAddOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+                <Plus className="h-3 w-3" /> 添加接收人
+                <ChevronsUpDown className="h-3 w-3 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[240px] p-0" align="end">
+              <Command>
+                <CommandInput placeholder="搜索用户名..." />
+                <CommandList>
+                  <CommandEmpty>无匹配用户</CommandEmpty>
+                  <CommandGroup>
+                    {users
+                      .filter((u) => !receivers.some((r) => r.user_id === u.id))
+                      .map((u) => (
+                        <CommandItem key={u.id} value={u.name} onSelect={() => {
+                          handleAdd(u.id);
+                          setAddOpen(false);
+                        }}>
+                          {u.name}
+                        </CommandItem>
+                      ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
         <p className="text-xs text-slate-400 mb-3">
           外部用户扫码提交的工单将同时推送至所有启用的接收人待办事项中，一人受理后其他人待办自动取消。

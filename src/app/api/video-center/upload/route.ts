@@ -56,3 +56,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "上传失败" }, { status: 500 });
   }
 }
+
+// DELETE: cleanup orphaned files (e.g. video uploaded but DB record creation failed)
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const fileName = searchParams.get("file");
+
+    if (!fileName) {
+      return NextResponse.json({ error: "缺少文件名" }, { status: 400 });
+    }
+
+    const fullPath = path.join(VIDEO_DIR, path.basename(fileName));
+    if (!fullPath.startsWith(path.resolve(VIDEO_DIR))) {
+      return NextResponse.json({ error: "非法路径" }, { status: 403 });
+    }
+
+    if (fs.existsSync(fullPath)) {
+      fs.unlinkSync(fullPath);
+    }
+
+    return NextResponse.json({ data: { success: true } });
+  } catch (error) {
+    console.error("清理文件失败:", error);
+    return NextResponse.json({ error: "清理失败" }, { status: 500 });
+  }
+}
