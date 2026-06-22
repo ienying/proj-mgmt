@@ -165,14 +165,6 @@ interface IssueManagementProps {
 export default function IssueManagement({ currentUser }: IssueManagementProps) {
   // Tab 状态
   const [activeTab, setActiveTab] = useState("my_reports");
-  const tabs = [
-    { key: "my_reports", label: "我的上报", icon: <FileText className="w-4 h-4" /> },
-    { key: "issues", label: "问题管理", icon: <ClipboardList className="w-4 h-4" /> },
-    { key: "my_handle", label: "需我处理", icon: <Inbox className="w-4 h-4" /> },
-    { key: "todo", label: "待办中心", icon: <CheckCircle className="w-4 h-4" /> },
-    { key: "notify", label: "知会抄送", icon: <Bell className="w-4 h-4" /> },
-    { key: "stats", label: "数据统计", icon: <BarChart3 className="w-4 h-4" /> },
-  ];
 
   // 数据状态
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -1557,91 +1549,102 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
     stats: 0,
   }), [myReports, issues, myHandleIssues, notifications]);
 
+  // Metro tile defs — 单行 6 列
+  const metroTiles = useMemo(() => {
+    const items = [
+      { key: "my_handle", label: "需我处理", icon: <Inbox className="w-4 h-4" />, color: "#f09609" },
+      { key: "my_reports", label: "我的上报", icon: <FileText className="w-4 h-4" />, color: "#2672ec" },
+      { key: "issues", label: "问题管理", icon: <ClipboardList className="w-4 h-4" />, color: "#60a917" },
+      { key: "todo", label: "待办中心", icon: <CheckCircle className="w-4 h-4" />, color: "#7c3aed" },
+      { key: "notify", label: "知会抄送", icon: <Bell className="w-4 h-4" />, color: "#00aba9" },
+      { key: "stats", label: "数据统计", icon: <BarChart3 className="w-4 h-4" />, color: "#e51400" },
+    ];
+    return items.map(t => {
+      const count = tabCounts[t.key as keyof typeof tabCounts] || 0;
+      const isActive = activeTab === t.key;
+      return { ...t, count, isActive };
+    });
+  }, [tabCounts, activeTab]);
+
   return (
     <div className="h-full flex flex-col bg-gray-50">
-      {/* 页面标题 */}
-      <div className="p-6">
-        <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-semibold flex items-center gap-2">
-            <AlertCircle className="w-6 h-6" />
-            问题上报
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">上报问题、跟踪处理、统计分析</p>
+      {/* 页面标题 + Metro 磁贴 */}
+      <div className="shrink-0 bg-gray-50 border-b">
+        <div className="px-6 pt-4 pb-1 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold flex items-center gap-2">
+              <AlertCircle className="w-6 h-6" />
+              问题上报
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">上报问题、跟踪处理、统计分析</p>
+          </div>
+          <Dialog open={showQrDialog} onOpenChange={setShowQrDialog}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="shrink-0 gap-1.5">
+                <QrCode className="w-4 h-4" />
+                扫码提报
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <QrCode className="w-4 h-4 text-blue-500" />
+                  扫码提报入口
+                </DialogTitle>
+                <DialogDescription>
+                  将以下链接或二维码分享给外部客户，客户无需登录即可提交工单。
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col items-center gap-4 py-4">
+                <div className="bg-white border rounded-lg p-3">
+                  <QRCodeSVG value={submissionUrl} size={200} level="M" marginSize={4} />
+                </div>
+                <div className="flex items-center gap-2 w-full">
+                  <Input value={submissionUrl} readOnly className="h-8 text-xs font-mono bg-gray-50 flex-1" />
+                  <Button size="sm" variant="outline" className="h-8 shrink-0"
+                    onClick={() => {
+                      navigator.clipboard.writeText(submissionUrl).then(() => {
+                        setQrCopied(true); setTimeout(() => setQrCopied(false), 2000);
+                      });
+                    }}>
+                    {qrCopied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span className="ml-1 text-xs">{qrCopied ? "已复制" : "复制"}</span>
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
-        {/* 扫码提报按钮 */}
-        <Dialog open={showQrDialog} onOpenChange={setShowQrDialog}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm" className="shrink-0 gap-1.5">
-              <QrCode className="w-4 h-4" />
-              扫码提报
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <QrCode className="w-4 h-4 text-blue-500" />
-                扫码提报入口
-              </DialogTitle>
-              <DialogDescription>
-                将以下链接或二维码分享给外部客户，客户无需登录即可提交工单。
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col items-center gap-4 py-4">
-              <div className="bg-white border rounded-lg p-3">
-                <QRCodeSVG value={submissionUrl} size={200} level="M" marginSize={4} />
+        {/* Metro 磁贴导航 — 单行紧凑 */}
+        <div className="px-3 pb-2 grid grid-cols-6 gap-1.5">
+          {metroTiles.map(tile => (
+            <button
+              key={tile.key}
+              onClick={() => setActiveTab(tile.key)}
+              className={`
+                relative flex items-center justify-center gap-1.5 rounded-lg text-white text-center py-1.5
+                transition-all duration-150 select-none cursor-pointer overflow-hidden
+                ${tile.isActive ? "ring-2 ring-white/60 ring-offset-1 ring-offset-gray-200 scale-[0.95]" : "hover:scale-[1.03]"}
+              `}
+              style={{ backgroundColor: tile.color }}
+            >
+              {/* icon */}
+              <span className="opacity-90 shrink-0">{tile.icon}</span>
+              {/* label + count */}
+              <div className="flex flex-col items-start leading-tight min-w-0">
+                <span className="font-medium text-[10px] truncate">{tile.label}</span>
+                <span className="font-bold text-sm leading-none">
+                  {tile.count > 0 ? (tile.count > 99 ? "99+" : tile.count) : tile.key === "stats" ? "" : "—"}
+                </span>
               </div>
-              <div className="flex items-center gap-2 w-full">
-                <Input
-                  value={submissionUrl}
-                  readOnly
-                  className="h-8 text-xs font-mono bg-gray-50 flex-1"
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 shrink-0"
-                  onClick={() => {
-                    navigator.clipboard.writeText(submissionUrl).then(() => {
-                      setQrCopied(true);
-                      setTimeout(() => setQrCopied(false), 2000);
-                    });
-                  }}
-                >
-                  {qrCopied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span className="ml-1 text-xs">{qrCopied ? "已复制" : "复制"}</span>
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-      </div>
-
-      {/* Tab 栏 — 胶囊式 */}
-      <div className="flex items-center gap-1.5 px-4 py-2 bg-gray-50 border-b">
-        {tabs.map(tab => {
-          const count = tabCounts[tab.key as keyof typeof tabCounts] || 0;
-          const isActive = activeTab === tab.key;
-          return (
-            <button key={tab.key}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-full transition-all duration-200 ${
-                isActive
-                  ? "bg-blue-50 text-blue-600 font-medium shadow-sm ring-1 ring-blue-200"
-                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-              }`}
-              onClick={() => setActiveTab(tab.key)}>
-              <span className={isActive ? "text-blue-500" : "text-gray-400"}>{tab.icon}</span>
-              {tab.label}
-              {count > 0 && (
-                <span className={`ml-0.5 min-w-[18px] h-[18px] rounded-full text-[10px] font-medium flex items-center justify-center px-1 ${
-                  isActive ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-500"
-                }`}>{count > 99 ? '99+' : count}</span>
+              {/* unread dot */}
+              {tile.key === "notify" && notifications.filter(n => !n.is_read).length > 0 && (
+                <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
               )}
             </button>
-          );
-        })}
+          ))}
+        </div>
       </div>
 
       {/* 内容区 */}
