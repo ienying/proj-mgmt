@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Search, ChevronRight, FileText, BookOpen, Wrench, CheckCircle, FileEdit,
-  BarChart3, Eye, ThumbsUp, MessageCircle, Download, User, X
+  BarChart3, Eye, ThumbsUp, MessageCircle, Download, User, X,
+  Video,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -65,52 +66,60 @@ interface HomeViewProps {
   onEnterCategory: (categoryId: string, categoryName: string, categoryType: string) => void;
   onPostClick: (post: Post) => void;
   onEnterDrafts: () => void;
+  onEnterVideoCenter: () => void;
 }
 
 const ICON_MAP: Record<string, React.ReactNode> = {
-  FileText: <FileText className="w-10 h-10" />,
-  BookOpen: <BookOpen className="w-10 h-10" />,
-  Wrench: <Wrench className="w-10 h-10" />,
-  CheckCircle: <CheckCircle className="w-10 h-10" />,
-  FileEdit: <FileEdit className="w-10 h-10" />,
+  FileText: <FileText className="w-9 h-9" />,
+  BookOpen: <BookOpen className="w-9 h-9" />,
+  Wrench: <Wrench className="w-9 h-9" />,
+  CheckCircle: <CheckCircle className="w-9 h-9" />,
+  FileEdit: <FileEdit className="w-9 h-9" />,
+  Video: <Video className="w-9 h-9" />,
 };
 
 const COLOR_MAP: Record<string, { iconBg: string; iconColor: string; border: string; badge: string }> = {
   tech_doc: {
-    iconBg: "bg-gradient-to-br from-blue-100/80 to-indigo-100/80",
+    iconBg: "bg-gradient-to-br from-blue-100 to-indigo-100",
     iconColor: "text-blue-600",
     border: "hover:border-blue-300/60",
     badge: "bg-blue-100/60 text-blue-700",
   },
   product_manual: {
-    iconBg: "bg-gradient-to-br from-amber-100/80 to-orange-100/80",
+    iconBg: "bg-gradient-to-br from-amber-100 to-orange-100",
     iconColor: "text-amber-600",
     border: "hover:border-amber-300/60",
     badge: "bg-amber-100/60 text-amber-700",
   },
   ops_tool: {
-    iconBg: "bg-gradient-to-br from-gray-100/80 to-slate-100/80",
+    iconBg: "bg-gradient-to-br from-gray-100 to-slate-100",
     iconColor: "text-gray-600",
     border: "hover:border-gray-300/60",
     badge: "bg-gray-100/60 text-gray-700",
   },
   acceptance: {
-    iconBg: "bg-gradient-to-br from-emerald-100/80 to-green-100/80",
+    iconBg: "bg-gradient-to-br from-emerald-100 to-green-100",
     iconColor: "text-emerald-600",
     border: "hover:border-emerald-300/60",
     badge: "bg-emerald-100/60 text-emerald-700",
   },
   solution_template: {
-    iconBg: "bg-gradient-to-br from-orange-100/80 to-red-100/80",
+    iconBg: "bg-gradient-to-br from-orange-100 to-red-100",
     iconColor: "text-orange-600",
     border: "hover:border-orange-300/60",
     badge: "bg-orange-100/60 text-orange-700",
   },
-  stats: {
-    iconBg: "bg-gradient-to-br from-violet-100/80 to-purple-100/80",
-    iconColor: "text-violet-600",
-    border: "hover:border-violet-300/60",
-    badge: "bg-violet-100/60 text-violet-700",
+  video_center: {
+    iconBg: "bg-gradient-to-br from-fuchsia-100 to-pink-100",
+    iconColor: "text-fuchsia-600",
+    border: "hover:border-fuchsia-300/60",
+    badge: "bg-fuchsia-100/60 text-fuchsia-700",
+  },
+  drafts: {
+    iconBg: "bg-gradient-to-br from-amber-100 to-yellow-100",
+    iconColor: "text-amber-600",
+    border: "hover:border-amber-300/60",
+    badge: "bg-amber-100/60 text-amber-700",
   },
 };
 
@@ -120,7 +129,7 @@ function formatDate(dateStr: string): string {
   return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`;
 }
 
-export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts }: HomeViewProps) {
+export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, onEnterVideoCenter }: HomeViewProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [postCounts, setPostCounts] = useState<Record<string, number>>({});
   const [draftCount, setDraftCount] = useState(0);
@@ -128,6 +137,7 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts }
   const [searchCategory, setSearchCategory] = useState("all");
   const [statsOpen, setStatsOpen] = useState(false);
   const [statsData, setStatsData] = useState<StatsData | null>(null);
+
   const loadData = useCallback(async () => {
     try {
       const [catRes, postsRes, statsRes, draftsRes] = await Promise.all([
@@ -173,9 +183,7 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts }
       if (searchCategory !== "all") params.set("category_id", searchCategory);
       const res = await fetch(`/api/knowledge/search?${params.toString()}`);
       const json = await res.json();
-      if (json.data) {
-        setSearchResults(json.data);
-      }
+      if (json.data) setSearchResults(json.data);
     } catch {
       setSearchResults([]);
     }
@@ -187,14 +195,53 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts }
     setSearchKeyword("");
   };
 
-  // Arrange cards: top row 3, bottom row 3 (方案模板, 验收资料, 信息统计)
-  const sorted = [...categories].sort((a, b) => a.sort_order - b.sort_order);
-  const topRow = sorted.slice(0, 3);
-  const bottomCats = sorted.slice(3, 5);
+  // Build uniform card list
+  const allCategories = [...categories].sort((a, b) => a.sort_order - b.sort_order);
+  const uniformCards: Array<{
+    id: string;
+    name: string;
+    description: string;
+    type: string;
+    icon: string;
+    count: number;
+    onClick: () => void;
+    badgeLabel: string;
+  }> = [
+    ...allCategories.map((cat) => ({
+      id: cat.id,
+      name: cat.name,
+      description: cat.description || "",
+      type: cat.category_type,
+      icon: cat.icon || "FileText",
+      count: postCounts[cat.id] || 0,
+      onClick: () => onEnterCategory(cat.id, cat.name, cat.category_type),
+      badgeLabel: "篇内容",
+    })),
+    {
+      id: "video_center",
+      name: "视频中心",
+      description: "产品视频上传、查看与分享",
+      type: "video_center",
+      icon: "Video",
+      count: 0,
+      onClick: onEnterVideoCenter,
+      badgeLabel: "进入查看",
+    },
+    {
+      id: "drafts",
+      name: "我的草稿",
+      description: "未发布的内容草稿",
+      type: "drafts",
+      icon: "FileEdit",
+      count: draftCount,
+      onClick: onEnterDrafts,
+      badgeLabel: "篇草稿",
+    },
+  ];
 
   return (
     <div className="space-y-6">
-      {/* Global Search Bar */}
+      {/* Search Bar + Stats button */}
       <div className="flex items-center gap-3 bg-white/80 backdrop-blur rounded-2xl p-4 shadow-lg border border-gray-100">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -219,6 +266,16 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts }
         </Select>
         <Button onClick={handleSearch} size="lg" className="h-12 px-6 rounded-xl">
           <Search className="w-4 h-4 mr-2" /> 搜索
+        </Button>
+        {/* Stats button — icon only, top-right corner */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 rounded-xl shrink-0 hover:bg-violet-100 hover:text-violet-600"
+          onClick={() => { setStatsOpen(true); loadData(); }}
+          title="信息统计"
+        >
+          <BarChart3 className="w-5 h-5" />
         </Button>
       </div>
 
@@ -301,109 +358,48 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts }
         </div>
       )}
 
-      {/* Card Grid */}
+      {/* Uniform Card Grid */}
       {searchResults === null && (
-      <div className="space-y-6">
-        {/* Top Row: 3 cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {topRow.map((cat) => {
-            const colors = COLOR_MAP[cat.category_type] || COLOR_MAP.tech_doc;
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+          {uniformCards.map((card) => {
+            const colors = COLOR_MAP[card.type] || COLOR_MAP.tech_doc;
             return (
               <div
-                key={cat.id}
-                onClick={() => onEnterCategory(cat.id, cat.name, cat.category_type)}
-                className={`group cursor-pointer bg-white/60 backdrop-blur-xl rounded-3xl border border-white/30 ${colors.border} shadow-lg hover:shadow-xl hover:-translate-y-2 transition-all duration-500 overflow-hidden`}
+                key={card.id}
+                onClick={card.onClick}
+                className={`group cursor-pointer bg-white/60 backdrop-blur-xl rounded-2xl border border-white/30 ${colors.border} shadow-md hover:shadow-xl hover:-translate-y-1.5 transition-all duration-400 overflow-hidden flex flex-col`}
               >
-                <div className="p-8 text-center">
-                  <div className={`w-20 h-20 ${colors.iconBg} backdrop-blur-sm rounded-3xl flex items-center justify-center mx-auto mb-5 group-hover:scale-110 transition-transform duration-500`}>
-                    <div className={colors.iconColor}>
-                      {ICON_MAP[cat.icon || "FileText"] || ICON_MAP.FileText}
+                <div className="p-6 text-center flex flex-col items-center justify-between h-full">
+                  <div className="space-y-3">
+                    <div className={`w-16 h-16 ${colors.iconBg} rounded-2xl flex items-center justify-center mx-auto group-hover:scale-110 transition-transform duration-400`}>
+                      <div className={colors.iconColor}>
+                        {ICON_MAP[card.icon] || ICON_MAP.FileText}
+                      </div>
                     </div>
+                    <h3 className="text-base font-bold text-gray-800">{card.name}</h3>
+                    <p className="text-xs text-gray-400 line-clamp-2">{card.description}</p>
                   </div>
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">{cat.name}</h3>
-                  <p className="text-sm text-gray-500 mb-4 line-clamp-2">{cat.description}</p>
-                  <div className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full ${colors.badge} text-sm font-medium`}>
-                    <span className="text-lg font-bold">{postCounts[cat.id] || 0}</span>
-                    <span>篇内容</span>
-                  </div>
-                  <div className="mt-5 flex items-center justify-center text-sm text-gray-400 group-hover:text-gray-600 transition-colors duration-300">
-                    <span>进入查看</span>
-                    <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1.5 transition-transform duration-300" />
+                  <div className="mt-4 space-y-3">
+                    <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full ${colors.badge} text-xs font-medium`}>
+                      {card.count > 0 ? (
+                        <>
+                          <span className="text-sm font-bold">{card.count}</span>
+                          <span>{card.badgeLabel}</span>
+                        </>
+                      ) : (
+                        <span>{card.badgeLabel === "进入查看" ? "点击进入" : "暂无内容"}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-center text-xs text-gray-400 group-hover:text-gray-600 transition-colors duration-300">
+                      <span>进入查看</span>
+                      <ChevronRight className="w-3.5 h-3.5 ml-0.5 group-hover:translate-x-1.5 transition-transform duration-300" />
+                    </div>
                   </div>
                 </div>
               </div>
             );
           })}
         </div>
-
-        {/* Bottom Row: 方案模板 + 验收资料 + 信息统计 + 我的草稿 */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {bottomCats.map((cat) => {
-            const colors = COLOR_MAP[cat.category_type] || COLOR_MAP.tech_doc;
-            return (
-              <div
-                key={cat.id}
-                onClick={() => onEnterCategory(cat.id, cat.name, cat.category_type)}
-                className={`group cursor-pointer bg-white/60 backdrop-blur-xl rounded-3xl border border-white/30 ${colors.border} shadow-lg hover:shadow-xl hover:-translate-y-2 transition-all duration-500 overflow-hidden`}
-              >
-                <div className="p-8 text-center">
-                  <div className={`w-20 h-20 ${colors.iconBg} backdrop-blur-sm rounded-3xl flex items-center justify-center mx-auto mb-5 group-hover:scale-110 transition-transform duration-500`}>
-                    <div className={colors.iconColor}>
-                      {ICON_MAP[cat.icon || "FileText"] || ICON_MAP.FileText}
-                    </div>
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">{cat.name}</h3>
-                  <p className="text-sm text-gray-500 mb-4 line-clamp-2">{cat.description}</p>
-                  <div className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full ${colors.badge} text-sm font-medium`}>
-                    <span className="text-lg font-bold">{postCounts[cat.id] || 0}</span>
-                    <span>篇内容</span>
-                  </div>
-                  <div className="mt-5 flex items-center justify-center text-sm text-gray-400 group-hover:text-gray-600 transition-colors duration-300">
-                    <span>进入查看</span>
-                    <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1.5 transition-transform duration-300" />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-
-          {/* 信息统计 Card - compact */}
-          <div
-            onClick={() => { setStatsOpen(true); loadData(); }}
-            className="group cursor-pointer bg-white/60 backdrop-blur-xl rounded-2xl border border-white/30 hover:border-violet-300/60 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-500 overflow-hidden"
-          >
-            <div className="p-5 text-center">
-              <div className="w-14 h-14 bg-gradient-to-br from-violet-100/80 to-purple-100/80 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform duration-500">
-                <BarChart3 className="w-7 h-7 text-violet-600" />
-              </div>
-              <h3 className="text-base font-bold text-gray-800 mb-1">信息统计</h3>
-              <p className="text-xs text-gray-500 mb-3 line-clamp-2">发布数量、贡献人数、阅读下载等统计</p>
-              <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-violet-100/60 text-violet-700 text-xs font-medium">
-                <span className="text-base font-bold">{statsData?.total_posts || 0}</span>
-                <span>篇内容</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 我的草稿 Card */}
-          <div
-            onClick={onEnterDrafts}
-            className="group cursor-pointer bg-white/60 backdrop-blur-xl rounded-2xl border border-white/30 hover:border-amber-300/60 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-500 overflow-hidden"
-          >
-            <div className="p-5 text-center">
-              <div className="w-14 h-14 bg-gradient-to-br from-amber-100/80 to-yellow-100/80 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform duration-500">
-                <FileEdit className="w-7 h-7 text-amber-600" />
-              </div>
-              <h3 className="text-base font-bold text-gray-800 mb-1">我的草稿</h3>
-              <p className="text-xs text-gray-500 mb-3">未发布的内容草稿</p>
-              <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-100/60 text-amber-700 text-xs font-medium">
-                <span className="text-base font-bold">{draftCount}</span>
-                <span>篇草稿</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
       )}
 
       {/* Rotating Info Banner */}
@@ -421,7 +417,6 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts }
           <ScrollArea className="max-h-[65vh]">
             {statsData ? (
               <div className="space-y-6 pr-4">
-                {/* Overview cards */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   {[
                     { label: "总发布", value: statsData.total_posts, icon: FileText, color: "text-blue-600 bg-blue-50" },
@@ -437,8 +432,6 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts }
                     </div>
                   ))}
                 </div>
-
-                {/* Per-category table */}
                 <div className="border rounded-xl overflow-hidden">
                   <table className="w-full text-sm">
                     <thead>

@@ -1,10 +1,21 @@
 "use client";
 
 import React, { useState } from "react";
+import dynamic from "next/dynamic";
 import HomeView from "./info-square/home-view";
 import ListView from "./info-square/list-view";
 import PostDrawer from "./info-square/post-drawer";
 import PostEditor from "./info-square/post-editor";
+
+const VideoCenterContent = dynamic(() => import("@/components/video-center"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-64 text-gray-400">
+      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500 mr-2" />
+      加载中...
+    </div>
+  ),
+});
 
 interface KnowledgeCenterProps {
   currentUser?: { id?: string; name?: string; role?: string } | null;
@@ -31,7 +42,7 @@ interface Post {
 }
 
 export default function KnowledgeCenter({ currentUser }: KnowledgeCenterProps) {
-  const [view, setView] = useState<"home" | "list" | "drafts">("home");
+  const [view, setView] = useState<"home" | "list" | "drafts" | "video_center">("home");
   const [selectedCategory, setSelectedCategory] = useState<{
     id: string;
     name: string;
@@ -60,6 +71,10 @@ export default function KnowledgeCenter({ currentUser }: KnowledgeCenterProps) {
     setView("drafts");
   };
 
+  const handleEnterVideoCenter = () => {
+    setView("video_center");
+  };
+
   const handlePostClick = (post: Post) => {
     setDrawerPost(post);
     setDrawerOpen(true);
@@ -85,40 +100,45 @@ export default function KnowledgeCenter({ currentUser }: KnowledgeCenterProps) {
 
   return (
     <div className="p-6" key={refreshKey}>
-      <div className="max-w-6xl mx-auto">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">信息广场</h2>
-        {view === "home" ? (
-          <HomeView
-            currentUser={currentUser}
-            onEnterCategory={handleEnterCategory}
-            onPostClick={handlePostClick}
-            onEnterDrafts={handleEnterDrafts}
-          />
-        ) : view === "drafts" ? (
-          <ListView
-            currentUser={currentUser}
-            categoryId=""
-            categoryName="我的草稿"
-            categoryType="tech_doc"
-            isDraft={true}
-            onBack={handleBack}
-            onPostClick={handlePostClick}
-            onPublish={handlePublish}
-            onEdit={handleEdit}
-          />
-        ) : selectedCategory ? (
-          <ListView
-            currentUser={currentUser}
-            categoryId={selectedCategory.id}
-            categoryName={selectedCategory.name}
-            categoryType={selectedCategory.type}
-            onBack={handleBack}
-            onPostClick={handlePostClick}
-            onPublish={handlePublish}
-            onEdit={handleEdit}
-          />
-        ) : null}
-      </div>
+      {view === "video_center" ? (
+        <VideoCenterContent currentUser={currentUser} onBack={handleBack} />
+      ) : (
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">信息广场</h2>
+          {view === "home" ? (
+            <HomeView
+              currentUser={currentUser}
+              onEnterCategory={handleEnterCategory}
+              onPostClick={handlePostClick}
+              onEnterDrafts={handleEnterDrafts}
+              onEnterVideoCenter={handleEnterVideoCenter}
+            />
+          ) : view === "drafts" ? (
+            <ListView
+              currentUser={currentUser}
+              categoryId=""
+              categoryName="我的草稿"
+              categoryType="tech_doc"
+              isDraft={true}
+              onBack={handleBack}
+              onPostClick={handlePostClick}
+              onPublish={handlePublish}
+              onEdit={handleEdit}
+            />
+          ) : selectedCategory ? (
+            <ListView
+              currentUser={currentUser}
+              categoryId={selectedCategory.id}
+              categoryName={selectedCategory.name}
+              categoryType={selectedCategory.type}
+              onBack={handleBack}
+              onPostClick={handlePostClick}
+              onPublish={handlePublish}
+              onEdit={handleEdit}
+            />
+          ) : null}
+        </div>
+      )}
 
       <PostDrawer
         post={drawerPost}

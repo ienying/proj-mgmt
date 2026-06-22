@@ -1,4 +1,4 @@
-import { pgTable, varchar, text, timestamp, boolean, integer, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, varchar, text, timestamp, boolean, integer, bigint, jsonb, index } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 // ============================================
@@ -334,4 +334,56 @@ export const taskCenterInstances = pgTable("task_center_instances", {
   index("task_center_instances_def_id_idx").on(table.def_id),
   index("task_center_instances_assignee_idx").on(table.assignee_id),
   index("task_center_instances_status_idx").on(table.status),
+]);
+
+// ── Video Center: 视频中心 ──
+
+export const video_center_videos = pgTable("video_center.videos", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  title: varchar("title", { length: 500 }).notNull(),
+  file_name: varchar("file_name", { length: 500 }).notNull(),
+  file_path: varchar("file_path", { length: 1000 }).notNull(),
+  file_size: bigint("file_size", { mode: "number" }).default(0).notNull(),
+  duration: varchar("duration", { length: 50 }),
+  module_name: varchar("module_name", { length: 200 }),
+  tags: varchar("tags", { length: 500 }),
+  description: text("description"),
+  created_by: varchar("created_by", { length: 36 }),
+  created_by_name: varchar("created_by_name", { length: 100 }),
+  view_count: integer("view_count").default(0),
+  download_count: integer("download_count").default(0),
+  share_token: varchar("share_token", { length: 64 }),
+  is_deleted: boolean("is_deleted").default(false),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }),
+}, (table) => [
+  index("idx_vc_videos_module").on(table.module_name),
+  index("idx_vc_videos_share_token").on(table.share_token),
+  index("idx_vc_videos_created_by").on(table.created_by),
+]);
+
+export const video_center_attachments = pgTable("video_center.attachments", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  video_id: varchar("video_id", { length: 36 }).notNull(),
+  file_name: varchar("file_name", { length: 500 }).notNull(),
+  file_path: varchar("file_path", { length: 1000 }).notNull(),
+  file_size: bigint("file_size", { mode: "number" }).default(0).notNull(),
+  file_type: varchar("file_type", { length: 50 }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_vc_attachments_video_id").on(table.video_id),
+]);
+
+export const video_center_comments = pgTable("video_center.comments", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  video_id: varchar("video_id", { length: 36 }).notNull(),
+  content: text("content").notNull(),
+  user_id: varchar("user_id", { length: 36 }),
+  user_name: varchar("user_name", { length: 100 }),
+  parent_id: varchar("parent_id", { length: 36 }),
+  is_deleted: boolean("is_deleted").default(false),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_vc_comments_video_id").on(table.video_id),
+  index("idx_vc_comments_parent_id").on(table.parent_id),
 ]);
