@@ -109,6 +109,30 @@ interface ReqDetail {
   date: string;
 }
 
+interface DashboardWarning {
+  project_id: string;
+  project_name: string;
+  category: "threshold" | "trend" | "comparison";
+  subcategory: string;
+  item: string;
+  condition: string;
+  level: "error" | "warning";
+  source: string;
+  current_value: string;
+  threshold: string;
+  comparison_project?: string;
+  gap?: string;
+}
+
+interface WarningSummary {
+  total: number;
+  errors: number;
+  warnings: number;
+  threshold: number;
+  trend: number;
+  comparison: number;
+}
+
 interface DashboardFullData {
   kpi: KpiData;
   domain_averages: DomainScore[];
@@ -130,6 +154,8 @@ interface DashboardFullData {
     detail_list: ReqDetail[];
   };
   departments: string[];
+  warnings: DashboardWarning[];
+  warning_summary: WarningSummary;
   projects: Array<{
     id: string;
     project_name: string;
@@ -222,7 +248,19 @@ function DomainCell({
   projectScores: Array<{ name: string; pct: number }>;
 }) {
   return (
-    <div className={`k9 ${cls}`}>
+    <div className={`k9 ${cls}`} style={{ position: "relative" }}>
+      {score > 0 && score < 60 && (
+        <span style={{
+          position: "absolute", top: 6, right: 6, width: 8, height: 8,
+          borderRadius: "50%", background: "#ef4444", border: "1px solid #fff",
+        }} title={`${label}严重偏低 ${score}%`} />
+      )}
+      {score >= 60 && score < 75 && (
+        <span style={{
+          position: "absolute", top: 6, right: 6, width: 8, height: 8,
+          borderRadius: "50%", background: "#f59e0b", border: "1px solid #fff",
+        }} title={`${label}偏低 ${score}%`} />
+      )}
       <div className="k9-icon">{icon}</div>
       <div className="k9-val" style={{ color: scoreColor(score) }}>
         {score}%
@@ -653,21 +691,23 @@ export function ProjectDashboard({
             })}
           </div>
 
-          {/* Warning pills */}
+          {/* Warning summary */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
-            {aiWarnings ? (
-              aiWarnings.slice(0, 6).map((w, i) => (
-                <WarningPill key={i} level={w.level === "info" ? "warning" : w.level} text={w.message.slice(0, 18)} />
-              ))
-            ) : (
+            {data.warning_summary && data.warning_summary.total > 0 ? (
               <>
-                <WarningPill level="error" text="金沙一中 进度滞后" />
-                <WarningPill level="warning" text="叙永教育 资源不足" />
+                <span className="db-warn-pill error" style={{ cursor: "pointer" }}>
+                  ● 严重 {data.warning_summary.errors}
+                </span>
+                <span className="db-warn-pill warning" style={{ cursor: "pointer" }}>
+                  ● 警告 {data.warning_summary.warnings}
+                </span>
+                <span style={{ fontSize: 10, color: "var(--text3)", padding: "4px 6px" }}>
+                  共 {data.warning_summary.total} 条预警 · 阈值{data.warning_summary.threshold} · 趋势{data.warning_summary.trend} · 对比{data.warning_summary.comparison}
+                </span>
               </>
-            )}
-            {data.project_type_distribution.length === 0 && (
+            ) : (
               <span style={{ fontSize: 10, color: "var(--text3)", padding: "4px 0" }}>
-                点击「生成新预警」开始 AI 分析
+                暂无预警 · 点击「生成新预警」开始 AI 分析
               </span>
             )}
           </div>
@@ -829,6 +869,147 @@ export function ProjectDashboard({
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ========== Warning Center ========== */}
+      <div className="db-panel" style={{ marginBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <span style={{ fontSize: 13, fontWeight: 700 }}>
+            ⚠️ 预警中心
+            <span style={{ fontSize: 10, color: "var(--text3)", fontWeight: 400, marginLeft: 8 }}>
+              {data.warning_summary.total > 0
+                ? `共 ${data.warning_summary.total} 条（严重 ${data.warning_summary.errors} · 警告 ${data.warning_summary.warnings}）`
+                : "暂无预警 · 指标正常"}
+            </span>
+          </span>
+          <button
+            className="db-gear"
+            onClick={() =>
+              setFormulaModal({
+                open: true,
+                title: "预警中心 · 触发规则",
+                formulas: [
+                  { metric: "单指标阈值", formula: "基于9大领域完成率、风险数、里程碑、回款率等单一指标的固定阈值判定", source: "各模块管理表" },
+                  { metric: "趋势恶化", formula: "基于连续2个月指标变化趋势判定", source: "需求登记表/风险登记表" },
+                  { metric: "差值对比", formula: "基于项目间综合得分/领域得分差距判定", source: "综合评分" },
+                ],
+              })
+            }
+          >
+            ⚙
+          </button>
+        </div>
+
+        {/* Warning KPI cards row */}
+        <div className="r4" style={{ marginBottom: 10 }}>
+          <div className="rt rt-k4" style={{ cursor: "pointer" }}>
+            <div className="rt-val" style={{ color: data.warning_summary.threshold > 0 ? "#ef4444" : "var(--text)" }}>
+              {data.warning_summary.threshold}
+            </div>
+            <div className="rt-label">📏 单指标阈值预警</div>
+          </div>
+          <div className="rt rt-k3" style={{ cursor: "pointer" }}>
+            <div className="rt-val" style={{ color: data.warning_summary.trend > 0 ? "#f59e0b" : "var(--text)" }}>
+              {data.warning_summary.trend}
+            </div>
+            <div className="rt-label">📈 趋势恶化预警</div>
+          </div>
+          <div className="rt rt-k1" style={{ cursor: "pointer" }}>
+            <div className="rt-val" style={{ color: data.warning_summary.comparison > 0 ? "#3d6cb9" : "var(--text)" }}>
+              {data.warning_summary.comparison}
+            </div>
+            <div className="rt-label">📊 差值对比预警</div>
+          </div>
+          <div className="rt rt-k2" style={{ cursor: "pointer" }}>
+            <div className="rt-val" style={{ color: data.warning_summary.errors > 0 ? "#ef4444" : data.warning_summary.total > 0 ? "#f59e0b" : "#10b981" }}>
+              {data.warning_summary.errors}
+            </div>
+            <div className="rt-label">🔴 严重 / {data.warning_summary.warnings} 警告</div>
+          </div>
+        </div>
+
+        {/* Warning bar chart + detail list */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10 }}>
+          {/* Left: Warning bar chart */}
+          <div className="r3-panel" style={{ padding: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6 }}>预警分布</div>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart
+                data={[
+                  { name: "阈值", error: data.warnings.filter((w) => w.category === "threshold" && w.level === "error").length, warning: data.warnings.filter((w) => w.category === "threshold" && w.level === "warning").length },
+                  { name: "趋势", error: data.warnings.filter((w) => w.category === "trend" && w.level === "error").length, warning: data.warnings.filter((w) => w.category === "trend" && w.level === "warning").length },
+                  { name: "对比", error: data.warnings.filter((w) => w.category === "comparison" && w.level === "error").length, warning: data.warnings.filter((w) => w.category === "comparison" && w.level === "warning").length },
+                ]}
+                margin={{ top: 4, right: 4, left: -8, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                <Tooltip contentStyle={{ fontSize: 11 }} />
+                <Bar dataKey="error" name="严重" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={24} stackId="a" />
+                <Bar dataKey="warning" name="警告" fill="#f59e0b" radius={[0, 0, 0, 0]} barSize={24} stackId="a" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Right: Top warnings list */}
+          <div style={{
+            background: "var(--card2)",
+            borderRadius: 10,
+            padding: 12,
+            maxHeight: 220,
+            overflowY: "auto",
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 8 }}>最新预警明细</div>
+            {(data.warnings || []).length > 0 ? (
+              data.warnings.slice(0, 8).map((w, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "6px 10px",
+                    marginBottom: 3,
+                    borderRadius: 6,
+                    background: "#fff",
+                    borderLeft: `3px solid ${w.level === "error" ? "#ef4444" : "#f59e0b"}`,
+                    fontSize: 11,
+                  }}
+                >
+                  <span style={{
+                    width: 7, height: 7, borderRadius: "50%",
+                    background: w.level === "error" ? "#ef4444" : "#f59e0b",
+                    flexShrink: 0,
+                  }} />
+                  <span style={{ fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {w.item}
+                  </span>
+                  <span style={{ fontSize: 10, color: "var(--text3)", whiteSpace: "nowrap" }}>
+                    {w.current_value}
+                  </span>
+                  <span style={{
+                    fontSize: 9,
+                    padding: "1px 6px",
+                    borderRadius: 8,
+                    background: w.level === "error" ? "#fef2f2" : "#fff7ed",
+                    color: w.level === "error" ? "#dc2626" : "#d97706",
+                    whiteSpace: "nowrap",
+                  }}>
+                    {w.level === "error" ? "严重" : "警告"}
+                  </span>
+                  <span style={{ fontSize: 9, color: "var(--text3)", whiteSpace: "nowrap" }}>
+                    {w.project_name}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div style={{ textAlign: "center", padding: "30px 0", color: "var(--text3)", fontSize: 11 }}>
+                ✅ 当前各项指标正常，无预警触发
+              </div>
+            )}
           </div>
         </div>
       </div>

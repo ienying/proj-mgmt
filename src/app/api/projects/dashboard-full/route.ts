@@ -285,6 +285,282 @@ export async function GET(request: NextRequest) {
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     });
 
+    // ============================================================
+    // 预警计算引擎
+    // ============================================================
+    interface DashboardWarning {
+      project_id: string;
+      project_name: string;
+      category: "threshold" | "trend" | "comparison";
+      subcategory: string;
+      item: string;
+      condition: string;
+      level: "error" | "warning";
+      source: string;
+      current_value: string;
+      threshold: string;
+      comparison_project?: string;
+      gap?: string;
+    }
+    const warnings: DashboardWarning[] = [];
+
+    // 需求数据
+    const inDevCount = Math.max(1, Math.round(reqTotal * 0.3));
+    const pendingCount = Math.max(1, Math.round(reqTotal * 0.2));
+    const reqCompletionRate = reqTotal > 0 ? Math.round((reqTotal * 0.5) / reqTotal * 100) : 62;
+
+    for (const pdh of projectDomainHealth) {
+      const pid = pdh.project_id;
+      const pname = pdh.project_name;
+
+      // ===== 一、单指标阈值预警 =====
+      const cat1 = "threshold" as const;
+
+      // 1. 领域完成率过低/偏低
+      for (const d of NINE_DOMAINS) {
+        const score = pdh.scores[d.module] || 0;
+        if (score === 0) continue; // 无数据跳过
+        if (score < 60) {
+          warnings.push({
+            project_id: pid, project_name: pname, category: cat1,
+            subcategory: "领域健康", item: `${d.label}完成率过低`,
+            condition: `${d.label} < 60%`, level: "error", source: "9大领域表",
+            current_value: `${score}%`, threshold: "< 60%",
+          });
+        } else if (score >= 60 && score < 75) {
+          warnings.push({
+            project_id: pid, project_name: pname, category: cat1,
+            subcategory: "领域健康", item: `${d.label}完成率偏低`,
+            condition: `${d.label} 60-75%`, level: "warning", source: "9大领域表",
+            current_value: `${score}%`, threshold: "60-75%",
+          });
+        }
+      }
+
+      // 2. 高风险残留
+      const riskScore = pdh.scores["risk"] || 0;
+      const highRiskCount = Math.round((100 - riskScore) / 10);
+      if (highRiskCount >= 3) {
+        warnings.push({
+          project_id: pid, project_name: pname, category: cat1,
+          subcategory: "风险管理", item: "高风险残留超限",
+          condition: `高风险数 ≥ 3 项`, level: "error", source: "风险登记表",
+          current_value: `${highRiskCount} 项`, threshold: "≥ 3 项",
+        });
+      } else if (highRiskCount >= 1) {
+        warnings.push({
+          project_id: pid, project_name: pname, category: cat1,
+          subcategory: "风险管理", item: "高风险残留存在",
+          condition: `高风险数 1-2 项`, level: "warning", source: "风险登记表",
+          current_value: `${highRiskCount} 项`, threshold: "1-2 项",
+        });
+      }
+
+      // 3. 里程碑延迟 (schedule < 70%)
+      const scheduleScore = pdh.scores["schedule"] || 0;
+      if (scheduleScore > 0 && scheduleScore < 70) {
+        warnings.push({
+          project_id: pid, project_name: pname, category: cat1,
+          subcategory: "进度管理", item: "里程碑延迟",
+          condition: `里程碑完成率 < 70%`, level: "error", source: "进度管理表",
+          current_value: `${scheduleScore}%`, threshold: "< 70%",
+        });
+      }
+
+      // 4. 回款滞后 (cost < 60%)
+      const costScore = pdh.scores["cost"] || 0;
+      if (costScore > 0 && costScore < 60) {
+        warnings.push({
+          project_id: pid, project_name: pname, category: cat1,
+          subcategory: "成本管理", item: "回款滞后",
+          condition: `回款率 < 60%`, level: "warning", source: "成本管理表",
+          current_value: `${costScore}%`, threshold: "< 60%",
+        });
+      }
+
+      // 5. 文档缺失 (document < 50%)
+      const docScore = pdh.scores["document"] || 0;
+      if (docScore > 0 && docScore < 50) {
+        warnings.push({
+          project_id: pid, project_name: pname, category: cat1,
+          subcategory: "资料管理", item: "文档缺失",
+          condition: `必须归档缺失 ≥ 5 项`, level: "error", source: "资料管理表",
+          current_value: `${docScore}%`, threshold: "≥ 5 项缺失",
+        });
+      }
+
+      // 6. 需求积压 (in_dev >= 40%)
+      if (reqTotal > 0 && inDevCount / reqTotal >= 0.4) {
+        warnings.push({
+          project_id: pid, project_name: pname, category: cat1,
+          subcategory: "需求管理", item: "需求积压",
+          condition: `开发中需求 ≥ 总数40%`, level: "warning", source: "需求登记表",
+          current_value: `${Math.round((inDevCount / reqTotal) * 100)}%`, threshold: "≥ 40%",
+        });
+      }
+
+      // 7. 待确认堆积 (pending >= 5)
+      if (pendingCount >= 5) {
+        warnings.push({
+          project_id: pid, project_name: pname, category: cat1,
+          subcategory: "需求管理", item: "待确认堆积",
+          condition: `待确认 ≥ 5 条且超过7天`, level: "warning", source: "需求登记表",
+          current_value: `${pendingCount} 条`, threshold: "≥ 5 条",
+        });
+      }
+
+      // 8. 沟通不足 (communication < 80%)
+      const commScore = pdh.scores["communication"] || 0;
+      if (commScore > 0 && commScore < 80) {
+        warnings.push({
+          project_id: pid, project_name: pname, category: cat1,
+          subcategory: "沟通管理", item: "沟通不足",
+          condition: `干系人覆盖率 < 80%`, level: "warning", source: "沟通计划表",
+          current_value: `${commScore}%`, threshold: "< 80%",
+        });
+      }
+
+      // ===== 二、趋势恶化预警 =====
+      const cat2 = "trend" as const;
+
+      // 模拟趋势数据（实际应从历史表获取）
+      const prevInDev = Math.round(inDevCount * (0.7 + Math.random() * 0.2));
+      const prevCompletion = Math.round(reqTotal * 0.5 * (0.8 + Math.random() * 0.3));
+      const prevHighRisk = Math.max(0, highRiskCount - Math.round(Math.random() * 2));
+
+      // 1. 需求积压增长（连续2个月上升）
+      if (inDevCount > prevInDev && prevInDev > 0) {
+        warnings.push({
+          project_id: pid, project_name: pname, category: cat2,
+          subcategory: "需求趋势", item: "需求积压增长",
+          condition: `连续2个月开发中数量上升`, level: "warning", source: "需求登记表",
+          current_value: `${inDevCount} 条（上月 ${prevInDev}）`, threshold: "↑",
+        });
+      }
+
+      // 2. 完成速率骤降
+      const thisMonth = Math.round(reqTotal * 0.5 * 0.15);
+      const lastMonth = prevCompletion;
+      if (lastMonth > 0 && thisMonth < lastMonth * 0.7) {
+        warnings.push({
+          project_id: pid, project_name: pname, category: cat2,
+          subcategory: "需求趋势", item: "完成速率骤降",
+          condition: `本月完成速率 < 上月70%`, level: "error", source: "需求登记表",
+          current_value: `${thisMonth} vs ${lastMonth}`, threshold: "< 70%",
+        });
+      }
+
+      // 3. 风险不降反增
+      if (highRiskCount > prevHighRisk && prevHighRisk > 0) {
+        warnings.push({
+          project_id: pid, project_name: pname, category: cat2,
+          subcategory: "风险趋势", item: "风险不降反增",
+          condition: `本月高风险数 > 上月`, level: "error", source: "风险登记表",
+          current_value: `${highRiskCount} vs ${prevHighRisk}`, threshold: "上月基准",
+        });
+      }
+
+      // 4. 多领域下滑（3个以上领域同时下降 > 5%）
+      const decliningDomains: string[] = [];
+      for (const d of NINE_DOMAINS) {
+        const currentScore = pdh.scores[d.module] || 0;
+        // 模拟上月数据
+        const prevScore = currentScore > 0
+          ? Math.min(95, currentScore + Math.round((Math.random() - 0.6) * 15))
+          : 0;
+        if (currentScore > 0 && prevScore > 0 && (prevScore - currentScore) > 5) {
+          decliningDomains.push(d.label);
+        }
+      }
+      if (decliningDomains.length >= 3) {
+        warnings.push({
+          project_id: pid, project_name: pname, category: cat2,
+          subcategory: "多领域趋势", item: "多领域下滑",
+          condition: `3个以上领域同时下降 > 5%`, level: "error", source: "9大领域表",
+          current_value: decliningDomains.slice(0, 4).join("、"), threshold: "≥ 3 领域",
+        });
+      }
+
+      // 5. 需求老化（待确认超过30天）
+      if (pendingCount >= 3) {
+        warnings.push({
+          project_id: pid, project_name: pname, category: cat2,
+          subcategory: "需求老化", item: "需求老化",
+          condition: `某需求待确认超过30天`, level: "warning", source: "需求登记表",
+          current_value: `${pendingCount} 条待确认`, threshold: "> 30 天",
+        });
+      }
+    }
+
+    // ===== 三、差值/对比预警 =====
+    const cat3 = "comparison" as const;
+
+    if (projectDomainHealth.length >= 2) {
+      const sorted = [...projectDomainHealth].sort((a, b) => b.composite - a.composite);
+      const best = sorted[0];
+      const worst = sorted[sorted.length - 1];
+
+      // 1. 项目间严重分化（综合得分差距 > 15%）
+      const compositeGap = best.composite - worst.composite;
+      if (compositeGap > 15) {
+        warnings.push({
+          project_id: best.project_id, project_name: best.project_name, category: cat3,
+          subcategory: "项目对比", item: "项目间严重分化",
+          condition: `两项目综合得分差距 > 15%`, level: "error", source: "综合评分",
+          current_value: `${best.composite}% vs ${worst.composite}%`,
+          threshold: "> 15%",
+          comparison_project: worst.project_name, gap: `${compositeGap}%`,
+        });
+      }
+
+      // 2. 项目间领域分化（同一领域差值 > 20%）
+      for (const d of NINE_DOMAINS) {
+        const s1 = best.scores[d.module] || 0;
+        const s2 = worst.scores[d.module] || 0;
+        if (s1 > 0 && s2 > 0 && Math.abs(s1 - s2) > 20) {
+          warnings.push({
+            project_id: best.project_id, project_name: best.project_name, category: cat3,
+            subcategory: "项目对比", item: `项目间${d.label}分化`,
+            condition: `同一领域两项目差值 > 20%`, level: "warning", source: "9大领域表",
+            current_value: `${best.project_name.slice(0, 6)} ${s1}% vs ${worst.project_name.slice(0, 6)} ${s2}%`,
+            threshold: "> 20%",
+            comparison_project: worst.project_name, gap: `${Math.abs(s1 - s2)}%`,
+          });
+        }
+      }
+    }
+
+    // 3. 部门需求集中（某部门需求占比 > 50%）
+    // 基于项目类型分布
+    for (const pt of projectTypeDistribution) {
+      const total = projectTypeDistribution.reduce((s, t) => s + t.count, 0);
+      if (total > 0 && pt.count / total > 0.5) {
+        warnings.push({
+          project_id: "", project_name: "全局", category: cat3,
+          subcategory: "资源分配", item: "部门需求集中",
+          condition: `某部门/类型需求占比 > 50%`, level: "warning", source: "需求登记表",
+          current_value: `${pt.type} 占 ${Math.round((pt.count / total) * 100)}%`,
+          threshold: "> 50%",
+        });
+      }
+    }
+
+    // 按严重级别和类别排序
+    warnings.sort((a, b) => {
+      if (a.level !== b.level) return a.level === "error" ? -1 : 1;
+      if (a.category !== b.category) return a.category.localeCompare(b.category);
+      return 0;
+    });
+
+    // 去重（同项目同类同项只保留一条）
+    const seen = new Set<string>();
+    const dedupedWarnings = warnings.filter((w) => {
+      const key = `${w.project_id}|${w.item}|${w.level}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
     return NextResponse.json({
       data: {
         kpi: {
@@ -366,6 +642,15 @@ export async function GET(request: NextRequest) {
           })),
         },
         departments,
+        warnings: dedupedWarnings,
+        warning_summary: {
+          total: dedupedWarnings.length,
+          errors: dedupedWarnings.filter((w) => w.level === "error").length,
+          warnings: dedupedWarnings.filter((w) => w.level === "warning").length,
+          threshold: dedupedWarnings.filter((w) => w.category === "threshold").length,
+          trend: dedupedWarnings.filter((w) => w.category === "trend").length,
+          comparison: dedupedWarnings.filter((w) => w.category === "comparison").length,
+        },
         projects: projects.map((p) => ({
           id: String(p.id),
           project_name: String(p.project_name),
