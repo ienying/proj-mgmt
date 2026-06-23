@@ -106,6 +106,7 @@ export interface ColumnConfig {
   label?: string;
   max_size?: string; // 视频最大文件大小: "100MB" / "500MB" / "1GB"
   max_count?: number; // 视频最多上传个数
+  format?: "number" | "percent"; // 数字列的显示格式
   reference_config?: {
     source_table_code: string;
     source_column: string;
@@ -1132,6 +1133,7 @@ export function StandardManagement({
         "描述": col.description || "",
         "选项": (col.options || []).join(", "),
         "快捷语": (col.quick_inputs || []).join(", "),
+        "显示格式": col.format || "",
       }));
       const worksheet = xlsxLib.utils.json_to_sheet(exportData);
       const workbook = xlsxLib.utils.book_new();
@@ -1189,6 +1191,9 @@ export function StandardManagement({
         const quickInputsStr = String(row["快捷语"] ?? row["quick_inputs"] ?? "");
         const quickInputs = quickInputsStr ? quickInputsStr.split(/[,，]/).map((s: string) => s.trim()).filter(Boolean) : [];
 
+        const rawFormat = String(row["显示格式"] ?? row["format"] ?? "");
+        const format = (rawFormat === "percent" || rawFormat === "百分比") ? "percent" : (rawFormat === "number" || rawFormat === "普通数字") ? undefined : undefined;
+
         return {
           name: String(row["列名"] ?? row["name"] ?? ""),
           type,
@@ -1197,6 +1202,7 @@ export function StandardManagement({
           description: String(row["描述"] ?? row["description"] ?? "") || undefined,
           options: options.length > 0 ? options : undefined,
           quick_inputs: quickInputs.length > 0 ? quickInputs : undefined,
+          format: format as ColumnConfig["format"],
         };
       }).filter((col) => col.name);
 
@@ -1972,6 +1978,51 @@ export function StandardManagement({
                                     </TableCell>
                                   </TableRow>
                                 )}
+                                {col.type === "number" && (
+                                  <TableRow
+                                    key={`fmt-${index}`}
+                                    className={`${dragColIndex === index ? "opacity-40 bg-muted/20" : ""} ${dragOverColIndex === index && dragColIndex !== index ? "ring-2 ring-primary ring-inset" : ""} transition-all`}
+                                    onDragOver={(e) => {
+                                      e.preventDefault();
+                                      e.dataTransfer.dropEffect = "move";
+                                      setDragOverColIndex(index);
+                                    }}
+                                    onDrop={(e) => {
+                                      e.preventDefault();
+                                      if (dragColIndex !== null && dragColIndex !== index) {
+                                        moveColumn(dragColIndex, index);
+                                      }
+                                      setDragColIndex(null);
+                                      setDragOverColIndex(null);
+                                    }}
+                                  >
+                                    <TableCell colSpan={7} className="bg-muted/30 px-4 py-3">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-muted-foreground shrink-0">显示格式:</span>
+                                        <div className="flex gap-1">
+                                          <Button
+                                            type="button"
+                                            variant={col.format !== "percent" ? "default" : "outline"}
+                                            size="sm"
+                                            className="h-6 text-xs px-2"
+                                            onClick={() => updateColumn(index, "format", undefined)}
+                                          >
+                                            普通数字
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            variant={col.format === "percent" ? "default" : "outline"}
+                                            size="sm"
+                                            className="h-6 text-xs px-2"
+                                            onClick={() => updateColumn(index, "format", "percent")}
+                                          >
+                                            百分比
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
                                 {(col.type as string) === "procurement_module" && (
                                   <TableRow
                                     key={`pm-${index}`}
@@ -2631,6 +2682,8 @@ export function StandardManagement({
                               })()
                             : ["office", "pdf", "md", "image", "archive"].includes(col.type as string)
                             ? renderFileCellDisplay(String(record[col.name] ?? ""), col.type as string)
+                            : col.type === "number" && col.format === "percent"
+                            ? `${String(record[col.name] ?? "-")}%`
                             : String(record[col.name] ?? "-")}
                         </TableCell>
                       ))}
@@ -2735,15 +2788,20 @@ export function StandardManagement({
                       />
                     </div>
                   ) : col.type === "number" ? (
-                    <Input
-                      type="number"
-                      value={String(recordFormData[col.name] || "")}
-                      onChange={(e) => setRecordFormData((prev) => ({ ...prev, [col.name]: e.target.value }))}
-                      placeholder={col.description || `请输入${col.name}`}
-                      disabled={isReadonly}
-                      className={isReadonly ? "bg-muted cursor-not-allowed" : ""}
-                      title={isReadonly ? (col.readonly_reason || "只读字段，不可编辑") : ""}
-                    />
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        value={String(recordFormData[col.name] || "")}
+                        onChange={(e) => setRecordFormData((prev) => ({ ...prev, [col.name]: e.target.value }))}
+                        placeholder={col.description || `请输入${col.name}`}
+                        disabled={isReadonly}
+                        className={`${isReadonly ? "bg-muted cursor-not-allowed" : ""} ${col.format === "percent" ? "pr-8" : ""}`}
+                        title={isReadonly ? (col.readonly_reason || "只读字段，不可编辑") : ""}
+                      />
+                      {col.format === "percent" && (
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">%</span>
+                      )}
+                    </div>
                   ) : col.type === "date" ? (
                     <Input
                       type="date"
