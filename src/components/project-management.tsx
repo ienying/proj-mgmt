@@ -8,7 +8,7 @@ import {
   MoreHorizontal, Edit, Trash2, LayoutGrid, List,
   Building2, Phone, Mail, Tag, FileText, Layers,
   MapPin, Globe, Lock, Flag, Palette, ChevronRight, ArrowRight,
-  SlidersHorizontal, Download, ChevronDown, CheckIcon,
+  SlidersHorizontal, Download, ChevronDown, CheckIcon, Package,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger,
@@ -173,6 +173,7 @@ export function ProjectManagement({
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedRoleType, setSelectedRoleType] = useState("");
   const [userSearchOpen, setUserSearchOpen] = useState(false);
+  const [modSearch, setModSearch] = useState("");
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
 
   // 加载项目成员和权限
@@ -414,6 +415,9 @@ export function ProjectManagement({
       .catch(() => {});
   }, [initialProjectTypes, initialProjectStages, initialProcurementModules]);
 
+  // 切换项目时清空搜索
+  useEffect(() => { setModSearch(""); }, [selectedProject?.id]);
+
   const getStatusBadge = (status?: string) => {
     const styles: Record<string, string> = {
       active: "bg-blue-100 text-blue-700",
@@ -594,6 +598,46 @@ export function ProjectManagement({
             </div>
           )}
         </div>
+
+        {/* 采购模块 */}
+        {selectedProject.procurement_modules && (selectedProject.procurement_modules as string[]).length > 0 && (() => {
+          const modules = selectedProject.procurement_modules as string[];
+          const filtered = modSearch
+            ? modules.filter((code) => {
+                const mod = procurementModules.find(m => m.code === code);
+                const name = mod?.name || code;
+                return name.toLowerCase().includes(modSearch.toLowerCase()) || code.toLowerCase().includes(modSearch.toLowerCase());
+              })
+            : modules;
+          return (
+            <div className="p-4 border-t border-slate-200">
+              <h3 className="text-sm font-medium text-slate-500 flex items-center gap-1.5 mb-2">
+                <Package className="w-3.5 h-3.5" />
+                采购模块
+                <span className="text-xs text-slate-400 ml-1">{modules.length} 个</span>
+              </h3>
+              <Input
+                placeholder="搜索模块..."
+                value={modSearch}
+                onChange={(e) => setModSearch(e.target.value)}
+                className="h-7 text-xs mb-2"
+              />
+              <div className="max-h-36 overflow-y-auto space-y-1">
+                {filtered.map((code) => {
+                  const mod = procurementModules.find(m => m.code === code);
+                  return (
+                    <div key={code} className="text-xs text-slate-700 py-0.5 px-2 rounded bg-slate-50 truncate">
+                      {mod?.name || code}
+                    </div>
+                  );
+                })}
+                {filtered.length === 0 && (
+                  <div className="text-xs text-slate-400 text-center py-2">无匹配模块</div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* 成员与权限 */}
         <div className="p-4 border-t border-slate-200">

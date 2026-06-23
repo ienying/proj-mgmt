@@ -28,6 +28,7 @@ function buildCreateTableSQL(tableCode: string, columnsConfig: Array<{name: stri
     "updated_at TIMESTAMP WITH TIME ZONE",
     "created_by VARCHAR(36)",
     "allow_delete BOOLEAN DEFAULT TRUE",
+    "_readonly BOOLEAN DEFAULT FALSE",
     "data_source TEXT DEFAULT 'standard'",
   ];
 
