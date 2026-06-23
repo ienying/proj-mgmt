@@ -750,6 +750,10 @@ export function ProjectForm({
       toast.error("请选择项目阶段");
       return;
     }
+    if (!projectStatus) {
+      toast.error("请选择项目状态");
+      return;
+    }
     if (selectedModules.length === 0) {
       toast.error("请至少选择一个采购模块");
       return;
@@ -998,7 +1002,9 @@ export function ProjectForm({
               </div>
               <div className="grid grid-cols-2 gap-5">
                 <div className="space-y-1.5">
-                  <Label>项目状态</Label>
+                  <Label>
+                    项目状态 <span className="text-red-500">*</span>
+                  </Label>
                   <Select value={projectStatus} onValueChange={setProjectStatus}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="请选择项目状态" />
