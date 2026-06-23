@@ -1306,23 +1306,35 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
             <div className="space-y-3 text-sm text-gray-600">
               <div className="flex items-start gap-2">
                 <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">1</div>
-                <span>点击「新建项目」，填写项目名称、编号、类型、阶段</span>
+                <span>点击「新建项目」进入全屏表单，填写<strong className="text-gray-900">项目名称、编号</strong></span>
               </div>
               <div className="flex items-start gap-2">
                 <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">2</div>
-                <span>配置客户信息和渠道信息（公司、联系人、联系方式）</span>
+                <span>选择<strong className="text-gray-900">项目类型、阶段、状态</strong>（这三项决定 Schema 规则匹配）</span>
               </div>
               <div className="flex items-start gap-2">
                 <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">3</div>
-                <span>添加项目成员，设定角色（项目经理、开发、测试等）</span>
+                <span>填写基本信息：部门、角色（销售/售前/市场产品/项目经理）、客户类型（<strong className="text-gray-900">多选</strong>）、部署模式、描述</span>
               </div>
               <div className="flex items-start gap-2">
                 <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">4</div>
-                <span>选择采购模块（来源于基础数据-产品模块）</span>
+                <span>配置时间信息（进场/初验/终验）、客户信息（地址/联系人/照片）、渠道信息</span>
               </div>
               <div className="flex items-start gap-2">
                 <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">5</div>
-                <span>进入项目详情，按模块管理数据（10大模块）</span>
+                <span>添加项目成员、选择<strong className="text-gray-900">采购模块</strong>（可通过 Excel 模板批量导入匹配）</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">6</div>
+                <span>配置对接信息（厂商/开发方/配合方/时间计划）</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">7</div>
+                <span>提交 → 后台根据规则自动匹配并复制规范表（<strong className="text-gray-900">只增不删</strong>）</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs shrink-0">!</div>
+                <span className="text-amber-700">若无匹配规则，项目仍会创建成功，但弹出提示"未匹配到 Schema 规则，未复制规范表"</span>
               </div>
             </div>
             <div className="mt-3 bg-emerald-50 rounded-lg p-2.5">
@@ -1332,45 +1344,35 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
 
           {/* 数据库逻辑 */}
           <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
-            <h4 className="font-semibold text-gray-900 mb-3">数据库逻辑</h4>
+            <h4 className="font-semibold text-gray-900 mb-3">后端处理流程</h4>
             <div className="space-y-4 text-sm text-gray-600">
+              {/* 步骤表 */}
+              <div>
+                <p className="font-medium text-gray-700 mb-2">完整处理步骤</p>
+                <div className="bg-gray-50 rounded-lg p-3 font-mono text-xs leading-relaxed text-gray-700 space-y-1">
+                  <p><span className="text-emerald-600 font-bold">0. 查重</span> — 检查 project_code 是否已存在</p>
+                  <p><span className="text-emerald-600 font-bold">1. Schema</span> — 生成项目 Schema 名：<code className="bg-gray-200 px-1 rounded">yuansu_{'{'}project_code{'}'}</code></p>
+                  <p><span className="text-emerald-600 font-bold">2. 插入</span> — dp_insert('projects', data) 写入主记录</p>
+                  <p><span className="text-emerald-600 font-bold">3. 成员</span> — 遍历 members[] → dp_insert('project_members', ...)</p>
+                  <p><span className="text-emerald-600 font-bold">4. Schema</span> — CREATE SCHEMA IF NOT EXISTS</p>
+                  <p><span className="text-emerald-600 font-bold">5. 规则匹配</span> — copyTableDefinitionsToSchema() 匹配规则 & 建表</p>
+                  <p><span className="text-emerald-600 font-bold">6. 采购记录</span> — 为 procurement_record 表生成模块行</p>
+                  <p><span className="text-emerald-600 font-bold">7. 对接信息</span> — 写入 integration_info 表</p>
+                  <p><span className="text-emerald-600 font-bold">8. 返回</span> — 201 Created（含 warning 信息，若有）</p>
+                </div>
+              </div>
+
               {/* 核心表关系 */}
               <div>
                 <p className="font-medium text-gray-700 mb-2">核心表关系</p>
                 <div className="bg-gray-50 rounded-lg p-3 font-mono text-xs leading-relaxed text-gray-700">
                   <p className="text-emerald-600 font-bold">projects</p>
-                  <p className="pl-4">├── project_members (项目成员，project_id → projects.id)</p>
-                  <p className="pl-4">├── project_member_permissions (成员权限，project_id + user_id + permission_key)</p>
-                  <p className="pl-4">├── customer_info (jsonb: 客户信息，嵌入项目记录)</p>
-                  <p className="pl-4">├── channel_info (jsonb: 渠道信息，嵌入项目记录)</p>
-                  <p className="pl-4">└── procurement_modules (_text: 采购模块数组)</p>
-                </div>
-              </div>
-
-              {/* 创建流程数据流 */}
-              <div>
-                <p className="font-medium text-gray-700 mb-2">创建流程数据流</p>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
-                    <span className="text-xs">前端提交表单 → <code className="bg-gray-100 px-1 rounded">POST /api/projects</code></span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
-                    <span className="text-xs">API 调用 <code className="bg-gray-100 px-1 rounded">dp_insert('projects', data)</code> 插入项目主记录</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
-                    <span className="text-xs">客户信息/渠道信息作为 jsonb 字段直接存储在 projects 表中</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
-                    <span className="text-xs">采购模块存储为 _text 数组，关联 product_module_types 表</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
-                    <span className="text-xs">成员通过 <code className="bg-gray-100 px-1 rounded">dp_insert('project_members', ...)</code> 批量写入</span>
-                  </div>
+                  <p className="pl-4">├── project_members (项目成员)</p>
+                  <p className="pl-4">├── customer_info (jsonb: 客户信息)</p>
+                  <p className="pl-4">├── customer_type (_text: 客户类型数组，支持多选)</p>
+                  <p className="pl-4">├── channel_info (jsonb: 渠道信息)</p>
+                  <p className="pl-4">├── procurement_modules (_text: 采购模块数组)</p>
+                  <p className="pl-4">└── integration_info (对接信息，独立表)</p>
                 </div>
               </div>
 
@@ -1380,34 +1382,11 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-blue-50 rounded-lg p-2.5">
                     <p className="text-xs font-medium text-blue-700">design_public</p>
-                    <p className="text-xs text-blue-600 mt-1">存储全局数据：项目列表、用户、字典、规范表定义</p>
+                    <p className="text-xs text-blue-600 mt-1">全局数据：项目列表、用户、字典、规范表定义</p>
                   </div>
                   <div className="bg-purple-50 rounded-lg p-2.5">
-                    <p className="text-xs font-medium text-purple-700">project_{'{'}id{'}'}</p>
-                    <p className="text-xs text-purple-600 mt-1">每个项目独立 Schema，存储规范表数据、模块业务数据</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* 规范表同步 */}
-              <div>
-                <p className="font-medium text-gray-700 mb-2">规范表同步到项目</p>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></div>
-                    <span className="text-xs">规范管理中定义表结构（字段名/类型/选项）</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></div>
-                    <span className="text-xs">「同步到项目」→ 在项目 Schema 中创建对应的物理表</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></div>
-                    <span className="text-xs">支持三种同步模式：仅结构 / 仅数据 / 结构+数据</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></div>
-                    <span className="text-xs">同步后项目详情页可按模块查看和编辑该表数据</span>
+                    <p className="text-xs font-medium text-purple-700">yuansu_{'{'}code{'}'}</p>
+                    <p className="text-xs text-purple-600 mt-1">项目独立 Schema，存储规范表副本和业务数据</p>
                   </div>
                 </div>
               </div>
@@ -1415,7 +1394,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
           </div>
         </section>
 
-        {/* Schema 规则匹配关系 */}
+        {/* Schema 规则匹配 */}
         <section id="schema-rules" className="scroll-mt-4">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-xl bg-teal-600 flex items-center justify-center">
@@ -1423,7 +1402,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Schema 规则匹配</h2>
-              <p className="text-sm text-gray-500">项目 Schema 规则配置 · 匹配关系说明</p>
+              <p className="text-sm text-gray-500">三项必选 · 精确匹配 · 多规则合并去重</p>
             </div>
           </div>
 
@@ -1431,8 +1410,9 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
           <div className="bg-gradient-to-br from-teal-600 to-cyan-700 rounded-2xl p-8 text-white mb-6">
             <h3 className="text-xl font-bold mb-2">新建项目时自动复制规范表</h3>
             <p className="text-teal-100 text-sm leading-relaxed">
-              系统通过「项目 Schema 规则配置」定义匹配规则，当新建项目时，
-              根据项目类型、阶段、状态和采购模块自动匹配规则，将对应的规范表结构（含初始数据）复制到项目 Schema 中。
+              系统通过「项目 Schema 规则配置」定义匹配规则。新建项目时，根据项目类型、阶段、状态精确匹配，
+              将对应规范表结构（含初始数据）复制到项目 Schema。<strong className="text-white">CREATE TABLE IF NOT EXISTS</strong>，
+              旧表<strong className="text-white">永不删除</strong>（只增不删）。
             </p>
           </div>
 
@@ -1443,11 +1423,14 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
               类型阶段规则（type_stage）
             </h4>
             <p className="text-sm text-gray-500 mb-4">
-              三个条件（类型、阶段、状态）都是<strong className="text-gray-700">可选的</strong>（null = 不限）。规则中某个字段非 null，项目对应值必须匹配上才算命中。
+              三个条件（类型、阶段、状态）<strong className="text-gray-900">全部为必选项</strong>，
+              必须与项目值完全一致才算命中。不设"不限"概念，不设优先级排序。
             </p>
 
             <div className="bg-teal-50 rounded-lg p-3 mb-4">
-              <p className="text-xs font-medium text-teal-700 mb-1">关系：规则内的条件是 AND，规则之间是"谁匹配更多谁优先"</p>
+              <p className="text-xs font-medium text-teal-700">
+                匹配条件：<code className="bg-teal-100 px-1 rounded">rule.type === project.type && rule.stage === project.stage && rule.status === project.status</code>
+              </p>
             </div>
 
             <div className="overflow-x-auto">
@@ -1457,33 +1440,27 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
                     <th className="text-left py-2 pr-3 text-gray-500 font-medium text-xs">类型</th>
                     <th className="text-left py-2 pr-3 text-gray-500 font-medium text-xs">阶段</th>
                     <th className="text-left py-2 pr-3 text-gray-500 font-medium text-xs">状态</th>
-                    <th className="text-left py-2 text-gray-500 font-medium text-xs">匹配含义</th>
+                    <th className="text-left py-2 text-gray-500 font-medium text-xs">结果</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   <tr>
-                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">A</td>
-                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">B</td>
-                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">C</td>
-                    <td className="py-1.5 text-gray-700">三者全中才命中（最精确，优先级最高）</td>
+                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">自研软件</td>
+                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">实施</td>
+                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">进行中</td>
+                    <td className="py-1.5 text-emerald-700 font-medium">✓ 命中 — 收集 table_definitions</td>
                   </tr>
                   <tr>
-                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">A</td>
-                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">B</td>
-                    <td className="py-1.5 pr-3 text-gray-400 text-xs">不限</td>
-                    <td className="py-1.5 text-gray-700">type 和 stage 必须匹配，不限状态</td>
+                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">自研软件</td>
+                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">实施</td>
+                    <td className="py-1.5 pr-3 font-mono text-xs text-amber-700">已完成</td>
+                    <td className="py-1.5 text-red-600">✗ 状态不匹配 — 跳过</td>
                   </tr>
                   <tr>
-                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">A</td>
-                    <td className="py-1.5 pr-3 text-gray-400 text-xs">不限</td>
-                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">C</td>
-                    <td className="py-1.5 text-gray-700">type 和 status 必须匹配，不限阶段</td>
-                  </tr>
-                  <tr>
-                    <td className="py-1.5 pr-3 text-gray-400 text-xs">不限</td>
-                    <td className="py-1.5 pr-3 text-gray-400 text-xs">不限</td>
-                    <td className="py-1.5 pr-3 text-gray-400 text-xs">不限</td>
-                    <td className="py-1.5 text-gray-700">通用规则，不限任何条件（最低优先级）</td>
+                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">自研软件</td>
+                    <td className="py-1.5 pr-3 font-mono text-xs text-amber-700">维护</td>
+                    <td className="py-1.5 pr-3 font-mono text-xs text-teal-700">进行中</td>
+                    <td className="py-1.5 text-red-600">✗ 阶段不匹配 — 跳过</td>
                   </tr>
                 </tbody>
               </table>
@@ -1491,7 +1468,8 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
 
             <div className="mt-3 bg-gray-50 rounded-lg p-3">
               <p className="text-xs text-gray-600">
-                <strong>多规则命中：</strong>按匹配的条件数量排序（3个 &gt; 2个 &gt; 1个 &gt; 0个），所有匹配规则的表定义会<strong>合并收集</strong>（Set 去重）。
+                <strong>多规则命中：</strong>全部<strong>合并收集</strong>（Set 去重），不做优先级排序。<br/>
+                <strong>零命中：</strong>返回 warning 提示，不复制任何表，项目仍创建成功。
               </p>
             </div>
           </div>
@@ -1503,40 +1481,36 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
               产品规则（module）
             </h4>
             <p className="text-sm text-gray-500 mb-4">
-              根据项目采购的产品模块匹配规则，同时支持按项目阶段和状态进一步过滤。
+              根据项目采购模块匹配，三个条件同样全部必选。
             </p>
 
             <div className="bg-cyan-50 rounded-lg p-3 mb-4">
-              <p className="text-xs font-medium text-cyan-700 mb-1">关系：模块命中是硬性条件（AND），阶段和状态是可选过滤</p>
+              <p className="text-xs font-medium text-cyan-700">匹配条件：模块交集（AND）+ 三项精确匹配</p>
             </div>
 
             <div className="space-y-2 text-sm text-gray-600">
               <div className="flex items-start gap-2">
                 <div className="w-5 h-5 rounded-full bg-cyan-100 text-cyan-700 flex items-center justify-center text-xs shrink-0">1</div>
-                <span><code className="bg-gray-100 px-1 rounded text-xs">module_codes</code> 与项目 <code className="bg-gray-100 px-1 rounded text-xs">procurement_modules</code> <strong className="text-gray-900">必须有交集</strong> → 没交集直接跳过</span>
+                <span><code className="bg-gray-100 px-1 rounded text-xs">module_codes</code> 与项目 <code className="bg-gray-100 px-1 rounded text-xs">procurement_modules</code> <strong className="text-gray-900">必须有交集</strong> → 无交集则跳过</span>
               </div>
               <div className="flex items-start gap-2">
                 <div className="w-5 h-5 rounded-full bg-cyan-100 text-cyan-700 flex items-center justify-center text-xs shrink-0">2</div>
-                <span>模块有交集后，检查 <code className="bg-gray-100 px-1 rounded text-xs">project_stage</code>：规则为 null 不限制，有值则项目阶段必须相等</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <div className="w-5 h-5 rounded-full bg-cyan-100 text-cyan-700 flex items-center justify-center text-xs shrink-0">3</div>
-                <span>再检查 <code className="bg-gray-100 px-1 rounded text-xs">project_status</code>：规则为 null 不限制，有值则项目状态必须相等</span>
+                <span>type / stage / status <strong className="text-gray-900">全部精确匹配</strong> → 任一不满足则跳过</span>
               </div>
             </div>
 
             <div className="mt-3 bg-gray-50 rounded-lg p-3">
               <p className="text-xs text-gray-600">
-                阶段和状态条件是 <strong className="text-gray-900">AND</strong> 关系，全部通过才算最终命中。
+                以上条件全通过才算命中。
               </p>
             </div>
           </div>
 
-          {/* 两类规则之间 */}
+          {/* 整体结果 */}
           <div className="bg-white border border-gray-200 rounded-xl p-5">
             <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-violet-500" />
-              两类规则之间的关系
+              整体结果
             </h4>
             <div className="flex items-start gap-3">
               <div className="flex-1 grid grid-cols-2 gap-3">
@@ -1553,8 +1527,18 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
               <div className="flex-1 bg-violet-50 rounded-lg p-3 flex items-center">
                 <p className="text-xs text-violet-700 text-center w-full">
                   <strong>合并去重</strong><br/>
-                  收集到一个 Set 中，无重复
+                  Set 收集，无重复
                 </p>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="bg-emerald-50 rounded-lg p-2.5">
+                <p className="text-xs font-medium text-emerald-700">有命中</p>
+                <p className="text-xs text-emerald-600">201 data，建表 + 复制数据 + 生成采购记录</p>
+              </div>
+              <div className="bg-amber-50 rounded-lg p-2.5">
+                <p className="text-xs font-medium text-amber-700">零命中</p>
+                <p className="text-xs text-amber-600">201 data + warning，不复制表，前端弹 8s toast</p>
               </div>
             </div>
           </div>
@@ -1756,27 +1740,23 @@ function GuideContent({ onNavigate }: { onNavigate: (viewId: string) => void }) 
             </div>
             <div className="flex items-start gap-2">
               <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">2</div>
-              <span>点击「<strong>新建项目</strong>」按钮，填写项目名称、编号</span>
+              <span>点击「<strong>新建项目</strong>」，填写名称、编号，选择<strong>类型、阶段、状态</strong></span>
             </div>
             <div className="flex items-start gap-2">
               <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">3</div>
-              <span>选择<strong>项目类型</strong>和<strong>项目阶段</strong>（类型和阶段在「设置→基础数据」中维护）</span>
+              <span>填写基本信息、客户信息、渠道信息（客户类型为<strong>多选</strong>）</span>
             </div>
             <div className="flex items-start gap-2">
               <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">4</div>
-              <span>配置<strong>客户信息</strong>和<strong>渠道信息</strong></span>
+              <span>选择<strong>采购模块</strong>（可搜索筛选，支持 Excel 模板导入）</span>
             </div>
             <div className="flex items-start gap-2">
               <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">5</div>
-              <span>选择<strong>采购模块</strong>（可搜索筛选，支持模板导入导出）</span>
-            </div>
-            <div className="flex items-start gap-2">
-              <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">6</div>
-              <span>添加<strong>项目成员</strong>，分配角色和权限</span>
+              <span>添加<strong>项目成员</strong>、配置<strong>对接信息</strong></span>
             </div>
           </div>
           <div className="mt-3 bg-emerald-50 rounded-lg p-3 text-xs text-emerald-700">
-            <span className="font-medium">创建后：</span>系统会根据项目类型+阶段+采购模块自动匹配 Schema 规则，将对应规范表复制到项目专属 Schema 中。
+            <span className="font-medium">创建后：</span>系统根据项目类型+阶段+状态<strong>精确匹配</strong> Schema 规则，以 CREATE TABLE IF NOT EXISTS 方式复制规范表（<strong>只增不删</strong>）。若无匹配规则则弹出提示，不复制表。
           </div>
           <button
             onClick={() => onNavigate("projects")}

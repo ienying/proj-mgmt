@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. 根据规则复制规范表到项目 Schema
-    await copyTableDefinitionsToSchema(
+    const copyResult = await copyTableDefinitionsToSchema(
       client,
       project_type,
       project_stage,
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
       project_status || null
     );
 
-    // 5. 保存对接信息
+    // 6. 保存对接信息
     if (Array.isArray(integration_list) && integration_list.length > 0) {
       for (const item of integration_list as Record<string, unknown>[]) {
         const { id, ...rest } = item;
@@ -168,6 +168,16 @@ export async function POST(request: NextRequest) {
           p_data: { project_id: projectId, ...rest },
         });
       }
+    }
+
+    if (!copyResult.matched) {
+      return NextResponse.json(
+        {
+          data,
+          warning: "项目已创建，但未匹配到任何 Schema 规则，未复制规范表。请检查「系统配置 → 项目 Schema 规则配置」中是否配置了对应的规则。",
+        },
+        { status: 201 }
+      );
     }
 
     return NextResponse.json({ data }, { status: 201 });
@@ -180,6 +190,7 @@ export async function POST(request: NextRequest) {
 
 /**
  * 根据项目类型、阶段、状态和模块查找匹配的规则，复制规范表到项目 Schema
+ * 返回匹配结果：{ matched: boolean, tableCount: number }
  */
 async function copyTableDefinitionsToSchema(
   client: Awaited<ReturnType<typeof createServerClient>>,
@@ -188,7 +199,7 @@ async function copyTableDefinitionsToSchema(
   projectSchema: string,
   procurementModules: string[] = [],
   projectStatus: string | null = null
-) {
+): Promise<{ matched: boolean; tableCount: number }> {
   try {
     // 查询所有启用的规则
     const { data: rules, error } = await client.rpc("dp_select", {
@@ -197,7 +208,7 @@ async function copyTableDefinitionsToSchema(
 
     if (error || !rules) {
       console.error("查询规则失败:", error);
-      return;
+      return { matched: false, tableCount: 0 };
     }
 
     // 过滤启用的规则
@@ -209,59 +220,33 @@ async function copyTableDefinitionsToSchema(
     const allTableDefinitions = new Set<string>();
 
     // 1. 匹配类型阶段规则（type_stage）
-    // 规则中为 null 的字段表示"不限"，项目值必须匹配规则的非 null 字段
+    // 三个条件（type/stage/status）必须全部精确匹配
     const typeStageRules = enabledRules.filter((r) => r.rule_type !== 'module');
 
-    // 按精确度分组：统计每个规则匹配的条件数（type/stage/status）
-    const typeStageMatches: { rule: Record<string, unknown>; matchCount: number }[] = [];
     for (const rule of typeStageRules) {
       const ruleType = rule.project_type as string | null;
       const ruleStage = rule.project_stage as string | null;
       const ruleStatus = (rule as Record<string, unknown>).project_status as string | null;
 
-      let matchCount = 0;
-      // type: 规则有限制时，项目值必须匹配
-      if (ruleType !== null && ruleType !== projectType) continue;
-      if (ruleType !== null) matchCount++;
-
-      // stage: 规则有限制时，项目值必须匹配
-      if (ruleStage !== null && ruleStage !== projectStage) continue;
-      if (ruleStage !== null) matchCount++;
-
-      // status: 规则有限制时，项目值必须匹配
-      if (ruleStatus !== null && ruleStatus !== projectStatus) continue;
-      if (ruleStatus !== null) matchCount++;
-
-      typeStageMatches.push({ rule, matchCount });
-    }
-
-    // 按匹配度降序排序（精确匹配的优先）
-    typeStageMatches.sort((a, b) => b.matchCount - a.matchCount);
-
-    // 收集所有匹配的类型阶段规则的表定义（高精确度的先加入）
-    for (const { rule } of typeStageMatches) {
-      if (rule.table_definitions) {
-        (rule.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
+      if (ruleType === projectType && ruleStage === projectStage && ruleStatus === projectStatus) {
+        if (rule.table_definitions) {
+          (rule.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
+        }
       }
     }
 
     // 2. 匹配模块规则（module）
-    // 模块必须有交集（AND），阶段和状态作为可选过滤（null = 不限）
+    // 模块必须有交集（AND），三个条件必须全部精确匹配
     if (procurementModules && procurementModules.length > 0) {
       for (const rule of enabledRules) {
         if (rule.rule_type === 'module' && rule.module_codes) {
           const moduleCodes = rule.module_codes as string[];
-          // 模块必须有交集
           const hasModuleMatch = moduleCodes.some((code) => procurementModules.includes(code));
           if (!hasModuleMatch) continue;
 
-          // 阶段过滤：规则有限制时，项目阶段必须匹配
-          const ruleStage = rule.project_stage as string | null;
-          if (ruleStage !== null && ruleStage !== projectStage) continue;
-
-          // 状态过滤：规则有限制时，项目状态必须匹配
-          const ruleStatus = (rule as Record<string, unknown>).project_status as string | null;
-          if (ruleStatus !== null && ruleStatus !== projectStatus) continue;
+          if (rule.project_type !== projectType) continue;
+          if (rule.project_stage !== projectStage) continue;
+          if ((rule as Record<string, unknown>).project_status !== projectStatus) continue;
 
           if (rule.table_definitions) {
             (rule.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
@@ -270,52 +255,10 @@ async function copyTableDefinitionsToSchema(
       }
     }
 
-    // 3. 从 data_table_definitions 直接匹配：apply_project_types 和 apply_project_stages
-    const { data: directDefinitions } = await client.rpc("dp_select", {
-      p_table: "data_table_definitions",
-    });
-    if (directDefinitions) {
-      for (const def of directDefinitions as Record<string, unknown>[]) {
-        const applyTypes = (def.apply_project_types as string[]) || [];
-        const applyStages = (def.apply_project_stages as string[]) || [];
-        const tableCode = def.table_code as string;
-        
-        // 检查是否匹配：类型或阶段有交集即匹配
-        const typeMatch = applyTypes.length === 0 || applyTypes.includes(projectType);
-        const stageMatch = applyStages.length === 0 || applyStages.includes(projectStage);
-        if (typeMatch && stageMatch && tableCode) {
-          allTableDefinitions.add(tableCode);
-        }
-      }
-    }
-
-    // 4. 按模块配置匹配：从 project_type_stage_modules 获取启用的模块码，
-    //    再从 data_table_definitions 中找到属于这些模块的表
-    if (projectType && projectStage) {
-      const { data: moduleConfigs } = await client.rpc("dp_select", {
-        p_table: "project_type_stage_modules",
-      });
-      if (moduleConfigs) {
-        const enabledModuleCodes = (moduleConfigs as Record<string, unknown>[])
-          .filter((c) => c.project_type_code === projectType && c.project_stage_code === projectStage && c.is_enabled)
-          .map((c) => c.module_code as string);
-        
-        if (enabledModuleCodes.length > 0 && directDefinitions) {
-          for (const def of directDefinitions as Record<string, unknown>[]) {
-            const moduleTypes = (def.module_type as string[]) || [];
-            const tableCode = def.table_code as string;
-            // 表的模块与启用的模块有交集
-            if (moduleTypes.some((m: string) => enabledModuleCodes.includes(m)) && tableCode) {
-              allTableDefinitions.add(tableCode);
-            }
-          }
-        }
-      }
-    }
-
+    // 无任何规则命中：返回未匹配状态，由调用方提示用户
     if (allTableDefinitions.size === 0) {
-      console.log("未找到匹配的规则或规范表定义");
-      return;
+      console.log("未找到匹配的规则，不复制任何规范表");
+      return { matched: false, tableCount: 0 };
     }
 
     const tableDefinitions = Array.from(allTableDefinitions);
@@ -328,7 +271,7 @@ async function copyTableDefinitionsToSchema(
 
     if (!allDefinitions) {
       console.log("未找到规范表定义");
-      return;
+      return { matched: false, tableCount: 0 };
     }
 
     // 过滤出需要复制的表
@@ -545,8 +488,11 @@ async function copyTableDefinitionsToSchema(
         console.log(`已为 ${tableCode} 生成 ${sortedModules.length} 条采购模块记录`);
       }
     }
+
+    return { matched: true, tableCount: tablesToCopy.length };
   } catch (err) {
     console.error("复制规范表失败:", err);
+    return { matched: false, tableCount: 0 };
   }
 }
 

@@ -36,12 +36,13 @@ import {
   MapPin,
   Calendar,
   Camera,
-  Server,
   Link,
   AlertTriangle,
   Search,
   Download,
   Upload,
+  Copy,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -367,7 +368,7 @@ export function ProjectForm({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 客户类型和部署模式
-  const [customerType, setCustomerType] = useState("");
+  const [selectedCustomerTypes, setSelectedCustomerTypes] = useState<string[]>([]);
   const [deploymentMode, setDeploymentMode] = useState("");
   const [customerTypes, setCustomerTypes] = useState<{ code: string; name: string }[]>([]);
   const [deploymentModes, setDeploymentModes] = useState<{ code: string; name: string }[]>([]);
@@ -392,11 +393,289 @@ export function ProjectForm({
   // 采购模块 Excel 导入文件引用
   const procurementFileRef = useRef<HTMLInputElement>(null);
 
-  // 系统信息
-  const [tenantId, setTenantId] = useState("");
-  const [loginUrl, setLoginUrl] = useState("");
-  const [loginUsername, setLoginUsername] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
+  // 不匹配模块弹窗
+  const [showUnmatchedDialog, setShowUnmatchedDialog] = useState(false);
+  const [unmatchedNames, setUnmatchedNames] = useState<string[]>([]);
+
+  // 项目信息 Excel 导入文件引用
+  const projectImportFileRef = useRef<HTMLInputElement>(null);
+
+  // 下载项目导入模板
+  const handleDownloadProjectTemplate = async () => {
+    try {
+      const ExcelJS = await import("exceljs");
+      const Excel = (ExcelJS as any).default || ExcelJS;
+      const wb = new Excel.Workbook();
+
+      // Sheet 1: 项目信息（字段名 + 值）
+      const fields: { label: string; options?: string[] }[] = [
+        { label: "项目名称" },
+        { label: "项目编号" },
+        { label: "项目类型", options: projectTypes.map((t) => t.name) },
+        { label: "项目阶段", options: projectStages.map((s) => s.name) },
+        { label: "项目状态", options: projectStatuses.map((s) => s.name) },
+        { label: "部门" },
+        { label: "销售负责人" },
+        { label: "售前负责人" },
+        { label: "市场产品负责人" },
+        { label: "项目经理" },
+        { label: "客户类型", options: customerTypes.map((t) => t.name) },
+        { label: "部署模式", options: deploymentModes.map((m) => m.name) },
+        { label: "项目描述" },
+        { label: "进场日期(YYYY-MM-DD)" },
+        { label: "初验日期(YYYY-MM-DD)" },
+        { label: "终验日期(YYYY-MM-DD)" },
+        { label: "客户公司名称" },
+        { label: "联系人姓名(多个用、分隔)" },
+        { label: "联系人电话(多个用、分隔)" },
+        { label: "联系人职务(多个用、分隔)" },
+        { label: "省" },
+        { label: "市" },
+        { label: "区/县" },
+        { label: "镇/街道" },
+        { label: "村/社区" },
+        { label: "经度" },
+        { label: "纬度" },
+        { label: "渠道公司名称(多个用、分隔)" },
+        { label: "渠道联系人(多个用、分隔)" },
+        { label: "渠道电话(多个用、分隔)" },
+        { label: "项目成员姓名(多个用、分隔)" },
+        { label: "项目成员角色(多个用、分隔)" },
+        { label: "采购总金额(元)" },
+        { label: "软件金额(元)" },
+        { label: "硬件金额(元)" },
+      ];
+
+      const ws1 = wb.addWorksheet("项目信息");
+      ws1.columns = [
+        { header: "字段", key: "label", width: 22 },
+        { header: "值", key: "value", width: 42 },
+      ];
+      // Style header
+      ws1.getRow(1).font = { bold: true };
+      ws1.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8F5E9" } };
+
+      const dateFields = new Set(["进场日期(YYYY-MM-DD)", "初验日期(YYYY-MM-DD)", "终验日期(YYYY-MM-DD)"]);
+
+      fields.forEach((f, i) => {
+        const row = i + 2;
+        ws1.getCell(row, 1).value = f.label;
+        ws1.getCell(row, 2).value = "";
+        if (f.options && f.options.length > 0) {
+          ws1.getCell(row, 2).dataValidation = {
+            type: "list",
+            allowBlank: true,
+            formulae: [`"${f.options.join(",")}"`],
+          };
+          ws1.getCell(row, 2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0F8FF" } };
+          ws1.getCell(row, 2).note = { texts: [{ text: "点击选择" }] };
+        }
+        if (dateFields.has(f.label)) {
+          ws1.getCell(row, 2).numFmt = "yyyy-mm-dd";
+        }
+      });
+
+      // Sheet 2: 选项说明
+      const optionFields = fields.filter((f) => f.options && f.options.length > 0);
+      if (optionFields.length > 0) {
+        const ws2 = wb.addWorksheet("选项说明");
+        ws2.columns = [
+          { header: "字段", key: "label", width: 18 },
+          { header: "可选值（用 / 分隔）", key: "options", width: 60 },
+        ];
+        ws2.getRow(1).font = { bold: true };
+        ws2.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF3E0" } };
+        optionFields.forEach((f, i) => {
+          const row = i + 2;
+          ws2.getCell(row, 1).value = f.label;
+          ws2.getCell(row, 2).value = f.options!.join(" / ");
+        });
+      }
+
+      // Sheet 3: 采购模块
+      const ws3 = wb.addWorksheet("采购模块");
+      ws3.columns = [
+        { header: "模块名称", key: "module", width: 30 },
+      ];
+      ws3.getRow(1).font = { bold: true };
+      ws3.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE3F2FD" } };
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "项目导入模板.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("模板下载成功");
+    } catch (e) {
+      toast.error("下载模板失败: " + String(e));
+    }
+  };
+
+  // 从 Excel 导入项目信息
+  const handleImportProjectExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const XLSX_dyn = await import("xlsx");
+      const xlsxLib = (XLSX_dyn as any).default || XLSX_dyn;
+      const data = await file.arrayBuffer();
+      const wb = xlsxLib.read(data, { type: "array" });
+
+      // 读取项目信息 sheet
+      const sheet1 = wb.Sheets["项目信息"] || wb.Sheets[wb.SheetNames[0]];
+      const rows = xlsxLib.utils.sheet_to_json(sheet1, { header: 1, defval: "", raw: false }) as string[][];
+
+      // 建立字段映射：label → value
+      const map = new Map<string, string>();
+      for (const row of rows) {
+        if (row[0]) map.set(String(row[0]).trim(), String(row[1] || "").trim());
+      }
+
+      const get = (label: string) => map.get(label) || "";
+
+      // 解析并填充表单
+      setProjectName(get("项目名称"));
+      setProjectCode(get("项目编号").replace(/[^a-z0-9_]/g, ""));
+
+      // 按名称查找 code
+      const typeMatch = projectTypes.find(t => t.name === get("项目类型"));
+      if (typeMatch) setProjectType(typeMatch.code);
+      const stageMatch = projectStages.find(s => s.name === get("项目阶段"));
+      if (stageMatch) setProjectStage(stageMatch.code);
+      const statusMatch = projectStatuses.find(s => s.name === get("项目状态"));
+      if (statusMatch) setProjectStatus(statusMatch.code);
+
+      setDepartment(get("部门"));
+      setRoleSales(get("销售负责人"));
+      setRolePresales(get("售前负责人"));
+      setRoleMarketProduct(get("市场产品负责人"));
+      setRoleProjectManager(get("项目经理"));
+
+      // 客户类型（多选，用、分隔）
+      const ctStr = get("客户类型");
+      if (ctStr) {
+        const ctNames = ctStr.split(/[、,，]/).map(s => s.trim()).filter(Boolean);
+        const ctCodes = ctNames.map(n => customerTypes.find(t => t.name === n)?.code).filter(Boolean) as string[];
+        if (ctCodes.length > 0) setSelectedCustomerTypes(ctCodes);
+      }
+
+      const dmMatch = deploymentModes.find(m => m.name === get("部署模式"));
+      if (dmMatch) setDeploymentMode(dmMatch.code);
+      setDescription(get("项目描述"));
+
+      // 日期标准化：将 Excel 可能的各种日期格式转为 YYYY-MM-DD
+      const normalizeDate = (val: string): string => {
+        if (!val) return "";
+        // 已经是 YYYY-MM-DD 格式
+        if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+        // 尝试解析各种格式：M/D/YY, MM/DD/YYYY, YYYY/MM/DD 等
+        const cleaned = val.replace(/\//g, "-").replace(/\s+/g, "");
+        const d = new Date(cleaned);
+        if (!isNaN(d.getTime())) {
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, "0");
+          const dd = String(d.getDate()).padStart(2, "0");
+          return `${y}-${m}-${dd}`;
+        }
+        return val; // 无法解析则原样返回
+      };
+      setEntryDate(normalizeDate(get("进场日期(YYYY-MM-DD)")));
+      setInitialAcceptanceDate(normalizeDate(get("初验日期(YYYY-MM-DD)")));
+      setFinalAcceptanceDate(normalizeDate(get("终验日期(YYYY-MM-DD)")));
+
+      setCompanyName(get("客户公司名称"));
+      const cpNames = get("联系人姓名(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
+      const cpPhones = get("联系人电话(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
+      const cpPositions = get("联系人职务(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
+      if (cpNames.length > 0) {
+        const contacts = cpNames.map((name, i) => ({
+          id: String(Date.now()) + i,
+          name,
+          phone: cpPhones[i] || "",
+          position: cpPositions[i] || "",
+          email: "",
+        }));
+        setContactPersons(contacts);
+      }
+
+      setProvince(get("省"));
+      setCity(get("市"));
+      setDistrict(get("区/县"));
+      setTown(get("镇/街道"));
+      setVillage(get("村/社区"));
+      setLongitude(get("经度"));
+      setLatitude(get("纬度"));
+
+      const chNames = get("渠道公司名称(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
+      const chContacts = get("渠道联系人(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
+      const chPhones = get("渠道电话(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
+      if (chNames.length > 0) {
+        const channels = chNames.map((name, i) => ({
+          id: String(Date.now()) + i,
+          company_name: name,
+          contact_person: chContacts[i] || "",
+          contact_phone: chPhones[i] || "",
+          remark: "",
+        }));
+        setChannelCompanies(channels);
+      }
+
+      const mNames = get("项目成员姓名(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
+      const mRoles = get("项目成员角色(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
+      if (mNames.length > 0) {
+        const members = mNames.map((name, i) => ({
+          id: String(Date.now()) + i,
+          name,
+          role_type: mRoles[i] || "",
+          user_id: "",
+          phone: "",
+        }));
+        setProjectMembers(members);
+      }
+
+      const procAmt = get("采购总金额(元)");
+      if (procAmt) setProcurementAmount(procAmt);
+      const swAmt = get("软件金额(元)");
+      if (swAmt) setSoftwareAmount(swAmt);
+      const hwAmt = get("硬件金额(元)");
+      if (hwAmt) setHardwareAmount(hwAmt);
+
+      // 读取采购模块 sheet
+      if (wb.SheetNames.length > 1) {
+        const sheet2 = wb.Sheets["采购模块"] || wb.Sheets[wb.SheetNames[1]];
+        const modRows = xlsxLib.utils.sheet_to_json(sheet2, { defval: "", raw: false }) as Record<string, string>[];
+        const matchedCodes: string[] = [];
+        const unmatchedList: string[] = [];
+        for (const row of modRows) {
+          const name = (row["模块名称"] || "").toString().trim();
+          if (!name) continue;
+          const matched = productModules.find((m) => m.module_name === name);
+          if (matched) {
+            matchedCodes.push(matched.module_code);
+          } else {
+            unmatchedList.push(name);
+          }
+        }
+        if (matchedCodes.length > 0) {
+          setSelectedModules(matchedCodes);
+        }
+        if (unmatchedList.length > 0) {
+          setUnmatchedNames(unmatchedList);
+          setShowUnmatchedDialog(true);
+        }
+      }
+
+      toast.success("项目信息导入完成");
+    } catch (err) {
+      toast.error("导入失败: " + String(err));
+    }
+    if (projectImportFileRef.current) {
+      projectImportFileRef.current.value = "";
+    }
+  };
 
   // 对接信息
   const [integrationList, setIntegrationList] = useState<IntegrationItem[]>([]);
@@ -460,13 +739,24 @@ export function ProjectForm({
       setSoftwareAmount(d.software_amount != null ? String(d.software_amount) : "");
       setHardwareAmount(d.hardware_amount != null ? String(d.hardware_amount) : "");
 
-      // 系统信息
-      setCustomerType((d.customer_type as string) || "");
+      // 客户类型 & 部署模式
+      const ct = d.customer_type;
+      if (Array.isArray(ct)) {
+        setSelectedCustomerTypes(ct as string[]);
+      } else if (typeof ct === "string" && ct) {
+        // 尝试 JSON 数组格式 ["junior","senior"]，兼容旧逗号分隔格式
+        try {
+          const parsed = JSON.parse(ct);
+          if (Array.isArray(parsed)) {
+            setSelectedCustomerTypes(parsed as string[]);
+          } else {
+            setSelectedCustomerTypes(ct.split(",").map((s: string) => s.trim()).filter(Boolean));
+          }
+        } catch {
+          setSelectedCustomerTypes(ct.split(",").map((s: string) => s.trim()).filter(Boolean));
+        }
+      }
       setDeploymentMode((d.deployment_mode as string) || "");
-      setTenantId((d.tenant_id as string) || "");
-      setLoginUrl((d.login_url as string) || "");
-      setLoginUsername((d.login_username as string) || "");
-      setLoginPassword((d.login_password as string) || "");
 
       // 渠道信息
       const ch = d.channel_info as Array<Record<string, string>> | null;
@@ -488,8 +778,7 @@ export function ProjectForm({
       setCompanyName(""); setContactPersons([{ id: "", name: "", phone: "", position: "", email: "" }]);
       setProvince(""); setCity(""); setDistrict(""); setTown(""); setVillage("");
       setLongitude(""); setLatitude(""); setSchoolPhotos([]);
-      setCustomerType(""); setDeploymentMode(""); setTenantId("");
-      setLoginUrl(""); setLoginUsername(""); setLoginPassword("");
+      setSelectedCustomerTypes([]); setDeploymentMode("");
       setChannelCompanies([{ id: "", company_name: "", contact_person: "", contact_phone: "", remark: "" }]);
       setSelectedModules([]); setProcurementAmount(""); setSoftwareAmount(""); setHardwareAmount("");
       setHasIntegration(false); setIntegrationList([]);
@@ -563,15 +852,11 @@ export function ProjectForm({
     setLongitude("");
     setLatitude("");
     setSchoolPhotos([]);
-    setCustomerType("");
+    setSelectedCustomerTypes([]);
     setDeploymentMode("");
     setChannelCompanies([]);
     setProjectMembers([]);
     setSelectedModules([]);
-    setTenantId("");
-    setLoginUrl("");
-    setLoginUsername("");
-    setLoginPassword("");
   };
 
   // 关闭时重置
@@ -788,7 +1073,7 @@ export function ProjectForm({
       longitude: longitude || null,
       latitude: latitude || null,
       school_photos: schoolPhotos.length > 0 ? schoolPhotos : null,
-      customer_type: customerType || null,
+      customer_type: selectedCustomerTypes.length > 0 ? selectedCustomerTypes : null,
       deployment_mode: deploymentMode || null,
       channel_info: channelCompanies.filter((cc) => cc.company_name),
       members: projectMembers.filter((pm) => pm.name),
@@ -796,20 +1081,18 @@ export function ProjectForm({
       procurement_amount: procurementAmount ? parseFloat(procurementAmount) : null,
       software_amount: softwareAmount ? parseFloat(softwareAmount) : null,
       hardware_amount: hardwareAmount ? parseFloat(hardwareAmount) : null,
-      tenant_id: tenantId || null,
-      login_url: loginUrl || null,
-      login_username: loginUsername || null,
-      login_password: loginPassword || null,
       integration_list: hasIntegration ? integrationList.filter((i) => i.vendor_name) : [],
     };
 
-    // 编辑模式下检测类型/阶段是否变更
+    // 编辑模式下检测类型/阶段/状态是否变更
     const isEdit = !!initialData;
     if (isEdit) {
       const oldType = (initialData as Record<string, unknown>).project_type as string;
       const oldStage = (initialData as Record<string, unknown>).project_stage as string;
+      const oldStatus = (initialData as Record<string, unknown>).project_status as string;
       const typeChanged = oldType !== projectType;
       const stageChanged = oldStage !== projectStage;
+      const statusChanged = oldStatus !== (projectStatus || null);
 
       if (typeChanged || stageChanged) {
         setPendingSubmitData(requestBody);
@@ -819,6 +1102,12 @@ export function ProjectForm({
         const newStageName = projectStages.find(s => s.code === projectStage)?.name || projectStage;
         setTypeStageChangeInfo({ oldType, oldStage, newType: projectType, newStage: projectStage, oldTypeName, newTypeName, oldStageName, newStageName });
         setShowTypeStageConfirm(true);
+        return;
+      }
+
+      // 仅状态变更：静默同步 schema（无需确认弹窗）
+      if (statusChanged) {
+        await doSubmit(requestBody, true);
         return;
       }
     }
@@ -858,6 +1147,9 @@ export function ProjectForm({
 
       if (response.ok && result.data) {
         toast.success(isEdit ? "项目更新成功" : "项目创建成功");
+        if (result.warning) {
+          toast.warning(result.warning, { duration: 8000 });
+        }
         onOpenChange(false);
         onSuccess?.();
       } else {
@@ -903,6 +1195,27 @@ export function ProjectForm({
           </h1>
         </div>
         <div className="flex items-center gap-3">
+          {!initialData && (
+            <>
+              <button
+                type="button"
+                onClick={handleDownloadProjectTemplate}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors border border-emerald-200"
+              >
+                <Download className="h-3.5 w-3.5" />下载模板
+              </button>
+              <label className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors border border-emerald-200 cursor-pointer">
+                <Upload className="h-3.5 w-3.5" />导入Excel
+                <input
+                  ref={projectImportFileRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={handleImportProjectExcel}
+                />
+              </label>
+            </>
+          )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             取消
           </Button>
@@ -1053,18 +1366,48 @@ export function ProjectForm({
               <div className="grid grid-cols-2 gap-5">
                 <div className="space-y-1.5">
                   <Label>客户类型</Label>
-                  <Select value={customerType} onValueChange={setCustomerType}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="请选择客户类型" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customerTypes.filter(t => t.code).map((type) => (
-                        <SelectItem key={type.code} value={type.code}>
-                          {type.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button className="w-full flex items-center justify-between min-h-[2.25rem] rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-sm hover:bg-accent hover:text-accent-foreground">
+                        {selectedCustomerTypes.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {selectedCustomerTypes.map((code) => (
+                              <Badge key={code} variant="secondary" className="text-xs">
+                                {customerTypes.find(t => t.code === code)?.name || code}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">请选择客户类型</span>
+                        )}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[280px] p-2" align="start">
+                      <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {customerTypes.filter(t => t.code).map((type) => {
+                          const checked = selectedCustomerTypes.includes(type.code);
+                          return (
+                            <label
+                              key={type.code}
+                              className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-sm hover:bg-accent ${checked ? "bg-accent" : ""}`}
+                            >
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={() => {
+                                  setSelectedCustomerTypes(prev =>
+                                    prev.includes(type.code)
+                                      ? prev.filter(c => c !== type.code)
+                                      : [...prev, type.code]
+                                  );
+                                }}
+                              />
+                              {type.name}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="space-y-1.5">
                   <Label>部署模式</Label>
@@ -1458,11 +1801,12 @@ export function ProjectForm({
                       onClick={async () => {
                         try {
                           const XLSX = await import("xlsx");
-                          const ws = XLSX.utils.aoa_to_sheet([["模块名称"]]);
+                          const xlsxLib = (XLSX as any).default || XLSX;
+                          const ws = xlsxLib.utils.aoa_to_sheet([["模块名称"]]);
                           ws["!cols"] = [{ wch: 30 }];
-                          const wb = XLSX.utils.book_new();
-                          XLSX.utils.book_append_sheet(wb, ws, "采购模块");
-                          XLSX.writeFile(wb, "采购模块导入模板.xlsx");
+                          const wb = xlsxLib.utils.book_new();
+                          xlsxLib.utils.book_append_sheet(wb, ws, "采购模块");
+                          xlsxLib.writeFile(wb, "采购模块导入模板.xlsx");
                           toast.success("模板下载成功");
                         } catch (e) {
                           toast.error("下载失败: " + String(e));
@@ -1484,11 +1828,12 @@ export function ProjectForm({
                           if (!file) return;
                           try {
                             const XLSX_dyn = await import("xlsx");
+                            const xlsxLib = (XLSX_dyn as any).default || XLSX_dyn;
                             const data = await file.arrayBuffer();
-                            const wb = XLSX_dyn.read(data, { type: "array" });
+                            const wb = xlsxLib.read(data, { type: "array" });
                             const sheetName = wb.SheetNames[0];
                             const ws = wb.Sheets[sheetName];
-                            const rows = XLSX_dyn.utils.sheet_to_json<Record<string, string>>(ws, { defval: "" });
+                            const rows = xlsxLib.utils.sheet_to_json(ws, { defval: "" }) as Record<string, string>[];
 
                             if (rows.length === 0) {
                               toast.error("Excel 文件中没有数据");
@@ -1496,21 +1841,18 @@ export function ProjectForm({
                             }
 
                             const matchedCodes: string[] = [];
-                            let unmatched = 0;
+                            const unmatchedList: string[] = [];
 
                             for (const row of rows) {
                               const name = (row["模块名称"] || "").toString().trim();
-                              if (!name) {
-                                unmatched++;
-                                continue;
-                              }
+                              if (!name) continue;
                               const matched = productModules.find(
                                 (m) => m.module_name === name
                               );
                               if (matched) {
                                 matchedCodes.push(matched.module_code);
                               } else {
-                                unmatched++;
+                                unmatchedList.push(name);
                               }
                             }
 
@@ -1522,8 +1864,13 @@ export function ProjectForm({
                               });
                             }
 
+                            if (unmatchedList.length > 0) {
+                              setUnmatchedNames(unmatchedList);
+                              setShowUnmatchedDialog(true);
+                            }
+
                             toast.success(
-                              `导入完成：匹配 ${matchedCodes.length} 个模块${unmatched > 0 ? `，${unmatched} 行未匹配` : ""}`
+                              `导入完成：匹配 ${matchedCodes.length} 个模块${unmatchedList.length > 0 ? `，${unmatchedList.length} 个未匹配` : ""}`
                             );
                           } catch (err) {
                             toast.error("导入失败: " + String(err));
@@ -1583,49 +1930,6 @@ export function ProjectForm({
                     </div>
                   );
                 })()}
-              </div>
-            </Section>
-
-            {/* 系统信息 */}
-            <Section
-              title="系统信息"
-              icon={<Server className="h-4 w-4 text-slate-600" />}
-              defaultOpen={false}
-            >
-              <div className="grid grid-cols-2 gap-5">
-                <div className="space-y-1.5">
-                  <Label>租户号</Label>
-                  <Input
-                    value={tenantId}
-                    onChange={(e) => setTenantId(e.target.value)}
-                    placeholder="请输入租户号"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>登录地址</Label>
-                  <Input
-                    value={loginUrl}
-                    onChange={(e) => setLoginUrl(e.target.value)}
-                    placeholder="请输入登录地址"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>用户名</Label>
-                  <Input
-                    value={loginUsername}
-                    onChange={(e) => setLoginUsername(e.target.value)}
-                    placeholder="请输入用户名"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>密码</Label>
-                  <Input
-                    type="password"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="请输入密码"
-                  />
-                </div>
               </div>
             </Section>
 
@@ -1871,10 +2175,12 @@ export function ProjectForm({
                       <span>{r.v}</span>
                     </div>
                   ))}
-                  {customerType && (
+                  {selectedCustomerTypes.length > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-500">客户类型</span>
-                      <span className="font-medium">{customerTypes.find(t => t.code === customerType)?.name || customerType || "-"}</span>
+                      <span className="font-medium">
+                        {selectedCustomerTypes.map(c => customerTypes.find(t => t.code === c)?.name || c).join("、")}
+                      </span>
                     </div>
                   )}
                   {deploymentMode && (
@@ -2024,39 +2330,6 @@ export function ProjectForm({
                 </div>
               </div>
 
-              {/* 系统信息 */}
-              {(tenantId || loginUrl || loginUsername) && (
-                <div className="space-y-2">
-                  <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">系统信息</div>
-                  <div className="bg-white rounded-lg p-3.5 space-y-2.5 border">
-                    {tenantId && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-500">租户号</span>
-                        <span className="font-mono text-xs">{tenantId}</span>
-                      </div>
-                    )}
-                    {loginUrl && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-500">登录地址</span>
-                        <span className="font-mono text-xs truncate ml-2 max-w-[280px]">{loginUrl}</span>
-                      </div>
-                    )}
-                    {loginUsername && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-500">用户名</span>
-                        <span className="font-medium">{loginUsername}</span>
-                      </div>
-                    )}
-                    {loginPassword && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-500">密码</span>
-                        <span className="font-mono">••••••</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
               {/* 对接信息 */}
               <div className="space-y-2">
                 <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">对接信息</div>
@@ -2086,6 +2359,77 @@ export function ProjectForm({
           </div>
         </div>
       </div>
+
+      {/* 采购模块导入不匹配弹窗 */}
+      {showUnmatchedDialog && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden">
+            <div className="bg-gradient-to-r from-cyan-500 to-blue-500 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <ClipboardList className="h-6 w-6 text-white" />
+                <h3 className="text-lg font-semibold text-white">
+                  {unmatchedNames.length} 个模块未匹配
+                </h3>
+              </div>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-sm text-slate-500 mb-3">
+                以下模块名称在系统中未找到，无法自动匹配。可复制后去「基础数据 → 产品模块」中添加。
+              </p>
+              <div className="bg-slate-50 rounded-lg p-3 max-h-48 overflow-y-auto mb-4">
+                <div className="space-y-1 font-mono text-xs">
+                  {unmatchedNames.map((name, i) => (
+                    <div key={i} className="text-slate-700">
+                      {i + 1}. {name}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const text = unmatchedNames.join("\n");
+                    if (navigator.clipboard) {
+                      navigator.clipboard.writeText(text).then(() => {
+                        toast.success("已复制 " + unmatchedNames.length + " 个模块名称到剪贴板");
+                      }).catch(() => {
+                        toast.error("复制失败，请手动复制");
+                      });
+                    } else {
+                      // fallback for non-HTTPS environments
+                      const ta = document.createElement("textarea");
+                      ta.value = text;
+                      ta.style.position = "fixed";
+                      ta.style.left = "-9999px";
+                      document.body.appendChild(ta);
+                      ta.select();
+                      try {
+                        document.execCommand("copy");
+                        toast.success("已复制 " + unmatchedNames.length + " 个模块名称到剪贴板");
+                      } catch {
+                        toast.error("复制失败，请手动复制");
+                      }
+                      document.body.removeChild(ta);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-cyan-600 text-white hover:bg-cyan-700 transition-colors"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  复制全部名称
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowUnmatchedDialog(false)}
+                  className="px-4 py-2 text-sm rounded-lg border border-slate-300 hover:bg-slate-100 transition-colors"
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 类型/阶段变更确认对话框 */}
       {showTypeStageConfirm && (

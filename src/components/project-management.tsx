@@ -8,7 +8,7 @@ import {
   MoreHorizontal, Edit, Trash2, LayoutGrid, List,
   Building2, Phone, Mail, Tag, FileText, Layers,
   MapPin, Globe, Lock, Flag, Palette, ChevronRight, ArrowRight,
-  SlidersHorizontal, Download, ChevronDown,
+  SlidersHorizontal, Download, ChevronDown, CheckIcon,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger,
@@ -16,6 +16,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -156,6 +158,9 @@ export function ProjectManagement({
 
   const [projectTypes, setProjectTypes] = useState<ProjectType[]>([]);
   const [projectStages, setProjectStages] = useState<ProjectStage[]>([]);
+  const [customerTypes, setCustomerTypes] = useState<{ code: string; name: string }[]>([]);
+  const [deploymentModes, setDeploymentModes] = useState<{ code: string; name: string }[]>([]);
+  const [departmentDict, setDepartmentDict] = useState<{ code: string; name: string }[]>([]);
   const [projectStatuses, setProjectStatuses] = useState<{name: string; code: string}[]>([]);
   const [procurementModules, setProcurementModules] = useState<ProcurementModule[]>([]);
   const [memberRoles, setMemberRoles] = useState<MemberRole[]>([]);
@@ -167,6 +172,7 @@ export function ProjectManagement({
   const [showAddMember, setShowAddMember] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedRoleType, setSelectedRoleType] = useState("");
+  const [userSearchOpen, setUserSearchOpen] = useState(false);
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
 
   // 加载项目成员和权限
@@ -381,11 +387,29 @@ export function ProjectManagement({
     setProjectTypes(initialProjectTypes);
     setProjectStages(initialProjectStages);
     setProcurementModules(initialProcurementModules);
-    // 加载项目状态
+    // 加载项目状态、客户类型、部署模式
     fetch("/api/dicts?type=project_statuses")
       .then(res => res.json())
       .then(data => {
         if (data.data) setProjectStatuses(data.data.map((item: {name: string; code: string; is_enabled: boolean}) => item.is_enabled !== false ? {name: item.name, code: item.code || item.name} : null).filter(Boolean));
+      })
+      .catch(() => {});
+    fetch("/api/dicts?type=customer_types")
+      .then(res => res.json())
+      .then(data => {
+        if (data.data) setCustomerTypes(data.data.filter((item: { is_enabled: boolean }) => item.is_enabled !== false).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
+      })
+      .catch(() => {});
+    fetch("/api/dicts?type=deployment_modes")
+      .then(res => res.json())
+      .then(data => {
+        if (data.data) setDeploymentModes(data.data.filter((item: { is_enabled: boolean }) => item.is_enabled !== false).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
+      })
+      .catch(() => {});
+    fetch("/api/dicts?type=departments")
+      .then(res => res.json())
+      .then(data => {
+        if (data.data) setDepartmentDict(data.data.filter((item: { is_enabled: boolean }) => item.is_enabled !== false).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
       })
       .catch(() => {});
   }, [initialProjectTypes, initialProjectStages, initialProcurementModules]);
@@ -414,6 +438,25 @@ export function ProjectManagement({
         {stageName}
       </span>
     );
+  };
+
+  // 将存储值（JSON数组字符串/逗号分隔字符串/数组）解析为 code 数组，并转为名称展示
+  const formatCodeList = (raw: unknown, dict: { code: string; name: string }[]): string => {
+    if (!raw) return "";
+    let codes: string[] = [];
+    if (Array.isArray(raw)) {
+      codes = raw.map(String);
+    } else if (typeof raw === "string") {
+      // 兼容 JSON 数组格式 ["junior"] 和逗号分隔格式 junior,senior
+      const trimmed = raw.trim();
+      if (trimmed.startsWith("[")) {
+        try { const p = JSON.parse(trimmed); if (Array.isArray(p)) codes = p.map(String); } catch { /* fall through */ }
+      }
+      if (codes.length === 0) {
+        codes = trimmed.split(",").map(s => s.trim()).filter(Boolean);
+      }
+    }
+    return codes.map(c => dict.find(d => d.code === c)?.name || c).join("、");
   };
 
   // 项目详情面板
@@ -454,19 +497,25 @@ export function ProjectManagement({
             {selectedProject.project_type && (
               <div>
                 <span className="text-[11px] text-slate-400">项目类型</span>
-                <p className="text-xs font-medium text-slate-700 truncate">{selectedProject.project_type}</p>
+                <p className="text-xs font-medium text-slate-700 truncate">
+                  {projectTypes.find(t => t.code === selectedProject.project_type)?.name || selectedProject.project_type}
+                </p>
               </div>
             )}
             {selectedProject.department && (
               <div>
                 <span className="text-[11px] text-slate-400">部门</span>
-                <p className="text-xs font-medium text-slate-700 truncate">{selectedProject.department}</p>
+                <p className="text-xs font-medium text-slate-700 truncate">
+                  {departmentDict.find(d => d.code === selectedProject.department)?.name || selectedProject.department}
+                </p>
               </div>
             )}
             {selectedProject.customer_type && (
               <div>
                 <span className="text-[11px] text-slate-400">客户类型</span>
-                <p className="text-xs font-medium text-slate-700 truncate">{selectedProject.customer_type}</p>
+                <p className="text-xs font-medium text-slate-700 truncate">
+                  {formatCodeList(selectedProject.customer_type, customerTypes)}
+                </p>
               </div>
             )}
             {typeof selectedProject.customer_info === 'object' && selectedProject.customer_info !== null && (() => {
@@ -509,7 +558,9 @@ export function ProjectManagement({
             {selectedProject.deployment_mode && (
               <div>
                 <span className="text-[11px] text-slate-400">部署方式</span>
-                <p className="text-xs font-medium text-slate-700 truncate">{selectedProject.deployment_mode}</p>
+                <p className="text-xs font-medium text-slate-700 truncate">
+                  {formatCodeList(selectedProject.deployment_mode, deploymentModes)}
+                </p>
               </div>
             )}
             {selectedProject.description && (
@@ -568,20 +619,42 @@ export function ProjectManagement({
           {/* 添加成员表单 */}
           {showAddMember && (
             <div className="p-3 bg-slate-50 rounded-lg mb-3 space-y-2">
-              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="选择用户" />
-                </SelectTrigger>
-                <SelectContent>
-                  {users
-                    .filter((u) => !projectMembers.some((m) => (m.user_id || m.id) === u.id))
-                    .map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              <Popover open={userSearchOpen} onOpenChange={setUserSearchOpen}>
+                <PopoverTrigger asChild>
+                  <button className="flex w-full items-center justify-between h-8 rounded-md border border-input bg-transparent px-3 py-1 text-xs hover:bg-accent hover:text-accent-foreground">
+                    {selectedUserId
+                      ? users.find((u) => u.id === selectedUserId)?.name || "未知用户"
+                      : <span className="text-muted-foreground">选择用户</span>}
+                    <ChevronDown className="h-3.5 w-3.5 opacity-50" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[260px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="搜索用户姓名..." className="h-8 text-xs" />
+                    <CommandList>
+                      <CommandEmpty className="text-xs py-3">未找到匹配用户</CommandEmpty>
+                      <CommandGroup>
+                        {users
+                          .filter((u) => !projectMembers.some((m) => (m.user_id || m.id) === u.id))
+                          .map((u) => (
+                            <CommandItem
+                              key={u.id}
+                              value={u.name}
+                              onSelect={() => {
+                                setSelectedUserId(selectedUserId === u.id ? "" : u.id);
+                                setUserSearchOpen(false);
+                              }}
+                              className="text-xs"
+                            >
+                              <CheckIcon className={`mr-2 h-3.5 w-3.5 ${selectedUserId === u.id ? "opacity-100" : "opacity-0"}`} />
+                              {u.name}
+                            </CommandItem>
+                          ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               <Select value={selectedRoleType} onValueChange={setSelectedRoleType}>
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue placeholder="选择角色" />
@@ -938,7 +1011,7 @@ export function ProjectManagement({
                 </div>
                 <div className="flex items-center justify-between text-slate-500">
                   <span>部署模式</span>
-                  <span className="text-slate-700">{project.deployment_mode || '-'}</span>
+                  <span className="text-slate-700">{formatCodeList(project.deployment_mode, deploymentModes) || '-'}</span>
                 </div>
               </div>
             </div>

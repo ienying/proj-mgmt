@@ -163,106 +163,69 @@ async function syncProjectSchema(
   projectSchema: string,
   projectType: string,
   projectStage: string,
-  procurementModules: string[]
-) {
+  procurementModules: string[],
+  projectStatus?: string | null
+): Promise<{ matched: boolean; tableCount: number }> {
   // 收集所有匹配的表定义
   const allTableDefinitions = new Set<string>();
 
-  // 1. 从 project_schema_rules 匹配
+  // 查询所有启用的规则
   const { data: rules } = await client.rpc("dp_select", {
     p_table: "project_schema_rules",
   });
+
+  // 过滤启用的规则
   const enabledRules = ((rules as Record<string, unknown>[]) || [])
-    .filter((r) => r.is_enabled === true);
+    .filter((r) => r.is_enabled === true)
+    .sort((a, b) => ((a.sort_order as number) || 0) - ((b.sort_order as number) || 0));
 
-  // 类型+阶段精确匹配
-  const exactMatch = enabledRules.find(
-    (r) => r.rule_type !== "module" && r.project_type === projectType && r.project_stage === projectStage
-  );
-  if (exactMatch?.table_definitions) {
-    (exactMatch.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
-  }
-  // 类型匹配
-  const typeMatch = enabledRules.find(
-    (r) => r.rule_type !== "module" && r.project_type === projectType && r.project_stage === null
-  );
-  if (typeMatch?.table_definitions) {
-    (typeMatch.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
-  }
-  // 阶段匹配
-  const stageMatch = enabledRules.find(
-    (r) => r.rule_type !== "module" && r.project_type === null && r.project_stage === projectStage
-  );
-  if (stageMatch?.table_definitions) {
-    (stageMatch.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
-  }
-  // 通用规则
-  const genericMatch = enabledRules.find(
-    (r) => r.rule_type !== "module" && r.project_type === null && r.project_stage === null
-  );
-  if (genericMatch?.table_definitions) {
-    (genericMatch.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
+  // 1. 匹配类型阶段规则（type_stage）
+  // 三个条件（type/stage/status）必须全部精确匹配
+  const typeStageRules = enabledRules.filter((r) => r.rule_type !== "module");
+
+  for (const rule of typeStageRules) {
+    const ruleType = rule.project_type as string | null;
+    const ruleStage = rule.project_stage as string | null;
+    const ruleStatus = (rule as Record<string, unknown>).project_status as string | null;
+
+    if (ruleType === projectType && ruleStage === projectStage && ruleStatus === projectStatus) {
+      if (rule.table_definitions) {
+        (rule.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
+      }
+    }
   }
 
-  // 2. 模块规则
+  // 2. 匹配模块规则（module）
+  // 模块必须有交集（AND），三个条件必须全部精确匹配
   if (procurementModules && procurementModules.length > 0) {
     for (const rule of enabledRules) {
       if (rule.rule_type === "module" && rule.module_codes) {
         const moduleCodes = rule.module_codes as string[];
-        const hasMatch = moduleCodes.some((code) => procurementModules.includes(code));
-        if (hasMatch && rule.table_definitions) {
+        const hasModuleMatch = moduleCodes.some((code) => procurementModules.includes(code));
+        if (!hasModuleMatch) continue;
+
+        if (rule.project_type !== projectType) continue;
+        if (rule.project_stage !== projectStage) continue;
+        if ((rule as Record<string, unknown>).project_status !== projectStatus) continue;
+
+        if (rule.table_definitions) {
           (rule.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
         }
       }
     }
   }
 
-  // 3. 从 data_table_definitions 直接匹配
-  const { data: directDefinitions } = await client.rpc("dp_select", {
-    p_table: "data_table_definitions",
-  });
-  if (directDefinitions) {
-    for (const def of directDefinitions as Record<string, unknown>[]) {
-      const applyTypes = (def.apply_project_types as string[]) || [];
-      const applyStages = (def.apply_project_stages as string[]) || [];
-      const tableCode = def.table_code as string;
-      const tMatch = applyTypes.length === 0 || applyTypes.includes(projectType);
-      const sMatch = applyStages.length === 0 || applyStages.includes(projectStage);
-      if (tMatch && sMatch && tableCode) {
-        allTableDefinitions.add(tableCode);
-      }
-    }
+  // 无任何规则命中：返回未匹配状态，由调用方提示用户
+  if (allTableDefinitions.size === 0) {
+    console.log("未找到匹配的规则，不复制任何规范表");
+    return { matched: false, tableCount: 0 };
   }
-
-  // 4. 按模块配置匹配
-  if (projectType && projectStage) {
-    const { data: moduleConfigs } = await client.rpc("dp_select", {
-      p_table: "project_type_stage_modules",
-    });
-    if (moduleConfigs) {
-      const enabledModuleCodes = (moduleConfigs as Record<string, unknown>[])
-        .filter((c) => c.project_type_code === projectType && c.project_stage_code === projectStage && c.is_enabled)
-        .map((c) => c.module_code as string);
-
-      if (enabledModuleCodes.length > 0 && directDefinitions) {
-        for (const def of directDefinitions as Record<string, unknown>[]) {
-          const moduleTypes = (def.module_type as string[]) || [];
-          const tableCode = def.table_code as string;
-          if (moduleTypes.some((m: string) => enabledModuleCodes.includes(m)) && tableCode) {
-            allTableDefinitions.add(tableCode);
-          }
-        }
-      }
-    }
-  }
-
-  if (allTableDefinitions.size === 0) return;
 
   // 查询规范表定义用于创建表
   const { data: allDefinitions } = await client.rpc("dp_select", {
     p_table: "data_table_definitions",
   });
-  if (!allDefinitions) return;
+  if (!allDefinitions) return { matched: false, tableCount: 0 };
 
   const tablesToCopy = (allDefinitions as Record<string, unknown>[]).filter(
     (d) => allTableDefinitions.has(d.table_code as string)
@@ -435,6 +398,8 @@ async function syncProjectSchema(
       console.log(`已为 ${tableCode} 同步 ${sortedModules.length} 条采购模块记录`);
     }
   }
+
+  return { matched: true, tableCount: tablesToCopy.length };
 }
 
 export async function GET(request: NextRequest) {
@@ -508,22 +473,29 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    // 如果类型/阶段变更需要同步 schema
+    // 如果类型/阶段/状态变更需要同步 schema
     if (_sync_schema) {
       const projectSchema = updateData.project_schema as string;
       const projectType = updateData.project_type as string;
       const projectStage = updateData.project_stage as string;
+      const projectStatus = updateData.project_status as string | null;
       const procurementModules = (updateData.procurement_modules as string[]) || [];
 
       if (projectSchema && (projectType || projectStage)) {
         try {
-          await syncProjectSchema(client, projectSchema, projectType, projectStage, procurementModules);
+          const syncResult = await syncProjectSchema(client, projectSchema, projectType, projectStage, procurementModules, projectStatus);
+          if (!syncResult.matched) {
+            return NextResponse.json({
+              data,
+              warning: "项目已更新，但未匹配到任何 Schema 规则，未同步规范表。请检查「系统配置 → 项目 Schema 规则配置」中是否配置了对应的规则。",
+            });
+          }
         } catch (syncErr) {
           console.error("同步Schema失败:", syncErr);
           // 不阻塞主流程，但返回警告
-          return NextResponse.json({ 
-            data, 
-            warning: "项目已更新，但Schema同步部分失败，请手动检查" 
+          return NextResponse.json({
+            data,
+            warning: "项目已更新，但Schema同步部分失败，请手动检查"
           });
         }
       }

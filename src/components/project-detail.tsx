@@ -701,26 +701,28 @@ export function ProjectDetail({
           }
         });
 
-        setTableDefinitions(definitions);
-        
-        // 2. 确保所有表都存在（不存在则自动创建），并获取数据
+        // 查询 schema 中实际存在的表，只展示规则匹配创建的表
+        const existingTableSet = new Set<string>();
+        try {
+          const existingRes = await fetch(`/api/project-data/tables?schema=${encodeURIComponent(project.project_schema)}`);
+          const existingData = await existingRes.json();
+          if (existingData.tables && Array.isArray(existingData.tables)) {
+            existingData.tables.forEach((t: string) => existingTableSet.add(t));
+          }
+        } catch {
+          // 查不到就不过滤
+        }
+        const visibleDefs = existingTableSet.size > 0
+          ? definitions.filter((def: TableDefinition) => existingTableSet.has(def.table_code))
+          : definitions;
+
+        setTableDefinitions(visibleDefs);
+
+        // 并获取数据
         const dataMap: Record<string, TableData[]> = {};
-        // 并行调用 ensure-table 确保所有表存在
-        await Promise.all(
-          definitions.map((def: TableDefinition) =>
-            fetch("/api/project-data/ensure-table", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                projectSchema: project.project_schema,
-                tableCode: def.table_code,
-              }),
-            }).catch(() => null)
-          )
-        );
         // 并行获取所有表数据
         const dataResults = await Promise.all(
-          definitions.map((def: TableDefinition) =>
+          visibleDefs.map((def: TableDefinition) =>
             fetch(
               `/api/project-data?projectSchema=${project.project_schema}&tableCode=${def.table_code}`
             )
@@ -735,10 +737,10 @@ export function ProjectDetail({
 
         // 3. 同步采购模块记录：对于含有 procurement_record 类型列的表，
         //    确保每个采购模块都有一条对应记录
-        await sortProcurementModuleRecords(definitions, dataMap);
+        await sortProcurementModuleRecords(visibleDefs, dataMap);
 
         // 4. 触发引用关系双向同步
-        const hasReferences = definitions.some((def: TableDefinition) =>
+        const hasReferences = visibleDefs.some((def: TableDefinition) =>
           def.references_config && def.references_config.length > 0
         );
         if (hasReferences) {
@@ -750,7 +752,7 @@ export function ProjectDetail({
             });
             // 同步后重新获取相关表数据
             const refTableCodes = new Set<string>();
-            definitions.forEach((def: TableDefinition) => {
+            visibleDefs.forEach((def: TableDefinition) => {
               if (def.references_config?.length) refTableCodes.add(def.table_code);
               def.references_config?.forEach(ref => refTableCodes.add(ref.source_table_code));
             });
@@ -769,7 +771,7 @@ export function ProjectDetail({
         setTableDataMap(dataMap);
 
         // Fetch linked task center workflows for records in these tables
-        fetchLinkedTasks(definitions, dataMap);
+        fetchLinkedTasks(visibleDefs, dataMap);
       }
     } catch (error) {
       console.error("加载数据失败:", error);
@@ -1011,89 +1013,6 @@ export function ProjectDetail({
       <span className={cn("px-2.5 py-1 text-xs font-semibold rounded-full", styles[status] || "bg-gray-100 text-gray-700 ring-1 ring-gray-200")}>
         {labels[status] || status}
       </span>
-    );
-  };
-
-  // 渲染概览面板
-  const renderOverview = () => {
-    const projectType = projectTypes.find(t => t.code === project.project_type)?.name || project.project_type;
-    const projectStage = projectStages.find(s => s.code === project.project_stage)?.name || project.project_stage;
-
-    const mc = getModuleColor(activeModule);
-
-    return (
-      <div className="space-y-4">
-        {/* 项目概览 */}
-        <div className="rounded-xl border border-slate-200/80 overflow-hidden shadow-sm">
-          <div className={cn("px-4 py-2.5", mc.header)}>
-            <h2 className="font-semibold text-white text-sm flex items-center gap-2">
-              <FolderKanban className="w-4 h-4" />
-              项目概览
-            </h2>
-          </div>
-          <div className="p-4 space-y-4 bg-white">
-            {/* 基本信息 */}
-            <div>
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">基本信息</h3>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-slate-50 rounded-lg p-2">
-                  <span className="text-[10px] text-slate-400">项目名称</span>
-                  <p className="text-slate-900 text-xs font-medium mt-0.5 truncate">{project.project_name}</p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-2">
-                  <span className="text-[10px] text-slate-400">项目编号</span>
-                  <p className="text-slate-900 text-xs font-mono mt-0.5">{project.project_code}</p>
-                </div>
-                <div className={cn("rounded-lg p-2", mc.light)}>
-                  <span className={cn("text-[10px]", mc.text)}>项目类型</span>
-                  <p className="text-slate-900 text-xs mt-0.5">{projectType || "-"}</p>
-                </div>
-                <div className={cn("rounded-lg p-2", mc.light)}>
-                  <span className={cn("text-[10px]", mc.text)}>项目阶段</span>
-                  <p className="text-slate-900 text-xs mt-0.5">{projectStage || "-"}</p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-2">
-                  <span className="text-[10px] text-slate-400">状态</span>
-                  <div className="mt-0.5">{getStatusBadge(project.status)}</div>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-2">
-                  <span className="text-[10px] text-slate-400">创建时间</span>
-                  <p className="text-slate-900 text-xs mt-0.5">{new Date(project.created_at).toLocaleDateString()}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* 客户信息 */}
-            {project.customer_info && (
-              <div className="pt-3 border-t border-slate-100">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">客户信息</h3>
-                <div className="space-y-1.5 text-xs">
-                  {project.customer_info.company_name && (
-                    <div className={cn("flex items-center gap-2 rounded-lg px-2.5 py-1.5", mc.light)}>
-                      <Building2 className={cn("w-3.5 h-3.5 shrink-0", mc.text)} />
-                      <span className="text-slate-900 text-xs">{project.customer_info.company_name}</span>
-                    </div>
-                  )}
-                  {project.customer_info.contact_person && (
-                    <div className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-slate-50">
-                      <Users className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-                      <span className="text-slate-900 text-xs">{project.customer_info.contact_person}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* 项目描述 */}
-            {project.description && (
-              <div className="pt-3 border-t border-slate-100">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">项目描述</h3>
-                <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 rounded-lg p-2.5">{project.description}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
     );
   };
 
@@ -3854,12 +3773,8 @@ export function ProjectDetail({
 
         {/* 左侧概览+统计 + 中间数据区 */}
         <div className="flex-1 flex min-h-0">
-          {/* 左侧：概览 + 统计 */}
+          {/* 左侧：统计 */}
           <div className="w-60 bg-white border-r border-slate-200/80 overflow-y-auto flex flex-col shrink-0">
-            {/* 项目概览 */}
-            <div className="p-4 border-b border-slate-100">
-              {renderOverview()}
-            </div>
             {/* 数据统计 */}
             <div className="p-4 space-y-5 flex-1">
             {/* 数据统计 */}
