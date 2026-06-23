@@ -10,7 +10,8 @@ import {
   ClipboardList,
   AlertTriangle,
   Megaphone,
-
+  BookOpen,
+  BriefcaseBusiness,
   Shield,
   Database,
   GitBranch,
@@ -38,6 +39,7 @@ const NAV_SECTIONS = [
   { id: "database", label: "数据库设计", icon: <Database className="w-3.5 h-3.5" /> },
   { id: "module-mgmt", label: "模块管理", icon: <Blocks className="w-3.5 h-3.5" /> },
   { id: "auth", label: "认证与权限", icon: <Shield className="w-3.5 h-3.5" /> },
+  { id: "dashboard-detail", label: "看板预警", icon: <AlertTriangle className="w-3.5 h-3.5" /> },
   { id: "flow", label: "核心流程", icon: <GitBranch className="w-3.5 h-3.5" /> },
   { id: "project-flow", label: "创建项目", icon: <FolderPlus className="w-3.5 h-3.5" /> },
   { id: "schema-rules", label: "Schema 规则", icon: <FileText className="w-3.5 h-3.5" /> },
@@ -45,6 +47,21 @@ const NAV_SECTIONS = [
 ];
 
 const FEATURE_MODULES = [
+  {
+    id: "dashboard",
+    name: "项目看板",
+    icon: <LayoutDashboard className="w-5 h-5" />,
+    color: "bg-teal-500",
+    viewId: "project-board",
+    desc: "全局项目健康度监控，三大预警板块实时告警。",
+    highlights: [
+      "KPI 概览：项目总数/需求总数/高风险数/采购项等核心指标",
+      "雷达图：十大模块健康度评分，快速定位薄弱环节",
+      "三大预警板块：单指标阈值告警 / 趋势恶化预警 / 差值对比告警",
+      "项目健康排名 + 薄弱点标注",
+      "需求统计：完成率/积压量/处理周期/完成速度趋势图",
+    ],
+  },
   {
     id: "projects",
     name: "项目管理",
@@ -58,6 +75,7 @@ const FEATURE_MODULES = [
       "3种脉络追踪视图：色标脉络/进度条/瀑布图",
       "项目成员权限精细控制（8项权限）",
       "右侧面板：项目概览 + 任务列表 + 成员与权限",
+      "采购模块支持模板导入导出与搜索过滤",
     ],
   },
   {
@@ -71,32 +89,36 @@ const FEATURE_MODULES = [
       "字段类型：文本/数字/日期/单选/多选/多行文本/采购模块选择",
       "支持按项目类型和阶段应用",
       "同步到项目：仅结构/仅数据/结构+数据三种模式",
-      "字段排序、必填、描述、选项配置",
+      "适用阶段筛选 + 名称搜索 + 统计卡片",
+      "文本字段支持快捷语配置，填写时一键选择",
+      "行列矩阵权限模型：表级/行级/列级三级控制",
     ],
   },
   {
     id: "issues",
-    name: "问题上报",
+    name: "工单提交",
     icon: <AlertTriangle className="w-5 h-5" />,
     color: "bg-orange-500",
     viewId: "issues",
-    desc: "问题工单全生命周期管理，与待办自动联动。",
+    desc: "问题工单全生命周期管理，与待办自动联动，支持外部提报。",
     highlights: [
-      "5大Tab：我的上报/问题管理/待办/知会抄送/数据统计",
+      "Metro 磁贴导航：我的上报/问题管理/待办/知会抄送/数据统计",
       "状态流转：待受理→处理中→已完结/已驳回→已关闭",
       "创建工单自动写入待办任务",
       "支持转交/撤回/重新打开",
+      "外部人员扫码提报工单（无需登录）",
       "附件上传、处理流水记录",
     ],
   },
   {
     id: "todos",
-    name: "待办任务",
+    name: "任务中心",
     icon: <ClipboardList className="w-5 h-5" />,
     color: "bg-emerald-500",
-    viewId: "todos",
+    viewId: "tasks",
     desc: "任务发布与管理，支持周期任务自动生成实例。",
     highlights: [
+      "Metro 磁贴导航：统一待办/任务管理/发布任务/数据统计",
       "4步发布向导：基本信息→选择任务表单→指派实施人员→截止提醒",
       "周期任务：按日/周/月/年自动创建新实例",
       "普通任务：一次性任务，逾期提醒+允许补交",
@@ -111,16 +133,29 @@ const FEATURE_MODULES = [
     icon: <Megaphone className="w-5 h-5" />,
     color: "bg-amber-500",
     viewId: "messages",
-    desc: "公告通知、共享资料、经验分享三大板块。",
+    desc: "公告通知、共享资料、经验分享、视频中心四大板块。",
     highlights: [
       "公告通知：管理员发布，置顶/已读追踪/评论",
       "共享资料：分类标签+资料类型筛选，支持视频在线播放",
       "经验分享：人人可发，点赞/收藏/评论",
+      "视频中心：视频上传/在线播放/分享/模块分类筛选",
       "附件通过对象存储(S3)上传下载",
       "发布重要公告自动写入待办任务",
     ],
   },
-
+  {
+    id: "case-center",
+    name: "案例中心",
+    icon: <BriefcaseBusiness className="w-5 h-5" />,
+    color: "bg-teal-500",
+    viewId: "case-center",
+    desc: "客户画像与产品案例库，积累和展示项目成果。",
+    highlights: [
+      "用户画像：客户档案/项目履历/沟通记录管理",
+      "产品案例：按产品模块归档项目案例",
+      "支持案例详情展示与成果沉淀",
+    ],
+  },
   {
     id: "settings",
     name: "系统设置",
@@ -132,8 +167,21 @@ const FEATURE_MODULES = [
       "用户管理：创建用户/角色分配/重置密码/启用禁用",
       "角色权限面板：超级管理员/子管理员/普通用户",
       "基础数据：产品模块/项目类型/项目阶段/模块管理",
-      "工单配置：问题类别/紧急程度/保修情况",
+      "工单配置：问题类别/紧急程度/保修情况/外部接收设置",
       "信息广场分类维护",
+    ],
+  },
+  {
+    id: "learning",
+    name: "学习中心",
+    icon: <BookOpen className="w-5 h-5" />,
+    color: "bg-cyan-500",
+    viewId: "learning",
+    desc: "知识库与培训资料中心，助力团队能力提升。",
+    highlights: [
+      "培训资料分类浏览",
+      "知识文档沉淀与共享",
+      "与信息广场资料互通",
     ],
   },
 ];
@@ -141,15 +189,22 @@ const FEATURE_MODULES = [
 const DATABASE_TABLES = [
   { group: "用户与认证", tables: ["users", "user_sessions", "project_member_permissions"] },
   { group: "项目管理", tables: ["projects", "project_types", "project_stages", "project_members", "project_module_types", "project_type_stage_modules"] },
-  { group: "规范管理", tables: ["data_table_definitions"] },
+  { group: "规范管理", tables: ["data_table_definitions", "project_schema_rules"] },
   { group: "待办任务（统一待办）", tables: ["todo_task_defs", "todo_task_instances"] },
-  { group: "问题上报", tables: ["issue_mgmt_issues", "issue_mgmt_issue_attachments", "issue_mgmt_issue_processing_records", "issue_mgmt_issue_notifications", "issue_mgmt_issue_categories", "issue_mgmt_issue_urgency", "issue_mgmt_issue_warranty_status"] },
+  { group: "问题上报", tables: ["issue_mgmt_issues", "issue_mgmt_issue_attachments", "issue_mgmt_issue_processing_records", "issue_mgmt_issue_notifications", "issue_mgmt_issue_categories", "issue_mgmt_issue_urgency", "issue_mgmt_issue_warranty_status", "issue_mgmt_external_receivers"] },
   { group: "信息广场", tables: ["design_info_square.knowledge_categories", "design_info_square.knowledge_posts", "design_info_square.knowledge_attachments", "design_info_square.knowledge_reads", "design_info_square.knowledge_likes", "design_info_square.knowledge_comments"] },
-
+  { group: "视频中心", tables: ["video_center.videos", "video_center.video_attachments", "video_center.video_comments"] },
+  { group: "案例中心", tables: ["case_center.customers", "case_center.customer_contacts", "case_center.case_projects"] },
   { group: "基础数据", tables: ["product_module_types", "product_categories", "product_vendors", "product_scopes", "member_role_types"] },
 ];
 
+const MAIN_TABS = [
+  { id: "about", label: "关于系统" },
+  { id: "guide", label: "操作说明" },
+] as const;
+
 export default function AboutPage({ onNavigate }: AboutPageProps) {
+  const [mainTab, setMainTab] = useState<"about" | "guide">("about");
   const [activeSection, setActiveSection] = useState("overview");
   const [expandedModule, setExpandedModule] = useState<string | null>(null);
   const [expandedTableGroup, setExpandedTableGroup] = useState<string | null>(null);
@@ -167,6 +222,26 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
 
   return (
     <div className="h-full overflow-y-auto">
+      {/* 顶部 Tab 切换 — 浮动卡片式按钮 */}
+      <div className="sticky top-[72px] z-20 flex items-center justify-center gap-2 pt-3 pb-2">
+        {MAIN_TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setMainTab(t.id)}
+            className={`px-5 py-2 rounded-xl text-sm font-medium transition-all duration-200 shadow-sm ${
+              mainTab === t.id
+                ? "bg-blue-600 text-white shadow-blue-200 scale-105"
+                : "bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 border border-gray-200"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 关于系统 Tab */}
+      {mainTab === "about" && (
+      <>
       {/* 左侧居中悬浮导航 */}
       <div className="fixed left-6 top-1/2 -translate-y-1/2 z-20">
         <div className="flex flex-col items-center gap-1.5 bg-white/80 backdrop-blur-lg border border-gray-200 rounded-2xl p-2 shadow-lg shadow-gray-200/50">
@@ -191,36 +266,27 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
       </div>
 
       {/* 内容区域 */}
-      <div className="max-w-5xl mx-auto px-6 py-8 pl-20 space-y-12">
+      <div className="max-w-5xl mx-auto px-6 pt-32 pb-8 pl-20 space-y-12">
 
         {/* 项目概览 */}
         <section id="overview" className="scroll-mt-4">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center">
-              <LayoutDashboard className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">项目概览</h2>
-              <p className="text-sm text-gray-500">Project Overview</p>
-            </div>
-          </div>
-
           <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-8 text-white mb-6">
             <h3 className="text-2xl font-bold mb-2">元素科技 · 项目管理平台</h3>
             <p className="text-blue-100 text-sm mb-6">
               Element Tech - Project Management System
             </p>
             <p className="text-blue-50 leading-relaxed">
-              企业级全流程项目管理平台，涵盖项目立项、规范定义、任务分配、问题追踪、知识分享等核心场景。
+              企业级全流程项目管理平台，涵盖看板监控、项目立项、规范定义、任务分配、问题追踪、知识分享、案例管理等核心场景。
               通过统一的权限体系和数据架构，实现跨团队协作与精细化管理。
+              整体采用 Windows Phone Metro 磁贴导航风格，简洁直观。
             </p>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { label: "功能模块", value: "7+", icon: <Layers className="w-4 h-4" /> },
-              { label: "数据表", value: "30+", icon: <Database className="w-4 h-4" /> },
-              { label: "API接口", value: "50+", icon: <Server className="w-4 h-4" /> },
+              { label: "功能模块", value: "10+", icon: <Layers className="w-4 h-4" /> },
+              { label: "数据表", value: "40+", icon: <Database className="w-4 h-4" /> },
+              { label: "API接口", value: "60+", icon: <Server className="w-4 h-4" /> },
               { label: "权限项", value: "8项", icon: <Shield className="w-4 h-4" /> },
             ].map((stat) => (
               <div key={stat.label} className="bg-white border border-gray-200 rounded-xl p-4 text-center">
@@ -886,6 +952,83 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
             </div>
           </div>
 
+          {/* 角色权限对照表 */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
+            <h4 className="font-semibold text-gray-900 mb-3">角色权限对照表</h4>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-2.5 pr-4 text-gray-500 font-medium text-xs w-[40%]">功能</th>
+                    <th className="text-center py-2.5 px-3 text-gray-500 font-medium text-xs w-[20%]">超级管理员</th>
+                    <th className="text-center py-2.5 px-3 text-gray-500 font-medium text-xs w-[20%]">子管理员</th>
+                    <th className="text-center py-2.5 px-3 text-gray-500 font-medium text-xs w-[20%]">普通用户</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {/* Dock 栏可见性 */}
+                  <tr>
+                    <td colSpan={4} className="pt-3 pb-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Dock 栏可见性</td>
+                  </tr>
+                  {[
+                    ["项目看板 / 项目管理 / 任务中心 / 工单提交 / 案例中心 / 信息广场", true, true, true],
+                    ["规范管理", true, true, false],
+                    ["设置", true, true, false],
+                  ].map(([label, sa, sub, u], i) => (
+                    <tr key={i} className="hover:bg-gray-50/50">
+                      <td className="py-2 pr-4 text-gray-700">{label}</td>
+                      <td className="py-2 px-3 text-center">{sa ? <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 text-xs">✓</span> : <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 text-gray-400 text-xs">✗</span>}</td>
+                      <td className="py-2 px-3 text-center">{sub ? <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 text-xs">✓</span> : <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 text-gray-400 text-xs">✗</span>}</td>
+                      <td className="py-2 px-3 text-center">{u ? <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 text-xs">✓</span> : <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 text-gray-400 text-xs">✗</span>}</td>
+                    </tr>
+                  ))}
+
+                  {/* 设置页面 */}
+                  <tr>
+                    <td colSpan={4} className="pt-3 pb-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">设置页面访问</td>
+                  </tr>
+                  {[
+                    ["用户管理", true, true, false],
+                    ["角色权限", true, false, false],
+                    ["基础数据 / 模块管理 / 工单配置 / 信息广场分类 / 大模型配置 / 系统配置", true, true, false],
+                  ].map(([label, sa, sub, u], i) => (
+                    <tr key={i} className="hover:bg-gray-50/50">
+                      <td className="py-2 pr-4 text-gray-700">{label}</td>
+                      <td className="py-2 px-3 text-center">{sa ? <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 text-xs">✓</span> : <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 text-gray-400 text-xs">✗</span>}</td>
+                      <td className="py-2 px-3 text-center">{sub ? <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 text-xs">✓</span> : <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 text-gray-400 text-xs">✗</span>}</td>
+                      <td className="py-2 px-3 text-center">{u ? <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 text-xs">✓</span> : <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 text-gray-400 text-xs">✗</span>}</td>
+                    </tr>
+                  ))}
+
+                  {/* 操作权限 */}
+                  <tr>
+                    <td colSpan={4} className="pt-3 pb-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">操作权限</td>
+                  </tr>
+                  {[
+                    ["创建项目", true, true, true],
+                    ["管理用户角色（分配/修改角色）", true, false, false],
+                    ["创建/编辑用户时设置角色", true, false, false],
+                    ["后端 API 角色保护", true, true, true],
+                  ].map(([label, sa, sub, u], i) => (
+                    <tr key={i} className="hover:bg-gray-50/50">
+                      <td className="py-2 pr-4 text-gray-700">{label}</td>
+                      <td className="py-2 px-3 text-center">{sa ? <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 text-xs">✓</span> : <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 text-gray-400 text-xs">✗</span>}</td>
+                      <td className="py-2 px-3 text-center">{sub ? <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 text-xs">✓</span> : <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 text-gray-400 text-xs">✗</span>}</td>
+                      <td className="py-2 px-3 text-center">{u ? <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 text-xs">✓</span> : <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 text-gray-400 text-xs">✗</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-3 bg-blue-50 rounded-lg p-3">
+              <p className="text-xs text-blue-700 leading-relaxed">
+                <strong>说明：</strong>普通用户仅能看到 Dock 栏中的项目看板、项目管理、任务中心、工单提交、案例中心、信息广场六个入口。
+                规范管理和设置页面对普通用户完全隐藏，且前端页面渲染层和后端 API 层均有权限校验。
+                超级管理员拥有全部权限，子管理员由超级管理员授权，可管理用户和基础数据但不可变更用户角色。
+              </p>
+            </div>
+          </div>
+
           {/* 项目级权限 */}
           <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
             <h4 className="font-semibold text-gray-900 mb-3">项目级权限（8项）</h4>
@@ -965,6 +1108,78 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
           </div>
         </section>
 
+        {/* 项目看板预警 */}
+        <section id="dashboard-detail" className="scroll-mt-4">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-rose-600 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">看板预警系统</h2>
+              <p className="text-sm text-gray-500">Dashboard Warning System · 三大预警板块</p>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-rose-600 to-pink-700 rounded-2xl p-8 text-white mb-6">
+            <h3 className="text-xl font-bold mb-2">实时项目健康监控</h3>
+            <p className="text-rose-100 text-sm leading-relaxed">
+              项目看板集成三大预警板块，实时监控项目指标，自动识别异常并告警。
+              结合雷达图健康度评分和项目排名，帮助管理者快速定位风险项目。
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            {[
+              {
+                title: "单指标阈值告警",
+                icon: "🎯",
+                color: "bg-red-50 border-red-200",
+                text: "为关键指标设定安全阈值，超出时自动标记为 error/warning 级别。适用于进度偏差率、成本超支率、高风险剩余数等。",
+              },
+              {
+                title: "趋势恶化预警",
+                icon: "📉",
+                color: "bg-amber-50 border-amber-200",
+                text: "跟踪指标历史趋势，检测连续多期恶化信号。适用于需求积压量上升、完成率下降、处理周期延长等趋势性问题。",
+              },
+              {
+                title: "差值对比告警",
+                icon: "⚖️",
+                color: "bg-blue-50 border-blue-200",
+                text: "项目间横向对比，标记偏离项目群均值过多的异常项。适用于识别个别项目与其他项目的显著差异。",
+              },
+            ].map((w) => (
+              <div key={w.title} className={`rounded-xl p-4 border ${w.color}`}>
+                <div className="text-lg mb-2">{w.icon}</div>
+                <div className="font-semibold text-gray-900 text-sm mb-1">{w.title}</div>
+                <p className="text-xs text-gray-600">{w.text}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <h4 className="font-semibold text-gray-900 mb-3">预警数据流</h4>
+            <div className="space-y-2 text-sm text-gray-600">
+              <div className="flex items-start gap-2">
+                <div className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center text-xs shrink-0">1</div>
+                <span>看板加载时请求 <code className="bg-gray-100 px-1 rounded text-xs">GET /api/dashboard/full</code>，返回 KPI + 健康度 + 预警汇总</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center text-xs shrink-0">2</div>
+                <span>预警汇总卡片显示：总预警数 / error 数 / warning 数 / 按类别分（阈值/趋势/对比）</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center text-xs shrink-0">3</div>
+                <span>点击预警卡片展开详情列表，可查看每个预警的触发条件和当前值</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center text-xs shrink-0">4</div>
+                <span>点击预警项可跳转到对应项目详情，快速定位问题</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* 核心流程 */}
         <section id="flow" className="scroll-mt-4">
           <div className="flex items-center gap-3 mb-6">
@@ -996,7 +1211,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
                   </div>
                 ))}
               </div>
-              <p className="mt-3 text-xs text-gray-500">支持转交/撤回/重新打开，状态变更自动同步待办任务</p>
+              <p className="mt-3 text-xs text-gray-500">支持转交/撤回/重新打开，状态变更自动同步待办任务。外部人员可通过扫码链接匿名提报工单。</p>
             </div>
 
             {/* 任务流程 */}
@@ -1458,6 +1673,362 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
             Built with Next.js 16 · React 19 · TypeScript 5 · PostgreSQL 16
           </p>
         </div>
+      </div>
+      </>
+      )}
+
+      {/* 操作说明 Tab */}
+      {mainTab === "guide" && (
+        <GuideContent onNavigate={handleNavigate} />
+      )}
+    </div>
+  );
+}
+
+/* ================================================================
+   操作说明 — 面向初次接触者
+   ================================================================ */
+function GuideContent({ onNavigate }: { onNavigate: (viewId: string) => void }) {
+  return (
+    <div className="max-w-4xl mx-auto px-6 pt-32 pb-8 space-y-10">
+      {/* 欢迎区块 */}
+      <div className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-2xl p-8 text-white">
+        <h3 className="text-2xl font-bold mb-2">欢迎使用元素科技项目管理平台</h3>
+        <p className="text-emerald-100 text-sm leading-relaxed">
+          本平台覆盖项目全生命周期管理，包括看板监控、项目创建、任务分发、工单追踪、规范管理、信息共享等核心场景。
+          以下操作说明将帮助你快速上手。
+        </p>
+      </div>
+
+      {/* 一、界面导航 */}
+      <section>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white text-sm font-bold">1</div>
+          <h3 className="text-xl font-bold text-gray-900">界面导航</h3>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
+          <h4 className="font-semibold text-gray-900 mb-3">Dock 导航栏</h4>
+          <p className="text-sm text-gray-600 mb-3">
+            顶部悬浮的 Metro 磁贴风格导航栏是你操作系统的核心入口，包含以下功能区：
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {[
+              { label: "项目看板", desc: "总览所有项目健康度与预警" },
+              { label: "项目管理", desc: "创建、查看和管理项目" },
+              { label: "任务中心", desc: "发布任务、查看待办、统计" },
+              { label: "工单提交", desc: "提交问题工单、追踪处理" },
+              { label: "案例中心", desc: "客户案例与产品案例库" },
+              { label: "信息广场", desc: "公告、资料、经验分享" },
+              { label: "规范管理", desc: "定义数据表结构与同步" },
+              { label: "设置", desc: "用户管理、基础数据、权限" },
+              { label: "关于", desc: "系统介绍与操作说明" },
+              { label: "学习中心", desc: "知识库与培训资料" },
+            ].map((item) => (
+              <div key={item.label} className="flex items-start gap-2 px-3 py-2 bg-gray-50 rounded-lg">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" />
+                <div>
+                  <span className="text-sm font-medium text-gray-800">{item.label}</span>
+                  <span className="text-xs text-gray-500 block">{item.desc}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 bg-blue-50 rounded-lg p-3 text-xs text-blue-700">
+            <span className="font-medium">提示：</span>
+            Dock 栏右侧的 📌 图钉按钮可固定/取消固定导航栏。取消固定后，鼠标移至屏幕顶部可唤出导航栏。
+          </div>
+        </div>
+      </section>
+
+      {/* 二、创建第一个项目 */}
+      <section>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white text-sm font-bold">2</div>
+          <h3 className="text-xl font-bold text-gray-900">创建第一个项目</h3>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="space-y-3 text-sm text-gray-600">
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">1</div>
+              <span>点击 Dock 栏「<strong>项目管理</strong>」进入项目列表</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">2</div>
+              <span>点击「<strong>新建项目</strong>」按钮，填写项目名称、编号</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">3</div>
+              <span>选择<strong>项目类型</strong>和<strong>项目阶段</strong>（类型和阶段在「设置→基础数据」中维护）</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">4</div>
+              <span>配置<strong>客户信息</strong>和<strong>渠道信息</strong></span>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">5</div>
+              <span>选择<strong>采购模块</strong>（可搜索筛选，支持模板导入导出）</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">6</div>
+              <span>添加<strong>项目成员</strong>，分配角色和权限</span>
+            </div>
+          </div>
+          <div className="mt-3 bg-emerald-50 rounded-lg p-3 text-xs text-emerald-700">
+            <span className="font-medium">创建后：</span>系统会根据项目类型+阶段+采购模块自动匹配 Schema 规则，将对应规范表复制到项目专属 Schema 中。
+          </div>
+          <button
+            onClick={() => onNavigate("projects")}
+            className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-100 transition-colors"
+          >
+            前往项目管理
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </section>
+
+      {/* 三、发布任务 */}
+      <section>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-orange-600 flex items-center justify-center text-white text-sm font-bold">3</div>
+          <h3 className="text-xl font-bold text-gray-900">发布任务与待办管理</h3>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <h4 className="font-semibold text-gray-900 mb-3">4 步发布任务</h4>
+          <div className="flex items-center gap-1 text-xs text-gray-600 mb-4 flex-wrap">
+            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded font-medium">基本信息</span>
+            <ChevronRight className="w-3 h-3 text-gray-300" />
+            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded font-medium">选择任务表单</span>
+            <ChevronRight className="w-3 h-3 text-gray-300" />
+            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded font-medium">指派实施人员</span>
+            <ChevronRight className="w-3 h-3 text-gray-300" />
+            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded font-medium">截止日期与提醒</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="bg-blue-50 rounded-lg p-3">
+              <p className="text-xs font-medium text-blue-700">普通任务</p>
+              <p className="text-xs text-blue-600 mt-1">一次性任务，逾期自动提醒，支持补交</p>
+            </div>
+            <div className="bg-purple-50 rounded-lg p-3">
+              <p className="text-xs font-medium text-purple-700">周期任务</p>
+              <p className="text-xs text-purple-600 mt-1">按日/周/月/年自动创建新实例，到期自动生成</p>
+            </div>
+          </div>
+
+          <div className="bg-amber-50 rounded-lg p-3 text-xs text-amber-700">
+            <span className="font-medium">统一待办：</span>任务中心自动汇总你的所有待办 — 包括任务、工单和重要公告。Dock 栏「任务中心」的红色角标数字即为待办数量。
+          </div>
+
+          <button
+            onClick={() => onNavigate("tasks")}
+            className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-orange-50 text-orange-700 rounded-lg text-sm font-medium hover:bg-orange-100 transition-colors"
+          >
+            前往任务中心
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </section>
+
+      {/* 四、工单提报 */}
+      <section>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-red-600 flex items-center justify-center text-white text-sm font-bold">4</div>
+          <h3 className="text-xl font-bold text-gray-900">问题工单提报</h3>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="space-y-3 text-sm text-gray-600">
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-xs shrink-0">1</div>
+              <span>点击 Dock 栏「<strong>工单提交</strong>」，顶部 Metro 磁贴可切换：我的上报 / 问题管理 / 待办 / 知会抄送 / 数据统计</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-xs shrink-0">2</div>
+              <span>点击「<strong>新建工单</strong>」→ 选择项目 → 填写问题描述 → 上传截图/附件 → 提交</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-xs shrink-0">3</div>
+              <span>工单流转：<strong>待受理 → 处理中 → 已完结/已驳回 → 已关闭</strong></span>
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="bg-green-50 rounded-lg p-2.5">
+              <p className="text-xs font-medium text-green-700">工单与待办联动</p>
+              <p className="text-xs text-green-600 mt-1">创建工单自动写入相关人员的待办任务，处理后状态回写</p>
+            </div>
+            <div className="bg-cyan-50 rounded-lg p-2.5">
+              <p className="text-xs font-medium text-cyan-700">外部人员提报</p>
+              <p className="text-xs text-cyan-600 mt-1">支持外部人员通过扫码链接匿名提交工单，无需登录系统</p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => onNavigate("issues")}
+            className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-red-50 text-red-700 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors"
+          >
+            前往工单提交
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </section>
+
+      {/* 五、信息广场与视频中心 */}
+      <section>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center text-white text-sm font-bold">5</div>
+          <h3 className="text-xl font-bold text-gray-900">信息广场与视频中心</h3>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            {[
+              { title: "公告通知", desc: "管理员发布，支持置顶、已读追踪、评论互动" },
+              { title: "共享资料", desc: "分类标签筛选，支持视频在线播放，附件 S3 存储" },
+              { title: "经验分享", desc: "人人可发布，点赞/收藏/评论，知识沉淀" },
+            ].map((item) => (
+              <div key={item.title} className="bg-purple-50 rounded-lg p-3">
+                <p className="text-xs font-medium text-purple-700">{item.title}</p>
+                <p className="text-xs text-purple-600 mt-1">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-amber-50 rounded-lg p-3 text-xs text-amber-700">
+            <span className="font-medium">重要公告自动写待办：</span>发布重要公告时，系统自动为相关用户创建待办任务，确保通知到位。
+          </div>
+
+          <button
+            onClick={() => onNavigate("messages")}
+            className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-purple-50 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-100 transition-colors"
+          >
+            前往信息广场
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </section>
+
+      {/* 六、规范管理 */}
+      <section>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center text-white text-sm font-bold">6</div>
+          <h3 className="text-xl font-bold text-gray-900">规范管理（数据表定义）</h3>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="space-y-3 text-sm text-gray-600">
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-xs shrink-0">1</div>
+              <span>点击 Dock 栏「<strong>规范管理</strong>」，查看所有已定义的数据表</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-xs shrink-0">2</div>
+              <span>点击「<strong>新建表</strong>」→ 配置字段（文本/数字/日期/单选/多选/多行文本/采购模块选择）</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-xs shrink-0">3</div>
+              <span>设置<strong>适用项目类型</strong>和<strong>阶段</strong>，定义 Schema 规则</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-xs shrink-0">4</div>
+              <span>点击「<strong>同步到项目</strong>」→ 选择同步模式（仅结构/仅数据/结构+数据）→ 指定目标项目</span>
+            </div>
+          </div>
+
+          <div className="mt-3 bg-violet-50 rounded-lg p-3 text-xs text-violet-700">
+            <span className="font-medium">提示：</span>规范表定义后，可通过「操作数据」进入数据管理界面，行列矩阵权限模型可控制每一行每一列的编辑和删除权限。
+          </div>
+
+          <button
+            onClick={() => onNavigate("standards")}
+            className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-violet-50 text-violet-700 rounded-lg text-sm font-medium hover:bg-violet-100 transition-colors"
+          >
+            前往规范管理
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </section>
+
+      {/* 七、案例中心 */}
+      <section>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-teal-600 flex items-center justify-center text-white text-sm font-bold">7</div>
+          <h3 className="text-xl font-bold text-gray-900">案例中心</h3>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="bg-teal-50 rounded-lg p-3">
+              <p className="text-xs font-medium text-teal-700">用户画像</p>
+              <p className="text-xs text-teal-600 mt-1">管理客户档案，包括基本信息、项目履历、沟通记录等</p>
+            </div>
+            <div className="bg-cyan-50 rounded-lg p-3">
+              <p className="text-xs font-medium text-cyan-700">产品案例</p>
+              <p className="text-xs text-cyan-600 mt-1">按产品模块归档项目案例，支持展示案例详情和成果</p>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigate("case-center")}
+            className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 bg-teal-50 text-teal-700 rounded-lg text-sm font-medium hover:bg-teal-100 transition-colors"
+          >
+            前往案例中心
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </section>
+
+      {/* 八、常见问题 */}
+      <section>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center text-white text-sm font-bold">8</div>
+          <h3 className="text-xl font-bold text-gray-900">常见问题</h3>
+        </div>
+        <div className="space-y-3">
+          {[
+            {
+              q: "如何添加项目成员并设置权限？",
+              a: "进入项目详情页，右侧面板找到「成员与权限」区域，点击「添加」选择用户并设定角色。点击成员行展开权限设置，通过开关控制 8 项项目级权限。",
+            },
+            {
+              q: "任务的表单从哪里来？",
+              a: "任务表单来源于规范管理中定义的数据表。先在规范管理中创建表并同步到项目，发布任务时即可选择该表作为任务表单。也可以导入 Excel 自动建表。",
+            },
+            {
+              q: "工单提交后谁会收到通知？",
+              a: "工单提交后自动写入所有相关人员的待办任务。可额外添加「知会抄送」人员。所有操作（受理/处理/完结）都会记录在工单处理流水中。",
+            },
+            {
+              q: "如何查看我的所有待办？",
+              a: "点击 Dock 栏「任务中心」，默认显示「统一待办」Tab，自动汇聚了分配给你的任务、工单和重要公告。红色角标数字为实时待办数量。",
+            },
+            {
+              q: "规范表中的数据怎么控制权限？",
+              a: "规范管理支持行列矩阵权限模型：表级默认值 + 行级覆盖 + 列级覆盖。通过 AND/OR 模式决定单元格锁定逻辑。数据来源标记（manual/import/standard/reference）决定权限适用规则。",
+            },
+            {
+              q: "外部人员如何提报工单？",
+              a: "管理员在「设置→工单配置→外部接收设置」中配置外部工单接收人和字段。系统生成扫码链接，外部人员无需登录即可填写和提交工单。",
+            },
+            {
+              q: "Dock 导航栏可以隐藏吗？",
+              a: "点击 Dock 栏右侧的 📌 图钉按钮取消固定。之后鼠标移至屏幕顶部边缘即可唤出导航栏，鼠标离开后自动隐藏。再次点击图钉可重新固定。",
+            },
+          ].map((faq, i) => (
+            <div key={i} className="bg-white border border-gray-200 rounded-xl p-4">
+              <p className="text-sm font-medium text-gray-900 mb-1">Q: {faq.q}</p>
+              <p className="text-sm text-gray-600">A: {faq.a}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 页脚 */}
+      <div className="text-center py-8 border-t border-gray-200">
+        <p className="text-sm text-gray-400">
+          更多问题请联系系统管理员或查看「关于系统」了解技术架构详情
+        </p>
       </div>
     </div>
   );

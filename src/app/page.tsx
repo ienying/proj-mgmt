@@ -42,6 +42,7 @@ import {
   Info,
   CheckSquare,
   LayoutDashboard,
+  Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -544,6 +545,19 @@ export default function HomePage() {
   };
 
   const renderContent = () => {
+    // 普通用户无权访问规范管理和设置页面
+    if (user?.role === "user" && (activeItem === "standards" || activeItem === "settings")) {
+      return (
+        <div className="h-full flex items-center justify-center">
+          <div className="text-center">
+            <Shield className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+            <h2 className="text-xl font-semibold mb-2">访问受限</h2>
+            <p className="text-muted-foreground">您没有权限访问此页面，请联系管理员。</p>
+          </div>
+        </div>
+      );
+    }
+
     switch (activeItem) {
       case "project-board":
         return (
@@ -692,7 +706,10 @@ case "messages":
   return (
     <div className="h-screen flex flex-col bg-background">
       <TopDock
-        items={dockItems}
+        items={dockItems.filter((item) => {
+          if (user?.role !== "user") return true;
+          return item.id !== "standards" && item.id !== "settings";
+        })}
         activeItem={activeItem}
         onItemClick={handleItemClick}
         userName={userName}

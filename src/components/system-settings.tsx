@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/auth-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -125,7 +126,14 @@ export default function SystemSettings({
   onUserToggleActive,
   onBaseDataChange,
 }: SystemSettingsProps) {
+  const { user: currentUser } = useAuth();
   const [activeMenu, setActiveMenu] = useState("users");
+
+  // 角色权限菜单仅超级管理员可见
+  const visibleMenuItems = menuItems.filter((item) => {
+    if (item.id === "roles" && currentUser?.role !== "super_admin") return false;
+    return true;
+  });
   // 记录已访问过的菜单，避免组件重复挂载
   const [visitedMenus, setVisitedMenus] = useState<Set<string>>(new Set(["users"]));
   const [searchQuery, setSearchQuery] = useState("");
@@ -436,7 +444,7 @@ export default function SystemSettings({
         {/* 左侧导航 - 固定不滚动 */}
         <div className="w-48 bg-card border-r border-border p-4 flex-shrink-0">
           <nav className="space-y-1">
-            {menuItems.map((item) => (
+            {visibleMenuItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => {
@@ -633,24 +641,26 @@ export default function SystemSettings({
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>角色</Label>
-                          <Select
-                            value={formData.role || "user"}
-                            onValueChange={(value) =>
-                              setFormData((prev) => ({ ...prev, role: value as "super_admin" | "sub_admin" | "user" }))
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="选择角色" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="user">普通用户</SelectItem>
-                              <SelectItem value="sub_admin">子管理员</SelectItem>
-                              <SelectItem value="super_admin">超级管理员</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        {currentUser?.role === "super_admin" && (
+                          <div className="space-y-2">
+                            <Label>角色</Label>
+                            <Select
+                              value={formData.role || "user"}
+                              onValueChange={(value) =>
+                                setFormData((prev) => ({ ...prev, role: value as "super_admin" | "sub_admin" | "user" }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="选择角色" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="user">普通用户</SelectItem>
+                                <SelectItem value="sub_admin">子管理员</SelectItem>
+                                <SelectItem value="super_admin">超级管理员</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                         {!editingId && (
                           <div className="space-y-2">
                             <Label>初始密码</Label>
@@ -713,16 +723,18 @@ export default function SystemSettings({
                         取消选择
                       </Button>
                       <div className="flex-1" />
-                      <Select onValueChange={handleBatchRoleChange} disabled={batchLoading}>
-                        <SelectTrigger className="h-7 w-32 text-xs border-blue-300">
-                          <SelectValue placeholder="批量改角色" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="user">普通用户</SelectItem>
-                          <SelectItem value="sub_admin">子管理员</SelectItem>
-                          <SelectItem value="super_admin">超级管理员</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      {currentUser?.role === "super_admin" && (
+                        <Select onValueChange={handleBatchRoleChange} disabled={batchLoading}>
+                          <SelectTrigger className="h-7 w-32 text-xs border-blue-300">
+                            <SelectValue placeholder="批量改角色" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="user">普通用户</SelectItem>
+                            <SelectItem value="sub_admin">子管理员</SelectItem>
+                            <SelectItem value="super_admin">超级管理员</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
@@ -1109,7 +1121,16 @@ export default function SystemSettings({
 
           {/* 角色权限 */}
           <div className={activeMenu === "roles" ? "" : "hidden"}>
-            <RolePermissionPanel users={users} onUserUpdate={onUserUpdate} />
+            {currentUser?.role === "super_admin" ? (
+              <RolePermissionPanel users={users} onUserUpdate={onUserUpdate} />
+            ) : (
+              <div className="flex items-center justify-center h-64 text-muted-foreground">
+                <div className="text-center">
+                  <Shield className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p className="text-sm">仅超级管理员可访问角色权限管理</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 基础数据 */}
