@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Progress } from "@/components/ui/progress";
 import { Markdown } from "@/components/markdown";
 import { toast } from "sonner";
+import { parseTags } from "./tag-utils";
 import dynamic from "next/dynamic";
 
 const RichTextEditor = dynamic(() => import("@/components/rich-text-editor"), {
@@ -160,14 +161,7 @@ export default function PostEditor({
         setContentType((editPost.content_type as "rich_text" | "markdown") || "rich_text");
         setSelectedCategoryId(editPost.category_id || "");
         setIsPinned(editPost.is_pinned || false);
-        const tags = editPost.tags;
-        setTagStr(
-          typeof tags === "string"
-            ? tags
-            : Array.isArray(tags)
-            ? (tags as string[]).join(", ")
-            : ""
-        );
+        setTagStr(parseTags(editPost.tags).join(", "));
         // Load existing attachments
         fetch(`/api/knowledge/posts/${editPost.id}`)
           .then((r) => r.json())
@@ -363,12 +357,12 @@ export default function PostEditor({
   return (
     <div className="fixed inset-0 z-50 bg-white">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-6 py-3 border-b bg-white sticky top-0 z-10">
+      <div className="flex items-center justify-between px-6 py-3 border-b bg-gradient-to-r from-indigo-50 via-white to-purple-50 sticky top-0 z-10">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={handleClose}>
+          <Button variant="ghost" size="sm" onClick={handleClose} className="hover:bg-red-50 hover:text-red-500">
             <X className="w-4 h-4 mr-1" /> 关闭
           </Button>
-          <h2 className="text-lg font-semibold">
+          <h2 className="text-lg font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
             {isEditing ? `编辑 (v${editPost!.version} → v${nextVersion})` : "发布内容"}
           </h2>
         </div>
@@ -378,11 +372,11 @@ export default function PostEditor({
             {showPreview ? "编辑" : "预览"}
           </Button>
           {!isEditing && (
-            <Button variant="outline" onClick={handleSaveDraft} disabled={!title.trim() || saving}>
+            <Button variant="outline" onClick={handleSaveDraft} disabled={!title.trim() || saving} className="border-amber-300 text-amber-700 hover:bg-amber-50">
               <Save className="w-4 h-4 mr-1" /> 存草稿
             </Button>
           )}
-          <Button onClick={handleSave} disabled={!title.trim() || saving}>
+          <Button onClick={handleSave} disabled={!title.trim() || saving} className="bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600">
             {saving ? (
               <Loader2 className="w-4 h-4 mr-1 animate-spin" />
             ) : (
@@ -419,18 +413,20 @@ export default function PostEditor({
               </div>
 
               {/* Content type toggle */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 w-fit">
                 <Button
-                  variant={contentType === "rich_text" ? "default" : "outline"}
+                  variant={contentType === "rich_text" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setContentType("rich_text")}
+                  className={contentType === "rich_text" ? "bg-white shadow-sm text-indigo-600 hover:bg-white" : "text-gray-500 hover:text-gray-700"}
                 >
                   富文本
                 </Button>
                 <Button
-                  variant={contentType === "markdown" ? "default" : "outline"}
+                  variant={contentType === "markdown" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setContentType("markdown")}
+                  className={contentType === "markdown" ? "bg-white shadow-sm text-indigo-600 hover:bg-white" : "text-gray-500 hover:text-gray-700"}
                 >
                   Markdown
                 </Button>
@@ -527,7 +523,7 @@ export default function PostEditor({
         </div>
 
         {/* Right sidebar - metadata */}
-        <div className="w-80 shrink-0 border-l bg-gray-50 p-4 overflow-y-auto space-y-5">
+        <div className="w-80 shrink-0 border-l bg-gradient-to-b from-indigo-50/50 via-white to-purple-50/50 p-4 overflow-y-auto space-y-5">
           {/* Category */}
           <div>
             <Label className="text-xs font-semibold text-gray-500 uppercase">分类</Label>
@@ -613,14 +609,14 @@ export default function PostEditor({
           <div>
             <Label className="text-xs font-semibold text-gray-500 uppercase">附件</Label>
             <div
-              className="mt-1 border-2 border-dashed border-gray-200 rounded-lg p-3 text-center cursor-pointer hover:border-indigo-300 transition-colors"
+              className="mt-1 border-2 border-dashed border-indigo-200 rounded-xl p-4 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/50 transition-all"
               onClick={() => fileInputRef.current?.click()}
             >
-              <Upload className="w-5 h-5 mx-auto text-gray-300 mb-1" />
-              <p className="text-xs text-gray-500">
+              <Upload className="w-6 h-6 mx-auto text-indigo-300 mb-1" />
+              <p className="text-xs text-gray-600 font-medium">
                 {activeUploads.length > 0 ? "上传中..." : "点击上传文件"}
               </p>
-              <p className="text-xs text-gray-400">文档、表格、图片、视频、压缩包</p>
+              <p className="text-xs text-gray-400 mt-0.5">文档、表格、图片、视频、压缩包</p>
               <input
                 ref={fileInputRef}
                 type="file"

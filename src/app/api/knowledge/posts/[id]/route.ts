@@ -118,6 +118,11 @@ export async function PUT(
       },
     });
 
+    // Normalize tags: convert array to comma-separated string
+    if (Array.isArray(postData.tags)) {
+      postData.tags = postData.tags.join(",");
+    }
+
     // Update post with new data + incremented version
     const updatePayload = {
       ...postData,

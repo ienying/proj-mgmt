@@ -2,17 +2,20 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  X, ThumbsUp, Star, MessageCircle, Send, Download, Share2,
+  X, MessageCircle, Send, Download, Share2,
   FileText, User, Clock, Eye, Copy, Check, Maximize2, Minimize2,
-  Lock, Unlock
+  Lock, Unlock, Trash2, History
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Markdown } from "@/components/markdown";
 import { toast } from "sonner";
+import { parseTags } from "./tag-utils";
 
 interface Attachment {
   id: string;
@@ -124,9 +127,10 @@ export default function PostDrawer({
   onEdit,
 }: PostDrawerProps) {
   const [detail, setDetail] = useState<{
-    attachments: Attachment[];
+    attachments: (Attachment & { downloads?: Array<{ user_name?: string; downloaded_at: string }> })[];
     comments: Comment[];
     versions: Version[];
+    reads?: Array<{ user_id?: string; user_name?: string; read_at: string }>;
     _readCount: number;
   } | null>(null);
   const [newComment, setNewComment] = useState("");
@@ -138,6 +142,8 @@ export default function PostDrawer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [tocOpen, setTocOpen] = useState(false);
+  const [readHistoryOpen, setReadHistoryOpen] = useState(false);
+  const [downloadHistory, setDownloadHistory] = useState<{ attachmentName: string; records: Array<{ user_name?: string; downloaded_at: string }> } | null>(null);
 
   const loadDetail = useCallback(async () => {
     if (!post) return;
@@ -155,6 +161,7 @@ export default function PostDrawer({
           attachments: json.data.attachments || [],
           comments: json.data.comments || [],
           versions: json.data.versions || [],
+          reads: json.data.reads || [],
           _readCount: json.data._readCount || 0,
         });
         setActiveVersion(json.data.post?.version || post.version);
@@ -180,50 +187,32 @@ export default function PostDrawer({
     }
   }, [open, post, loadDetail]);
 
-  const handleLike = async () => {
-    if (!post) return;
-    try {
-      await fetch(`/api/knowledge/posts/${post.id}/like`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: currentUser?.id, user_name: currentUser?.name }),
-      });
-      onPostUpdated();
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleFavorite = async () => {
-    if (!post) return;
-    try {
-      await fetch(`/api/knowledge/posts/${post.id}/favorite`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: currentUser?.id, user_name: currentUser?.name }),
-      });
-      onPostUpdated();
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   const handleComment = async () => {
     if (!newComment.trim() || !post) return;
+    if (!currentUser?.id) {
+      toast.error("请先登录后再评论");
+      return;
+    }
     try {
-      await fetch(`/api/knowledge/posts/${post.id}/comments`, {
+      const res = await fetch(`/api/knowledge/posts/${post.id}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          content: newComment,
-          author_id: currentUser?.id,
-          author_name: currentUser?.name,
+          content: newComment.trim(),
+          user_id: currentUser.id,
+          user_name: currentUser.name,
         }),
       });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        toast.error(json.error || "评论发送失败，请重试");
+        return;
+      }
       setNewComment("");
+      toast.success("评论已发送");
       loadDetail();
     } catch (e) {
-      console.error(e);
+      toast.error("网络错误，请检查网络后重试");
     }
   };
 
@@ -260,6 +249,30 @@ export default function PostDrawer({
         toast.error(json.error || "设置失败，请重试");
       }
     } catch (e) {
+      toast.error("网络错误，请重试");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!post) return;
+    if (!confirm("确定要删除此内容吗？此操作不可撤销。")) return;
+    const isAuthor = currentUser?.id === post.created_by;
+    const isAdmin = currentUser?.role === "super_admin";
+    const hard = (isAuthor || isAdmin) ? "true" : "false";
+    try {
+      const res = await fetch(
+        `/api/knowledge/posts/${post.id}?hard=${hard}&user_id=${currentUser?.id || ""}&user_role=${currentUser?.role || ""}`,
+        { method: "DELETE" }
+      );
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        toast.error(json.error || "删除失败，请重试");
+        return;
+      }
+      toast.success("删除成功");
+      onOpenChange(false);
+      onPostUpdated();
+    } catch {
       toast.error("网络错误，请重试");
     }
   };
@@ -316,10 +329,10 @@ export default function PostDrawer({
       >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
+          <div className="flex items-center justify-between px-6 py-4 border-b shrink-0 bg-gradient-to-r from-indigo-50 to-purple-50">
             <div className="flex-1 min-w-0">
               <h3 className="text-lg font-semibold text-gray-900 truncate">{post.title}</h3>
-              <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
+              <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
                 <span className="flex items-center gap-1">
                   <User className="w-3 h-3" />
                   {post.created_by_name || "匿名"}
@@ -434,6 +447,16 @@ export default function PostDrawer({
                 )}
               </Button>
 
+              {currentUser?.id && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDelete}
+                  className="hover:bg-red-50 hover:text-red-500"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
               <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
                 <X className="w-5 h-5" />
               </Button>
@@ -517,11 +540,8 @@ export default function PostDrawer({
 
                 {post.tags && (
                   <div className="flex gap-1.5 flex-wrap">
-                    {(typeof post.tags === "string"
-                      ? post.tags.split(",").filter(Boolean)
-                      : (post.tags as string[])
-                    ).map((tag, i) => (
-                      <Badge key={i} variant="outline" className="text-xs">
+                    {parseTags(post.tags).map((tag, i) => (
+                      <Badge key={i} variant="outline" className="text-xs bg-indigo-50 text-indigo-600 border-indigo-200">
                         {tag}
                       </Badge>
                     ))}
@@ -544,10 +564,16 @@ export default function PostDrawer({
                               {formatFileSize(att.file_size)}
                             </span>
                             {att.download_count !== undefined && (
-                              <span className="text-xs text-gray-400 shrink-0">
+                              <button
+                                className="text-xs text-indigo-500 hover:text-indigo-700 shrink-0 hover:underline"
+                                onClick={() => setDownloadHistory({
+                                  attachmentName: att.file_name,
+                                  records: (att.downloads || []) as Array<{ user_name?: string; downloaded_at: string }>,
+                                })}
+                              >
                                 <Download className="w-3 h-3 inline mr-0.5" />
-                                {att.download_count}
-                              </span>
+                                {att.download_count} 次下载
+                              </button>
                             )}
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
@@ -564,36 +590,25 @@ export default function PostDrawer({
                   </div>
                 )}
 
-                <div className="border-t pt-4 flex items-center gap-4">
-                  <Button variant="ghost" size="sm" onClick={handleLike}>
-                    <ThumbsUp
-                      className={`w-4 h-4 mr-1 ${
-                        post._liked ? "text-indigo-500 fill-indigo-500" : ""
-                      }`}
-                    />
-                    点赞 ({post.like_count})
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={handleFavorite}>
-                    <Star
-                      className={`w-4 h-4 mr-1 ${
-                        post._favorited ? "text-amber-500 fill-amber-500" : ""
-                      }`}
-                    />
-                    收藏
-                  </Button>
-                  <span className="text-sm text-gray-400">
-                    <MessageCircle className="w-4 h-4 inline mr-1" />
-                    评论 ({post.comment_count})
+                <div className="border-t pt-4 flex items-center gap-3 flex-wrap">
+                  <span className="text-sm text-gray-400 flex items-center gap-1">
+                    <MessageCircle className="w-4 h-4" />
+                    {post.comment_count}
                   </span>
-                  <span className="text-sm text-gray-400">
-                    <Eye className="w-4 h-4 inline mr-1" />
-                    {post.view_count}次浏览
-                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="rounded-full hover:bg-indigo-50 hover:text-indigo-600"
+                    onClick={() => setReadHistoryOpen(true)}
+                  >
+                    <Eye className="w-4 h-4 mr-1" />
+                    {post.view_count} 次浏览
+                  </Button>
                   {currentUser?.id && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="ml-auto"
+                      className="ml-auto rounded-full hover:bg-indigo-50 hover:text-indigo-600"
                       onClick={() => onEdit(post)}
                     >
                       编辑
@@ -603,18 +618,49 @@ export default function PostDrawer({
 
                 {detail?.comments && detail.comments.length > 0 && (
                   <div className="border-t pt-4 space-y-3">
-                    <h4 className="text-sm font-medium text-gray-700">评论</h4>
+                    <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                      <MessageCircle className="w-4 h-4 text-indigo-400" />
+                      评论 ({detail.comments.length})
+                    </h4>
                     {detail.comments.map((c) => (
-                      <div key={c.id} className="bg-gray-50 rounded-lg p-3">
-                        <div className="flex items-center gap-2 text-sm mb-1">
+                      <div key={c.id} className="bg-gradient-to-r from-gray-50 to-indigo-50/30 rounded-xl p-3.5 border border-gray-100 group">
+                        <div className="flex items-center gap-2 text-sm mb-1.5">
+                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xs font-medium">
+                            {(c.author_name || c.user_name || "匿")[0]}
+                          </div>
                           <span className="font-medium text-gray-700">
                             {c.author_name || c.user_name || "匿名"}
                           </span>
                           <span className="text-xs text-gray-400">
                             {formatDate(c.created_at)}
                           </span>
+                          {(currentUser?.id === (c.user_id || c.author_id) || currentUser?.role === "super_admin") && (
+                            <button
+                              className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500"
+                              onClick={async () => {
+                                if (!confirm("确定要删除此评论吗？")) return;
+                                try {
+                                  const res = await fetch(
+                                    `/api/knowledge/posts/${post.id}/comments?comment_id=${c.id}&user_id=${currentUser?.id || ""}&user_role=${currentUser?.role || ""}`,
+                                    { method: "DELETE" }
+                                  );
+                                  const json = await res.json();
+                                  if (!res.ok || json.error) {
+                                    toast.error(json.error || "删除失败");
+                                    return;
+                                  }
+                                  toast.success("评论已删除");
+                                  loadDetail();
+                                } catch {
+                                  toast.error("网络错误，请重试");
+                                }
+                              }}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
-                        <p className="text-sm text-gray-600">{c.content}</p>
+                        <p className="text-sm text-gray-600 pl-9">{c.content}</p>
                       </div>
                     ))}
                   </div>
@@ -626,10 +672,13 @@ export default function PostDrawer({
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") handleComment();
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleComment();
+                      }
                     }}
                   />
-                  <Button size="sm" onClick={handleComment}>
+                  <Button size="sm" onClick={handleComment} disabled={!newComment.trim()}>
                     <Send className="w-4 h-4" />
                   </Button>
                 </div>
@@ -638,6 +687,81 @@ export default function PostDrawer({
           </div>
         </div>
       </div>
+      {/* Read History Dialog */}
+      <Dialog open={readHistoryOpen} onOpenChange={setReadHistoryOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="w-5 h-5 text-indigo-500" />
+              浏览记录
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh]">
+            {detail?.reads && detail.reads.length > 0 ? (
+              <div className="space-y-2 pr-3">
+                {detail.reads
+                  .sort((a, b) => new Date(b.read_at).getTime() - new Date(a.read_at).getTime())
+                  .map((r, i) => (
+                    <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xs font-medium">
+                          {(r.user_name || "匿")[0]}
+                        </div>
+                        <span className="text-sm text-gray-700">{r.user_name || "匿名用户"}</span>
+                      </div>
+                      <span className="text-xs text-gray-400">
+                        {new Date(r.read_at).toLocaleString("zh-CN", {
+                          month: "2-digit", day: "2-digit",
+                          hour: "2-digit", minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-400 text-sm">暂无浏览记录</div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Download History Dialog */}
+      <Dialog open={!!downloadHistory} onOpenChange={() => setDownloadHistory(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Download className="w-5 h-5 text-indigo-500" />
+              下载记录 — {downloadHistory?.attachmentName}
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh]">
+            {downloadHistory && downloadHistory.records.length > 0 ? (
+              <div className="space-y-2 pr-3">
+                {downloadHistory.records
+                  .sort((a, b) => new Date(b.downloaded_at).getTime() - new Date(a.downloaded_at).getTime())
+                  .map((r, i) => (
+                    <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-xs font-medium">
+                          {(r.user_name || "匿")[0]}
+                        </div>
+                        <span className="text-sm text-gray-700">{r.user_name || "匿名用户"}</span>
+                      </div>
+                      <span className="text-xs text-gray-400">
+                        {new Date(r.downloaded_at).toLocaleString("zh-CN", {
+                          month: "2-digit", day: "2-digit",
+                          hour: "2-digit", minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-400 text-sm">暂无下载记录</div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

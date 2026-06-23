@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  ArrowLeft, Plus, Search, Eye, ThumbsUp, MessageCircle,
+  ArrowLeft, Plus, Search, Eye, MessageCircle,
   User, Clock, FileText, Download, Pin, Trash2, Edit
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { parseTags } from "./tag-utils";
 
 interface Attachment {
   id: string;
@@ -110,17 +111,23 @@ export default function ListView({
 
   const handleDelete = async (post: Post) => {
     if (!confirm("确定要删除此内容吗？此操作不可撤销。")) return;
-    const isAuthor = currentUser?.id === post.created_by || currentUser?.id === post.author_id;
+    const isAuthor = currentUser?.id === post.created_by;
     const isAdmin = currentUser?.role === "super_admin";
     const hard = (isAuthor || isAdmin) ? "true" : "false";
     try {
-      await fetch(
+      const res = await fetch(
         `/api/knowledge/posts/${post.id}?hard=${hard}&user_id=${currentUser?.id || ""}&user_role=${currentUser?.role || ""}`,
         { method: "DELETE" }
       );
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        alert(json.error || "删除失败，请重试");
+        return;
+      }
       loadPosts();
     } catch (e) {
       console.error("Delete failed:", e);
+      alert("网络错误，请重试");
     }
   };
 
@@ -129,13 +136,13 @@ export default function ListView({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={onBack}>
+          <Button variant="ghost" size="sm" onClick={onBack} className="hover:bg-gray-100 rounded-full">
             <ArrowLeft className="w-4 h-4 mr-1" /> 返回
           </Button>
           <h3 className="text-lg font-semibold text-gray-800">{categoryName}</h3>
-          <Badge variant="outline" className="text-xs">{total} 篇</Badge>
+          <Badge className="text-xs bg-indigo-100 text-indigo-600 border-indigo-200">{total} 篇</Badge>
         </div>
-        <Button onClick={onPublish} size="sm">
+        <Button onClick={onPublish} size="sm" className="bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 rounded-full">
           <Plus className="w-4 h-4 mr-1" /> 发布
         </Button>
       </div>
@@ -148,11 +155,11 @@ export default function ListView({
             placeholder="搜索标题或内容..."
             value={searchKeyword}
             onChange={(e) => setSearchKeyword(e.target.value)}
-            className="pl-9"
+            className="pl-9 rounded-xl border-gray-200 focus-visible:ring-indigo-400"
             onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
           />
         </div>
-        <Button variant="outline" size="sm" onClick={handleSearch}>
+        <Button variant="outline" size="sm" onClick={handleSearch} className="rounded-xl">
           <Search className="w-3 h-3 mr-1" /> 搜索
         </Button>
       </div>
@@ -173,7 +180,7 @@ export default function ListView({
           {posts.map((post) => (
             <div
               key={post.id}
-              className="bg-white rounded-lg border border-gray-100 p-4 hover:shadow-md transition-shadow"
+              className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-lg hover:border-indigo-200 hover:-translate-y-0.5 transition-all duration-200"
             >
               <div className="flex items-start justify-between gap-4">
                 <div
@@ -199,10 +206,6 @@ export default function ListView({
                       {post.view_count}
                     </span>
                     <span className="flex items-center gap-1">
-                      <ThumbsUp className="w-3 h-3" />
-                      {post.like_count}
-                    </span>
-                    <span className="flex items-center gap-1">
                       <MessageCircle className="w-3 h-3" />
                       {post.comment_count}
                     </span>
@@ -224,6 +227,16 @@ export default function ListView({
                           +{post.attachments.length - 3}个文件
                         </span>
                       )}
+                    </div>
+                  )}
+                  {/* Tags */}
+                  {post.tags && (
+                    <div className="flex gap-1 flex-wrap mt-2">
+                      {parseTags(post.tags).map((tag, i) => (
+                        <Badge key={i} variant="outline" className="text-[10px] bg-indigo-50/50 text-indigo-500 border-indigo-100">
+                          {tag}
+                        </Badge>
+                      ))}
                     </div>
                   )}
                 </div>

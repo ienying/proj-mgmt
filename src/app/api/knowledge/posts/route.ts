@@ -95,6 +95,11 @@ export async function POST(request: Request) {
     // Generate share token
     const shareToken = randomUUID().replace(/-/g, "");
 
+    // Normalize tags: convert array to comma-separated string
+    if (Array.isArray(postData.tags)) {
+      postData.tags = postData.tags.join(",");
+    }
+
     const postPayload = {
       ...postData,
       version: 1,

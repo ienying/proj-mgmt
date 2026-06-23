@@ -92,10 +92,10 @@ const COLOR_MAP: Record<string, { iconBg: string; iconColor: string; border: str
     badge: "bg-amber-100/60 text-amber-700",
   },
   ops_tool: {
-    iconBg: "bg-gradient-to-br from-gray-100 to-slate-100",
-    iconColor: "text-gray-600",
-    border: "hover:border-gray-300/60",
-    badge: "bg-gray-100/60 text-gray-700",
+    iconBg: "bg-gradient-to-br from-cyan-100 to-teal-100",
+    iconColor: "text-cyan-600",
+    border: "hover:border-cyan-300/60",
+    badge: "bg-cyan-100/60 text-cyan-700",
   },
   acceptance: {
     iconBg: "bg-gradient-to-br from-emerald-100 to-green-100",
