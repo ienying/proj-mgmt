@@ -735,7 +735,7 @@ export function StandardManagement({
         const res = await fetch("/api/dicts?type=product_module_types");
         const json = await res.json();
         if (json.data && Array.isArray(json.data)) {
-          const names = json.data.map((item: Record<string, unknown>) => item.module_name).filter(Boolean) as string[];
+          const names = [...new Set(json.data.map((item: Record<string, unknown>) => item.module_name).filter(Boolean) as string[])];
           setProductModuleNames(names);
         }
       } catch { /* ignore */ }
