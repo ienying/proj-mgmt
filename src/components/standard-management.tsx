@@ -2461,7 +2461,6 @@ export function StandardManagement({
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10"></TableHead>
-                <TableHead>表代码</TableHead>
                 <TableHead>表名称</TableHead>
                 <TableHead>模块</TableHead>
                 <TableHead>适用类型</TableHead>
@@ -2491,7 +2490,6 @@ export function StandardManagement({
                     <TableCell>
                       <GripVertical className="w-4 h-4 text-muted-foreground" />
                     </TableCell>
-                    <TableCell className="font-mono text-sm">{def.table_code}</TableCell>
                     <TableCell className="font-medium">{def.table_name}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
@@ -2586,7 +2584,7 @@ export function StandardManagement({
                   {/* 抽屉式编辑面板 */}
                   {expandedDefId === def.id && drawerFormData && (
                     <TableRow className="bg-muted/20 hover:bg-muted/20">
-                      <TableCell colSpan={8} className="p-0">
+                      <TableCell colSpan={7} className="p-0">
                         <div className="overflow-hidden">
                         <div className="px-6 py-4 space-y-4 border-b-2 border-b-primary/20 max-h-[65vh] overflow-y-auto">
                           {/* Row 1: 基本信息 */}
