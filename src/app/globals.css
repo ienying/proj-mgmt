@@ -805,9 +805,6 @@ body {
 
 /* KPI card gear button */
 .tk-gear {
-  position: absolute;
-  top: 4px;
-  right: 4px;
   width: 22px;
   height: 22px;
   border-radius: 50%;
@@ -820,9 +817,11 @@ body {
   transition: transform .3s;
   font-size: 11px;
   opacity: 0;
+  flex-shrink: 0;
 }
 .tk:hover .tk-gear,
-.rt:hover .tk-gear {
+.rt:hover .tk-gear,
+.blc:hover .tk-gear {
   opacity: 1;
 }
 .tk-gear:hover {

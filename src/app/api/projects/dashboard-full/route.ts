@@ -9,6 +9,62 @@ function tryCount(rows: unknown): number {
   return Number((rows as Array<{ cnt: string }>)?.[0]?.cnt) || 0;
 }
 
+// ---- KPI config types ----
+interface KpiCondition {
+  column: string;
+  operator: string; // "eq" | "gt" | "lt" | "gte" | "lte" | "in" | "not_in"
+  values: string[];
+}
+interface KpiSource {
+  table_code: string;
+  conditions: KpiCondition[];
+}
+interface KpiConfigValue {
+  sources: KpiSource[];
+  expression: string;
+}
+
+function hashSource(s: KpiSource): string {
+  return JSON.stringify(s);
+}
+
+function buildSourceSQL(schema: string, source: KpiSource): string {
+  let sql = `SELECT COUNT(*) as cnt FROM ${schema}."${source.table_code.replace(/"/g, '""')}"`;
+  const conditions: string[] = [];
+  for (const c of source.conditions || []) {
+    if (!c.column || !c.operator) continue;
+    const col = `"${c.column.replace(/"/g, '""')}"`;
+    const vals = (c.values || []).map((v) => `'${String(v).replace(/'/g, "''")}'`);
+    if (vals.length === 0) continue;
+    switch (c.operator) {
+      case "eq": conditions.push(`${col} = ${vals[0]}`); break;
+      case "gt": conditions.push(`${col} > ${vals[0]}`); break;
+      case "lt": conditions.push(`${col} < ${vals[0]}`); break;
+      case "gte": conditions.push(`${col} >= ${vals[0]}`); break;
+      case "lte": conditions.push(`${col} <= ${vals[0]}`); break;
+      case "in": conditions.push(`${col} IN (${vals.join(", ")})`); break;
+      case "not_in": conditions.push(`${col} NOT IN (${vals.join(", ")})`); break;
+    }
+  }
+  if (conditions.length > 0) sql += " WHERE " + conditions.join(" AND ");
+  return sql;
+}
+
+function evaluateExpression(expr: string, values: number[]): number {
+  let replaced = expr;
+  for (let i = 0; i < values.length; i++) {
+    replaced = replaced.replace(new RegExp(`s${i}\\b`, "g"), String(values[i]));
+  }
+  // Safety: only allow digits, operators, parens, spaces, dots
+  if (!/^[\d+\-*/().%\s]+$/.test(replaced)) return 0;
+  try {
+    const result = Function('"use strict"; return (' + replaced + ")")();
+    return isNaN(result) || !isFinite(result) ? 0 : Math.round(Number(result));
+  } catch {
+    return 0;
+  }
+}
+
 const NINE_DOMAINS = [
   { module: "scope", label: "范围管理", icon: "🎯" },
   { module: "schedule", label: "进度管理", icon: "⏱" },
@@ -46,77 +102,66 @@ export async function GET(request: NextRequest) {
 
     const client = await createServerClient();
 
-    // 0. Load KPI config for requirement total (super-admin configured data source)
-    let requirementTotalConfig: { table_code?: string; module_type?: string; table_name?: string } | null = null;
+    // 0. Ensure KPI config table exists, then load all configs
     try {
       await client.rpc("execute_sql", {
         p_sql: `CREATE TABLE IF NOT EXISTS design_public.dashboard_kpi_config (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), kpi_key TEXT UNIQUE NOT NULL, config_value JSONB NOT NULL DEFAULT '{}', updated_by TEXT, updated_at TIMESTAMPTZ DEFAULT NOW())`,
       });
     } catch { /* table may already exist */ }
+    const kpiConfigMap = new Map<string, KpiConfigValue>();
     try {
-      const { data: configRows } = await client.rpc("execute_sql", {
-        p_sql: `SELECT config_value FROM design_public.dashboard_kpi_config WHERE kpi_key = 'requirement_total'`,
+      const { data: allConfigRows } = await client.rpc("execute_sql", {
+        p_sql: `SELECT kpi_key, config_value FROM design_public.dashboard_kpi_config`,
       });
-      const rows = configRows as Array<{ config_value: Record<string, unknown> }> | null;
-      if (rows && rows.length > 0 && rows[0].config_value) {
-        const cv = rows[0].config_value;
-        requirementTotalConfig = {
-          table_code: typeof cv.table_code === "string" ? cv.table_code : undefined,
-          module_type: typeof cv.module_type === "string" ? cv.module_type : undefined,
-          table_name: typeof cv.table_name === "string" ? cv.table_name : undefined,
-        };
-      }
-    } catch { /* ignore config load errors */ }
-
-    // 0b. Load KPI config for high_risk_remaining
-    let highRiskConfig: {
-      table_code?: string; module_type?: string; table_name?: string;
-      include_column?: string; include_value?: string;
-      exclude_column?: string; exclude_value?: string;
-    } | null = null;
-    try {
-      const { data: hrConfigRows } = await client.rpc("execute_sql", {
-        p_sql: `SELECT config_value FROM design_public.dashboard_kpi_config WHERE kpi_key = 'high_risk_remaining'`,
-      });
-      const rows = hrConfigRows as Array<{ config_value: Record<string, unknown> }> | null;
-      if (rows && rows.length > 0 && rows[0].config_value) {
-        const cv = rows[0].config_value;
-        highRiskConfig = {
-          table_code: typeof cv.table_code === "string" ? cv.table_code : undefined,
-          module_type: typeof cv.module_type === "string" ? cv.module_type : undefined,
-          table_name: typeof cv.table_name === "string" ? cv.table_name : undefined,
-          include_column: typeof cv.include_column === "string" ? cv.include_column : undefined,
-          include_value: typeof cv.include_value === "string" ? cv.include_value : undefined,
-          exclude_column: typeof cv.exclude_column === "string" ? cv.exclude_column : undefined,
-          exclude_value: typeof cv.exclude_value === "string" ? cv.exclude_value : undefined,
-        };
-      }
-    } catch { /* ignore */ }
-
-    // 0c. Load KPI config for task total
-    let taskTotalConfig: {
-      table_code?: string; module_type?: string; table_name?: string;
-      conditions?: { column?: string; values?: string[] };
-    } | null = null;
-    try {
-      const { data: taskConfigRows } = await client.rpc("execute_sql", {
-        p_sql: `SELECT config_value FROM design_public.dashboard_kpi_config WHERE kpi_key = 'task_total'`,
-      });
-      const rows = taskConfigRows as Array<{ config_value: Record<string, unknown> }> | null;
-      if (rows && rows.length > 0 && rows[0].config_value) {
-        const cv = rows[0].config_value;
-        const conds = cv.conditions as Record<string, unknown> | undefined;
-        taskTotalConfig = {
-          table_code: typeof cv.table_code === "string" ? cv.table_code : undefined,
-          module_type: typeof cv.module_type === "string" ? cv.module_type : undefined,
-          table_name: typeof cv.table_name === "string" ? cv.table_name : undefined,
-          conditions: conds ? {
-            column: typeof conds.column === "string" ? conds.column : undefined,
-            values: Array.isArray(conds.values) ? conds.values.map(String) : undefined,
-          } : undefined,
-        };
+      const rows = allConfigRows as Array<{ kpi_key: string; config_value: Record<string, unknown> }> | null;
+      if (rows) {
+        for (const row of rows) {
+          const cv = row.config_value;
+          const sourcesRaw = (cv.sources as Array<Record<string, unknown>>) || [];
+          const sources: KpiSource[] = sourcesRaw.map((s) => {
+            // New format: conditions[] with operator
+            const condsRaw = (s.conditions as Array<Record<string, unknown>>) || [];
+            if (condsRaw.length > 0 || !s.include) {
+              return {
+                table_code: String(s.table_code || ""),
+                conditions: condsRaw.map((c) => ({
+                  column: String(c.column || ""),
+                  operator: String(c.operator || "in"),
+                  values: Array.isArray(c.values) ? c.values.map(String) : [],
+                })),
+              };
+            }
+            // Legacy format: include[] + exclude[]
+            const incCond: KpiCondition[] = ((s.include as Array<Record<string, unknown>>) || []).map((c) => ({
+              column: String(c.column || ""), operator: "in",
+              values: Array.isArray(c.values) ? c.values.map(String) : [],
+            }));
+            const excCond: KpiCondition[] = ((s.exclude as Array<Record<string, unknown>>) || []).map((c) => ({
+              column: String(c.column || ""), operator: "not_in",
+              values: Array.isArray(c.values) ? c.values.map(String) : [],
+            }));
+            return { table_code: String(s.table_code || ""), conditions: [...incCond, ...excCond] };
+          });
+          kpiConfigMap.set(row.kpi_key, {
+            sources,
+            expression: typeof cv.expression === "string" ? cv.expression : sources.map((_, i) => `s${i}`).join(" + "),
+          });
+        }
       }
     } catch { /* ignore */ }
+
+    // Collect all unique source queries
+    const allSources = new Map<string, { source: KpiSource; result: number }>();
+    for (const [, config] of kpiConfigMap) {
+      for (const source of config.sources) {
+        if (source.table_code) {
+          const key = hashSource(source);
+          if (!allSources.has(key)) {
+            allSources.set(key, { source, result: 0 });
+          }
+        }
+      }
+    }
 
     // 1. Get all projects
     const { data: projectRows } = await client.rpc("dp_select", { p_table: "projects" });
@@ -191,20 +236,12 @@ export async function GET(request: NextRequest) {
         });
         const tableNames = (schemaTables as Array<{ table_name: string }>) || [];
 
-        // Build a UNION ALL query to count all tables at once
+        // Build a UNION ALL query to count all tables at once (for domain health)
         const tableCountQueries = tableNames
           .map((t) => {
             const tn = t.table_name;
-            // Skip task_ tables
             if (tn.startsWith("task_")) return null;
-            let sql = `SELECT '${tn}' as tbl, COUNT(*) as cnt FROM ${schema}."${tn}"`;
-            // Apply WHERE filter for task_total config
-            if (taskTotalConfig?.table_code === tn && taskTotalConfig?.conditions?.column && taskTotalConfig?.conditions?.values?.length) {
-              const col = taskTotalConfig.conditions.column.replace(/"/g, '""');
-              const vals = taskTotalConfig.conditions.values.map((v) => `'${v.replace(/'/g, "''")}'`).join(", ");
-              sql += ` WHERE "${col}" IN (${vals})`;
-            }
-            return sql;
+            return `SELECT '${tn}' as tbl, COUNT(*) as cnt FROM ${schema}."${tn}"`;
           })
           .filter(Boolean);
 
@@ -220,76 +257,58 @@ export async function GET(request: NextRequest) {
             for (const row of rows) {
               const module = moduleMap.get(row.tbl) || "other";
               const count = Number(row.cnt) || 0;
-
-              // Accumulate to domain totals
               if (moduleCounts.hasOwnProperty(module)) {
                 moduleCounts[module] += count;
               }
-
-              // KPI counts
-              if (requirementTotalConfig?.table_code) {
-                if (row.tbl === requirementTotalConfig.table_code) {
-                  totalRequirements += count;
-                }
-              } else if (module === "requirement" || row.tbl.includes("requirement")) {
-                totalRequirements += count;
-              }
-              // task total: use config if set, else fallback to schedule/task module
-              if (taskTotalConfig?.table_code) {
-                if (row.tbl === taskTotalConfig.table_code) {
-                  totalTasks += count;
-                }
-              } else if (module === "schedule" || module === "task") {
-                totalTasks += count;
-              }
-              if (module === "communication") totalStakeholders += count;
-              if (module === "procurement") totalProcurement += count;
             }
           } catch {
             // batch failed, skip
           }
         }
 
-        // 4b. If high-risk config is set, query with filter conditions
-        if (highRiskConfig?.table_code && highRiskConfig.include_column && highRiskConfig.include_value) {
+        // 4b. Execute KPI source queries for this project
+        for (const [key, entry] of allSources) {
           try {
-            const incCol = `"${highRiskConfig.include_column.replace(/"/g, '""')}"`;
-            const incVal = highRiskConfig.include_value.replace(/'/g, "''");
-            // Count: rows matching include condition
-            const countSql = `SELECT COUNT(*) as cnt FROM ${schema}."${highRiskConfig.table_code}" WHERE ${incCol} = '${incVal}'`;
-            const { data: countRes } = await client.rpc("execute_sql", { p_sql: countSql });
-            const total = Number((countRes as any[])?.[0]?.cnt || 0);
-
-            // Count: rows matching include AND exclude conditions
-            let excluded = 0;
-            if (highRiskConfig.exclude_column && highRiskConfig.exclude_value) {
-              const excCol = `"${highRiskConfig.exclude_column.replace(/"/g, '""')}"`;
-              const excVal = highRiskConfig.exclude_value.replace(/'/g, "''");
-              const excSql = `SELECT COUNT(*) as cnt FROM ${schema}."${highRiskConfig.table_code}" WHERE ${incCol} = '${incVal}' AND ${excCol} = '${excVal}'`;
-              const { data: excRes } = await client.rpc("execute_sql", { p_sql: excSql });
-              excluded = Number((excRes as any[])?.[0]?.cnt || 0);
-            }
-
-            totalHighRisk += Math.max(0, total - excluded);
-          } catch { /* skip if table/column doesn't exist in this schema */ }
+            const sql = buildSourceSQL(schema, entry.source);
+            const { data: countRes } = await client.rpc("execute_sql", { p_sql: sql });
+            const cnt = Number((countRes as Array<{ cnt: string }>)?.[0]?.cnt || 0);
+            entry.result += cnt;
+          } catch {
+            // table/column may not exist in this schema
+          }
         }
 
         // Convert counts to domain scores (simplified: if data exists, score ~70-90%)
         // Fallback: use presence of data as indicator
+
+        // No more hardcoded KPI counting — all KPI values are computed from configs below
+        // after all projects have been processed.
+
       } catch {
         // schema access failed
       }
 
-      // Calculate domain health scores as percentages
-      // Without detailed completion data, use a simplified model
+      // Calculate domain health scores
       const domainScores: Record<string, number> = {};
       for (const d of NINE_DOMAINS) {
-        const count = moduleCounts[d.module] || 0;
-        // Simplified: if there are records, assign a score in 60-95 range
-        if (count > 0) {
-          domainScores[d.module] = Math.min(95, 60 + (count % 36));
+        const domainConfig = kpiConfigMap.get(`domain_score_${d.module}`);
+        if (domainConfig && domainConfig.sources.length > 0) {
+          // Use config-driven calculation
+          try {
+            const vals: number[] = [];
+            for (const source of domainConfig.sources) {
+              const sql = buildSourceSQL(schema, source);
+              const { data: cr } = await client.rpc("execute_sql", { p_sql: sql });
+              vals.push(Number((cr as Array<{ cnt: string }>)?.[0]?.cnt || 0));
+            }
+            domainScores[d.module] = evaluateExpression(domainConfig.expression, vals);
+          } catch {
+            domainScores[d.module] = 0;
+          }
         } else {
-          domainScores[d.module] = 0;
+          // Fallback: simplified heuristic
+          const count = moduleCounts[d.module] || 0;
+          domainScores[d.module] = count > 0 ? Math.min(95, 60 + (count % 36)) : 0;
         }
       }
 
@@ -368,6 +387,34 @@ export async function GET(request: NextRequest) {
         };
       });
 
+    // ============================================================
+    // Compute KPI values from configs
+    // ============================================================
+    const sourceValueMap = new Map<string, number>();
+    for (const [key, entry] of allSources) {
+      sourceValueMap.set(key, entry.result);
+    }
+
+    function getKpiValue(kpiKey: string): { value: number; configured: boolean } {
+      const config = kpiConfigMap.get(kpiKey);
+      if (!config || config.sources.length === 0) return { value: 0, configured: false };
+      const vals = config.sources.map((s) => sourceValueMap.get(hashSource(s)) || 0);
+      return { value: evaluateExpression(config.expression, vals), configured: true };
+    }
+
+    const totalProjectsVal = getKpiValue("total_projects");
+    const totalReqsVal = getKpiValue("requirement_total");
+    const tasksVal = getKpiValue("task_total");
+    const highRiskVal = getKpiValue("high_risk_remaining");
+    const stakeholdersVal = getKpiValue("stakeholders");
+    const procurementVal = getKpiValue("procurement_items");
+    const completionRateVal = getKpiValue("completion_rate");
+    const inDevVal = getKpiValue("in_development");
+    const pendingVal = getKpiValue("pending_confirmation");
+    const backlogVal = getKpiValue("backlog");
+
+    const reqTotal = totalReqsVal.configured ? totalReqsVal.value : (totalRequirements || projects.length * 5);
+
     // Project type distribution
     const typeMap = new Map<string, number>();
     projects.forEach((p) => {
@@ -390,8 +437,6 @@ export async function GET(request: NextRequest) {
       )
     );
 
-    // Use defaults when no real data
-    const reqTotal = totalRequirements;
     const now = new Date();
     const trendMonths = Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
@@ -674,10 +719,17 @@ export async function GET(request: NextRequest) {
       return true;
     });
 
+    // KPI values already computed above, build final response values
+    const displayTotalReqs = reqTotal;
+    const displayTotalTasks = tasksVal.configured ? tasksVal.value : (totalTasks || projects.length * 9);
+    const displayHighRisk = highRiskVal.configured ? highRiskVal.value : totalHighRisk;
+    const displayStakeholders = stakeholdersVal.configured ? stakeholdersVal.value : (totalStakeholders || totalMembers || projects.length * 5);
+    const displayProcurement = procurementVal.configured ? procurementVal.value : (totalProcurement || projects.length * 3);
+
     return NextResponse.json({
       data: {
         kpi: {
-          total_projects: projects.length,
+          total_projects: totalProjectsVal.configured ? totalProjectsVal.value : projects.length,
           customer_type:
             projects.length === 1
               ? String(
@@ -685,11 +737,11 @@ export async function GET(request: NextRequest) {
                     ?.company_name || "未分类"
                 )
               : null,
-          total_requirements: reqTotal,
-          high_risk_remaining: totalHighRisk,
-          total_tasks: totalTasks || projects.length * 9,
-          stakeholders: totalStakeholders || totalMembers || projects.length * 5,
-          procurement_items: totalProcurement || projects.length * 3,
+          total_requirements: displayTotalReqs,
+          high_risk_remaining: displayHighRisk,
+          total_tasks: displayTotalTasks,
+          stakeholders: displayStakeholders,
+          procurement_items: displayProcurement,
         },
         domain_averages: domainAverages,
         project_domain_health: projectDomainHealth,
@@ -711,17 +763,17 @@ export async function GET(request: NextRequest) {
         ],
         requirements: {
           stats: {
-            total: reqTotal,
-            completion_rate: reqTotal > 0 ? Math.round((reqTotal * 0.5) / reqTotal * 100) : 62,
-            in_development: Math.max(1, Math.round(reqTotal * 0.3)),
-            pending_confirmation: Math.max(1, Math.round(reqTotal * 0.2)),
-            backlog: Math.max(1, Math.round(reqTotal * 0.3)),
+            total: displayTotalReqs,
+            completion_rate: completionRateVal.configured ? completionRateVal.value : (displayTotalReqs > 0 ? 50 : 0),
+            in_development: inDevVal.configured ? inDevVal.value : Math.max(0, Math.round(displayTotalReqs * 0.3)),
+            pending_confirmation: pendingVal.configured ? pendingVal.value : Math.max(0, Math.round(displayTotalReqs * 0.2)),
+            backlog: backlogVal.configured ? backlogVal.value : Math.max(0, Math.round(displayTotalReqs * 0.3)),
             avg_processing_days: 14,
             completion_velocity: 2.3,
           },
           backlog: {
-            backlog_count: Math.max(1, Math.round(reqTotal * 0.3)),
-            pending_confirmation: Math.max(1, Math.round(reqTotal * 0.2)),
+            backlog_count: backlogVal.configured ? backlogVal.value : Math.max(0, Math.round(displayTotalReqs * 0.3)),
+            pending_confirmation: pendingVal.configured ? pendingVal.value : Math.max(0, Math.round(displayTotalReqs * 0.2)),
             avg_processing_days: 14,
             completion_velocity: 2.3,
           },

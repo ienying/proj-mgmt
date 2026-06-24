@@ -28,6 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { KpiConfigModal } from "@/components/kpi-config-modal";
 import {
   Popover,
   PopoverContent,
@@ -237,26 +238,44 @@ function KpiCard({
   label,
   variant,
   onSettings,
+  onExport,
 }: {
   value: number | string;
   label: string;
   variant: 1 | 2 | 3 | 4 | 5 | 6;
   onSettings?: () => void;
+  onExport?: () => void;
 }) {
   return (
     <div className={`tk tk-k${variant}`} style={{ position: "relative" }}>
       <div className="tk-val">{value}</div>
       <div className="tk-label">{label}</div>
-      {onSettings && (
-        <button
-          className="tk-gear"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSettings();
-          }}
-        >
-          ⚙
-        </button>
+      {(onSettings || onExport) && (
+        <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 4 }}>
+          {onExport && (
+            <button
+              className="tk-gear"
+              title="导出 CSV"
+              onClick={(e) => {
+                e.stopPropagation();
+                onExport();
+              }}
+            >
+              📥
+            </button>
+          )}
+          {onSettings && (
+            <button
+              className="tk-gear"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSettings();
+              }}
+            >
+              ⚙
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -400,7 +419,54 @@ export function ProjectDashboard({
   const [highRiskIncludeValues, setHighRiskIncludeValues] = useState<string[]>([]);
   const [highRiskExcludeValues, setHighRiskExcludeValues] = useState<string[]>([]);
 
-  /* task total KPI config */
+  /* unified KPI config modal */
+  const [kpiModal, setKpiModal] = useState<{ open: boolean; key: string; label: string }>({ open: false, key: "", label: "" });
+  const openKpiModal = (key: string, label: string) => setKpiModal({ open: true, key, label });
+  const [domainPopoverOpen, setDomainPopoverOpen] = useState(false);
+  const [radarDomainPopoverOpen, setRadarDomainPopoverOpen] = useState(false);
+
+  const handleExportKpi = async (kpiKey: string, label?: string) => {
+    try {
+      const res = await fetch(`/api/dashboard/kpi-config?kpi_key=${encodeURIComponent(kpiKey)}`);
+      const json = await res.json();
+      const cfg = json.data;
+      if (!cfg?.sources?.length) {
+        toast.error("该 KPI 未配置数据源，请先设置");
+        return;
+      }
+      const exportLabel = label || kpiKey;
+      const urlParams = new URLSearchParams(window.location.search);
+      const query = new URLSearchParams();
+      const dept = urlParams.get("department");
+      const status = urlParams.get("status");
+      if (dept && dept !== "all") query.set("department", dept);
+      if (status && status !== "all") query.set("status", status);
+      const qs = query.toString();
+      const exportRes = await fetch(`/api/dashboard/export-source-data${qs ? "?" + qs : ""}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sources: cfg.sources, label: exportLabel }),
+      });
+      if (!exportRes.ok) {
+        const err = await exportRes.json().catch(() => ({ error: "导出失败" }));
+        throw new Error(err.error || "导出失败");
+      }
+      const blob = await exportRes.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const d = new Date();
+      const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
+      a.download = `${exportLabel}-${ds}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("导出成功");
+    } catch (e: any) {
+      toast.error(e.message || "导出失败");
+    }
+  };
+
+  /* task total KPI config (legacy - gradually migrating to unified) */
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [taskConfig, setTaskConfig] = useState<{
     table_code: string; module_type: string; table_name: string;
@@ -1028,27 +1094,44 @@ export function ProjectDashboard({
           value={selectedIds.size === 1 ? (allProjects.find((p) => selectedIds.has(p.id))?.customer_info?.company_name || "未分类") : kpi?.total_projects ?? 0}
           label={selectedIds.size === 1 ? "客户类型" : "项目总数"}
           variant={1}
+          onSettings={isSuperAdmin && selectedIds.size !== 1 ? () => openKpiModal("total_projects", "项目总数") : undefined}
+          onExport={isSuperAdmin && selectedIds.size !== 1 ? () => handleExportKpi("total_projects", "项目总数") : undefined}
         />
         <KpiCard
           value={kpi?.total_requirements ?? 0}
           label="需求总数"
           variant={2}
-          onSettings={isSuperAdmin ? () => setKpiConfigModal(true) : undefined}
+          onSettings={isSuperAdmin ? () => openKpiModal("requirement_total", "需求总数") : undefined}
+          onExport={isSuperAdmin ? () => handleExportKpi("requirement_total", "需求总数") : undefined}
         />
         <KpiCard
           value={kpi?.high_risk_remaining ?? 0}
           label="高风险残留"
           variant={3}
-          onSettings={isSuperAdmin ? () => setHighRiskConfigModal(true) : undefined}
+          onSettings={isSuperAdmin ? () => openKpiModal("high_risk_remaining", "高风险残留") : undefined}
+          onExport={isSuperAdmin ? () => handleExportKpi("high_risk_remaining", "高风险残留") : undefined}
         />
         <KpiCard
           value={kpi?.total_tasks ?? 0}
           label="任务总数"
           variant={4}
-          onSettings={isSuperAdmin ? () => setTaskModalOpen(true) : undefined}
+          onSettings={isSuperAdmin ? () => openKpiModal("task_total", "任务总数") : undefined}
+          onExport={isSuperAdmin ? () => handleExportKpi("task_total", "任务总数") : undefined}
         />
-        <KpiCard value={kpi?.stakeholders ?? 0} label="干系人" variant={5} />
-        <KpiCard value={kpi?.procurement_items ?? 0} label="采购项" variant={6} />
+        <KpiCard
+          value={kpi?.stakeholders ?? 0}
+          label="干系人"
+          variant={5}
+          onSettings={isSuperAdmin ? () => openKpiModal("stakeholders", "干系人") : undefined}
+          onExport={isSuperAdmin ? () => handleExportKpi("stakeholders", "干系人") : undefined}
+        />
+        <KpiCard
+          value={kpi?.procurement_items ?? 0}
+          label="采购项"
+          variant={6}
+          onSettings={isSuperAdmin ? () => openKpiModal("procurement_items", "采购项") : undefined}
+          onExport={isSuperAdmin ? () => handleExportKpi("procurement_items", "采购项") : undefined}
+        />
       </div>
 
       {/* ========== Main 2-column layout ========== */}
@@ -1058,22 +1141,95 @@ export function ProjectDashboard({
           {/* 9-domain grid */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <span style={{ fontSize: 13, fontWeight: 700 }}>9 大领域指标</span>
-            <button
-              className="db-gear"
-              onClick={() =>
-                setFormulaModal({
-                  open: true,
-                  title: "9 大领域指标 · 计算公式",
-                  formulas: NINE_DOMAINS.map((d) => ({
-                    metric: d.label,
-                    formula: `${d.label} = 已完成数 / 总数 × 100%`,
-                    source: `${d.label}表`,
-                  })),
-                })
-              }
-            >
-              ⚙
-            </button>
+            {isSuperAdmin ? (
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <Popover open={domainPopoverOpen} onOpenChange={setDomainPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <button className="db-gear">⚙</button>
+                  </PopoverTrigger>
+                <PopoverContent className="w-52 p-2" align="end" style={{ borderRadius: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>选择要配置的领域</div>
+                  {NINE_DOMAINS.map((d) => (
+                    <div
+                      key={d.module}
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "4px 4px", borderRadius: 6,
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--card2)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <button
+                        onClick={() => {
+                          setDomainPopoverOpen(false);
+                          openKpiModal(`domain_score_${d.module}`, `${d.icon} ${d.label}`);
+                        }}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 6, flex: 1,
+                          fontSize: 12, border: "none", cursor: "pointer",
+                          background: "transparent", color: "var(--text)", textAlign: "left",
+                          padding: "2px 4px",
+                        }}
+                      >
+                        <span>{d.icon}</span>
+                        <span>{d.label}</span>
+                      </button>
+                      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                        <button
+                          title="设置"
+                          onClick={() => {
+                            setDomainPopoverOpen(false);
+                            openKpiModal(`domain_score_${d.module}`, `${d.icon} ${d.label}`);
+                          }}
+                          style={{
+                            width: 22, height: 22, borderRadius: "50%",
+                            border: "1px solid var(--border)", background: "var(--card2)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            cursor: "pointer", fontSize: 11,
+                          }}
+                        >
+                          ⚙
+                        </button>
+                        <button
+                          title="导出 Excel"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDomainPopoverOpen(false);
+                            handleExportKpi(`domain_score_${d.module}`, `9大领域-${d.label}`);
+                          }}
+                          style={{
+                            width: 22, height: 22, borderRadius: "50%",
+                            border: "1px solid var(--border)", background: "var(--card2)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            cursor: "pointer", fontSize: 11,
+                          }}
+                        >
+                          📥
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </PopoverContent>
+              </Popover>
+              </div>
+            ) : (
+              <button
+                className="db-gear"
+                onClick={() =>
+                  setFormulaModal({
+                    open: true,
+                    title: "9 大领域指标 · 计算公式",
+                    formulas: NINE_DOMAINS.map((d) => ({
+                      metric: d.label,
+                      formula: `${d.label} = 已完成数 / 总数 × 100%`,
+                      source: `${d.label}表`,
+                    })),
+                  })
+                }
+              >
+                ⚙
+              </button>
+            )}
           </div>
           <div className="k93">
             {NINE_DOMAINS.map((d) => {
@@ -1135,39 +1291,64 @@ export function ProjectDashboard({
           <div className="side-inner">
             {/* Radar chart */}
             <div className="db-panel" style={{ position: "relative" }}>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>9 维能力雷达</div>
-              <button
-                className="db-gear"
-                style={{ position: "absolute", top: 10, right: 10 }}
-                onClick={() =>
-                  setFormulaModal({
-                    open: true,
-                    title: "9 维能力雷达 · 计算公式",
-                    formulas: [
-                      { metric: "综合得分", formula: "(范围% + 进度% + 质量% + 成本% + 风险关闭% + 采购% + 资源% + 资料%) / 8", source: "各模块管理表" },
-                      ...NINE_DOMAINS.map((d) => ({
-                        metric: d.label,
-                        formula: `${d.label} = 已完成数 / 总数 × 100%`,
-                        source: `${d.label}表`,
-                      })),
-                    ],
-                  })
-                }
-              >
-                ⚙
-              </button>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 700 }}>9 维能力雷达</span>
+                {isSuperAdmin && (
+                  <Popover open={radarDomainPopoverOpen} onOpenChange={setRadarDomainPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <button className="db-gear">⚙</button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-52 p-2" align="end" style={{ borderRadius: 10 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>选择要配置的领域</div>
+                      {NINE_DOMAINS.map((d) => (
+                        <div
+                          key={d.module}
+                          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 4px", borderRadius: 6 }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--card2)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                        >
+                          <button
+                            onClick={() => {
+                              setRadarDomainPopoverOpen(false);
+                              openKpiModal(`domain_score_${d.module}`, `${d.icon} ${d.label}`);
+                            }}
+                            style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, fontSize: 12, border: "none", cursor: "pointer", background: "transparent", color: "var(--text)", textAlign: "left", padding: "2px 4px" }}
+                          >
+                            <span>{d.icon}</span>
+                            <span>{d.label}</span>
+                          </button>
+                          <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                            <button
+                              title="设置"
+                              onClick={() => {
+                                setRadarDomainPopoverOpen(false);
+                                openKpiModal(`domain_score_${d.module}`, `${d.icon} ${d.label}`);
+                              }}
+                              style={{ width: 22, height: 22, borderRadius: "50%", border: "1px solid var(--border)", background: "var(--card2)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 11 }}
+                            >
+                              ⚙
+                            </button>
+                            <button
+                              title="导出 Excel"
+                              onClick={(e) => { e.stopPropagation(); setRadarDomainPopoverOpen(false); handleExportKpi(`domain_score_${d.module}`, `9大领域-${d.label}`); }}
+                              style={{ width: 22, height: 22, borderRadius: "50%", border: "1px solid var(--border)", background: "var(--card2)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 11 }}
+                            >
+                              📥
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </div>
+              {radarData.length === 0 ? (
+                <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text3)", fontSize: 12 }}>
+                  暂无数据，请先配置领域指标数据源
+                </div>
+              ) : (
               <ResponsiveContainer width="100%" height={220}>
-                <RadarChart data={radarData.length > 0 ? radarData : [
-                  { domain: "范围", "项目A": 80, "项目B": 72 },
-                  { domain: "进度", "项目A": 75, "项目B": 68 },
-                  { domain: "质量", "项目A": 81, "项目B": 74 },
-                  { domain: "成本", "项目A": 70, "项目B": 65 },
-                  { domain: "沟通", "项目A": 71, "项目B": 67 },
-                  { domain: "风险", "项目A": 59, "项目B": 55 },
-                  { domain: "采购", "项目A": 79, "项目B": 71 },
-                  { domain: "资源", "项目A": 85, "项目B": 78 },
-                  { domain: "资料", "项目A": 77, "项目B": 72 },
-                ]}>
+                <RadarChart data={radarData}>
                   <PolarGrid stroke="#e5e7eb" />
                   <PolarAngleAxis dataKey="domain" tick={{ fontSize: 10, fill: "#5f6570" }} />
                   <PolarRadiusAxis
@@ -1197,6 +1378,7 @@ export function ProjectDashboard({
                   )}
                 </RadarChart>
               </ResponsiveContainer>
+              )}
             </div>
 
             {/* Health ranking */}
@@ -1430,30 +1612,55 @@ export function ProjectDashboard({
           <div className="rt-val">{data.requirements.stats.total}</div>
           <div className="rt-label">需求总数</div>
           {isSuperAdmin && (
-            <button className="tk-gear" onClick={(e) => { e.stopPropagation(); setKpiConfigModal(true); }}>
-              ⚙
-            </button>
+            <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 4 }}>
+              <button className="tk-gear" title="导出 CSV" onClick={(e) => { e.stopPropagation(); handleExportKpi("requirement_total", "需求总数"); }}>📥</button>
+              <button className="tk-gear" onClick={(e) => { e.stopPropagation(); openKpiModal("requirement_total", "需求总数"); }}>⚙</button>
+            </div>
           )}
         </div>
-        <div className="rt rt-k2">
+        <div className="rt rt-k2" style={{ position: "relative" }}>
           <div className="rt-val">{data.requirements.stats.completion_rate}%</div>
           <div className="rt-label">完成率</div>
+          {isSuperAdmin && (
+            <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 4 }}>
+              <button className="tk-gear" title="导出 Excel" onClick={(e) => { e.stopPropagation(); handleExportKpi("completion_rate", "完成率"); }}>📥</button>
+              <button className="tk-gear" onClick={(e) => { e.stopPropagation(); openKpiModal("completion_rate", "完成率"); }}>⚙</button>
+            </div>
+          )}
         </div>
-        <div className="rt rt-k3">
+        <div className="rt rt-k3" style={{ position: "relative" }}>
           <div className="rt-val">{data.requirements.stats.in_development}</div>
           <div className="rt-label">开发中</div>
+          {isSuperAdmin && (
+            <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 4 }}>
+              <button className="tk-gear" title="导出 Excel" onClick={(e) => { e.stopPropagation(); handleExportKpi("in_development", "开发中"); }}>📥</button>
+              <button className="tk-gear" onClick={(e) => { e.stopPropagation(); openKpiModal("in_development", "开发中"); }}>⚙</button>
+            </div>
+          )}
         </div>
-        <div className="rt rt-k4">
+        <div className="rt rt-k4" style={{ position: "relative" }}>
           <div className="rt-val">{data.requirements.stats.pending_confirmation}</div>
           <div className="rt-label">待确认</div>
+          {isSuperAdmin && (
+            <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 4 }}>
+              <button className="tk-gear" title="导出 Excel" onClick={(e) => { e.stopPropagation(); handleExportKpi("pending_confirmation", "待确认"); }}>📥</button>
+              <button className="tk-gear" onClick={(e) => { e.stopPropagation(); openKpiModal("pending_confirmation", "待确认"); }}>⚙</button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* ========== Backlog Analysis Row ========== */}
       <div className="r4">
-        <div className="blc blc-backlog">
+        <div className="blc blc-backlog" style={{ position: "relative" }}>
           <div className="blc-val">{data.requirements.backlog.backlog_count}</div>
           <div className="blc-label">积压需求</div>
+          {isSuperAdmin && (
+            <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 4 }}>
+              <button className="tk-gear" title="导出 CSV" onClick={(e) => { e.stopPropagation(); handleExportKpi("backlog", "积压需求"); }}>📥</button>
+              <button className="tk-gear" onClick={(e) => { e.stopPropagation(); openKpiModal("backlog", "积压需求"); }}>⚙</button>
+            </div>
+          )}
         </div>
         <div className="blc blc-pending">
           <div className="blc-val">{data.requirements.backlog.pending_confirmation}</div>
@@ -2285,6 +2492,15 @@ export function ProjectDashboard({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Unified KPI config modal */}
+      <KpiConfigModal
+        open={kpiModal.open}
+        onOpenChange={(v) => setKpiModal((p) => ({ ...p, open: v }))}
+        kpiKey={kpiModal.key}
+        kpiLabel={kpiModal.label}
+        onSaved={() => fetchData(selectedIds.size > 0 ? Array.from(selectedIds) : undefined)}
+      />
     </div>
   );
 }
