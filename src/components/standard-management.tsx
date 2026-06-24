@@ -697,6 +697,10 @@ export function StandardManagement({
   const [selectedStage, setSelectedStage] = useState<string>("all");
   const [searchName, setSearchName] = useState("");
 
+  // 抽屉式展开编辑
+  const [expandedDefId, setExpandedDefId] = useState<string | null>(null);
+  const [drawerFormData, setDrawerFormData] = useState<TableDefinition | null>(null);
+
   // 规范定义列表拖拽排序
   const [dragDefIndex, setDragDefIndex] = useState<number | null>(null);
   const [dragOverDefIndex, setDragOverDefIndex] = useState<number | null>(null);
@@ -1261,6 +1265,94 @@ export function StandardManagement({
         ? prev.apply_project_stages.filter((s) => s !== code)
         : [...(prev.apply_project_stages || []), code],
     }));
+  };
+
+  // ============ 抽屉式编辑面板 ============
+  const openDrawer = (def: TableDefinition) => {
+    if (expandedDefId === def.id) {
+      setExpandedDefId(null);
+      setDrawerFormData(null);
+      return;
+    }
+    setExpandedDefId(def.id);
+    setDrawerFormData({
+      ...def,
+      module_type: Array.isArray(def.module_type) ? [...def.module_type] : def.module_type ? [def.module_type] : [],
+      columns_config: (def.columns_config || []).map((c) => ({ ...c })),
+      references_config: (def.references_config || []).map((r) => ({ ...r })),
+      apply_project_types: [...(def.apply_project_types || [])],
+      apply_project_stages: [...(def.apply_project_stages || [])],
+    });
+  };
+
+  const closeDrawer = () => {
+    setExpandedDefId(null);
+    setDrawerFormData(null);
+  };
+
+  const handleDrawerSave = () => {
+    if (!drawerFormData || !expandedDefId) return;
+    const deduped = dedupeColumnsByName(drawerFormData.columns_config || []);
+    if (deduped.length < (drawerFormData.columns_config || []).length) {
+      toast.warning(`检测到 ${(drawerFormData.columns_config || []).length - deduped.length} 个重复列名，已自动去除`);
+    }
+    onUpdate(expandedDefId, { ...drawerFormData, columns_config: deduped });
+    closeDrawer();
+  };
+
+  const drawerUpdateField = (field: string, value: unknown) => {
+    setDrawerFormData((prev) => (prev ? { ...prev, [field]: value } : null));
+  };
+
+  const drawerToggleModule = (code: string) => {
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      const modules = prev.module_type || [];
+      return { ...prev, module_type: modules.includes(code) ? modules.filter((m) => m !== code) : [...modules, code] };
+    });
+  };
+
+  const drawerToggleProjectType = (code: string) => {
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      const types = prev.apply_project_types || [];
+      return { ...prev, apply_project_types: types.includes(code) ? types.filter((t) => t !== code) : [...types, code] };
+    });
+  };
+
+  const drawerToggleProjectStage = (code: string) => {
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      const stages = prev.apply_project_stages || [];
+      return { ...prev, apply_project_stages: stages.includes(code) ? stages.filter((s) => s !== code) : [...stages, code] };
+    });
+  };
+
+  const drawerAddColumn = () => {
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        columns_config: [...(prev.columns_config || []), { name: "", type: "text", required: false, readonly: false, description: "", options: [] }],
+      };
+    });
+  };
+
+  const drawerRemoveColumn = (index: number) => {
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      return { ...prev, columns_config: (prev.columns_config || []).filter((_, i) => i !== index) };
+    });
+  };
+
+  const drawerUpdateColumn = (index: number, field: string, value: unknown) => {
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        columns_config: (prev.columns_config || []).map((col, i) => (i === index ? { ...col, [field]: value } : col)),
+      };
+    });
   };
 
   // 打开数据记录对话框
@@ -2380,116 +2472,439 @@ export function StandardManagement({
             </TableHeader>
             <TableBody>
               {filteredDefinitions.map((def, index) => (
-                <TableRow
-                  key={def.id}
-                  draggable
-                  onDragStart={() => setDragDefIndex(index)}
-                  onDragOver={(e) => { e.preventDefault(); setDragOverDefIndex(index); }}
-                  onDrop={() => {
-                    if (dragDefIndex !== null && dragDefIndex !== index) {
-                      onReorder(dragDefIndex, index);
-                    }
-                    setDragDefIndex(null);
-                    setDragOverDefIndex(null);
-                  }}
-                  onDragEnd={() => { setDragDefIndex(null); setDragOverDefIndex(null); }}
-                  className={`${dragDefIndex === index ? "opacity-50 bg-muted/50" : ""} ${dragOverDefIndex === index && dragDefIndex !== index ? "border-t-2 border-t-primary" : ""} transition-colors cursor-grab active:cursor-grabbing`}
-                >
-                  <TableCell>
-                    <GripVertical className="w-4 h-4 text-muted-foreground" />
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">{def.table_code}</TableCell>
-                  <TableCell className="font-medium">{def.table_name}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {(() => {
-                        const modules = Array.isArray(def.module_type)
-                          ? def.module_type
-                          : def.module_type
-                          ? [def.module_type]
-                          : [];
-                        return modules.length === 0 ? (
-                          <span className="text-muted-foreground text-sm">-</span>
+                <Fragment key={def.id}>
+                  <TableRow
+                    draggable
+                    onDragStart={() => setDragDefIndex(index)}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverDefIndex(index); }}
+                    onDrop={() => {
+                      if (dragDefIndex !== null && dragDefIndex !== index) {
+                        onReorder(dragDefIndex, index);
+                      }
+                      setDragDefIndex(null);
+                      setDragOverDefIndex(null);
+                    }}
+                    onDragEnd={() => { setDragDefIndex(null); setDragOverDefIndex(null); }}
+                    onClick={() => openDrawer(def)}
+                    className={`${dragDefIndex === index ? "opacity-50 bg-muted/50" : ""} ${dragOverDefIndex === index && dragDefIndex !== index ? "border-t-2 border-t-primary" : ""} transition-colors cursor-pointer ${expandedDefId === def.id ? "bg-accent/80 border-l-2 border-l-primary" : ""}`}
+                  >
+                    <TableCell>
+                      <GripVertical className="w-4 h-4 text-muted-foreground" />
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">{def.table_code}</TableCell>
+                    <TableCell className="font-medium">{def.table_name}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {(() => {
+                          const modules = Array.isArray(def.module_type)
+                            ? def.module_type
+                            : def.module_type
+                            ? [def.module_type]
+                            : [];
+                          return modules.length === 0 ? (
+                            <span className="text-muted-foreground text-sm">-</span>
+                          ) : (
+                            modules.map((mod) => (
+                              <Badge key={mod} variant="outline" className="text-xs">
+                                {moduleTypes.find((m) => m.code === mod)?.name || mod}
+                              </Badge>
+                            ))
+                          );
+                        })()}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {def.apply_project_types.length === 0 ? (
+                          <span className="text-muted-foreground text-sm">全部</span>
                         ) : (
-                          modules.map((mod) => (
-                            <Badge key={mod} variant="outline" className="text-xs">
-                              {moduleTypes.find((m) => m.code === mod)?.name || mod}
+                          def.apply_project_types.map((type) => (
+                            <Badge key={type} variant="secondary" className="text-xs">
+                              {projectTypes.find((t) => t.code === type)?.name || type}
                             </Badge>
                           ))
-                        );
-                      })()}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {def.apply_project_types.length === 0 ? (
-                        <span className="text-muted-foreground text-sm">全部</span>
-                      ) : (
-                        def.apply_project_types.map((type) => (
-                          <Badge key={type} variant="secondary" className="text-xs">
-                            {projectTypes.find((t) => t.code === type)?.name || type}
-                          </Badge>
-                        ))
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {def.apply_project_stages.length === 0 ? (
-                        <span className="text-muted-foreground text-sm">全部</span>
-                      ) : (
-                        def.apply_project_stages.map((stage) => (
-                          <Badge key={stage} variant="outline" className="text-xs">
-                            {projectStages.find((s) => s.code === stage)?.name || stage}
-                          </Badge>
-                        ))
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={def.is_active ? "default" : "secondary"}>
-                      {def.is_active ? "启用" : "禁用"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
-                        onClick={() => openEditDialog(def)}
-                      >
-                        编辑
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
-                        title="查看数据"
-                        onClick={() => openDataDialog(def)}
-                      >
-                        数据
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2 text-xs text-blue-600 hover:text-blue-700"
-                        onClick={() => openSyncDialog(def)}
-                      >
-                        同步
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        title="删除表定义"
-                        onClick={() => onDelete(def.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {def.apply_project_stages.length === 0 ? (
+                          <span className="text-muted-foreground text-sm">全部</span>
+                        ) : (
+                          def.apply_project_stages.map((stage) => (
+                            <Badge key={stage} variant="outline" className="text-xs">
+                              {projectStages.find((s) => s.code === stage)?.name || stage}
+                            </Badge>
+                          ))
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={def.is_active ? "default" : "secondary"}>
+                        {def.is_active ? "启用" : "禁用"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+                          onClick={() => openEditDialog(def)}
+                        >
+                          编辑
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+                          title="查看数据"
+                          onClick={() => openDataDialog(def)}
+                        >
+                          数据
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-xs text-blue-600 hover:text-blue-700"
+                          onClick={() => openSyncDialog(def)}
+                        >
+                          同步
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          title="删除表定义"
+                          onClick={() => onDelete(def.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                  {/* 抽屉式编辑面板 */}
+                  {expandedDefId === def.id && drawerFormData && (
+                    <TableRow className="bg-muted/20 hover:bg-muted/20">
+                      <TableCell colSpan={8} className="p-0">
+                        <div className="px-6 py-4 space-y-4 border-b-2 border-b-primary/20 max-h-[65vh] overflow-y-auto">
+                          {/* Row 1: 基本信息 */}
+                          <div className="rounded-lg border bg-card p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <span className="font-medium text-sm">基本信息</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label className="text-xs font-medium">
+                                  表代码 <span className="text-destructive">*</span>
+                                </Label>
+                                <Input
+                                  value={drawerFormData.table_code || ""}
+                                  onChange={(e) => drawerUpdateField("table_code", e.target.value)}
+                                  placeholder="如: scope_wbs"
+                                  disabled
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-xs font-medium">
+                                  表名称 <span className="text-destructive">*</span>
+                                </Label>
+                                <Input
+                                  value={drawerFormData.table_name || ""}
+                                  onChange={(e) => drawerUpdateField("table_name", e.target.value)}
+                                  placeholder="如: WBS分解表"
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-2 mt-3">
+                              <Label className="text-xs font-medium">描述</Label>
+                              <Input
+                                value={drawerFormData.description || ""}
+                                onChange={(e) => drawerUpdateField("description", e.target.value)}
+                                placeholder="表描述"
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                            <div className="flex items-center justify-between pt-3 mt-3 border-t">
+                              <div className="space-y-0.5">
+                                <Label className="text-xs font-medium">允许项目添加记录</Label>
+                                <p className="text-xs text-muted-foreground">关闭后，项目模块管理中不显示"添加记录"按钮</p>
+                              </div>
+                              <Switch
+                                checked={drawerFormData.allow_add !== false}
+                                onCheckedChange={(checked: boolean) => drawerUpdateField("allow_add", checked)}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Row 2: 所属模块 + 适用范围 */}
+                          <div className="grid grid-cols-2 gap-4">
+                            {/* 所属模块 */}
+                            <div className="rounded-lg border bg-card p-4">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Layers className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <span className="font-medium text-sm">所属模块</span>
+                                <Badge variant="secondary" className="ml-auto text-xs shrink-0">
+                                  {(drawerFormData.module_type || []).length}
+                                </Badge>
+                              </div>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                {moduleTypes.map((module) => (
+                                  <label
+                                    key={module.code}
+                                    className="flex items-center gap-2 rounded-md px-2 py-1 text-xs cursor-pointer hover:bg-accent transition-colors has-[:checked]:bg-primary/10 has-[:checked]:text-primary"
+                                  >
+                                    <Checkbox
+                                      checked={(drawerFormData.module_type || []).includes(module.code)}
+                                      onCheckedChange={() => drawerToggleModule(module.code)}
+                                      className="h-3.5 w-3.5"
+                                    />
+                                    <span className="truncate">{module.name}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* 适用范围 */}
+                            <div className="rounded-lg border bg-card p-4">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Settings className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <span className="font-medium text-sm">适用范围</span>
+                                <Badge variant="secondary" className="ml-auto text-xs shrink-0">
+                                  {(drawerFormData.apply_project_types || []).length + (drawerFormData.apply_project_stages || []).length || 0}
+                                </Badge>
+                              </div>
+                              <div className="space-y-3">
+                                <div>
+                                  <Label className="text-xs font-medium mb-1.5 block">
+                                    适用项目类型 <span className="text-muted-foreground font-normal">(可多选)</span>
+                                  </Label>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {projectTypes.map((type) => (
+                                      <button
+                                        key={type.code}
+                                        type="button"
+                                        onClick={() => drawerToggleProjectType(type.code)}
+                                        className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
+                                          (drawerFormData.apply_project_types || []).includes(type.code)
+                                            ? "bg-primary text-primary-foreground border-primary"
+                                            : "hover:bg-muted border-border"
+                                        }`}
+                                      >
+                                        {type.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div>
+                                  <Label className="text-xs font-medium mb-1.5 block">
+                                    适用项目阶段 <span className="text-muted-foreground font-normal">(可多选)</span>
+                                  </Label>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {projectStages.map((stage) => (
+                                      <button
+                                        key={stage.code}
+                                        type="button"
+                                        onClick={() => drawerToggleProjectStage(stage.code)}
+                                        className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
+                                          (drawerFormData.apply_project_stages || []).includes(stage.code)
+                                            ? "bg-primary text-primary-foreground border-primary"
+                                            : "hover:bg-muted border-border"
+                                        }`}
+                                      >
+                                        {stage.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Row 3: 列配置 —— 矩阵式布局 */}
+                          <div className="rounded-lg border bg-card p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <Database className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <span className="font-medium text-sm">列配置</span>
+                              <Badge variant="secondary" className="ml-auto text-xs shrink-0">
+                                {(drawerFormData.columns_config || []).length}
+                              </Badge>
+                            </div>
+
+                            {(drawerFormData.columns_config || []).length === 0 ? (
+                              <div className="text-center py-6 text-muted-foreground">
+                                <Database className="w-6 h-6 mx-auto mb-1.5 opacity-50" />
+                                <p className="text-sm">暂无列定义</p>
+                              </div>
+                            ) : (
+                              <div className="space-y-2 overflow-x-auto">
+                                {/* 列名行 */}
+                                <div className="flex items-start gap-3 min-w-max">
+                                  <span className="text-xs text-muted-foreground shrink-0 w-10 pt-2 font-medium">列名</span>
+                                  <div className="flex gap-2 flex-1">
+                                    {(drawerFormData.columns_config || []).map((col, ci) => (
+                                      <div key={`name-${ci}`} className="flex flex-col gap-1 min-w-[150px] flex-1">
+                                        <Input
+                                          value={col.name}
+                                          onChange={(e) => drawerUpdateColumn(ci, "name", e.target.value)}
+                                          placeholder="列名"
+                                          className="h-8 text-sm"
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* 必填 + 只读行 */}
+                                <div className="flex items-start gap-3 min-w-max">
+                                  <div className="shrink-0 w-10 pt-2 space-y-3">
+                                    <span className="text-xs text-muted-foreground font-medium block">必填</span>
+                                    <span className="text-xs text-muted-foreground font-medium block">只读</span>
+                                  </div>
+                                  <div className="flex gap-2 flex-1">
+                                    {(drawerFormData.columns_config || []).map((col, ci) => (
+                                      <div key={`flags-${ci}`} className="flex flex-col gap-3 min-w-[150px] flex-1 items-center py-1">
+                                        <Checkbox
+                                          checked={col.required}
+                                          onCheckedChange={(checked) => drawerUpdateColumn(ci, "required", checked)}
+                                          className="h-4 w-4"
+                                        />
+                                        <Checkbox
+                                          checked={col.readonly || false}
+                                          onCheckedChange={(checked) => drawerUpdateColumn(ci, "readonly", checked)}
+                                          className="h-4 w-4"
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* 类型行 */}
+                                <div className="flex items-start gap-3 min-w-max">
+                                  <span className="text-xs text-muted-foreground shrink-0 w-10 pt-2 font-medium">类型</span>
+                                  <div className="flex gap-2 flex-1">
+                                    {(drawerFormData.columns_config || []).map((col, ci) => (
+                                      <div key={`type-${ci}`} className="min-w-[150px] flex-1">
+                                        <Select
+                                          value={col.type}
+                                          onValueChange={(value) => drawerUpdateColumn(ci, "type", value)}
+                                        >
+                                          <SelectTrigger className="h-8 text-sm w-full">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {COLUMN_TYPES.map((type) => (
+                                              <SelectItem key={type.code} value={type.code}>
+                                                {type.name}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* 描述行 */}
+                                <div className="flex items-start gap-3 min-w-max">
+                                  <span className="text-xs text-muted-foreground shrink-0 w-10 pt-2 font-medium">描述</span>
+                                  <div className="flex gap-2 flex-1">
+                                    {(drawerFormData.columns_config || []).map((col, ci) => (
+                                      <div key={`desc-${ci}`} className="min-w-[150px] flex-1">
+                                        <Input
+                                          value={col.description || ""}
+                                          onChange={(e) => drawerUpdateColumn(ci, "description", e.target.value)}
+                                          placeholder="列描述"
+                                          className="h-8 text-sm"
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* 删除列按钮行 */}
+                                <div className="flex items-start gap-3 min-w-max">
+                                  <span className="shrink-0 w-10" />
+                                  <div className="flex gap-2 flex-1">
+                                    {(drawerFormData.columns_config || []).map((col, ci) => (
+                                      <div key={`del-${ci}`} className="min-w-[150px] flex-1 flex justify-center">
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7"
+                                          onClick={() => drawerRemoveColumn(ci)}
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="mt-3 pt-3 border-t">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={drawerAddColumn}
+                                className="h-8 text-xs gap-1"
+                              >
+                                <Plus className="h-3.5 w-3.5" /> 添加列
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Row 4: 引用配置概览 */}
+                          <div className="rounded-lg border bg-card p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <LinkIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <span className="font-medium text-sm">引用关系</span>
+                              <Badge variant="secondary" className="ml-auto text-xs shrink-0">
+                                {(drawerFormData.references_config || []).length}
+                              </Badge>
+                            </div>
+                            {(drawerFormData.references_config || []).length === 0 ? (
+                              <p className="text-xs text-muted-foreground py-2">暂无引用关系</p>
+                            ) : (
+                              <div className="space-y-1.5">
+                                {(drawerFormData.references_config || []).map((ref) => {
+                                  const sourceDef = definitions.find(d => d.table_code === ref.source_table_code);
+                                  return (
+                                    <div key={ref.id} className="flex items-center gap-2 text-xs py-1 px-2 rounded bg-muted/50">
+                                      <span className="font-medium">{ref.name}</span>
+                                      <span className="text-muted-foreground">
+                                        → {sourceDef?.table_name || ref.source_table_code}.{ref.match_condition.source_column}
+                                      </span>
+                                      <span className="text-muted-foreground">
+                                        入口: {ref.entry_column}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 操作按钮 */}
+                        <div className="px-6 py-3 border-t bg-muted/30 flex justify-end gap-2">
+                          <Button variant="outline" size="sm" onClick={closeDrawer}>
+                            取消
+                          </Button>
+                          <Button size="sm" onClick={handleDrawerSave}>
+                            保存
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
               ))}
             </TableBody>
           </Table>
