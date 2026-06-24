@@ -82,11 +82,11 @@ const MODULE_COLORS: Record<string, { bg: string; light: string; border: string;
   scope:         { bg: "bg-blue-500",    light: "bg-blue-50",    border: "border-blue-200",    text: "text-blue-600",    badge: "bg-blue-100 text-blue-700",    header: "bg-gradient-to-r from-blue-500 to-blue-600",    hoverRow: "hover:bg-blue-50/50",    ring: "ring-blue-200", hex: "#3b82f6" },
   schedule:      { bg: "bg-emerald-500", light: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-600", badge: "bg-emerald-100 text-emerald-700", header: "bg-gradient-to-r from-emerald-500 to-emerald-600", hoverRow: "hover:bg-emerald-50/50", ring: "ring-emerald-200", hex: "#10b981" },
   quality:       { bg: "bg-violet-500",  light: "bg-violet-50",  border: "border-violet-200",  text: "text-violet-600",  badge: "bg-violet-100 text-violet-700",  header: "bg-gradient-to-r from-violet-500 to-violet-600",  hoverRow: "hover:bg-violet-50/50", ring: "ring-violet-200", hex: "#8b5cf6" },
-  cost:          { bg: "bg-amber-500",   light: "bg-amber-50",   border: "border-amber-200",   text: "text-amber-600",   badge: "bg-amber-100 text-amber-700",   header: "bg-gradient-to-r from-amber-500 to-amber-600",   hoverRow: "hover:bg-amber-50/50", ring: "ring-amber-200", hex: "#f59e0b" },
+  cost:          { bg: "bg-amber-400",   light: "bg-amber-50",   border: "border-amber-200",   text: "text-amber-500",   badge: "bg-amber-50 text-amber-600",    header: "bg-gradient-to-r from-amber-300 to-amber-400",   hoverRow: "hover:bg-amber-50/50", ring: "ring-amber-200", hex: "#fbbf24" },
   collaboration: { bg: "bg-cyan-500",    light: "bg-cyan-50",    border: "border-cyan-200",    text: "text-cyan-600",    badge: "bg-cyan-100 text-cyan-700",     header: "bg-gradient-to-r from-cyan-500 to-cyan-600",     hoverRow: "hover:bg-cyan-50/50", ring: "ring-cyan-200", hex: "#06b6d4" },
-  communication: { bg: "bg-pink-500",    light: "bg-pink-50",    border: "border-pink-200",    text: "text-pink-600",    badge: "bg-pink-100 text-pink-700",     header: "bg-gradient-to-r from-pink-500 to-pink-600",     hoverRow: "hover:bg-pink-50/50", ring: "ring-pink-200", hex: "#ec4899" },
+  communication: { bg: "bg-pink-400",    light: "bg-pink-50",    border: "border-pink-200",    text: "text-pink-500",    badge: "bg-pink-50 text-pink-600",      header: "bg-gradient-to-r from-pink-300 to-pink-400",      hoverRow: "hover:bg-pink-50/50", ring: "ring-pink-200", hex: "#f472b6" },
   risk:          { bg: "bg-red-500",     light: "bg-red-50",     border: "border-red-200",     text: "text-red-600",     badge: "bg-red-100 text-red-700",       header: "bg-gradient-to-r from-red-500 to-red-600",       hoverRow: "hover:bg-red-50/50", ring: "ring-red-200", hex: "#ef4444" },
-  procurement:   { bg: "bg-orange-500",  light: "bg-orange-50",  border: "border-orange-200",  text: "text-orange-600",  badge: "bg-orange-100 text-orange-700", header: "bg-gradient-to-r from-orange-500 to-orange-600", hoverRow: "hover:bg-orange-50/50", ring: "ring-orange-200", hex: "#f97316" },
+  procurement:   { bg: "bg-orange-400",  light: "bg-orange-50",  border: "border-orange-200",  text: "text-orange-500",  badge: "bg-orange-50 text-orange-600",  header: "bg-gradient-to-r from-orange-300 to-orange-400", hoverRow: "hover:bg-orange-50/50", ring: "ring-orange-200", hex: "#fb923c" },
   resource:      { bg: "bg-teal-500",    light: "bg-teal-50",    border: "border-teal-200",    text: "text-teal-600",    badge: "bg-teal-100 text-teal-700",     header: "bg-gradient-to-r from-teal-500 to-teal-600",     hoverRow: "hover:bg-teal-50/50", ring: "ring-teal-200", hex: "#14b8a6" },
   document:      { bg: "bg-indigo-500",  light: "bg-indigo-50",  border: "border-indigo-200",  text: "text-indigo-600",  badge: "bg-indigo-100 text-indigo-700", header: "bg-gradient-to-r from-indigo-500 to-indigo-600", hoverRow: "hover:bg-indigo-50/50", ring: "ring-indigo-200", hex: "#6366f1" },
 };
@@ -3631,12 +3631,15 @@ export function ProjectDetail({
       <div className="rounded-xl border border-slate-200/80 overflow-hidden shadow-sm">
         {/* 表头 */}
         <div className={cn("px-4 py-3", mc.header)}>
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="font-semibold text-white flex items-center gap-2">
-              <Layers className="w-4 h-4" />
-              {table.table_name}
-              <span className="text-white/60 text-xs font-normal ml-1">{data.length} 条</span>
-            </h4>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-3">
+              <h4 className="font-semibold text-white flex items-center gap-2">
+                <Layers className="w-4 h-4" />
+                {table.table_name}
+                <span className="text-white/60 text-xs font-normal ml-1">{data.length} 条</span>
+              </h4>
+              {renderViewModeSwitcher(table)}
+            </div>
             <div className="flex items-center gap-2">
               {renderViewSettingsPopover(table)}
 
@@ -3647,9 +3650,6 @@ export function ProjectDetail({
                 </Button>
               )}
             </div>
-          </div>
-          <div className="flex justify-center">
-            {renderViewModeSwitcher(table)}
           </div>
         </div>
         {/* 数据区域 */}
