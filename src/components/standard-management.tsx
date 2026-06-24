@@ -2724,8 +2724,8 @@ export function StandardManagement({
                             </div>
                           </div>
 
-                          {/* Row 3: 列配置 —— 矩阵式布局 */}
-                          <div className="rounded-lg border bg-card p-4">
+                          {/* Row 3: 列配置 —— 矩阵式布局（独立横向滚动） */}
+                          <div className="rounded-lg border bg-card p-4 overflow-hidden">
                             <div className="flex items-center gap-2 mb-3">
                               <Database className="h-4 w-4 text-muted-foreground shrink-0" />
                               <span className="font-medium text-sm">列配置</span>
@@ -2740,108 +2740,110 @@ export function StandardManagement({
                                 <p className="text-sm">暂无列定义</p>
                               </div>
                             ) : (
-                              <div className="space-y-2 overflow-x-auto">
-                                {/* 列名行 */}
-                                <div className="flex items-start gap-3 min-w-max">
-                                  <span className="text-xs text-muted-foreground shrink-0 w-10 pt-2 font-medium">列名</span>
-                                  <div className="flex gap-2 flex-1">
-                                    {(drawerFormData.columns_config || []).map((col, ci) => (
-                                      <div key={`name-${ci}`} className="flex flex-col gap-1 min-w-[150px] flex-1">
-                                        <Input
-                                          value={col.name}
-                                          onChange={(e) => drawerUpdateColumn(ci, "name", e.target.value)}
-                                          placeholder="列名"
-                                          className="h-8 text-sm"
-                                        />
-                                      </div>
-                                    ))}
+                              <div className="overflow-x-auto">
+                                <div className="min-w-max space-y-2">
+                                  {/* 列名行 */}
+                                  <div className="flex items-start gap-3">
+                                    <span className="text-xs text-muted-foreground shrink-0 w-10 pt-2 font-medium sticky left-0 bg-card z-10">列名</span>
+                                    <div className="flex gap-2">
+                                      {(drawerFormData.columns_config || []).map((col, ci) => (
+                                        <div key={`name-${ci}`} className="w-[160px] shrink-0">
+                                          <Input
+                                            value={col.name}
+                                            onChange={(e) => drawerUpdateColumn(ci, "name", e.target.value)}
+                                            placeholder="列名"
+                                            className="h-8 text-sm"
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
-                                </div>
 
-                                {/* 必填 + 只读行 */}
-                                <div className="flex items-start gap-3 min-w-max">
-                                  <div className="shrink-0 w-10 pt-2 space-y-3">
-                                    <span className="text-xs text-muted-foreground font-medium block">必填</span>
-                                    <span className="text-xs text-muted-foreground font-medium block">只读</span>
+                                  {/* 必填 + 只读行 */}
+                                  <div className="flex items-start gap-3">
+                                    <div className="shrink-0 w-10 pt-2 space-y-3 sticky left-0 bg-card z-10">
+                                      <span className="text-xs text-muted-foreground font-medium block">必填</span>
+                                      <span className="text-xs text-muted-foreground font-medium block">只读</span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      {(drawerFormData.columns_config || []).map((col, ci) => (
+                                        <div key={`flags-${ci}`} className="flex flex-col gap-3 w-[160px] shrink-0 items-center py-1">
+                                          <Checkbox
+                                            checked={col.required}
+                                            onCheckedChange={(checked) => drawerUpdateColumn(ci, "required", checked)}
+                                            className="h-4 w-4"
+                                          />
+                                          <Checkbox
+                                            checked={col.readonly || false}
+                                            onCheckedChange={(checked) => drawerUpdateColumn(ci, "readonly", checked)}
+                                            className="h-4 w-4"
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
-                                  <div className="flex gap-2 flex-1">
-                                    {(drawerFormData.columns_config || []).map((col, ci) => (
-                                      <div key={`flags-${ci}`} className="flex flex-col gap-3 min-w-[150px] flex-1 items-center py-1">
-                                        <Checkbox
-                                          checked={col.required}
-                                          onCheckedChange={(checked) => drawerUpdateColumn(ci, "required", checked)}
-                                          className="h-4 w-4"
-                                        />
-                                        <Checkbox
-                                          checked={col.readonly || false}
-                                          onCheckedChange={(checked) => drawerUpdateColumn(ci, "readonly", checked)}
-                                          className="h-4 w-4"
-                                        />
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
 
-                                {/* 类型行 */}
-                                <div className="flex items-start gap-3 min-w-max">
-                                  <span className="text-xs text-muted-foreground shrink-0 w-10 pt-2 font-medium">类型</span>
-                                  <div className="flex gap-2 flex-1">
-                                    {(drawerFormData.columns_config || []).map((col, ci) => (
-                                      <div key={`type-${ci}`} className="min-w-[150px] flex-1">
-                                        <Select
-                                          value={col.type}
-                                          onValueChange={(value) => drawerUpdateColumn(ci, "type", value)}
-                                        >
-                                          <SelectTrigger className="h-8 text-sm w-full">
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            {COLUMN_TYPES.map((type) => (
-                                              <SelectItem key={type.code} value={type.code}>
-                                                {type.name}
-                                              </SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                    ))}
+                                  {/* 类型行 */}
+                                  <div className="flex items-start gap-3">
+                                    <span className="text-xs text-muted-foreground shrink-0 w-10 pt-2 font-medium sticky left-0 bg-card z-10">类型</span>
+                                    <div className="flex gap-2">
+                                      {(drawerFormData.columns_config || []).map((col, ci) => (
+                                        <div key={`type-${ci}`} className="w-[160px] shrink-0">
+                                          <Select
+                                            value={col.type}
+                                            onValueChange={(value) => drawerUpdateColumn(ci, "type", value)}
+                                          >
+                                            <SelectTrigger className="h-8 text-sm w-full">
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              {COLUMN_TYPES.map((type) => (
+                                                <SelectItem key={type.code} value={type.code}>
+                                                  {type.name}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
-                                </div>
 
-                                {/* 描述行 */}
-                                <div className="flex items-start gap-3 min-w-max">
-                                  <span className="text-xs text-muted-foreground shrink-0 w-10 pt-2 font-medium">描述</span>
-                                  <div className="flex gap-2 flex-1">
-                                    {(drawerFormData.columns_config || []).map((col, ci) => (
-                                      <div key={`desc-${ci}`} className="min-w-[150px] flex-1">
-                                        <Input
-                                          value={col.description || ""}
-                                          onChange={(e) => drawerUpdateColumn(ci, "description", e.target.value)}
-                                          placeholder="列描述"
-                                          className="h-8 text-sm"
-                                        />
-                                      </div>
-                                    ))}
+                                  {/* 描述行 */}
+                                  <div className="flex items-start gap-3">
+                                    <span className="text-xs text-muted-foreground shrink-0 w-10 pt-2 font-medium sticky left-0 bg-card z-10">描述</span>
+                                    <div className="flex gap-2">
+                                      {(drawerFormData.columns_config || []).map((col, ci) => (
+                                        <div key={`desc-${ci}`} className="w-[160px] shrink-0">
+                                          <Input
+                                            value={col.description || ""}
+                                            onChange={(e) => drawerUpdateColumn(ci, "description", e.target.value)}
+                                            placeholder="列描述"
+                                            className="h-8 text-sm"
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
-                                </div>
 
-                                {/* 删除列按钮行 */}
-                                <div className="flex items-start gap-3 min-w-max">
-                                  <span className="shrink-0 w-10" />
-                                  <div className="flex gap-2 flex-1">
-                                    {(drawerFormData.columns_config || []).map((col, ci) => (
-                                      <div key={`del-${ci}`} className="min-w-[150px] flex-1 flex justify-center">
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-7 w-7"
-                                          onClick={() => drawerRemoveColumn(ci)}
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                                        </Button>
-                                      </div>
-                                    ))}
+                                  {/* 删除列按钮行 */}
+                                  <div className="flex items-start gap-3">
+                                    <span className="shrink-0 w-10 sticky left-0 bg-card z-10" />
+                                    <div className="flex gap-2">
+                                      {(drawerFormData.columns_config || []).map((col, ci) => (
+                                        <div key={`del-${ci}`} className="w-[160px] shrink-0 flex justify-center">
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7"
+                                            onClick={() => drawerRemoveColumn(ci)}
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                                          </Button>
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
                                 </div>
                               </div>
