@@ -135,6 +135,7 @@ export async function POST(request: NextRequest) {
             // 确保权限控制列存在
             const permissionCols = [
               { name: "allow_delete", type: "BOOLEAN DEFAULT TRUE" },
+              { name: "_readonly", type: "BOOLEAN DEFAULT FALSE" },
               { name: "data_source", type: "TEXT DEFAULT 'standard'" },
             ];
             for (const pc of permissionCols) {

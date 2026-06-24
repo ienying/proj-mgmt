@@ -148,6 +148,7 @@ interface TableDefinition {
   table_name: string;
   module_codes: string[];
   allow_add?: boolean;
+  readonly_mode?: "and" | "or";
   columns_config: ColumnConfig[];
   references_config?: Array<{
     id: string;
@@ -691,6 +692,7 @@ export function ProjectDetail({
             table_name: d.table_name as string,
             module_codes: (d.module_type as string[]) || ["scope"],
             allow_add: d.allow_add as boolean | undefined,
+            readonly_mode: d.readonly_mode as ("and" | "or") | undefined,
             columns_config: dedupeColumnsByName(d.columns_config as ColumnConfig[]).map(col => ({ ...col, key: col.key || col.name })),
           }));
 
@@ -830,21 +832,37 @@ export function ProjectDetail({
   };
 
   // 简易编辑入口（自动从数据中取值）
-  // 判断某列在某行是否只读
+  // 判断某列在某行是否只读（AND/OR 模式）
   const isCellReadonly = (tableCode: string, rowId: string, column: string): boolean => {
     const table = tableDefinitions.find(t => t.table_code === tableCode);
     if (!table) return false;
     const col = table.columns_config.find(c => (c.key || c.name) === column);
-    // 只读列无论数据来源都不可编辑
-    return !!col?.readonly;
+    if (!col?.readonly) return false; // 列未设只读 → 可编辑
+
+    const data = tableDataMap[tableCode] || [];
+    const row = data.find(r => r.id === rowId);
+    const rowReadonly = row?._readonly === true;
+    const isOrMode = table.readonly_mode === "or";
+
+    if (isOrMode) return true;      // OR 模式: 列只读即锁定
+    return rowReadonly;             // AND 模式: 列只读 + 行只读才锁定
   };
 
-  // 判断某行是否有任何只读列（用于决定是否显示编辑按钮）
+  // 判断整行是否全部锁定（用于决定是否隐藏编辑按钮）
   const isRowReadonly = (tableCode: string, rowId: string): boolean => {
     const table = tableDefinitions.find(t => t.table_code === tableCode);
     if (!table) return false;
-    // 只要该表存在任何只读列，整行视为只读行
-    return table.columns_config.some((col: ColumnConfig) => col.readonly);
+
+    const data = tableDataMap[tableCode] || [];
+    const row = data.find(r => r.id === rowId);
+    const rowReadonly = row?._readonly === true;
+    const isOrMode = table.readonly_mode === "or";
+
+    if (isOrMode && rowReadonly) return true;  // OR: 行只读 → 全行锁定
+    if (!isOrMode && rowReadonly && table.columns_config.every(c => c.readonly)) {
+      return true;  // AND: 全部列只读 + 行只读 → 全行锁定
+    }
+    return false;
   };
 
   const startEditCell = (tableCode: string, rowId: string, column: string) => {
@@ -1705,8 +1723,8 @@ export function ProjectDetail({
                 isRowEditing && mc.ring
               )}>
                 {/* 卡片头部：第一个字段 + 操作 */}
-                <div className={cn("px-4 py-2 flex items-center justify-between", mc.light, "border-b border-slate-100")}>
-                  <span className={cn("font-medium text-sm", mc.text)}>
+                <div className={cn("px-4 py-2 flex items-center justify-between", mc.header)}>
+                  <span className="font-semibold text-sm text-white">
                     {columns[0] ? String(row[columns[0].name] ?? "-") : `记录 ${row.id}`}
                   </span>
                   <div className="flex items-center gap-1">
@@ -1728,7 +1746,7 @@ export function ProjectDetail({
                     const isEditing = editingCell?.tableCode === table.table_code && 
                                      editingCell?.rowId === row.id && 
                                      editingCell?.column === col.name;
-                    const isReadonly = !!col.readonly;
+                    const isReadonly = table.readonly_mode === "or" ? (!!col.readonly || row?._readonly === true) : (!!col.readonly && row?._readonly === true);
                     return (
                       <div key={col.name} className="min-w-0">
                         <div className="text-xs text-slate-400 mb-0.5 flex items-center gap-1">
@@ -2092,7 +2110,7 @@ export function ProjectDetail({
                       const isEditing = editingCell?.tableCode === table.table_code &&
                                        editingCell?.rowId === row.id &&
                                        editingCell?.column === col.name;
-                      const isReadonly = !!col.readonly;
+                      const isReadonly = table.readonly_mode === "or" ? (!!col.readonly || row?._readonly === true) : (!!col.readonly && row?._readonly === true);
                       const isFrozen = idx < FREEZE_COLS;
                       return (
                         <td key={col.name} className={cn(
@@ -2352,9 +2370,9 @@ export function ProjectDetail({
         <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: 300 }}>
         {groups.map((group) => (
           <div key={group.label} className="flex-shrink-0 w-72">
-            <div className="rounded-t-lg px-3 py-2 font-medium text-sm" style={{ backgroundColor: mc.light, color: mc.text, borderTop: `3px solid ${mc.border}` }}>
+            <div className={cn("rounded-t-lg px-3 py-2 font-semibold text-sm text-white", mc.header)}>
               {group.label}
-              <span className="ml-2 text-xs opacity-70">({group.items.length})</span>
+              <span className="ml-2 text-xs text-white/70">({group.items.length})</span>
             </div>
             <div className="bg-gray-50 rounded-b-lg p-2 space-y-2 min-h-[200px]">
               {group.items.length === 0 && (
@@ -2370,7 +2388,7 @@ export function ProjectDetail({
                       const isEditing = editingCell?.tableCode === table.table_code &&
                                        editingCell?.rowId === rowId &&
                                        editingCell?.column === col.name;
-                      const isReadonly = !!col.readonly;
+                      const isReadonly = table.readonly_mode === "or" ? (!!col.readonly || row?._readonly === true) : (!!col.readonly && row?._readonly === true);
                       return (
                         <div key={col.key} className="mb-1">
                           <span className="text-[10px] text-gray-400 mr-1">{col.label || col.key}:</span>
@@ -2556,7 +2574,7 @@ export function ProjectDetail({
                           const cellKey = col.key ?? col.name;
                           const cellValue = row[cellKey];
                           const isEditingThis = isEditing && editingCell?.column === cellKey;
-                          const isReadonlyCol = !!col.readonly;
+                          const isReadonlyCol = table.readonly_mode === "or" ? (!!col.readonly || row?._readonly === true) : (!!col.readonly && row?._readonly === true);
                           return (
                             <td
                               key={cellKey}
@@ -2583,7 +2601,10 @@ export function ProjectDetail({
                         >
                           <div className="flex gap-1 opacity-0 group-hover/row:opacity-100">
                             <button
-                              onClick={() => startEditCell(table.table_code, rowId, displayCols[0]?.key || '')}
+                              onClick={() => {
+                                const colKey = displayCols[0]?.key || columns[0]?.key || '';
+                                if (colKey) startEditCell(table.table_code, rowId, colKey);
+                              }}
                               className="px-1.5 py-0.5 rounded text-gray-500 hover:bg-gray-100 text-[10px]"
                             >
                               编辑
@@ -2610,7 +2631,7 @@ export function ProjectDetail({
                                   const cellValue = row[cellKey];
                                   const isNodeField = levelKeys.has(col.key);
                                   const isEditingThis = isEditing && editingCell?.column === cellKey;
-                                  const isReadonlyCol = !!col.readonly;
+                                  const isReadonlyCol = table.readonly_mode === "or" ? (!!col.readonly || row?._readonly === true) : (!!col.readonly && row?._readonly === true);
                                   return (
                                     <div key={cellKey} className="flex items-start gap-2 text-xs">
                                       <span className={cn("shrink-0 text-gray-400 min-w-[120px] text-right", isNodeField && "font-medium text-blue-500")}>
@@ -2631,7 +2652,10 @@ export function ProjectDetail({
                               </div>
                               <div className="flex gap-2 mt-3 pt-2 border-t border-blue-100">
                                 <button
-                                  onClick={() => startEditCell(table.table_code, rowId, displayCols[0]?.key || '')}
+                                  onClick={() => {
+                                    const colKey = displayCols[0]?.key || columns[0]?.key || '';
+                                    if (colKey) startEditCell(table.table_code, rowId, colKey);
+                                  }}
                                   className="px-3 py-1 rounded text-xs bg-white border border-gray-200 hover:bg-gray-50 text-gray-600"
                                 >
                                   编辑
@@ -2814,20 +2838,46 @@ export function ProjectDetail({
         </div>
 
         <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-          <div className="px-6 py-3 font-medium text-sm" style={{ backgroundColor: mc.light, color: mc.text, borderTop: `3px solid ${mc.border}` }}>
+          <div className={cn("px-6 py-3 font-semibold text-sm text-white", mc.header)}>
             {columns[0] && String(currentRow[columns[0].key] || '记录详情')}
           </div>
           <div className="p-6 space-y-4">
-            {columns.map((col: ColumnConfig) => (
-              <div key={col.key} className="flex items-start border-b border-gray-50 pb-3">
-                <div className="w-28 flex-shrink-0 text-sm font-medium text-gray-500">{col.label || col.key}</div>
-                <div className="flex-1 text-sm">{renderCellValue(col, currentRow[col.key ?? col.name])}</div>
-              </div>
-            ))}
+            {columns.map((col: ColumnConfig) => {
+              const cellKey = col.key ?? col.name;
+              const cellValue = currentRow[cellKey];
+              const isEditingThis = editingCell?.tableCode === table.table_code &&
+                                   editingCell?.rowId === rowId &&
+                                   editingCell?.column === col.name;
+              const isReadonlyCol = table.readonly_mode === "or" ? (!!col.readonly || currentRow?._readonly === true) : (!!col.readonly && currentRow?._readonly === true);
+              return (
+                <div key={col.key} className="flex items-start border-b border-gray-50 pb-3">
+                  <div className="w-28 flex-shrink-0 text-sm font-medium text-gray-500">{col.label || col.key}</div>
+                  <div className="flex-1 text-sm">
+                    {isEditingThis ? (
+                      renderEditCell(col, isReadonlyCol, cellValue)
+                    ) : (
+                      <div
+                        className={cn(!isReadonlyCol && "cursor-pointer hover:bg-blue-50 rounded px-1 -mx-1")}
+                        onClick={() => !isReadonlyCol && startEdit(table.table_code, rowId, col.name, cellValue)}
+                      >
+                        {isReadonlyCol ? (
+                          <span className="text-gray-400">{renderCellValue(col, cellValue) || "-"}</span>
+                        ) : (
+                          <span className="group inline-flex items-center gap-1">
+                            {renderCellValue(col, cellValue) || "-"}
+                            <Pencil className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 shrink-0" />
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           <div className="px-6 py-3 bg-gray-50 flex gap-2">
             <button
-              onClick={() => !isRowReadonly(table.table_code, rowId) && startEditCell(table.table_code, rowId, columns[0]?.key || '')}
+              onClick={() => !isRowReadonly(table.table_code, rowId) && startEdit(table.table_code, rowId, columns[0]?.name || '', currentRow[columns[0]?.key ?? columns[0]?.name ?? ''])}
               className="px-4 py-1.5 rounded text-sm text-white"
               style={{ backgroundColor: mc.border }}
             >
@@ -3587,13 +3637,38 @@ export function ProjectDetail({
                     {node.rows.map((row: Record<string, unknown>) => {
                       const rowId = String(row.id || '');
                       const canDelete = row.data_source === 'manual' || row.allow_delete !== false;
+                      const isEditing = editingCell?.tableCode === tc && editingCell?.rowId === rowId;
                       return (
                         <tr key={rowId} className="border-t border-gray-50 hover:bg-gray-50">
-                          {displayCols.map((col: ColumnConfig) => (
-                            <td key={col.key} className="px-4 py-2">{renderCellValue(col, row[col.key ?? col.name])}</td>
-                          ))}
+                          {displayCols.map((col: ColumnConfig) => {
+                            const cellKey = col.key ?? col.name;
+                            const cellValue = row[cellKey];
+                            const isEditingThis = isEditing && editingCell?.column === col.name;
+                            const isReadonlyCol = table.readonly_mode === "or" ? (!!col.readonly || row?._readonly === true) : (!!col.readonly && row?._readonly === true);
+                            return (
+                              <td key={col.key} className="px-4 py-2">
+                                {isEditingThis ? (
+                                  renderEditCell(col, isReadonlyCol, cellValue)
+                                ) : (
+                                  <div
+                                    className={cn(!isReadonlyCol && "cursor-pointer hover:bg-blue-50 rounded px-1 -mx-1")}
+                                    onClick={() => !isReadonlyCol && startEdit(tc, rowId, col.name, cellValue)}
+                                  >
+                                    {isReadonlyCol ? (
+                                      <span className="text-gray-400">{renderCellValue(col, cellValue)}</span>
+                                    ) : (
+                                      <span className="group inline-flex items-center gap-1">
+                                        {renderCellValue(col, cellValue)}
+                                        <Pencil className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 shrink-0" />
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                            );
+                          })}
                           <td className="px-4 py-2 text-right">
-                            {!isRowReadonly(tc, rowId) && <button onClick={() => startEditCell(tc, rowId, displayCols[0]?.key || '')} className="text-xs text-gray-500 hover:text-gray-700 mr-2">编辑</button>}
+                            {!isRowReadonly(tc, rowId) && <button onClick={() => startEdit(tc, rowId, displayCols[0]?.name || '', row[displayCols[0]?.key ?? displayCols[0]?.name ?? ''])} className="text-xs text-gray-500 hover:text-gray-700 mr-2">编辑</button>}
                             {canDelete && (
                               <button onClick={() => handleDeleteRow(tc, rowId)} className="text-xs text-red-500 hover:text-red-700">删除</button>
                             )}

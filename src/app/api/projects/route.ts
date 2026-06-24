@@ -308,6 +308,7 @@ async function copyTableDefinitionsToSchema(
       columnDefs.push(`"updated_at" TIMESTAMP WITH TIME ZONE`);
       columnDefs.push(`"created_by" VARCHAR(36)`);
       columnDefs.push(`"allow_delete" BOOLEAN DEFAULT true`);
+      columnDefs.push(`"_readonly" BOOLEAN DEFAULT false`);
 
       // 采购模块记录类型：添加 _module_code 隐藏列
       const hasProcurementRecord = columnsConfig.some((col: { type: string }) => col.type === 'procurement_record');

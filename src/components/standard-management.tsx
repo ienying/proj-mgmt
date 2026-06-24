@@ -3326,7 +3326,12 @@ export function StandardManagement({
           </DialogHeader>
           <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto px-1">
             {currentTableDef?.columns_config?.map((col) => {
-              const isReadonly = Boolean(col.readonly && editingRecord && editingRecord.data_source === "standard_sync"); // 仅规范同步数据的只读列禁用，手动/导入的可编辑
+              const rowReadonly = editingRecord?._readonly === true;
+              const colReadonly = !!col.readonly;
+              const isOrMode = currentTableDef?.readonly_mode === "or";
+              const isReadonly = isOrMode
+                ? (colReadonly || rowReadonly)
+                : (colReadonly && rowReadonly);
               return (
                 <div key={col.name} className="space-y-1.5">
                   <Label className={`text-sm ${isReadonly ? "text-muted-foreground" : ""}`}>

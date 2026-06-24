@@ -110,8 +110,47 @@ export async function PUT(request: NextRequest) {
 
     const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema;
 
+    // 只读防护：根据表定义的 readonly_mode 过滤被锁定列
+    let filteredData = data;
+    try {
+      const { data: tableDef } = await client.rpc("dp_select", { p_table: "data_table_definitions" });
+      const def = (tableDef as Array<{ table_code: string; columns_config: Array<{ name: string; readonly?: boolean }>; readonly_mode?: string }>)?.find(
+        (t) => t.table_code === tableCode
+      );
+      if (def) {
+        const readonlyMode = (def as Record<string, unknown>).readonly_mode || "and";
+        const isOrMode = readonlyMode === "or";
+        const readonlyColNames = (def.columns_config || []).filter(c => c.readonly).map(c => c.name);
+
+        // 获取当前记录的行只读状态
+        let rowReadonly = false;
+        try {
+          const { data: rowData } = await client.rpc("execute_sql", {
+            p_sql: `SELECT "_readonly" FROM ${safeSchema}."${tableCode}" WHERE id = '${String(rowId).replace(/'/g, "''")}'`,
+          });
+          const rows = rowData as Array<Record<string, unknown>>;
+          rowReadonly = rows?.[0]?._readonly === true;
+        } catch { /* _readonly 列不存在则忽略 */ }
+
+        // 决定锁定列
+        const lockedColumns = (() => {
+          if (isOrMode) {
+            if (rowReadonly) return (def.columns_config || []).map(c => c.name);
+            return readonlyColNames;
+          }
+          return rowReadonly ? readonlyColNames : [];
+        })();
+
+        // 从更新数据中移除被锁定的列
+        if (lockedColumns.length > 0) {
+          filteredData = { ...data };
+          lockedColumns.forEach(c => delete filteredData[c]);
+        }
+      }
+    } catch { /* 只读防护失败不影响主流程 */ }
+
     // 构建更新 SQL
-    const setClauses = Object.entries(data).map(([key, value]) => {
+    const setClauses = Object.entries(filteredData).map(([key, value]) => {
       if (value === null || value === undefined || value === "") {
         return `"${key}" = NULL`;
       }

@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
     columnDefs.push("updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()");
     columnDefs.push("created_by VARCHAR(36)");
     columnDefs.push("allow_delete BOOLEAN DEFAULT true");
+    columnDefs.push('"_readonly" BOOLEAN DEFAULT false');
     columnDefs.push("data_source TEXT DEFAULT 'standard'");
 
     // 如果有 procurement_record 类型列，添加 _module_code
