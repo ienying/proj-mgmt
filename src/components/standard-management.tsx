@@ -2457,7 +2457,7 @@ export function StandardManagement({
             <p className="text-sm">点击&quot;新建数据表&quot;创建第一个模板</p>
           </div>
         ) : (
-          <Table>
+          <Table className="table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10"></TableHead>
@@ -2587,6 +2587,7 @@ export function StandardManagement({
                   {expandedDefId === def.id && drawerFormData && (
                     <TableRow className="bg-muted/20 hover:bg-muted/20">
                       <TableCell colSpan={8} className="p-0">
+                        <div className="overflow-hidden">
                         <div className="px-6 py-4 space-y-4 border-b-2 border-b-primary/20 max-h-[65vh] overflow-y-auto">
                           {/* Row 1: 基本信息 */}
                           <div className="rounded-lg border bg-card p-4">
@@ -2725,7 +2726,7 @@ export function StandardManagement({
                           </div>
 
                           {/* Row 3: 列配置 —— 矩阵式布局（独立横向滚动） */}
-                          <div className="rounded-lg border bg-card p-4 overflow-hidden">
+                          <div className="rounded-lg border bg-card p-4">
                             <div className="flex items-center gap-2 mb-3">
                               <Database className="h-4 w-4 text-muted-foreground shrink-0" />
                               <span className="font-medium text-sm">列配置</span>
@@ -2902,6 +2903,7 @@ export function StandardManagement({
                           <Button size="sm" onClick={handleDrawerSave}>
                             保存
                           </Button>
+                        </div>
                         </div>
                       </TableCell>
                     </TableRow>
