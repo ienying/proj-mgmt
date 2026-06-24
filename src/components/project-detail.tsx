@@ -1813,6 +1813,11 @@ export function ProjectDetail({
     document.body.style.userSelect = "none";
   }, []);
 
+  const getColWidthForTable = (tableCode: string, colName: string) => {
+    const key = `${tableCode}:${colName}`;
+    return colWidths[key] || DEFAULT_COL_WIDTH;
+  };
+
   const renderCompactView = (table: TableDefinition) => {
     const data = tableDataMap[table.table_code] || [];
     const columns = table.columns_config;
@@ -1820,10 +1825,7 @@ export function ProjectDetail({
     const FREEZE_COLS = (getTableSetting(table.table_code, "compact_freeze_cols") as number) ?? 1;
     const FREEZE_ROWS = (getTableSetting(table.table_code, "compact_freeze_rows") as number) ?? 1;
 
-    const getColWidth = (colName: string) => {
-      const key = `${table.table_code}:${colName}`;
-      return colWidths[key] || DEFAULT_COL_WIDTH;
-    };
+    const getColWidth = (colName: string) => getColWidthForTable(table.table_code, colName);
 
     // 筛选逻辑
     type FilterItem = { field: string; operator: string; value: string };
@@ -3537,6 +3539,7 @@ export function ProjectDetail({
     const columns = table.columns_config;
     const mc = getModuleColor(activeModule);
     const tc = table.table_code;
+    const getColWidth = (colName: string) => getColWidthForTable(tc, colName);
 
     // 分组字段（支持多个）
     const groupFieldKeys = (getTableSetting(tc, "group_fields") as string[]) || [];
@@ -3624,13 +3627,29 @@ export function ProjectDetail({
               )}
               {/* 最底层：显示数据表格 */}
               {node.children.length === 0 && displayCols.length > 0 && (
-                <table className="w-full text-sm">
+                <table className="w-full text-sm" style={{ tableLayout: "fixed" }}>
+                  <colgroup>
+                    {displayCols.map((col: ColumnConfig) => (
+                      <col key={col.key} style={{ width: getColWidth(col.name) }} />
+                    ))}
+                    <col style={{ width: 80 }} />
+                  </colgroup>
                   <thead>
                     <tr className="bg-gray-50 text-xs text-gray-500">
                       {displayCols.map((col: ColumnConfig) => (
-                        <th key={col.key} className="px-4 py-2 text-left font-medium">{col.label || col.key}</th>
+                        <th key={col.key} className="px-2 py-2 text-left font-medium relative">
+                          {col.label || col.key}
+                          <div
+                            className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 transition-colors"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleResize(`${tc}:${col.name}`, getColWidth(col.name), e.clientX);
+                            }}
+                          />
+                        </th>
                       ))}
-                      <th className="px-4 py-2 text-right font-medium w-24">操作</th>
+                      <th className="px-2 py-2 text-right font-medium" style={{ width: 80 }}>操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3646,7 +3665,7 @@ export function ProjectDetail({
                             const isEditingThis = isEditing && editingCell?.column === col.name;
                             const isReadonlyCol = table.readonly_mode === "or" ? (!!col.readonly || row?._readonly === true) : (!!col.readonly && row?._readonly === true);
                             return (
-                              <td key={col.key} className="px-4 py-2">
+                              <td key={col.key} className="px-2 py-1.5">
                                 {isEditingThis ? (
                                   renderEditCell(col, isReadonlyCol, cellValue)
                                 ) : (
@@ -3667,7 +3686,7 @@ export function ProjectDetail({
                               </td>
                             );
                           })}
-                          <td className="px-4 py-2 text-right">
+                          <td className="px-2 py-1.5 text-right">
                             {!isRowReadonly(tc, rowId) && <button onClick={() => startEdit(tc, rowId, displayCols[0]?.name || '', row[displayCols[0]?.key ?? displayCols[0]?.name ?? ''])} className="text-xs text-gray-500 hover:text-gray-700 mr-2">编辑</button>}
                             {canDelete && (
                               <button onClick={() => handleDeleteRow(tc, rowId)} className="text-xs text-red-500 hover:text-red-700">删除</button>
