@@ -1355,6 +1355,56 @@ export function StandardManagement({
     });
   };
 
+  const drawerAddColumnOption = (colIndex: number, option: string) => {
+    if (!option.trim()) return;
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        columns_config: (prev.columns_config || []).map((col, i) =>
+          i === colIndex ? { ...col, options: [...(col.options || []), option.trim()] } : col
+        ),
+      };
+    });
+  };
+
+  const drawerRemoveColumnOption = (colIndex: number, optIndex: number) => {
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        columns_config: (prev.columns_config || []).map((col, i) =>
+          i === colIndex ? { ...col, options: (col.options || []).filter((_, oi) => oi !== optIndex) } : col
+        ),
+      };
+    });
+  };
+
+  const drawerAddColumnQuickInput = (colIndex: number, phrase: string) => {
+    if (!phrase.trim()) return;
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        columns_config: (prev.columns_config || []).map((col, i) =>
+          i === colIndex ? { ...col, quick_inputs: [...(col.quick_inputs || []), phrase.trim()] } : col
+        ),
+      };
+    });
+  };
+
+  const drawerRemoveColumnQuickInput = (colIndex: number, qiIndex: number) => {
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        columns_config: (prev.columns_config || []).map((col, i) =>
+          i === colIndex ? { ...col, quick_inputs: (col.quick_inputs || []).filter((_, qii) => qii !== qiIndex) } : col
+        ),
+      };
+    });
+  };
+
   // 打开数据记录对话框
   const openDataDialog = async (def: TableDefinition) => {
     setCurrentTableDef({ ...def, columns_config: dedupeColumnsByName(def.columns_config || []) });
@@ -2746,7 +2796,7 @@ export function StandardManagement({
                                     <span className="text-xs text-muted-foreground shrink-0 w-10 pt-2 font-medium sticky left-0 bg-card z-10">列名</span>
                                     <div className="flex gap-2">
                                       {(drawerFormData.columns_config || []).map((col, ci) => (
-                                        <div key={`name-${ci}`} className="w-[160px] shrink-0">
+                                        <div key={`name-${ci}`} className="w-[200px] shrink-0">
                                           <Input
                                             value={col.name}
                                             onChange={(e) => drawerUpdateColumn(ci, "name", e.target.value)}
@@ -2787,7 +2837,7 @@ export function StandardManagement({
                                     <span className="text-xs text-muted-foreground shrink-0 w-10 pt-2 font-medium sticky left-0 bg-card z-10">类型</span>
                                     <div className="flex gap-2">
                                       {(drawerFormData.columns_config || []).map((col, ci) => (
-                                        <div key={`type-${ci}`} className="w-[160px] shrink-0">
+                                        <div key={`type-${ci}`} className="w-[200px] shrink-0">
                                           <Select
                                             value={col.type}
                                             onValueChange={(value) => drawerUpdateColumn(ci, "type", value)}
@@ -2813,7 +2863,7 @@ export function StandardManagement({
                                     <span className="text-xs text-muted-foreground shrink-0 w-10 pt-2 font-medium sticky left-0 bg-card z-10">描述</span>
                                     <div className="flex gap-2">
                                       {(drawerFormData.columns_config || []).map((col, ci) => (
-                                        <div key={`desc-${ci}`} className="w-[160px] shrink-0">
+                                        <div key={`desc-${ci}`} className="w-[200px] shrink-0">
                                           <Input
                                             value={col.description || ""}
                                             onChange={(e) => drawerUpdateColumn(ci, "description", e.target.value)}
@@ -2824,6 +2874,203 @@ export function StandardManagement({
                                       ))}
                                     </div>
                                   </div>
+
+                                  {/* select/multiple_select: 选项 + 展示方式 */}
+                                  {(drawerFormData.columns_config || []).some(c => c.type === "select" || c.type === "multiple_select") && (
+                                    <>
+                                      <div className="flex items-start gap-3">
+                                        <span className="text-xs text-muted-foreground shrink-0 w-10 pt-1 font-medium sticky left-0 bg-card z-10">选项</span>
+                                        <div className="flex gap-2">
+                                          {(drawerFormData.columns_config || []).map((col, ci) => (
+                                            <div key={`drawer-opts-${ci}`} className="w-[200px] shrink-0">
+                                              {(col.type === "select" || col.type === "multiple_select") ? (
+                                                <div className="flex flex-wrap items-center gap-1 min-h-[28px]">
+                                                  {(col.options || []).map((opt, oi) => (
+                                                    <span key={oi} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs px-1.5 py-0.5 rounded-full">
+                                                      {opt}
+                                                      <button type="button" onClick={() => drawerRemoveColumnOption(ci, oi)} className="hover:text-destructive">
+                                                        <X className="w-3 h-3" />
+                                                      </button>
+                                                    </span>
+                                                  ))}
+                                                  <input
+                                                    type="text"
+                                                    placeholder="输入后回车"
+                                                    className="h-6 text-xs border-b border-dashed border-muted-foreground/30 bg-transparent outline-none focus:border-primary w-20"
+                                                    onKeyDown={(e) => {
+                                                      if (e.key === "Enter") {
+                                                        e.preventDefault();
+                                                        const val = (e.target as HTMLInputElement).value;
+                                                        drawerAddColumnOption(ci, val);
+                                                        (e.target as HTMLInputElement).value = "";
+                                                      }
+                                                    }}
+                                                  />
+                                                </div>
+                                              ) : null}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                      {(() => {
+                                        const hasSelectType = (drawerFormData.columns_config || []).some(c => c.type === "select");
+                                        if (!hasSelectType) return null;
+                                        return (
+                                          <div className="flex items-start gap-3">
+                                            <span className="text-xs text-muted-foreground shrink-0 w-10 pt-1 font-medium sticky left-0 bg-card z-10">展示</span>
+                                            <div className="flex gap-2">
+                                              {(drawerFormData.columns_config || []).map((col, ci) => (
+                                                <div key={`drawer-disp-${ci}`} className="w-[200px] shrink-0">
+                                                  {col.type === "select" ? (
+                                                    <div className="flex gap-1">
+                                                      <Button type="button" variant={col.display_mode !== "checkbox" ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "display_mode", "dropdown")}>下拉</Button>
+                                                      <Button type="button" variant={col.display_mode === "checkbox" ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "display_mode", "checkbox")}>单选框</Button>
+                                                    </div>
+                                                  ) : null}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
+                                    </>
+                                  )}
+
+                                  {/* text: 快捷语 */}
+                                  {(drawerFormData.columns_config || []).some(c => c.type === "text") && (
+                                    <div className="flex items-start gap-3">
+                                      <span className="text-xs text-muted-foreground shrink-0 w-10 pt-1 font-medium sticky left-0 bg-card z-10">快捷语</span>
+                                      <div className="flex gap-2">
+                                        {(drawerFormData.columns_config || []).map((col, ci) => (
+                                          <div key={`drawer-qi-${ci}`} className="w-[200px] shrink-0">
+                                            {col.type === "text" ? (
+                                              <div className="flex flex-wrap items-center gap-1 min-h-[28px]">
+                                                {(col.quick_inputs || []).map((phrase, qi) => (
+                                                  <span key={qi} className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs px-1.5 py-0.5 rounded-full">
+                                                    {phrase}
+                                                    <button type="button" onClick={() => drawerRemoveColumnQuickInput(ci, qi)} className="hover:text-destructive">
+                                                      <X className="w-3 h-3" />
+                                                    </button>
+                                                  </span>
+                                                ))}
+                                                <input
+                                                  type="text"
+                                                  placeholder="输入后回车"
+                                                  className="h-6 text-xs border-b border-dashed border-muted-foreground/30 bg-transparent outline-none focus:border-primary w-20"
+                                                  onKeyDown={(e) => {
+                                                    if (e.key === "Enter") {
+                                                      e.preventDefault();
+                                                      const val = (e.target as HTMLInputElement).value;
+                                                      drawerAddColumnQuickInput(ci, val);
+                                                      (e.target as HTMLInputElement).value = "";
+                                                    }
+                                                  }}
+                                                />
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* number: 显示格式 */}
+                                  {(drawerFormData.columns_config || []).some(c => c.type === "number") && (
+                                    <div className="flex items-start gap-3">
+                                      <span className="text-xs text-muted-foreground shrink-0 w-10 pt-1 font-medium sticky left-0 bg-card z-10">格式</span>
+                                      <div className="flex gap-2">
+                                        {(drawerFormData.columns_config || []).map((col, ci) => (
+                                          <div key={`drawer-fmt-${ci}`} className="w-[200px] shrink-0">
+                                            {col.type === "number" ? (
+                                              <div className="flex gap-1">
+                                                <Button type="button" variant={col.format !== "percent" ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "format", undefined)}>普通数字</Button>
+                                                <Button type="button" variant={col.format === "percent" ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "format", "percent")}>百分比</Button>
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* procurement_module: 数据来源 + 选择方式 */}
+                                  {(drawerFormData.columns_config || []).some(c => c.type === "procurement_module") && (
+                                    <div className="flex items-start gap-3">
+                                      <span className="text-xs text-muted-foreground shrink-0 w-10 pt-1 font-medium sticky left-0 bg-card z-10">来源</span>
+                                      <div className="flex gap-2">
+                                        {(drawerFormData.columns_config || []).map((col, ci) => (
+                                          <div key={`drawer-pms-${ci}`} className="w-[200px] shrink-0">
+                                            {col.type === "procurement_module" ? (
+                                              <div className="flex flex-col gap-1">
+                                                <div className="flex gap-1">
+                                                  <Button type="button" variant={col.display_mode !== "system" ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "display_mode", "project")}>项目采购模块</Button>
+                                                  <Button type="button" variant={col.display_mode === "system" ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "display_mode", "system")}>系统产品模块</Button>
+                                                </div>
+                                                <div className="flex gap-1">
+                                                  <Button type="button" variant={!col.multiple ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "multiple", false)}>单选</Button>
+                                                  <Button type="button" variant={col.multiple ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "multiple", true)}>多选</Button>
+                                                </div>
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* user: 选择方式 */}
+                                  {(drawerFormData.columns_config || []).some(c => c.type === "user") && (
+                                    <div className="flex items-start gap-3">
+                                      <span className="text-xs text-muted-foreground shrink-0 w-10 pt-1 font-medium sticky left-0 bg-card z-10">选择</span>
+                                      <div className="flex gap-2">
+                                        {(drawerFormData.columns_config || []).map((col, ci) => (
+                                          <div key={`drawer-usr-${ci}`} className="w-[200px] shrink-0">
+                                            {col.type === "user" ? (
+                                              <div className="flex gap-1">
+                                                <Button type="button" variant={!col.multiple ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "multiple", false)}>单选</Button>
+                                                <Button type="button" variant={col.multiple ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "multiple", true)}>多选</Button>
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* video: 最大文件 + 最多上传 */}
+                                  {(drawerFormData.columns_config || []).some(c => c.type === "video") && (
+                                    <div className="flex items-start gap-3">
+                                      <span className="text-xs text-muted-foreground shrink-0 w-10 pt-1 font-medium sticky left-0 bg-card z-10">限制</span>
+                                      <div className="flex gap-2">
+                                        {(drawerFormData.columns_config || []).map((col, ci) => (
+                                          <div key={`drawer-vid-${ci}`} className="w-[200px] shrink-0">
+                                            {col.type === "video" ? (
+                                              <div className="flex items-center gap-2">
+                                                <Select value={col.max_size || "1GB"} onValueChange={(v) => drawerUpdateColumn(ci, "max_size", v)}>
+                                                  <SelectTrigger className="h-6 w-20 text-xs"><SelectValue /></SelectTrigger>
+                                                  <SelectContent>
+                                                    <SelectItem value="100MB">100MB</SelectItem>
+                                                    <SelectItem value="500MB">500MB</SelectItem>
+                                                    <SelectItem value="1GB">1GB</SelectItem>
+                                                  </SelectContent>
+                                                </Select>
+                                                <span className="text-xs text-muted-foreground">最多</span>
+                                                <Select value={String(col.max_count || 5)} onValueChange={(v) => drawerUpdateColumn(ci, "max_count", Number(v))}>
+                                                  <SelectTrigger className="h-6 w-14 text-xs"><SelectValue /></SelectTrigger>
+                                                  <SelectContent>
+                                                    <SelectItem value="1">1个</SelectItem>
+                                                    <SelectItem value="3">3个</SelectItem>
+                                                    <SelectItem value="5">5个</SelectItem>
+                                                    <SelectItem value="10">10个</SelectItem>
+                                                  </SelectContent>
+                                                </Select>
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
 
                                   {/* 删除列按钮行 */}
                                   <div className="flex items-start gap-3">
