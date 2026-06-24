@@ -68,6 +68,31 @@ export async function GET(request: NextRequest) {
       }
     } catch { /* ignore config load errors */ }
 
+    // 0b. Load KPI config for high_risk_remaining
+    let highRiskConfig: {
+      table_code?: string; module_type?: string; table_name?: string;
+      include_column?: string; include_value?: string;
+      exclude_column?: string; exclude_value?: string;
+    } | null = null;
+    try {
+      const { data: hrConfigRows } = await client.rpc("execute_sql", {
+        p_sql: `SELECT config_value FROM design_public.dashboard_kpi_config WHERE kpi_key = 'high_risk_remaining'`,
+      });
+      const rows = hrConfigRows as Array<{ config_value: Record<string, unknown> }> | null;
+      if (rows && rows.length > 0 && rows[0].config_value) {
+        const cv = rows[0].config_value;
+        highRiskConfig = {
+          table_code: typeof cv.table_code === "string" ? cv.table_code : undefined,
+          module_type: typeof cv.module_type === "string" ? cv.module_type : undefined,
+          table_name: typeof cv.table_name === "string" ? cv.table_name : undefined,
+          include_column: typeof cv.include_column === "string" ? cv.include_column : undefined,
+          include_value: typeof cv.include_value === "string" ? cv.include_value : undefined,
+          exclude_column: typeof cv.exclude_column === "string" ? cv.exclude_column : undefined,
+          exclude_value: typeof cv.exclude_value === "string" ? cv.exclude_value : undefined,
+        };
+      }
+    } catch { /* ignore */ }
+
     // 1. Get all projects
     const { data: projectRows } = await client.rpc("dp_select", { p_table: "projects" });
     let projects = (projectRows as Array<Record<string, unknown>>) || [];
@@ -177,7 +202,7 @@ export async function GET(request: NextRequest) {
               } else if (module === "requirement" || row.tbl.includes("requirement")) {
                 totalRequirements += count;
               }
-              if (module === "risk") totalHighRisk += count;
+              // high-risk: only counted via config (see step 4b below), no fallback
               if (module === "schedule" || module === "task") totalTasks += count;
               if (module === "communication") totalStakeholders += count;
               if (module === "procurement") totalProcurement += count;
@@ -185,6 +210,30 @@ export async function GET(request: NextRequest) {
           } catch {
             // batch failed, skip
           }
+        }
+
+        // 4b. If high-risk config is set, query with filter conditions
+        if (highRiskConfig?.table_code && highRiskConfig.include_column && highRiskConfig.include_value) {
+          try {
+            const incCol = `"${highRiskConfig.include_column.replace(/"/g, '""')}"`;
+            const incVal = highRiskConfig.include_value.replace(/'/g, "''");
+            // Count: rows matching include condition
+            const countSql = `SELECT COUNT(*) as cnt FROM ${schema}."${highRiskConfig.table_code}" WHERE ${incCol} = '${incVal}'`;
+            const { data: countRes } = await client.rpc("execute_sql", { p_sql: countSql });
+            const total = Number((countRes as any[])?.[0]?.cnt || 0);
+
+            // Count: rows matching include AND exclude conditions
+            let excluded = 0;
+            if (highRiskConfig.exclude_column && highRiskConfig.exclude_value) {
+              const excCol = `"${highRiskConfig.exclude_column.replace(/"/g, '""')}"`;
+              const excVal = highRiskConfig.exclude_value.replace(/'/g, "''");
+              const excSql = `SELECT COUNT(*) as cnt FROM ${schema}."${highRiskConfig.table_code}" WHERE ${incCol} = '${incVal}' AND ${excCol} = '${excVal}'`;
+              const { data: excRes } = await client.rpc("execute_sql", { p_sql: excSql });
+              excluded = Number((excRes as any[])?.[0]?.cnt || 0);
+            }
+
+            totalHighRisk += Math.max(0, total - excluded);
+          } catch { /* skip if table/column doesn't exist in this schema */ }
         }
 
         // Convert counts to domain scores (simplified: if data exists, score ~70-90%)
@@ -304,7 +353,7 @@ export async function GET(request: NextRequest) {
     );
 
     // Use defaults when no real data
-    const reqTotal = totalRequirements || projects.length * 5;
+    const reqTotal = totalRequirements;
     const now = new Date();
     const trendMonths = Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
@@ -599,7 +648,7 @@ export async function GET(request: NextRequest) {
                 )
               : null,
           total_requirements: reqTotal,
-          high_risk_remaining: totalHighRisk || Math.ceil(projects.length * 1.2),
+          high_risk_remaining: totalHighRisk,
           total_tasks: totalTasks || projects.length * 9,
           stakeholders: totalStakeholders || totalMembers || projects.length * 5,
           procurement_items: totalProcurement || projects.length * 3,

@@ -25,7 +25,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   Popover,
@@ -380,6 +381,25 @@ export function ProjectDashboard({
   const [kpiConfigSelectedTable, setKpiConfigSelectedTable] = useState("");
   const [kpiConfigSaving, setKpiConfigSaving] = useState(false);
 
+  // 高风险残留 KPI 配置
+  const [highRiskConfigModal, setHighRiskConfigModal] = useState(false);
+  const [highRiskConfig, setHighRiskConfig] = useState<{
+    table_code: string; module_type: string; table_name: string;
+    include_column: string; include_value: string;
+    exclude_column: string; exclude_value: string;
+  } | null>(null);
+  const [highRiskSelectedModule, setHighRiskSelectedModule] = useState("");
+  const [highRiskSelectedTable, setHighRiskSelectedTable] = useState("");
+  const [highRiskIncludeColumn, setHighRiskIncludeColumn] = useState("");
+  const [highRiskIncludeValue, setHighRiskIncludeValue] = useState("");
+  const [highRiskExcludeColumn, setHighRiskExcludeColumn] = useState("");
+  const [highRiskExcludeValue, setHighRiskExcludeValue] = useState("");
+  const [highRiskSaving, setHighRiskSaving] = useState(false);
+  // 选中表后加载的列选项
+  const [highRiskTableColumns, setHighRiskTableColumns] = useState<Array<{ name: string; type: string; options?: string[] }>>([]);
+  const [highRiskIncludeValues, setHighRiskIncludeValues] = useState<string[]>([]);
+  const [highRiskExcludeValues, setHighRiskExcludeValues] = useState<string[]>([]);
+
   /* AI */
   const [aiWarnings, setAiWarnings] = useState<AIWarning[] | null>(null);
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -648,6 +668,14 @@ export function ProjectDashboard({
       .sort((a, b) => a.table_code.localeCompare(b.table_code));
   }, [kpiConfigDefs, kpiConfigSelectedModule]);
 
+  const highRiskTableOptions = useMemo(() => {
+    if (!highRiskSelectedModule) return [];
+    return kpiConfigDefs
+      .filter((d) => d.module_type?.includes(highRiskSelectedModule))
+      .map((d) => ({ table_code: d.table_code, table_name: d.table_name }))
+      .sort((a, b) => a.table_code.localeCompare(b.table_code));
+  }, [kpiConfigDefs, highRiskSelectedModule]);
+
   const handleSaveKpiConfig = async () => {
     if (!kpiConfigSelectedTable) return;
     const selectedDef = kpiConfigDefs.find((d) => d.table_code === kpiConfigSelectedTable);
@@ -702,6 +730,127 @@ export function ProjectDashboard({
       setKpiConfigSaving(false);
     }
   };
+
+  /* ---- high-risk KPI config ---- */
+  // Load table columns when table is selected
+  useEffect(() => {
+    if (!highRiskSelectedTable) return;
+    const def = kpiConfigDefs.find((d) => d.table_code === highRiskSelectedTable);
+    if (!def) return;
+    // Get the full table definition with columns_config
+    fetch(`/api/standards?table_code=${highRiskSelectedTable}`)
+      .then((r) => r.json())
+      .then((json) => {
+        const fullDef = (json.data || []).find((d: any) => d.table_code === highRiskSelectedTable);
+        if (fullDef?.columns_config) {
+          const cols = (fullDef.columns_config as Array<any>).filter((c: any) => c.name && !["id", "sort_order", "created_at", "updated_at", "created_by", "allow_delete", "_readonly", "data_source"].includes(c.name));
+          setHighRiskTableColumns(cols);
+        }
+      })
+      .catch(() => {});
+  }, [highRiskSelectedTable, kpiConfigDefs]);
+
+  // Load column values when a column is selected for include/exclude
+  useEffect(() => {
+    if (!highRiskSelectedTable || !highRiskIncludeColumn) { setHighRiskIncludeValues([]); return; }
+    const col = highRiskTableColumns.find((c) => c.name === highRiskIncludeColumn);
+    setHighRiskIncludeValues(col?.options || []);
+  }, [highRiskIncludeColumn, highRiskSelectedTable, highRiskTableColumns]);
+
+  useEffect(() => {
+    if (!highRiskSelectedTable || !highRiskExcludeColumn) { setHighRiskExcludeValues([]); return; }
+    const col = highRiskTableColumns.find((c) => c.name === highRiskExcludeColumn);
+    setHighRiskExcludeValues(col?.options || []);
+  }, [highRiskExcludeColumn, highRiskSelectedTable, highRiskTableColumns]);
+
+  const handleSaveHighRiskConfig = async () => {
+    if (!highRiskSelectedTable || !highRiskIncludeColumn || !highRiskIncludeValue) return;
+    const selectedDef = kpiConfigDefs.find((d) => d.table_code === highRiskSelectedTable);
+    const configValue = {
+      table_code: highRiskSelectedTable,
+      module_type: highRiskSelectedModule,
+      table_name: selectedDef?.table_name || highRiskSelectedTable,
+      include_column: highRiskIncludeColumn,
+      include_value: highRiskIncludeValue,
+      exclude_column: highRiskExcludeColumn || null,
+      exclude_value: highRiskExcludeValue || null,
+    };
+    setHighRiskSaving(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch("/api/dashboard/kpi-config", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ kpi_key: "high_risk_remaining", config_value: configValue }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "保存失败");
+      setHighRiskConfig(configValue as any);
+      setHighRiskConfigModal(false);
+      toast.success("高风险残留数据源已更新");
+      fetchData(selectedIds.size > 0 ? Array.from(selectedIds) : undefined);
+    } catch (e: any) {
+      toast.error(e.message || "保存失败");
+    } finally {
+      setHighRiskSaving(false);
+    }
+  };
+
+  const handleResetHighRiskConfig = async () => {
+    setHighRiskSaving(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      await fetch("/api/dashboard/kpi-config", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ kpi_key: "high_risk_remaining", config_value: null }),
+      });
+      setHighRiskConfig(null);
+      setHighRiskConfigModal(false);
+      toast.success("已恢复默认数据源（risk 模块）");
+      fetchData(selectedIds.size > 0 ? Array.from(selectedIds) : undefined);
+    } catch (e: any) {
+      toast.error(e.message || "重置失败");
+    } finally {
+      setHighRiskSaving(false);
+    }
+  };
+
+  // Load high-risk config on mount
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    fetch("/api/dashboard/kpi-config?kpi_key=high_risk_remaining")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.data) {
+          setHighRiskConfig(json.data);
+          setHighRiskSelectedModule(json.data.module_type || "");
+          setHighRiskSelectedTable(json.data.table_code || "");
+          setHighRiskIncludeColumn(json.data.include_column || "");
+          setHighRiskIncludeValue(json.data.include_value || "");
+          setHighRiskExcludeColumn(json.data.exclude_column || "");
+          setHighRiskExcludeValue(json.data.exclude_value || "");
+        }
+      })
+      .catch(() => {});
+  }, [isSuperAdmin]);
+
+  // Set module/table values when config is loaded (for opening modal with pre-filled values)
+  useEffect(() => {
+    if (highRiskConfigModal && highRiskConfig && !highRiskSelectedModule) {
+      setHighRiskSelectedModule(highRiskConfig.module_type || "");
+      setHighRiskSelectedTable(highRiskConfig.table_code || "");
+      setHighRiskIncludeColumn(highRiskConfig.include_column || "");
+      setHighRiskIncludeValue(highRiskConfig.include_value || "");
+      setHighRiskExcludeColumn(highRiskConfig.exclude_column || "");
+      setHighRiskExcludeValue(highRiskConfig.exclude_value || "");
+    }
+  }, [highRiskConfigModal]);
 
   /* ---- loading / error states ---- */
   if (loading && !data) {
@@ -784,7 +933,12 @@ export function ProjectDashboard({
           variant={2}
           onSettings={isSuperAdmin ? () => setKpiConfigModal(true) : undefined}
         />
-        <KpiCard value={kpi?.high_risk_remaining ?? 0} label="高风险残留" variant={3} />
+        <KpiCard
+          value={kpi?.high_risk_remaining ?? 0}
+          label="高风险残留"
+          variant={3}
+          onSettings={isSuperAdmin ? () => setHighRiskConfigModal(true) : undefined}
+        />
         <KpiCard value={kpi?.total_tasks ?? 0} label="任务总数" variant={4} />
         <KpiCard value={kpi?.stakeholders ?? 0} label="干系人" variant={5} />
         <KpiCard value={kpi?.procurement_items ?? 0} label="采购项" variant={6} />
@@ -1696,6 +1850,178 @@ export function ProjectDashboard({
                 disabled={!kpiConfigSelectedTable || kpiConfigSaving}
               >
                 {kpiConfigSaving ? "保存中..." : "保存"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 高风险残留 · 数据源配置 */}
+      <Dialog open={highRiskConfigModal} onOpenChange={setHighRiskConfigModal}>
+        <DialogContent style={{ maxWidth: 480 }}>
+          <DialogHeader>
+            <DialogTitle style={{ fontSize: 15 }}>高风险残留 · 数据源配置</DialogTitle>
+            <DialogDescription>
+              设置如何计算"高风险残留"：先筛选出符合条件A的行，减去其中同时符合条件B的行。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3" style={{ marginTop: 8, marginBottom: 8 }}>
+            {/* Current config */}
+            {highRiskConfig && (
+              <div className="text-xs text-muted-foreground bg-muted/50 rounded px-3 py-2">
+                当前: <strong>{highRiskConfig.table_name || highRiskConfig.table_code}</strong>
+                （{MODULE_LABEL_MAP[highRiskConfig.module_type] || highRiskConfig.module_type} 模块）
+              </div>
+            )}
+
+            {/* Module select */}
+            <div>
+              <Label className="text-xs">选择模块</Label>
+              <select
+                className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                value={highRiskSelectedModule}
+                onChange={(e) => {
+                  setHighRiskSelectedModule(e.target.value);
+                  setHighRiskSelectedTable("");
+                  setHighRiskIncludeColumn("");
+                  setHighRiskExcludeColumn("");
+                }}
+              >
+                <option value="">-- 选择模块 --</option>
+                {kpiModuleOptions.map((m) => (
+                  <option key={m.code} value={m.code}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Table select */}
+            {highRiskSelectedModule && (
+              <div>
+                <Label className="text-xs">选择数据表</Label>
+                <select
+                  className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                  value={highRiskSelectedTable}
+                  onChange={(e) => {
+                    setHighRiskSelectedTable(e.target.value);
+                    setHighRiskIncludeColumn("");
+                    setHighRiskExcludeColumn("");
+                  }}
+                >
+                  <option value="">-- 选择数据表 --</option>
+                  {highRiskTableOptions.map((t) => (
+                    <option key={t.table_code} value={t.table_code}>{t.table_name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Column selects */}
+            {highRiskSelectedTable && highRiskTableColumns.length > 0 && (
+              <>
+                <div className="border-t pt-3">
+                  <Label className="text-xs font-semibold text-orange-600">筛选条件 A（高风险项）</Label>
+                  <p className="text-[10px] text-muted-foreground mb-2">选择列 + 值，统计符合条件的行数</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                      value={highRiskIncludeColumn}
+                      onChange={(e) => { setHighRiskIncludeColumn(e.target.value); setHighRiskIncludeValue(""); }}
+                    >
+                      <option value="">-- 选择列 --</option>
+                      {highRiskTableColumns.map((c) => (
+                        <option key={c.name} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+                    <select
+                      className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                      value={highRiskIncludeValue}
+                      onChange={(e) => setHighRiskIncludeValue(e.target.value)}
+                      disabled={!highRiskIncludeColumn}
+                    >
+                      <option value="">-- 选择值 --</option>
+                      {highRiskIncludeValues.map((v) => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                      {highRiskIncludeValues.length === 0 && highRiskIncludeColumn && (
+                        <option value="">(无预设选项，可手动输入)</option>
+                      )}
+                    </select>
+                  </div>
+                  {highRiskIncludeColumn && highRiskIncludeValues.length === 0 && (
+                    <Input
+                      className="h-8 text-sm mt-2"
+                      placeholder="手动输入筛选值..."
+                      value={highRiskIncludeValue}
+                      onChange={(e) => setHighRiskIncludeValue(e.target.value)}
+                    />
+                  )}
+                </div>
+
+                <div className="border-t pt-3">
+                  <Label className="text-xs font-semibold text-blue-600">排除条件 B（已完成项，可选）</Label>
+                  <p className="text-[10px] text-muted-foreground mb-2">从 A 的结果中减去同时满足 B 的行（可留空）</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                      value={highRiskExcludeColumn}
+                      onChange={(e) => { setHighRiskExcludeColumn(e.target.value); setHighRiskExcludeValue(""); }}
+                    >
+                      <option value="">-- 选择列（可选）--</option>
+                      {highRiskTableColumns.map((c) => (
+                        <option key={c.name} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+                    <select
+                      className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                      value={highRiskExcludeValue}
+                      onChange={(e) => setHighRiskExcludeValue(e.target.value)}
+                      disabled={!highRiskExcludeColumn}
+                    >
+                      <option value="">-- 选择值 --</option>
+                      {highRiskExcludeValues.map((v) => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                      {highRiskExcludeValues.length === 0 && highRiskExcludeColumn && (
+                        <option value="">(无预设选项，可手动输入)</option>
+                      )}
+                    </select>
+                  </div>
+                  {highRiskExcludeColumn && highRiskExcludeValues.length === 0 && (
+                    <Input
+                      className="h-8 text-sm mt-2"
+                      placeholder="手动输入排除值..."
+                      value={highRiskExcludeValue}
+                      onChange={(e) => setHighRiskExcludeValue(e.target.value)}
+                    />
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Formula preview */}
+            {highRiskIncludeColumn && highRiskIncludeValue && (
+              <div className="text-xs text-muted-foreground bg-muted/50 rounded px-3 py-2">
+                <div>
+                  公式: <strong className="text-orange-600">COUNT({`${highRiskIncludeColumn} = "${highRiskIncludeValue}"`})</strong>
+                  {highRiskExcludeColumn && highRiskExcludeValue && (
+                    <> - <strong className="text-blue-600">COUNT({`${highRiskIncludeColumn} = "${highRiskIncludeValue}" AND ${highRiskExcludeColumn} = "${highRiskExcludeValue}"`})</strong></>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-between" style={{ marginTop: 12 }}>
+            <div>
+              {highRiskConfig && (
+                <Button variant="ghost" size="sm" onClick={handleResetHighRiskConfig} disabled={highRiskSaving} className="text-muted-foreground">
+                  恢复默认
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setHighRiskConfigModal(false)}>取消</Button>
+              <Button size="sm" onClick={handleSaveHighRiskConfig} disabled={highRiskSaving || !highRiskSelectedTable || !highRiskIncludeColumn || !highRiskIncludeValue}>
+                {highRiskSaving ? "保存中..." : "保存"}
               </Button>
             </div>
           </div>

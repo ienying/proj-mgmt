@@ -33,13 +33,15 @@ async function getCallerRole(request: NextRequest): Promise<string | null> {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await ensureTable();
     const client = await createServerClient();
+    const { searchParams } = new URL(request.url);
+    const kpiKey = searchParams.get("kpi_key") || "requirement_total";
 
     const { data } = await client.rpc("execute_sql", {
-      p_sql: `SELECT config_value FROM design_public.dashboard_kpi_config WHERE kpi_key = 'requirement_total'`,
+      p_sql: `SELECT config_value FROM design_public.dashboard_kpi_config WHERE kpi_key = '${kpiKey.replace(/'/g, "''")}'`,
     });
 
     const rows = data as Array<{ config_value: unknown }> | null;
@@ -62,17 +64,18 @@ export async function PUT(request: NextRequest) {
     await ensureTable();
     const client = await createServerClient();
     const body = await request.json();
+    const kpiKey = (body.kpi_key as string) || "requirement_total";
     const configValue = body.config_value ?? null;
 
     // Upsert: delete existing then insert
     await client.rpc("execute_sql", {
-      p_sql: `DELETE FROM design_public.dashboard_kpi_config WHERE kpi_key = 'requirement_total'`,
+      p_sql: `DELETE FROM design_public.dashboard_kpi_config WHERE kpi_key = '${kpiKey.replace(/'/g, "''")}'`,
     });
 
     if (configValue !== null) {
       const escaped = JSON.stringify(configValue).replace(/'/g, "''");
       await client.rpc("execute_sql", {
-        p_sql: `INSERT INTO design_public.dashboard_kpi_config (kpi_key, config_value, updated_at) VALUES ('requirement_total', '${escaped}'::jsonb, NOW())`,
+        p_sql: `INSERT INTO design_public.dashboard_kpi_config (kpi_key, config_value, updated_at) VALUES ('${kpiKey.replace(/'/g, "''")}', '${escaped}'::jsonb, NOW())`,
       });
     }
 
