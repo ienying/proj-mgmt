@@ -2115,10 +2115,10 @@ export function ProjectDetail({
                       return (
                         <td key={col.name} className={cn(
                           "px-2 py-1.5 text-sm border-r border-slate-100 last:border-r-0 align-top",
-                          isFrozen && "sticky left-0 z-10 bg-white border-r-2 border-slate-200",
-                          isRowEditing && isFrozen && "bg-white",
+                          isFrozen && "sticky left-0 z-[15] bg-white border-r-2 border-slate-200",
+                          isRowEditing && isFrozen && "!bg-white",
                           isRowEditing && !isFrozen && "bg-white",
-                          isFrozen && rowIdx % 2 === 1 && "bg-slate-50/50"
+                          isFrozen && rowIdx % 2 === 1 && "!bg-slate-50"
                         )}>
                           {isEditing ? (
                             renderEditCell(col, !!isReadonly, row[col.name])
@@ -3703,16 +3703,105 @@ export function ProjectDetail({
 
     const groupLabels = groupCols.map(c => c.label || c.key).join(' → ');
 
+    // 分组字段设置（内联）
+    const allGroupFields = columns;
+    const groupFieldsForUI: string[] = effectiveGroupKeys;
+    const groupDisplayFields = displayFieldKeys;
+
+    // 分组设置 Popover 内容
+    const renderGroupSettingsInline = () => (
+      <div className="space-y-2">
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">分组字段（支持多级）</Label>
+          {groupFieldsForUI.map((fKey: string, i: number) => (
+            <div key={i} className="flex items-center gap-1">
+              <span className="text-[10px] text-gray-400 shrink-0 w-4">{i + 1}.</span>
+              <Select value={fKey} onValueChange={v => {
+                const next = [...groupFieldsForUI];
+                next[i] = v;
+                setTableSetting(tc, "group_fields", next);
+              }}>
+                <SelectTrigger className="h-7 text-xs flex-1"><SelectValue placeholder="选择字段" /></SelectTrigger>
+                <SelectContent>
+                  {allGroupFields.map(f => (
+                    <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => {
+                const next = groupFieldsForUI.filter((_: string, j: number) => j !== i);
+                setTableSetting(tc, "group_fields", next);
+              }}>
+                <X className="w-3 h-3" />
+              </Button>
+            </div>
+          ))}
+          {groupFieldsForUI.length < allGroupFields.length && (
+            <Button variant="ghost" size="sm" className="h-6 text-xs text-blue-500 w-full" onClick={() => {
+              const used = new Set(groupFieldsForUI);
+              const next = allGroupFields.find(f => !used.has(f.key || f.name));
+              if (next) setTableSetting(tc, "group_fields", [...groupFieldsForUI, next.key || next.name]);
+            }}>+ 添加分组字段</Button>
+          )}
+        </div>
+        <div className="border-t" />
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">显示字段</Label>
+          <p className="text-[10px] text-muted-foreground">勾选要在分组内显示的字段</p>
+          <div className="max-h-[160px] overflow-y-auto space-y-1">
+            {nonGroupCols.map((f: ColumnConfig) => {
+              const fKey = f.key || f.name;
+              const checked = !groupFieldsConfigured || groupDisplayFields.includes(fKey);
+              return (
+                <label key={fKey} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
+                  <input type="checkbox" checked={checked} onChange={() => {
+                    const next = checked
+                      ? groupDisplayFields.filter((k: string) => k !== fKey)
+                      : [...groupDisplayFields, fKey];
+                    setTableSetting(tc, "group_display_fields", next);
+                    setTableSetting(tc, "group_display_fields_configured", true);
+                  }} className="rounded" />
+                  {f.label || f.name}
+                </label>
+              );
+            })}
+          </div>
+          {groupFieldsConfigured && (
+            <button
+              onClick={() => {
+                setTableSetting(tc, "group_display_fields", []);
+                setTableSetting(tc, "group_display_fields_configured", false);
+              }}
+              className="text-[10px] text-blue-500 hover:bg-blue-50 px-2 py-0.5 rounded w-full text-left"
+            >重置为全部显示</button>
+          )}
+        </div>
+      </div>
+    );
+
     return (
       <div className="space-y-2">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs text-gray-400">按「{groupLabels}」分组 · {data.length} 条记录</span>
-          <button
-            onClick={() => openAIPromptDialog(table.table_code)}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
-          >
-            <Sparkles className="h-3 w-3" />AI
-          </button>
+          <div className="flex items-center gap-1">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-gray-600 hover:bg-gray-200 transition-colors">
+                  <Settings2 className="h-3 w-3" />
+                  分组设置
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 max-h-[70vh] overflow-y-auto p-3" align="end">
+                {renderGroupSettingsInline()}
+              </PopoverContent>
+            </Popover>
+            <button
+              onClick={() => openAIPromptDialog(table.table_code)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
+            >
+              <Sparkles className="h-3 w-3" />AI
+            </button>
+          </div>
         </div>
         {groupTree.map(node => renderGroupNode(node, 0))}
         {groupTree.length === 0 && (
