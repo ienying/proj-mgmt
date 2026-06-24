@@ -2365,14 +2365,37 @@ export function ProjectDetail({
                 const canDelete = row.data_source === 'manual' || row.allow_delete !== false;
                 return (
                   <div key={rowId} className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-default">
-                    {visibleCols.map((col: ColumnConfig) => (
-                      <div key={col.key} className="mb-1">
-                        <span className="text-[10px] text-gray-400 mr-1">{col.label || col.key}:</span>
-                        <span className="text-xs">{renderCellValue(col, row[col.key ?? col.name])}</span>
-                      </div>
-                    ))}
+                    {visibleCols.map((col: ColumnConfig) => {
+                      const colKey = col.key ?? col.name;
+                      const isEditing = editingCell?.tableCode === table.table_code &&
+                                       editingCell?.rowId === rowId &&
+                                       editingCell?.column === col.name;
+                      const isReadonly = !!col.readonly;
+                      return (
+                        <div key={col.key} className="mb-1">
+                          <span className="text-[10px] text-gray-400 mr-1">{col.label || col.key}:</span>
+                          {isEditing ? (
+                            <span className="text-xs">{renderEditCell(col, isReadonly, row[colKey])}</span>
+                          ) : (
+                            <span
+                              className={!isReadonly ? "text-xs cursor-pointer hover:bg-blue-50 rounded px-1 -mx-1 inline-block" : "text-xs"}
+                              onClick={() => !isReadonly && startEdit(table.table_code, rowId, col.name, row[colKey])}
+                            >
+                              {isReadonly ? (
+                                renderCellValue(col, row[colKey])
+                              ) : (
+                                <span className="group inline-flex items-center gap-1">
+                                  {renderCellValue(col, row[colKey])}
+                                  <Pencil className="w-2.5 h-2.5 text-slate-300 opacity-0 group-hover:opacity-100 shrink-0" />
+                                </span>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                     <div className="flex gap-1 mt-2 pt-1 border-t border-gray-50">
-                      {!isRowReadonly(table.table_code, rowId) && <button onClick={() => startEditCell(table.table_code, rowId, visibleCols[0]?.key || '')} className="text-[10px] px-2 py-0.5 rounded text-gray-500 hover:bg-gray-100">编辑</button>}
+                      {!isRowReadonly(table.table_code, rowId) && <button onClick={() => startEdit(table.table_code, rowId, visibleCols[0]?.name || '', row[visibleCols[0]?.key ?? visibleCols[0]?.name ?? ''])} className="text-[10px] px-2 py-0.5 rounded text-gray-500 hover:bg-gray-100">编辑</button>}
                       {canDelete && (
                         <button onClick={() => handleDeleteRow(table.table_code, rowId)} className="text-[10px] px-2 py-0.5 rounded text-red-500 hover:bg-red-50">删除</button>
                       )}
