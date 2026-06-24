@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     // 构建插入 SQL
     const columns = Object.keys(dataWithMeta).map(k => `"${k}"`);
     const values = Object.values(dataWithMeta).map((v) => {
-      if (v === null || v === undefined) return "NULL";
+      if (v === null || v === undefined || v === "") return "NULL";
       if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
       if (typeof v === "number") return String(v);
       if (Array.isArray(v) || (typeof v === "object" && v !== null)) {
@@ -84,6 +84,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (error) {
+      console.error("新增记录 SQL 错误:", { sql: insertSQL, error });
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
@@ -111,7 +112,7 @@ export async function PUT(request: NextRequest) {
 
     // 构建更新 SQL
     const setClauses = Object.entries(data).map(([key, value]) => {
-      if (value === null || value === undefined) {
+      if (value === null || value === undefined || value === "") {
         return `"${key}" = NULL`;
       }
       if (typeof value === "boolean") {

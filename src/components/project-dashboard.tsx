@@ -400,6 +400,19 @@ export function ProjectDashboard({
   const [highRiskIncludeValues, setHighRiskIncludeValues] = useState<string[]>([]);
   const [highRiskExcludeValues, setHighRiskExcludeValues] = useState<string[]>([]);
 
+  /* task total KPI config */
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [taskConfig, setTaskConfig] = useState<{
+    table_code: string; module_type: string; table_name: string;
+    conditions?: { column: string; values: string[] };
+  } | null>(null);
+  const [taskSelectedModule, setTaskSelectedModule] = useState("");
+  const [taskSelectedTable, setTaskSelectedTable] = useState("");
+  const [taskSelectedColumn, setTaskSelectedColumn] = useState("");
+  const [taskSelectedValues, setTaskSelectedValues] = useState<string[]>([]);
+  const [taskTableColumns, setTaskTableColumns] = useState<Array<{ name: string; label: string; type: string; options: string[] }>>([]);
+  const [taskSaving, setTaskSaving] = useState(false);
+
   /* AI */
   const [aiWarnings, setAiWarnings] = useState<AIWarning[] | null>(null);
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -437,11 +450,18 @@ export function ProjectDashboard({
   /* ---- load KPI config ---- */
   useEffect(() => {
     if (!isSuperAdmin) return;
-    // Load current config
-    fetch("/api/dashboard/kpi-config")
+    // Load requirement_total config
+    fetch("/api/dashboard/kpi-config?kpi_key=requirement_total")
       .then((r) => r.json())
       .then((json) => {
         if (json.data) setKpiConfig(json.data);
+      })
+      .catch(() => {});
+    // Load task_total config
+    fetch("/api/dashboard/kpi-config?kpi_key=task_total")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.data) setTaskConfig(json.data);
       })
       .catch(() => {});
     // Load table definitions for selector
@@ -455,6 +475,20 @@ export function ProjectDashboard({
       })
       .catch(() => {});
   }, [isSuperAdmin]);
+
+  /* ---- load table columns for task config ---- */
+  useEffect(() => {
+    if (!taskSelectedTable || !taskModalOpen) return;
+    setTaskTableColumns([]);
+    setTaskSelectedColumn("");
+    setTaskSelectedValues([]);
+    fetch(`/api/dashboard/table-columns?table_code=${encodeURIComponent(taskSelectedTable)}`)
+      .then((r) => r.json())
+      .then((json) => {
+        setTaskTableColumns(json.data || []);
+      })
+      .catch(() => {});
+  }, [taskSelectedTable, taskModalOpen]);
 
   /* ---- fetch ---- */
   const fetchData = useCallback(async (ids?: string[]) => {
@@ -676,6 +710,14 @@ export function ProjectDashboard({
       .sort((a, b) => a.table_code.localeCompare(b.table_code));
   }, [kpiConfigDefs, highRiskSelectedModule]);
 
+  const taskTableOptions = useMemo(() => {
+    if (!taskSelectedModule) return [];
+    return kpiConfigDefs
+      .filter((d) => d.module_type?.includes(taskSelectedModule))
+      .map((d) => ({ table_code: d.table_code, table_name: d.table_name }))
+      .sort((a, b) => a.table_code.localeCompare(b.table_code));
+  }, [kpiConfigDefs, taskSelectedModule]);
+
   const handleSaveKpiConfig = async () => {
     if (!kpiConfigSelectedTable) return;
     const selectedDef = kpiConfigDefs.find((d) => d.table_code === kpiConfigSelectedTable);
@@ -728,6 +770,66 @@ export function ProjectDashboard({
       toast.error(e.message || "重置失败");
     } finally {
       setKpiConfigSaving(false);
+    }
+  };
+
+  /* ---- task total KPI config handlers ---- */
+  const handleSaveTaskConfig = async () => {
+    if (!taskSelectedTable || !taskSelectedColumn || taskSelectedValues.length === 0) return;
+    const selectedDef = kpiConfigDefs.find((d) => d.table_code === taskSelectedTable);
+    const configValue = {
+      table_code: taskSelectedTable,
+      module_type: taskSelectedModule,
+      table_name: selectedDef?.table_name || taskSelectedTable,
+      conditions: {
+        column: taskSelectedColumn,
+        values: taskSelectedValues,
+      },
+    };
+    setTaskSaving(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch("/api/dashboard/kpi-config", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ kpi_key: "task_total", config_value: configValue }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "保存失败");
+      setTaskConfig(configValue);
+      setTaskModalOpen(false);
+      toast.success("任务总数数据源已更新");
+      fetchData(selectedIds.size > 0 ? Array.from(selectedIds) : undefined);
+    } catch (e: any) {
+      toast.error(e.message || "保存失败");
+    } finally {
+      setTaskSaving(false);
+    }
+  };
+
+  const handleResetTaskConfig = async () => {
+    setTaskSaving(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch("/api/dashboard/kpi-config", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ kpi_key: "task_total", config_value: null }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "重置失败");
+      setTaskConfig(null);
+      setTaskModalOpen(false);
+      toast.success("已恢复默认任务统计逻辑");
+      fetchData(selectedIds.size > 0 ? Array.from(selectedIds) : undefined);
+    } catch (e: any) {
+      toast.error(e.message || "重置失败");
+    } finally {
+      setTaskSaving(false);
     }
   };
 
@@ -939,7 +1041,12 @@ export function ProjectDashboard({
           variant={3}
           onSettings={isSuperAdmin ? () => setHighRiskConfigModal(true) : undefined}
         />
-        <KpiCard value={kpi?.total_tasks ?? 0} label="任务总数" variant={4} />
+        <KpiCard
+          value={kpi?.total_tasks ?? 0}
+          label="任务总数"
+          variant={4}
+          onSettings={isSuperAdmin ? () => setTaskModalOpen(true) : undefined}
+        />
         <KpiCard value={kpi?.stakeholders ?? 0} label="干系人" variant={5} />
         <KpiCard value={kpi?.procurement_items ?? 0} label="采购项" variant={6} />
       </div>
@@ -2022,6 +2129,157 @@ export function ProjectDashboard({
               <Button variant="outline" size="sm" onClick={() => setHighRiskConfigModal(false)}>取消</Button>
               <Button size="sm" onClick={handleSaveHighRiskConfig} disabled={highRiskSaving || !highRiskSelectedTable || !highRiskIncludeColumn || !highRiskIncludeValue}>
                 {highRiskSaving ? "保存中..." : "保存"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 任务总数 · 数据源配置 */}
+      <Dialog open={taskModalOpen} onOpenChange={setTaskModalOpen}>
+        <DialogContent className="max-w-md" style={{ borderRadius: 14 }}>
+          <DialogHeader>
+            <DialogTitle style={{ fontSize: 15 }}>任务总数 · 数据源配置</DialogTitle>
+          </DialogHeader>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {taskConfig && (
+              <div style={{ fontSize: 12, color: "var(--text2)", background: "var(--card2)", padding: "8px 12px", borderRadius: 8 }}>
+                当前: <strong>{taskConfig.table_name || taskConfig.table_code}</strong>
+                {taskConfig.conditions && <>（{taskConfig.conditions.column} IN ({taskConfig.conditions.values.join(", ")})）</>}
+              </div>
+            )}
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>选择模块</label>
+              <select
+                value={taskSelectedModule}
+                onChange={(e) => {
+                  setTaskSelectedModule(e.target.value);
+                  setTaskSelectedTable("");
+                  setTaskSelectedColumn("");
+                  setTaskSelectedValues([]);
+                }}
+                style={{
+                  width: "100%", padding: "8px 12px", fontSize: 13,
+                  border: "1px solid var(--border)", borderRadius: 6,
+                  background: "var(--card)", color: "var(--text)",
+                }}
+              >
+                <option value="">-- 请选择模块 --</option>
+                {kpiModuleOptions.map((m) => (
+                  <option key={m.code} value={m.code}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {taskSelectedModule && (
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>选择数据表</label>
+                <select
+                  value={taskSelectedTable}
+                  onChange={(e) => {
+                    setTaskSelectedTable(e.target.value);
+                    setTaskSelectedColumn("");
+                    setTaskSelectedValues([]);
+                  }}
+                  style={{
+                    width: "100%", padding: "8px 12px", fontSize: 13,
+                    border: "1px solid var(--border)", borderRadius: 6,
+                    background: "var(--card)", color: "var(--text)",
+                  }}
+                >
+                  <option value="">-- 请选择表 --</option>
+                  {taskTableOptions.map((t) => (
+                    <option key={t.table_code} value={t.table_code}>
+                      {t.table_code} ({t.table_name})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {taskSelectedTable && taskTableColumns.length > 0 && (
+              <>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>选择筛选列</label>
+                  <select
+                    value={taskSelectedColumn}
+                    onChange={(e) => {
+                      setTaskSelectedColumn(e.target.value);
+                      setTaskSelectedValues([]);
+                    }}
+                    style={{
+                      width: "100%", padding: "8px 12px", fontSize: 13,
+                      border: "1px solid var(--border)", borderRadius: 6,
+                      background: "var(--card)", color: "var(--text)",
+                    }}
+                  >
+                    <option value="">-- 请选择列 --</option>
+                    {taskTableColumns.map((col) => (
+                      <option key={col.name} value={col.name}>
+                        {col.label || col.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {taskSelectedColumn && (
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>
+                      选择筛选值（多选）
+                    </label>
+                    <div style={{
+                      maxHeight: 160, overflowY: "auto",
+                      border: "1px solid var(--border)", borderRadius: 6,
+                      padding: 8, background: "var(--card)",
+                    }}>
+                      {taskTableColumns
+                        .find((c) => c.name === taskSelectedColumn)
+                        ?.options.map((opt) => (
+                          <label
+                            key={opt}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 8,
+                              padding: "4px 0", fontSize: 13, cursor: "pointer",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={taskSelectedValues.includes(opt)}
+                              onChange={(e) => {
+                                setTaskSelectedValues((prev) =>
+                                  e.target.checked
+                                    ? [...prev, opt]
+                                    : prev.filter((v) => v !== opt)
+                                );
+                              }}
+                            />
+                            {opt}
+                          </label>
+                        ))}
+                    </div>
+                    {taskSelectedValues.length > 0 && (
+                      <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 4 }}>
+                        已选: {taskSelectedValues.join(", ")}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
+              {taskConfig && (
+                <Button variant="outline" size="sm" onClick={handleResetTaskConfig} disabled={taskSaving}>
+                  恢复默认
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={handleSaveTaskConfig}
+                disabled={!taskSelectedTable || !taskSelectedColumn || taskSelectedValues.length === 0 || taskSaving}
+              >
+                {taskSaving ? "保存中..." : "保存"}
               </Button>
             </div>
           </div>

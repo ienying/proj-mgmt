@@ -93,6 +93,31 @@ export async function GET(request: NextRequest) {
       }
     } catch { /* ignore */ }
 
+    // 0c. Load KPI config for task total
+    let taskTotalConfig: {
+      table_code?: string; module_type?: string; table_name?: string;
+      conditions?: { column?: string; values?: string[] };
+    } | null = null;
+    try {
+      const { data: taskConfigRows } = await client.rpc("execute_sql", {
+        p_sql: `SELECT config_value FROM design_public.dashboard_kpi_config WHERE kpi_key = 'task_total'`,
+      });
+      const rows = taskConfigRows as Array<{ config_value: Record<string, unknown> }> | null;
+      if (rows && rows.length > 0 && rows[0].config_value) {
+        const cv = rows[0].config_value;
+        const conds = cv.conditions as Record<string, unknown> | undefined;
+        taskTotalConfig = {
+          table_code: typeof cv.table_code === "string" ? cv.table_code : undefined,
+          module_type: typeof cv.module_type === "string" ? cv.module_type : undefined,
+          table_name: typeof cv.table_name === "string" ? cv.table_name : undefined,
+          conditions: conds ? {
+            column: typeof conds.column === "string" ? conds.column : undefined,
+            values: Array.isArray(conds.values) ? conds.values.map(String) : undefined,
+          } : undefined,
+        };
+      }
+    } catch { /* ignore */ }
+
     // 1. Get all projects
     const { data: projectRows } = await client.rpc("dp_select", { p_table: "projects" });
     let projects = (projectRows as Array<Record<string, unknown>>) || [];
@@ -172,7 +197,14 @@ export async function GET(request: NextRequest) {
             const tn = t.table_name;
             // Skip task_ tables
             if (tn.startsWith("task_")) return null;
-            return `SELECT '${tn}' as tbl, COUNT(*) as cnt FROM ${schema}."${tn}"`;
+            let sql = `SELECT '${tn}' as tbl, COUNT(*) as cnt FROM ${schema}."${tn}"`;
+            // Apply WHERE filter for task_total config
+            if (taskTotalConfig?.table_code === tn && taskTotalConfig?.conditions?.column && taskTotalConfig?.conditions?.values?.length) {
+              const col = taskTotalConfig.conditions.column.replace(/"/g, '""');
+              const vals = taskTotalConfig.conditions.values.map((v) => `'${v.replace(/'/g, "''")}'`).join(", ");
+              sql += ` WHERE "${col}" IN (${vals})`;
+            }
+            return sql;
           })
           .filter(Boolean);
 
@@ -202,8 +234,14 @@ export async function GET(request: NextRequest) {
               } else if (module === "requirement" || row.tbl.includes("requirement")) {
                 totalRequirements += count;
               }
-              // high-risk: only counted via config (see step 4b below), no fallback
-              if (module === "schedule" || module === "task") totalTasks += count;
+              // task total: use config if set, else fallback to schedule/task module
+              if (taskTotalConfig?.table_code) {
+                if (row.tbl === taskTotalConfig.table_code) {
+                  totalTasks += count;
+                }
+              } else if (module === "schedule" || module === "task") {
+                totalTasks += count;
+              }
               if (module === "communication") totalStakeholders += count;
               if (module === "procurement") totalProcurement += count;
             }

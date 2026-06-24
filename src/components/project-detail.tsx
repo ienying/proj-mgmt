@@ -196,7 +196,7 @@ function ProcurementModuleSelect({
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const isMultiple = col.multiple || false;
   const isSystem = col.display_mode === "system";
-  const modules = isSystem ? systemModules : projectModules;
+  const modules = [...new Set(isSystem ? systemModules : projectModules)];
   const filtered = modules.filter((m: string) => m.toLowerCase().includes(search.toLowerCase()));
 
   const currentValues: string[] = (() => {
@@ -581,7 +581,7 @@ export function ProjectDetail({
         const res = await fetch("/api/dicts?type=product_module_types");
         const json = await res.json();
         if (json.data && Array.isArray(json.data)) {
-          const names = json.data.map((item: Record<string, unknown>) => item.module_name).filter(Boolean) as string[];
+          const names = [...new Set(json.data.map((item: Record<string, unknown>) => item.module_name).filter(Boolean) as string[])];
           setProductModuleNames(names);
         }
       } catch { /* ignore */ }
@@ -950,10 +950,14 @@ export function ProjectDetail({
         }),
       });
       
-      if (!response.ok) throw new Error("新增失败");
-      
       const result = await response.json();
-      
+
+      if (!response.ok) {
+        const errMsg = result?.error || `HTTP ${response.status}`;
+        console.error("新增记录失败:", errMsg, result);
+        throw new Error(errMsg);
+      }
+
       // 更新本地状态（补充 data_source 和 allow_delete，后端 RETURNING * 可能不返回）
       const newRecord = { ...result.data, data_source: "manual", allow_delete: true };
       setTableDataMap(prev => ({
@@ -963,11 +967,13 @@ export function ProjectDetail({
           newRecord,
         ],
       }));
-      
+
       toast.success("新增成功");
       setAddDialogOpen(false);
     } catch (error) {
-      toast.error("新增失败");
+      const message = error instanceof Error ? error.message : "新增失败";
+      console.error("新增记录异常:", message, error);
+      toast.error(message || "新增失败");
     }
   };
 
