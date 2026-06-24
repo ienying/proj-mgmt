@@ -563,6 +563,7 @@ export default function HomePage() {
         return (
           <ContentErrorBoundary>
             <ProjectDashboard
+              isSuperAdmin={user?.role === "super_admin"}
               onViewProject={(projectId) => {
                 const project = projects.find((p) => p.id === projectId);
                 if (project) {

@@ -192,6 +192,20 @@ const NINE_DOMAINS = [
   { module: "document", label: "资料管理", icon: "📁", cls: "k9-document", color: "#6b7280" },
 ] as const;
 
+const MODULE_LABEL_MAP: Record<string, string> = {
+  scope: "范围管理",
+  schedule: "进度管理",
+  quality: "质量管理",
+  cost: "成本管理",
+  communication: "沟通管理",
+  risk: "风险管理",
+  procurement: "采购管理",
+  resource: "资源管理",
+  document: "资料管理",
+  requirement: "需求管理",
+  task: "任务管理",
+};
+
 const WA_CLASSES = ["wa-doc", "wa-risk", "wa-cost", "wa-scope", "wa-schedule", "wa-procurement"] as const;
 
 const STATUS_LABELS: Record<string, string> = {
@@ -221,15 +235,28 @@ function KpiCard({
   value,
   label,
   variant,
+  onSettings,
 }: {
   value: number | string;
   label: string;
   variant: 1 | 2 | 3 | 4 | 5 | 6;
+  onSettings?: () => void;
 }) {
   return (
-    <div className={`tk tk-k${variant}`}>
+    <div className={`tk tk-k${variant}`} style={{ position: "relative" }}>
       <div className="tk-val">{value}</div>
       <div className="tk-label">{label}</div>
+      {onSettings && (
+        <button
+          className="tk-gear"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSettings();
+          }}
+        >
+          ⚙
+        </button>
+      )}
     </div>
   );
 }
@@ -318,8 +345,10 @@ function HealthRankCard({
 
 export function ProjectDashboard({
   onViewProject,
+  isSuperAdmin,
 }: {
   onViewProject?: (projectId: string) => void;
+  isSuperAdmin?: boolean;
 }) {
   /* ---- state ---- */
   const [data, setData] = useState<DashboardFullData | null>(null);
@@ -338,6 +367,18 @@ export function ProjectDashboard({
     title: string;
     formulas: Array<{ metric: string; formula: string; source: string }>;
   }>({ open: false, title: "", formulas: [] });
+
+  /* KPI config */
+  const [kpiConfigModal, setKpiConfigModal] = useState(false);
+  const [kpiConfig, setKpiConfig] = useState<{
+    table_code: string; module_type: string; table_name: string;
+  } | null>(null);
+  const [kpiConfigDefs, setKpiConfigDefs] = useState<Array<{
+    table_code: string; table_name: string; module_type: string[];
+  }>>([]);
+  const [kpiConfigSelectedModule, setKpiConfigSelectedModule] = useState("");
+  const [kpiConfigSelectedTable, setKpiConfigSelectedTable] = useState("");
+  const [kpiConfigSaving, setKpiConfigSaving] = useState(false);
 
   /* AI */
   const [aiWarnings, setAiWarnings] = useState<AIWarning[] | null>(null);
@@ -372,6 +413,28 @@ export function ProjectDashboard({
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, []);
+
+  /* ---- load KPI config ---- */
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    // Load current config
+    fetch("/api/dashboard/kpi-config")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.data) setKpiConfig(json.data);
+      })
+      .catch(() => {});
+    // Load table definitions for selector
+    fetch("/api/standards")
+      .then((r) => r.json())
+      .then((json) => {
+        const defs = (json.data || []).filter(
+          (d: any) => !String(d.table_code || "").startsWith("task_")
+        );
+        setKpiConfigDefs(defs);
+      })
+      .catch(() => {});
+  }, [isSuperAdmin]);
 
   /* ---- fetch ---- */
   const fetchData = useCallback(async (ids?: string[]) => {
@@ -566,6 +629,80 @@ export function ProjectDashboard({
     );
   }, [reqDetails, reqSearch]);
 
+  /* ---- KPI config helpers ---- */
+  const kpiModuleOptions = useMemo(() => {
+    const modules = new Set<string>();
+    for (const d of kpiConfigDefs) {
+      if (d.module_type?.length > 0) modules.add(d.module_type[0]);
+    }
+    return Array.from(modules)
+      .map((code) => ({ code, label: MODULE_LABEL_MAP[code] || code }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [kpiConfigDefs]);
+
+  const kpiTableOptions = useMemo(() => {
+    if (!kpiConfigSelectedModule) return [];
+    return kpiConfigDefs
+      .filter((d) => d.module_type?.includes(kpiConfigSelectedModule))
+      .map((d) => ({ table_code: d.table_code, table_name: d.table_name }))
+      .sort((a, b) => a.table_code.localeCompare(b.table_code));
+  }, [kpiConfigDefs, kpiConfigSelectedModule]);
+
+  const handleSaveKpiConfig = async () => {
+    if (!kpiConfigSelectedTable) return;
+    const selectedDef = kpiConfigDefs.find((d) => d.table_code === kpiConfigSelectedTable);
+    const configValue = {
+      table_code: kpiConfigSelectedTable,
+      module_type: kpiConfigSelectedModule,
+      table_name: selectedDef?.table_name || kpiConfigSelectedTable,
+    };
+    setKpiConfigSaving(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch("/api/dashboard/kpi-config", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ config_value: configValue }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "保存失败");
+      setKpiConfig(configValue);
+      setKpiConfigModal(false);
+      toast.success("需求总数数据源已更新");
+      fetchData(selectedIds.size > 0 ? Array.from(selectedIds) : undefined);
+    } catch (e: any) {
+      toast.error(e.message || "保存失败");
+    } finally {
+      setKpiConfigSaving(false);
+    }
+  };
+
+  const handleResetKpiConfig = async () => {
+    setKpiConfigSaving(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch("/api/dashboard/kpi-config", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ config_value: null }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "重置失败");
+      setKpiConfig(null);
+      setKpiConfigModal(false);
+      toast.success("已恢复默认数据源（requirement 模块）");
+      fetchData(selectedIds.size > 0 ? Array.from(selectedIds) : undefined);
+    } catch (e: any) {
+      toast.error(e.message || "重置失败");
+    } finally {
+      setKpiConfigSaving(false);
+    }
+  };
+
   /* ---- loading / error states ---- */
   if (loading && !data) {
     return (
@@ -641,7 +778,12 @@ export function ProjectDashboard({
           label={selectedIds.size === 1 ? "客户类型" : "项目总数"}
           variant={1}
         />
-        <KpiCard value={kpi?.total_requirements ?? 0} label="需求总数" variant={2} />
+        <KpiCard
+          value={kpi?.total_requirements ?? 0}
+          label="需求总数"
+          variant={2}
+          onSettings={isSuperAdmin ? () => setKpiConfigModal(true) : undefined}
+        />
         <KpiCard value={kpi?.high_risk_remaining ?? 0} label="高风险残留" variant={3} />
         <KpiCard value={kpi?.total_tasks ?? 0} label="任务总数" variant={4} />
         <KpiCard value={kpi?.stakeholders ?? 0} label="干系人" variant={5} />
@@ -1023,9 +1165,14 @@ export function ProjectDashboard({
 
       {/* ========== Requirement Stats Row ========== */}
       <div className="r4">
-        <div className="rt rt-k1">
+        <div className="rt rt-k1" style={{ position: "relative" }}>
           <div className="rt-val">{data.requirements.stats.total}</div>
           <div className="rt-label">需求总数</div>
+          {isSuperAdmin && (
+            <button className="tk-gear" onClick={(e) => { e.stopPropagation(); setKpiConfigModal(true); }}>
+              ⚙
+            </button>
+          )}
         </div>
         <div className="rt rt-k2">
           <div className="rt-val">{data.requirements.stats.completion_rate}%</div>
@@ -1478,6 +1625,80 @@ export function ProjectDashboard({
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* KPI config modal */}
+      <Dialog open={kpiConfigModal} onOpenChange={setKpiConfigModal}>
+        <DialogContent className="max-w-md" style={{ borderRadius: 14 }}>
+          <DialogHeader>
+            <DialogTitle style={{ fontSize: 15 }}>需求总数 · 数据源配置</DialogTitle>
+          </DialogHeader>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {kpiConfig && (
+              <div style={{ fontSize: 12, color: "var(--text2)", background: "var(--card2)", padding: "8px 12px", borderRadius: 8 }}>
+                当前: <strong>{kpiConfig.table_name || kpiConfig.table_code}</strong>（{MODULE_LABEL_MAP[kpiConfig.module_type] || kpiConfig.module_type} 模块）
+              </div>
+            )}
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>选择模块</label>
+              <select
+                value={kpiConfigSelectedModule}
+                onChange={(e) => {
+                  setKpiConfigSelectedModule(e.target.value);
+                  setKpiConfigSelectedTable("");
+                }}
+                style={{
+                  width: "100%", padding: "8px 12px", fontSize: 13,
+                  border: "1px solid var(--border)", borderRadius: 6,
+                  background: "var(--card)", color: "var(--text)",
+                }}
+              >
+                <option value="">-- 请选择模块 --</option>
+                {kpiModuleOptions.map((m) => (
+                  <option key={m.code} value={m.code}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {kpiConfigSelectedModule && (
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>选择数据表</label>
+                <select
+                  value={kpiConfigSelectedTable}
+                  onChange={(e) => setKpiConfigSelectedTable(e.target.value)}
+                  style={{
+                    width: "100%", padding: "8px 12px", fontSize: 13,
+                    border: "1px solid var(--border)", borderRadius: 6,
+                    background: "var(--card)", color: "var(--text)",
+                  }}
+                >
+                  <option value="">-- 请选择表 --</option>
+                  {kpiTableOptions.map((t) => (
+                    <option key={t.table_code} value={t.table_code}>
+                      {t.table_code} ({t.table_name})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
+              {kpiConfig && (
+                <Button variant="outline" size="sm" onClick={handleResetKpiConfig} disabled={kpiConfigSaving}>
+                  恢复默认
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={handleSaveKpiConfig}
+                disabled={!kpiConfigSelectedTable || kpiConfigSaving}
+              >
+                {kpiConfigSaving ? "保存中..." : "保存"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

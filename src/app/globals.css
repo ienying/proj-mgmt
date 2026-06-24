@@ -803,6 +803,33 @@ body {
   border-color: var(--p1);
 }
 
+/* KPI card gear button */
+.tk-gear {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--card2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform .3s;
+  font-size: 11px;
+  opacity: 0;
+}
+.tk:hover .tk-gear,
+.rt:hover .tk-gear {
+  opacity: 1;
+}
+.tk-gear:hover {
+  transform: rotate(60deg);
+  border-color: var(--p1);
+}
+
 /* ===== Modal ===== */
 .db-overlay {
   position: fixed;

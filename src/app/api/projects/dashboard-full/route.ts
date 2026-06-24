@@ -46,6 +46,28 @@ export async function GET(request: NextRequest) {
 
     const client = await createServerClient();
 
+    // 0. Load KPI config for requirement total (super-admin configured data source)
+    let requirementTotalConfig: { table_code?: string; module_type?: string; table_name?: string } | null = null;
+    try {
+      await client.rpc("execute_sql", {
+        p_sql: `CREATE TABLE IF NOT EXISTS design_public.dashboard_kpi_config (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), kpi_key TEXT UNIQUE NOT NULL, config_value JSONB NOT NULL DEFAULT '{}', updated_by TEXT, updated_at TIMESTAMPTZ DEFAULT NOW())`,
+      });
+    } catch { /* table may already exist */ }
+    try {
+      const { data: configRows } = await client.rpc("execute_sql", {
+        p_sql: `SELECT config_value FROM design_public.dashboard_kpi_config WHERE kpi_key = 'requirement_total'`,
+      });
+      const rows = configRows as Array<{ config_value: Record<string, unknown> }> | null;
+      if (rows && rows.length > 0 && rows[0].config_value) {
+        const cv = rows[0].config_value;
+        requirementTotalConfig = {
+          table_code: typeof cv.table_code === "string" ? cv.table_code : undefined,
+          module_type: typeof cv.module_type === "string" ? cv.module_type : undefined,
+          table_name: typeof cv.table_name === "string" ? cv.table_name : undefined,
+        };
+      }
+    } catch { /* ignore config load errors */ }
+
     // 1. Get all projects
     const { data: projectRows } = await client.rpc("dp_select", { p_table: "projects" });
     let projects = (projectRows as Array<Record<string, unknown>>) || [];
@@ -148,7 +170,11 @@ export async function GET(request: NextRequest) {
               }
 
               // KPI counts
-              if (module === "requirement" || row.tbl.includes("requirement")) {
+              if (requirementTotalConfig?.table_code) {
+                if (row.tbl === requirementTotalConfig.table_code) {
+                  totalRequirements += count;
+                }
+              } else if (module === "requirement" || row.tbl.includes("requirement")) {
                 totalRequirements += count;
               }
               if (module === "risk") totalHighRisk += count;
