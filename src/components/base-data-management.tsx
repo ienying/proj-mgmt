@@ -826,10 +826,6 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
             <Briefcase className="w-3.5 h-3.5" />
             项目类型
           </TabsTrigger>
-          <TabsTrigger value="construction-units" className="gap-1.5 text-xs">
-            <Hammer className="w-3.5 h-3.5" />
-            施工单位
-          </TabsTrigger>
           <TabsTrigger value="project-stages" className="gap-1.5 text-xs">
             <Layers className="w-3.5 h-3.5" />
             项目阶段
@@ -845,6 +841,10 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           <TabsTrigger value="customer-types" className="gap-1.5 text-xs">
             <Building2 className="w-3.5 h-3.5" />
             客户类型
+          </TabsTrigger>
+          <TabsTrigger value="construction-units" className="gap-1.5 text-xs">
+            <Hammer className="w-3.5 h-3.5" />
+            施工单位
           </TabsTrigger>
           <TabsTrigger value="member-roles" className="gap-1.5 text-xs">
             <Users className="w-3.5 h-3.5" />
