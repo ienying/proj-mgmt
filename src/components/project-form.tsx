@@ -43,6 +43,7 @@ import {
   Upload,
   Copy,
   ClipboardList,
+  Hammer,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -100,6 +101,16 @@ interface IntegrationItem {
   status: string;
   priority: string;
   remark: string;
+}
+
+interface ConstructionUnitEntry {
+  id: string;
+  construction_unit_id: string;
+  company_name: string;
+  quality_rating: string;
+  contact_person: string;
+  contact_phone: string;
+  construction_content: string;
 }
 
 interface ProjectFormProps {
@@ -349,6 +360,7 @@ export function ProjectForm({
 
   // 客户信息
   const [companyName, setCompanyName] = useState("");
+  const [implementationUnit, setImplementationUnit] = useState("");
   const [contactPersons, setContactPersons] = useState<ContactPerson[]>([
     { id: "1", name: "", phone: "", email: "", position: "" },
   ]);
@@ -377,6 +389,10 @@ export function ProjectForm({
 
   // 渠道信息
   const [channelCompanies, setChannelCompanies] = useState<ChannelCompany[]>([]);
+
+  // 施工单位
+  const [constructionUnits, setConstructionUnits] = useState<ConstructionUnitEntry[]>([]);
+  const [constructionUnitsList, setConstructionUnitsList] = useState<{ id: string; name: string; contact_person: string; phone: string; quality_rating: string }[]>([]);
 
   // 项目成员
   const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
@@ -436,9 +452,15 @@ export function ProjectForm({
         { label: "村/社区" },
         { label: "经度" },
         { label: "纬度" },
+        { label: "项目实施单位" },
         { label: "渠道公司名称(多个用、分隔)" },
         { label: "渠道联系人(多个用、分隔)" },
         { label: "渠道电话(多个用、分隔)" },
+        { label: "施工单位公司名称(多个用、分隔)" },
+        { label: "施工单位施工质量(多个用、分隔)" },
+        { label: "施工单位联系人(多个用、分隔)" },
+        { label: "施工单位联系电话(多个用、分隔)" },
+        { label: "施工单位施工内容(多个用、分隔)" },
         { label: "项目成员姓名(多个用、分隔)" },
         { label: "项目成员角色(多个用、分隔)" },
         { label: "采购总金额(元)" },
@@ -609,6 +631,8 @@ export function ProjectForm({
       setLongitude(get("经度"));
       setLatitude(get("纬度"));
 
+      setImplementationUnit(get("项目实施单位"));
+
       const chNames = get("渠道公司名称(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
       const chContacts = get("渠道联系人(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
       const chPhones = get("渠道电话(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
@@ -621,6 +645,24 @@ export function ProjectForm({
           remark: "",
         }));
         setChannelCompanies(channels);
+      }
+
+      const cuNames = get("施工单位公司名称(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
+      const cuQualities = get("施工单位施工质量(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
+      const cuContacts = get("施工单位联系人(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
+      const cuPhones = get("施工单位联系电话(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
+      const cuContents = get("施工单位施工内容(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
+      if (cuNames.length > 0) {
+        const units = cuNames.map((name, i) => ({
+          id: String(Date.now()) + i,
+          construction_unit_id: "",
+          company_name: name,
+          quality_rating: cuQualities[i] || "",
+          contact_person: cuContacts[i] || "",
+          contact_phone: cuPhones[i] || "",
+          construction_content: cuContents[i] || "",
+        }));
+        setConstructionUnits(units);
       }
 
       const mNames = get("项目成员姓名(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
@@ -764,6 +806,23 @@ export function ProjectForm({
         setChannelCompanies(ch.map(c => ({ id: c.id || "", company_name: c.company_name || "", contact_person: c.contact_person || "", contact_phone: c.contact_phone || "", remark: c.remark || "" })));
       }
 
+      // 项目实施单位
+      setImplementationUnit((d.implementation_unit as string) || "");
+
+      // 施工单位
+      const cu = d.construction_units_info as Array<Record<string, string>> | null;
+      if (cu && cu.length > 0) {
+        setConstructionUnits(cu.map(c => ({
+          id: c.id || "",
+          construction_unit_id: c.construction_unit_id || "",
+          company_name: c.company_name || "",
+          quality_rating: c.quality_rating || "",
+          contact_person: c.contact_person || "",
+          contact_phone: c.contact_phone || "",
+          construction_content: c.construction_content || "",
+        })));
+      }
+
       // 学校照片
       const sp = d.school_photos;
       if (Array.isArray(sp)) {
@@ -779,7 +838,9 @@ export function ProjectForm({
       setProvince(""); setCity(""); setDistrict(""); setTown(""); setVillage("");
       setLongitude(""); setLatitude(""); setSchoolPhotos([]);
       setSelectedCustomerTypes([]); setDeploymentMode("");
+      setImplementationUnit("");
       setChannelCompanies([{ id: "", company_name: "", contact_person: "", contact_phone: "", remark: "" }]);
+      setConstructionUnits([]);
       setSelectedModules([]); setProcurementAmount(""); setSoftwareAmount(""); setHardwareAmount("");
       setHasIntegration(false); setIntegrationList([]);
     }
@@ -823,6 +884,25 @@ export function ProjectForm({
           }
         })
         .catch(() => {});
+
+      fetch("/api/dicts?type=construction_units")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.data) {
+            setConstructionUnitsList(
+              data.data
+                .filter((item: { is_enabled: boolean; name: string }) => item.is_enabled !== false && item.name)
+                .map((item: { id: string; name: string; contact_person: string; phone: string; quality_rating: string }) => ({
+                  id: item.id,
+                  name: item.name,
+                  contact_person: item.contact_person || "",
+                  phone: item.phone || "",
+                  quality_rating: item.quality_rating || "",
+                }))
+            );
+          }
+        })
+        .catch(() => {});
     }
   }, [open]);
 
@@ -854,7 +934,9 @@ export function ProjectForm({
     setSchoolPhotos([]);
     setSelectedCustomerTypes([]);
     setDeploymentMode("");
+    setImplementationUnit("");
     setChannelCompanies([]);
+    setConstructionUnits([]);
     setProjectMembers([]);
     setSelectedModules([]);
   };
@@ -940,6 +1022,51 @@ export function ProjectForm({
   // 删除渠道公司
   const removeChannelCompany = (id: string) => {
     setChannelCompanies(channelCompanies.filter((cc) => cc.id !== id));
+  };
+
+  // 添加施工单位
+  const addConstructionUnit = () => {
+    setConstructionUnits([
+      ...constructionUnits,
+      {
+        id: Date.now().toString(),
+        construction_unit_id: "",
+        company_name: "",
+        quality_rating: "",
+        contact_person: "",
+        contact_phone: "",
+        construction_content: "",
+      },
+    ]);
+  };
+
+  // 更新施工单位
+  const updateConstructionUnit = (id: string, field: keyof ConstructionUnitEntry, value: string) => {
+    setConstructionUnits(
+      constructionUnits.map((cu) => {
+        if (cu.id !== id) return cu;
+        // 当公司名称改变时，自动带出施工质量、联系人、联系电话
+        if (field === "company_name") {
+          const selected = constructionUnitsList.find((u) => u.name === value);
+          if (selected) {
+            return {
+              ...cu,
+              company_name: value,
+              construction_unit_id: selected.id,
+              quality_rating: selected.quality_rating || "",
+              contact_person: selected.contact_person || "",
+              contact_phone: selected.phone || "",
+            };
+          }
+        }
+        return { ...cu, [field]: value };
+      })
+    );
+  };
+
+  // 删除施工单位
+  const removeConstructionUnit = (id: string) => {
+    setConstructionUnits(constructionUnits.filter((cu) => cu.id !== id));
   };
 
   // 添加项目成员
@@ -1076,6 +1203,8 @@ export function ProjectForm({
       customer_type: selectedCustomerTypes.length > 0 ? selectedCustomerTypes : null,
       deployment_mode: deploymentMode || null,
       channel_info: channelCompanies.filter((cc) => cc.company_name),
+      implementation_unit: implementationUnit || null,
+      construction_units_info: constructionUnits.filter((cu) => cu.company_name),
       members: projectMembers.filter((pm) => pm.name),
       procurement_modules: selectedModules,
       procurement_amount: procurementAmount ? parseFloat(procurementAmount) : null,
@@ -1278,6 +1407,14 @@ export function ProjectForm({
                     placeholder="请输入客户名称"
                   />
                 </div>
+                <div className="col-span-2 space-y-1.5">
+                  <Label>项目实施单位</Label>
+                  <Input
+                    value={implementationUnit}
+                    onChange={(e) => setImplementationUnit(e.target.value)}
+                    placeholder="请输入项目实施单位"
+                  />
+                </div>
                 <div className="space-y-1.5">
                   <Label>
                     项目类型 <span className="text-red-500">*</span>
@@ -1312,8 +1449,6 @@ export function ProjectForm({
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-5">
                 <div className="space-y-1.5">
                   <Label>
                     项目状态 <span className="text-red-500">*</span>
@@ -1692,6 +1827,113 @@ export function ProjectForm({
               ))}
               {channelCompanies.length === 0 && (
                 <div className="text-center py-6 text-slate-400 text-sm">暂无渠道公司，点击上方按钮添加</div>
+              )}
+            </Section>
+
+            {/* 施工单位 */}
+            <Section
+              title="施工单位"
+              icon={<Hammer className="h-4 w-4 text-amber-600" />}
+              count={constructionUnits.filter((cu) => cu.company_name).length}
+              color="amber"
+            >
+              <Button type="button" variant="outline" size="sm" onClick={addConstructionUnit}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> 添加施工单位
+              </Button>
+              {constructionUnits.map((cu, index) => (
+                <div key={cu.id} className="p-4 border rounded-lg space-y-3 relative">
+                  <button
+                    type="button"
+                    className="absolute right-3 top-3 text-slate-400 hover:text-red-500 transition-colors"
+                    onClick={() => removeConstructionUnit(cu.id)}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  <div className="text-xs font-medium text-slate-500">施工单位 {index + 1}</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-slate-500">公司名称</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            className="w-full justify-between text-sm font-normal h-9"
+                          >
+                            {cu.company_name || (
+                              <span className="text-muted-foreground">搜索选择施工单位...</span>
+                            )}
+                            <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[300px] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="搜索施工单位..." className="h-9" />
+                            <CommandList className="max-h-[200px]">
+                              <CommandEmpty className="py-2 text-center text-sm">未找到匹配单位</CommandEmpty>
+                              <CommandGroup>
+                                {constructionUnitsList.map((item) => (
+                                  <CommandItem
+                                    key={item.id}
+                                    value={item.id}
+                                    onSelect={() => {
+                                      updateConstructionUnit(cu.id, "company_name", item.name);
+                                    }}
+                                    className="text-sm"
+                                  >
+                                    {item.name}
+                                    {item.quality_rating && (
+                                      <span className="ml-2 text-xs text-amber-600">({item.quality_rating})</span>
+                                    )}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-slate-500">施工质量</Label>
+                      <Input
+                        value={cu.quality_rating}
+                        placeholder="选择公司后自动带出"
+                        className="h-9 text-sm bg-slate-50"
+                        readOnly
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-slate-500">联系人</Label>
+                      <Input
+                        value={cu.contact_person}
+                        onChange={(e) => updateConstructionUnit(cu.id, "contact_person", e.target.value)}
+                        placeholder="联系人"
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-slate-500">联系电话</Label>
+                      <Input
+                        value={cu.contact_phone}
+                        onChange={(e) => updateConstructionUnit(cu.id, "contact_phone", e.target.value)}
+                        placeholder="联系电话"
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-slate-500">施工内容</Label>
+                    <textarea
+                      value={cu.construction_content}
+                      onChange={(e) => updateConstructionUnit(cu.id, "construction_content", e.target.value)}
+                      placeholder="请输入施工内容"
+                      className="w-full min-h-[80px] p-3 border rounded-md resize-none text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+              ))}
+              {constructionUnits.length === 0 && (
+                <div className="text-center py-6 text-slate-400 text-sm">暂无施工单位，点击上方按钮添加</div>
               )}
             </Section>
 
@@ -2163,6 +2405,10 @@ export function ProjectForm({
                     <span className="text-slate-500">阶段</span>
                     <span className="font-medium">{projectStages.find(s => s.code === projectStage)?.name || projectStage || "-"}</span>
                   </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">状态</span>
+                    <span className="font-medium">{projectStatuses.find(s => s.code === projectStatus)?.name || projectStatus || "-"}</span>
+                  </div>
                   {department && (
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-500">部门</span>
@@ -2187,6 +2433,12 @@ export function ProjectForm({
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-500">部署模式</span>
                       <span className="font-medium">{deploymentModes.find(m => m.code === deploymentMode)?.name || deploymentMode || "-"}</span>
+                    </div>
+                  )}
+                  {implementationUnit && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">项目实施单位</span>
+                      <span className="font-medium">{implementationUnit}</span>
                     </div>
                   )}
                 </div>
@@ -2258,6 +2510,35 @@ export function ProjectForm({
                           <div className="font-medium">{cc.company_name}</div>
                           {cc.contact_person && (
                             <div className="text-xs text-slate-500">{cc.contact_person}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-slate-400">暂未填写</div>
+                  )}
+                </div>
+              </div>
+
+              {/* 施工单位 */}
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">施工单位</div>
+                <div className="bg-white rounded-lg p-3.5 border">
+                  {constructionUnits.filter((cu) => cu.company_name).length > 0 ? (
+                    <div className="space-y-2">
+                      {constructionUnits.filter((cu) => cu.company_name).map((cu, i) => (
+                        <div key={i} className="text-sm">
+                          <div className="font-medium">{cu.company_name}</div>
+                          {cu.quality_rating && (
+                            <span className="text-xs text-amber-600 font-medium ml-1">({cu.quality_rating})</span>
+                          )}
+                          {(cu.contact_person || cu.contact_phone) && (
+                            <div className="text-xs text-slate-500">
+                              {[cu.contact_person, cu.contact_phone].filter(Boolean).join(" · ")}
+                            </div>
+                          )}
+                          {cu.construction_content && (
+                            <div className="text-xs text-slate-400 mt-0.5 line-clamp-2">{cu.construction_content}</div>
                           )}
                         </div>
                       ))}
