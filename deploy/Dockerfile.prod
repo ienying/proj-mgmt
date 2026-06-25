@@ -1,0 +1,69 @@
+# ============================================
+# Stage 1: Build
+# ============================================
+FROM node:22-bookworm-slim AS builder
+
+# Enable corepack and prepare pnpm
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+
+WORKDIR /app
+
+# Install build-time system dependencies (bcrypt native compilation)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy package files first for layer caching
+COPY package.json pnpm-lock.yaml .npmrc ./
+
+# Install all dependencies (including devDependencies for build)
+RUN pnpm install --frozen-lockfile --prefer-offline
+
+# Copy source
+COPY . .
+
+# Build Next.js
+RUN pnpm next build
+
+# Bundle custom server with tsup
+RUN pnpm tsup src/server.ts --format cjs --platform node --target node20 --outDir dist --no-splitting --no-minify
+
+# ============================================
+# Stage 2: Production Runtime
+# ============================================
+FROM node:22-bookworm-slim AS runner
+
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+
+WORKDIR /app
+
+# Install runtime system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy package files
+COPY package.json pnpm-lock.yaml .npmrc ./
+
+# Install production dependencies only
+RUN pnpm install --prod --frozen-lockfile --prefer-offline
+
+# Copy build artifacts from builder
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/next.config.ts ./next.config.ts
+
+# Create upload directories
+RUN mkdir -p public/uploads/videos public/uploads/images
+
+EXPOSE 5000
+
+# Set production environment
+ENV COZE_PROJECT_ENV=PROD
+ENV NODE_ENV=production
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=30s \
+  CMD node -e "require('http').get('http://localhost:5000',r=>{process.exit(r.statusCode===200?0:1)})"
+
+CMD ["node", "dist/server.js"]

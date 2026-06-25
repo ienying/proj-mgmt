@@ -102,3 +102,7 @@ Desktop.ini
 
 # User uploaded files (runtime data)
 data/
+
+# Production deployment
+.env.production
+.backups/
