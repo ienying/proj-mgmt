@@ -93,3 +93,23 @@ INSERT INTO construction_units (code, name, contact_person, phone, description, 
 ('zhongke_edu',         '中科教信息技术有限公司',       '赵伟东',   '13501005678',   '教育信息化、教学资源平台建设',                 4, true),
 ('huizhong_edu',        '汇众教育装备有限公司',         '刘建国',   '13301006789',   '实验室设备安装、多媒体教室建设',               5, true)
 ON CONFLICT (code) DO NOTHING;
+
+-- ============================================
+-- 7. 模块定义（项目管理十大知识领域）
+-- 注意: project_module_types 的 code 列无唯一约束，使用 WHERE NOT EXISTS 防重复
+-- ============================================
+INSERT INTO project_module_types (code, name, icon, color, description, sort_order, is_enabled)
+SELECT v.code, v.name, v.icon, v.color, v.description, v.sort_order, v.is_enabled
+FROM (VALUES
+  ('scope',           '范围管理',    'Target',         'blue',       '项目范围定义、WBS分解、范围确认与控制',         0, true),
+  ('schedule',        '进度管理',    'Calendar',       'emerald',    '活动定义、排序、资源估算、进度计划与控制',     1, true),
+  ('quality',         '质量管理',    'CheckCircle',    'purple',     '质量规划、质量保证、质量控制',                 2, true),
+  ('cost',            '成本管理',    'DollarSign',     'amber',      '成本估算、预算编制、成本控制',                 3, true),
+  ('collaboration',   '协同管理',    'Users',          'cyan',       '团队协作、任务分配、工作流协同',               4, true),
+  ('communication',   '沟通管理',    'MessageCircle',  'indigo',     '沟通规划、信息发布、干系人沟通',               5, true),
+  ('risk',            '风险管理',    'AlertTriangle',  'red',        '风险识别、定性定量分析、风险应对与控制',       6, true),
+  ('procurement',     '采购管理',    'ShoppingCart',   'orange',     '采购规划、招标、合同管理、供应商管理',         7, true),
+  ('resource',        '资源管理',    'Database',       'teal',       '人力资源、设备资源、物料资源的计划与调配',     8, true),
+  ('document',        '资料管理',    'FileText',       'slate',      '项目文档、图纸、报告、归档管理',               9, true)
+) AS v(code, name, icon, color, description, sort_order, is_enabled)
+WHERE NOT EXISTS (SELECT 1 FROM project_module_types WHERE code = v.code);
