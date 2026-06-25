@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
           ...insertData,
           contact_person: body.contact_person || null,
           phone: body.phone || null,
+          cooperation_level: body.cooperation_level || null,
         };
         break;
       case "todo_statuses":

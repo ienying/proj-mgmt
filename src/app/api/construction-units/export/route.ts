@@ -8,13 +8,14 @@ export async function GET() {
     const { data } = await client.rpc("dp_select", { p_table: "construction_units" });
     const units = (data as Record<string, unknown>[]) || [];
 
-    const headers = ["名称", "单位负责人", "电话", "描述", "排序", "启用"];
+    const headers = ["名称", "单位负责人", "电话", "合作等级", "描述", "排序", "启用"];
     const rows = units
       .sort((a, b) => (a.sort_order as number) - (b.sort_order as number))
       .map((d) => [
         d.name,
         d.contact_person || "",
         d.phone || "",
+        d.cooperation_level || "",
         d.description || "",
         d.sort_order ?? 0,
         d.is_enabled ? "是" : "否",

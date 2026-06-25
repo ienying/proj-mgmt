@@ -85,13 +85,13 @@ ON CONFLICT (code) DO NOTHING;
 -- ============================================
 -- 6. 施工单位（教育行业相关）
 -- ============================================
-INSERT INTO construction_units (code, name, contact_person, phone, description, sort_order, is_enabled) VALUES
-('edu_tech_a',          '北京教育科技建设有限公司',     '张建国',   '13801001234',   '专注高校信息化建设，智慧校园整体方案',         0, true),
-('smart_edu_build',     '上海智慧教育建设有限公司',     '李明华',   '13901002345',   'K12智慧校园、一卡通系统建设',                   1, true),
-('south_edu_constr',    '广州南方教育建设有限公司',     '王志强',   '13701003456',   '教育实验室、实训基地建设',                     2, true),
-('huadong_network',     '华东教育网络科技有限公司',     '陈小芳',   '13601004567',   '校园网络、数据中心基础设施建设',               3, true),
-('zhongke_edu',         '中科教信息技术有限公司',       '赵伟东',   '13501005678',   '教育信息化、教学资源平台建设',                 4, true),
-('huizhong_edu',        '汇众教育装备有限公司',         '刘建国',   '13301006789',   '实验室设备安装、多媒体教室建设',               5, true)
+INSERT INTO construction_units (code, name, contact_person, phone, cooperation_level, description, sort_order, is_enabled) VALUES
+('edu_tech_a',          '北京教育科技建设有限公司',     '张建国',   '13801001234',   'A级',   '专注高校信息化建设，智慧校园整体方案',         0, true),
+('smart_edu_build',     '上海智慧教育建设有限公司',     '李明华',   '13901002345',   'A级',   'K12智慧校园、一卡通系统建设',                   1, true),
+('south_edu_constr',    '广州南方教育建设有限公司',     '王志强',   '13701003456',   'A级',   '教育实验室、实训基地建设',                     2, true),
+('huadong_network',     '华东教育网络科技有限公司',     '陈小芳',   '13601004567',   'B级',   '校园网络、数据中心基础设施建设',               3, true),
+('zhongke_edu',         '中科教信息技术有限公司',       '赵伟东',   '13501005678',   'B级',   '教育信息化、教学资源平台建设',                 4, true),
+('huizhong_edu',        '汇众教育装备有限公司',         '刘建国',   '13301006789',   'C级',   '实验室设备安装、多媒体教室建设',               5, true)
 ON CONFLICT (code) DO NOTHING;
 
 -- ============================================

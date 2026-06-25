@@ -153,6 +153,7 @@ CREATE TABLE IF NOT EXISTS construction_units (
   name VARCHAR(100) NOT NULL,
   contact_person VARCHAR(100),
   phone VARCHAR(50),
+  cooperation_level VARCHAR(50),
   description TEXT,
   sort_order INTEGER DEFAULT 0 NOT NULL,
   is_enabled BOOLEAN DEFAULT true NOT NULL,
