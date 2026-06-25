@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Settings,
   Users,
@@ -41,6 +41,7 @@ import {
   KeyRound,
   Cpu,
   BarChart3,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -137,9 +138,14 @@ export default function SystemSettings({
   // 记录已访问过的菜单，避免组件重复挂载
   const [visitedMenus, setVisitedMenus] = useState<Set<string>>(new Set(["users"]));
   const [searchQuery, setSearchQuery] = useState("");
+  // 下拉筛选
+  const [deptFilter, setDeptFilter] = useState("all");
+  const [positionFilter, setPositionFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState("all");
   // 用户管理子 Tab
   const [userSubTab, setUserSubTab] = useState<"users" | "departments">("users");
   const [departments, setDepartments] = useState<{ id: string; code: string; name: string; description?: string; sort_order: number; is_enabled: boolean }[]>([]);
+  const [deptSearchQuery, setDeptSearchQuery] = useState("");
   const [deptDialogOpen, setDeptDialogOpen] = useState(false);
   const [editingDeptId, setEditingDeptId] = useState<string | null>(null);
   const [deptFormData, setDeptFormData] = useState({ code: "", name: "", description: "", sort_order: 0, is_enabled: true });
@@ -165,12 +171,28 @@ export default function SystemSettings({
     password: "",
   });
 
-  const filteredUsers = users.filter(
-    (user) =>
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email?.toLowerCase().includes(searchQuery.toLowerCase())
+  // 提取唯一下拉选项
+  const uniqueDepartments = useMemo(
+    () => [...new Set(users.map((u) => u.department).filter(Boolean))].sort(),
+    [users]
   );
+  const uniquePositions = useMemo(
+    () => [...new Set(users.map((u) => u.position).filter(Boolean))].sort(),
+    [users]
+  );
+
+  const filteredUsers = users.filter((user) => {
+    const q = searchQuery.toLowerCase();
+    const matchesSearch =
+      !q ||
+      user.name.toLowerCase().includes(q) ||
+      user.username.toLowerCase().includes(q) ||
+      user.email?.toLowerCase().includes(q);
+    const matchesDept = deptFilter === "all" || user.department === deptFilter;
+    const matchesPosition = positionFilter === "all" || user.position === positionFilter;
+    const matchesRole = roleFilter === "all" || user.role === roleFilter;
+    return matchesSearch && matchesDept && matchesPosition && matchesRole;
+  });
 
   const openCreateDialog = () => {
     setEditingId(null);
@@ -427,6 +449,15 @@ export default function SystemSettings({
     stages: projectStages.length,
   };
 
+  // 部门搜索过滤
+  const filteredDepartments = useMemo(() => {
+    if (!deptSearchQuery.trim()) return departments;
+    const q = deptSearchQuery.toLowerCase();
+    return departments.filter(
+      (d) => d.name.toLowerCase().includes(q) || d.code.toLowerCase().includes(q)
+    );
+  }, [departments, deptSearchQuery]);
+
   // 统计卡片配置 - 扁平风格
   return (
     <div className="h-full bg-muted">
@@ -502,16 +533,74 @@ export default function SystemSettings({
             {/* 用户列表 */}
             {userSubTab === "users" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="relative flex-1 max-w-sm">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="搜索用户..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap flex-1">
+                  <div className="relative w-48">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="搜索用户..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  {/* 部门筛选 */}
+                  <Select
+                    value={deptFilter}
+                    onValueChange={(v) => { setDeptFilter(v); clearSelection(); }}
+                  >
+                    <SelectTrigger className="w-36 h-10 text-sm">
+                      <SelectValue placeholder="部门" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部部门</SelectItem>
+                      {uniqueDepartments.map((d) => (
+                        <SelectItem key={d} value={d!}>{d}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* 职位筛选 */}
+                  <Select
+                    value={positionFilter}
+                    onValueChange={(v) => { setPositionFilter(v); clearSelection(); }}
+                  >
+                    <SelectTrigger className="w-36 h-10 text-sm">
+                      <SelectValue placeholder="职位" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部职位</SelectItem>
+                      {uniquePositions.map((p) => (
+                        <SelectItem key={p} value={p!}>{p}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* 角色筛选 */}
+                  <Select
+                    value={roleFilter}
+                    onValueChange={(v) => { setRoleFilter(v); clearSelection(); }}
+                  >
+                    <SelectTrigger className="w-36 h-10 text-sm">
+                      <SelectValue placeholder="角色" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部角色</SelectItem>
+                      <SelectItem value="super_admin">超级管理员</SelectItem>
+                      <SelectItem value="sub_admin">子管理员</SelectItem>
+                      <SelectItem value="user">普通用户</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {(deptFilter !== "all" || positionFilter !== "all" || roleFilter !== "all") && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 text-xs text-slate-500"
+                      onClick={() => { setDeptFilter("all"); setPositionFilter("all"); setRoleFilter("all"); clearSelection(); }}
+                    >
+                      <X className="h-3.5 w-3.5 mr-1" />
+                      清除筛选
+                    </Button>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <input
@@ -882,8 +971,20 @@ export default function SystemSettings({
             {/* 部门管理 */}
             {userSubTab === "departments" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-slate-900">部门列表</h2>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold text-slate-900">部门列表</h2>
+                  <div className="relative w-56">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="搜索部门名称或编码..."
+                      value={deptSearchQuery}
+                      onChange={(e) => setDeptSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
                 <div className="flex items-center gap-2">
                   <input
                     ref={deptFileInputRef}
@@ -1051,29 +1152,33 @@ export default function SystemSettings({
                 </div>
               </div>
 
-              {departments.length === 0 ? (
+              {filteredDepartments.length === 0 ? (
                 <div className="bg-card border border-border rounded-lg p-8 text-center">
                   <Database className="w-10 h-10 mx-auto mb-3 text-slate-300" />
-                  <p className="text-slate-500 font-medium">暂无部门</p>
-                  <p className="text-sm text-slate-400 mt-1">点击"添加部门"创建第一个部门</p>
+                  <p className="text-slate-500 font-medium">
+                    {departments.length === 0 ? "暂无部门" : "无匹配部门"}
+                  </p>
+                  <p className="text-sm text-slate-400 mt-1">
+                    {departments.length === 0 ? "点击\"添加部门\"创建第一个部门" : "尝试修改搜索条件"}
+                  </p>
                 </div>
               ) : (
                 <div className="bg-card border border-border rounded-lg overflow-hidden">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted border-b border-border">
-                        <TableHead className="text-slate-600">部门编码</TableHead>
                         <TableHead className="text-slate-600">部门名称</TableHead>
+                        <TableHead className="text-slate-600">部门编码</TableHead>
                         <TableHead className="text-slate-600">描述</TableHead>
                         <TableHead className="text-slate-600">状态</TableHead>
                         <TableHead className="w-32 text-slate-600">操作</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {departments.map((dept) => (
+                      {filteredDepartments.map((dept) => (
                         <TableRow key={dept.id} className="border-b border-border">
-                          <TableCell className="font-mono text-sm text-slate-600">{dept.code}</TableCell>
                           <TableCell className="font-medium text-slate-900">{dept.name}</TableCell>
+                          <TableCell className="font-mono text-sm text-slate-600">{dept.code}</TableCell>
                           <TableCell className="text-slate-500">{dept.description || "-"}</TableCell>
                           <TableCell>
                             <Badge variant="outline" className={cn(
@@ -1583,6 +1688,26 @@ function AttachmentTagPanel() {
 // ==========================================
 function RolePermissionPanel({ users, onUserUpdate }: { users: User[]; onUserUpdate: (id: string, user: Partial<User>) => void }) {
   const [loading, setLoading] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  // 添加成员弹窗
+  const [addMemberOpen, setAddMemberOpen] = useState<{ open: boolean; role: string }>({ open: false, role: "" });
+  const [addSelectedIds, setAddSelectedIds] = useState<Set<string>>(new Set());
+  // 添加成员弹窗内的搜索筛选
+  const [addMemberSearch, setAddMemberSearch] = useState("");
+  const [addMemberDeptFilter, setAddMemberDeptFilter] = useState("all");
+  const [addMemberPositionFilter, setAddMemberPositionFilter] = useState("all");
+  // 移除成员弹窗
+  const [removeMemberOpen, setRemoveMemberOpen] = useState<{ open: boolean; role: string }>({ open: false, role: "" });
+  const [removeSelectedIds, setRemoveSelectedIds] = useState<Set<string>>(new Set());
+  // 权限编辑
+  const [editingPermsRole, setEditingPermsRole] = useState<string | null>(null);
+  const [newPermInput, setNewPermInput] = useState("");
+  // 可编辑的权限副本
+  const [editablePerms, setEditablePerms] = useState<Record<string, string[]>>({
+    super_admin: ["用户管理", "角色分配", "系统配置", "基础数据管理", "模块管理", "工单配置", "AI 配置", "全部数据访问"],
+    sub_admin: ["用户管理", "基础数据管理", "模块管理", "工单配置"],
+    user: ["创建项目", "项目内权限由管理员分配"],
+  });
 
   const roleLabels: Record<string, string> = {
     super_admin: "超级管理员",
@@ -1594,6 +1719,15 @@ function RolePermissionPanel({ users, onUserUpdate }: { users: User[]; onUserUpd
     super_admin: "拥有系统所有权限，可管理用户角色、系统配置等",
     sub_admin: "由超级管理员授权，可管理用户、基础数据等",
     user: "普通用户，可创建项目，项目内权限由管理员或项目经理分配",
+  };
+
+  const toggleCollapse = (role: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(role)) next.delete(role);
+      else next.add(role);
+      return next;
+    });
   };
 
   const handleRoleChange = async (userId: string, newRole: string) => {
@@ -1625,78 +1759,481 @@ function RolePermissionPanel({ users, onUserUpdate }: { users: User[]; onUserUpd
     }
   };
 
+  // 批量添加成员到某角色
+  const handleBatchAddToRole = async () => {
+    if (addSelectedIds.size === 0) return;
+    const roleLabel = roleLabels[addMemberOpen.role] || addMemberOpen.role;
+    if (!confirm(`确定将选中的 ${addSelectedIds.size} 名用户角色变更为「${roleLabel}」吗？`)) return;
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const ids = Array.from(addSelectedIds);
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/users/${id}/role`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ role: addMemberOpen.role }),
+          }).then(async (res) => {
+            if (res.ok) {
+              onUserUpdate(id, { role: addMemberOpen.role as "super_admin" | "sub_admin" | "user" });
+            }
+          })
+        )
+      );
+      setAddMemberOpen({ open: false, role: "" });
+      setAddSelectedIds(new Set());
+    } catch {
+      alert("批量添加失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 批量移除成员（改为普通用户）
+  const handleBatchRemoveFromRole = async () => {
+    if (removeSelectedIds.size === 0) return;
+    if (!confirm(`确定将选中的 ${removeSelectedIds.size} 名用户角色变更为「普通用户」吗？`)) return;
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const ids = Array.from(removeSelectedIds);
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/users/${id}/role`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ role: "user" }),
+          }).then(async (res) => {
+            if (res.ok) {
+              onUserUpdate(id, { role: "user" });
+            }
+          })
+        )
+      );
+      setRemoveMemberOpen({ open: false, role: "" });
+      setRemoveSelectedIds(new Set());
+    } catch {
+      alert("批量移除失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  // 权限编辑操作
+  const handleRemovePerm = (role: string, perm: string) => {
+    setEditablePerms((prev) => ({
+      ...prev,
+      [role]: (prev[role] || []).filter((p) => p !== perm),
+    }));
+  };
+
+  const handleAddPerm = (role: string) => {
+    const trimmed = newPermInput.trim();
+    if (!trimmed) return;
+    setEditablePerms((prev) => ({
+      ...prev,
+      [role]: [...(prev[role] || []), trimmed],
+    }));
+    setNewPermInput("");
+  };
+
   // Group users by role
   const roleGroups = [
-    { role: "super_admin", label: "超级管理员", color: "bg-red-50 border-red-200", badgeColor: "border-red-200 bg-red-50 text-red-700" },
-    { role: "sub_admin", label: "子管理员", color: "bg-blue-50 border-blue-200", badgeColor: "border-blue-200 bg-blue-50 text-blue-700" },
-    { role: "user", label: "普通用户", color: "bg-muted border-border", badgeColor: "border-border bg-muted text-slate-600" },
+    { role: "super_admin", label: "超级管理员", color: "bg-red-50 border-red-200", badgeColor: "border-red-200 bg-red-50 text-red-700", iconColor: "text-red-600", cardBorder: "border-l-red-400", btnClass: "hover:bg-red-100" },
+    { role: "sub_admin", label: "子管理员", color: "bg-blue-50 border-blue-200", badgeColor: "border-blue-200 bg-blue-50 text-blue-700", iconColor: "text-blue-600", cardBorder: "border-l-blue-400", btnClass: "hover:bg-blue-100" },
+    { role: "user", label: "普通用户", color: "bg-muted border-border", badgeColor: "border-border bg-muted text-slate-600", iconColor: "text-slate-600", cardBorder: "border-l-slate-300", btnClass: "hover:bg-slate-100" },
   ];
+
+  const totalUsers = users.length;
+
+  // 添加成员弹窗 — 可添加的用户及筛选
+  const addableUsers = useMemo(
+    () => users.filter((u) => (u.role || "user") !== addMemberOpen.role),
+    [users, addMemberOpen.role]
+  );
+  const addDialogDepts = useMemo(
+    () => [...new Set(addableUsers.map((u) => u.department).filter(Boolean))].sort(),
+    [addableUsers]
+  );
+  const addDialogPositions = useMemo(
+    () => [...new Set(addableUsers.map((u) => u.position).filter(Boolean))].sort(),
+    [addableUsers]
+  );
+  const filteredAddableUsers = useMemo(() => {
+    const q = addMemberSearch.toLowerCase();
+    return addableUsers.filter((u) => {
+      const matchesSearch = !q || u.name.toLowerCase().includes(q) || u.username.toLowerCase().includes(q);
+      const matchesDept = addMemberDeptFilter === "all" || u.department === addMemberDeptFilter;
+      const matchesPosition = addMemberPositionFilter === "all" || u.position === addMemberPositionFilter;
+      return matchesSearch && matchesDept && matchesPosition;
+    });
+  }, [addableUsers, addMemberSearch, addMemberDeptFilter, addMemberPositionFilter]);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-800">角色权限管理</h3>
+        <span className="text-sm text-muted-foreground">共 {totalUsers} 名用户</span>
       </div>
 
-      {/* 角色说明卡片 */}
-      <div className="grid grid-cols-3 gap-4">
-        {roleGroups.map((group) => (
-          <div key={group.role} className={`p-4 rounded-lg border ${group.color}`}>
-            <div className="flex items-center gap-2 mb-2">
-              <Shield className="w-5 h-5" />
-              <h4 className="font-semibold">{group.label}</h4>
+      {/* 角色说明卡片 — 含权限清单 + 操作按钮 */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {roleGroups.map((group) => {
+          const groupUsers = users.filter((u) => (u.role || "user") === group.role);
+          const perms = editablePerms[group.role] || [];
+          const isEditingPerms = editingPermsRole === group.role;
+          return (
+            <div key={group.role} className={`p-4 rounded-lg border ${group.color} flex flex-col transition-all`}>
+              <div className="flex items-center gap-2 mb-2">
+                <Shield className={`w-5 h-5 ${group.iconColor}`} />
+                <h4 className="font-semibold">{group.label}</h4>
+                <span className="text-xs text-muted-foreground ml-auto">{groupUsers.length} 人</span>
+              </div>
+              <p className="text-sm text-gray-600 mb-3">{roleDescriptions[group.role]}</p>
+              {/* 权限标签 — 可编辑 */}
+              <div className="flex flex-wrap gap-1 mb-3">
+                {perms.map((perm) => (
+                  <Badge key={perm} variant="outline" className={`text-xs bg-white/60 ${isEditingPerms ? "pr-0.5" : ""}`}>
+                    {perm}
+                    {isEditingPerms && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePerm(group.role, perm)}
+                        className="ml-1 hover:text-red-500 inline-flex items-center"
+                        title="移除权限"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </Badge>
+                ))}
+                {isEditingPerms && (
+                  <div className="flex items-center gap-1">
+                    <Input
+                      value={newPermInput}
+                      onChange={(e) => setNewPermInput(e.target.value)}
+                      placeholder="新权限..."
+                      className="h-6 w-24 text-xs"
+                      onKeyDown={(e) => { if (e.key === "Enter") handleAddPerm(group.role); }}
+                    />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 w-6 p-0"
+                      onClick={() => handleAddPerm(group.role)}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {/* 操作按钮 */}
+              <div className="flex items-center gap-1.5 mt-auto pt-3 border-t border-border/50">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className={`h-7 text-xs ${group.btnClass}`}
+                  onClick={() => {
+                    setAddMemberOpen({ open: true, role: group.role });
+                    setAddSelectedIds(new Set());
+                    setAddMemberSearch("");
+                    setAddMemberDeptFilter("all");
+                    setAddMemberPositionFilter("all");
+                  }}
+                >
+                  <UserPlus className="h-3.5 w-3.5 mr-1" />
+                  添加成员
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className={`h-7 text-xs ${group.btnClass}`}
+                  disabled={groupUsers.length === 0}
+                  onClick={() => {
+                    setRemoveMemberOpen({ open: true, role: group.role });
+                    setRemoveSelectedIds(new Set());
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  移除成员
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className={`h-7 text-xs ml-auto ${isEditingPerms ? "bg-white text-blue-600" : group.btnClass}`}
+                  onClick={() => {
+                    if (isEditingPerms) {
+                      setEditingPermsRole(null);
+                      setNewPermInput("");
+                    } else {
+                      setEditingPermsRole(group.role);
+                      setNewPermInput("");
+                    }
+                  }}
+                >
+                  {isEditingPerms ? (
+                    <>
+                      <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                      完成编辑
+                    </>
+                  ) : (
+                    <>
+                      <Edit className="h-3.5 w-3.5 mr-1" />
+                      编辑权限
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
-            <p className="text-sm text-gray-600">{roleDescriptions[group.role]}</p>
+          );
+        })}
+      </div>
+
+      {/* 添加成员弹窗 */}
+      <Dialog open={addMemberOpen.open} onOpenChange={(open) => { if (!open) setAddMemberOpen({ open: false, role: "" }); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>添加成员到「{roleLabels[addMemberOpen.role] || addMemberOpen.role}」</DialogTitle>
+            <DialogDescription>
+              选择要添加到该角色的用户（已过滤当前已是该角色的用户）
+            </DialogDescription>
+          </DialogHeader>
+          {/* 搜索与筛选 */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[140px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="搜索姓名或用户名..."
+                value={addMemberSearch}
+                onChange={(e) => setAddMemberSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <Select value={addMemberDeptFilter} onValueChange={setAddMemberDeptFilter}>
+              <SelectTrigger className="w-28 h-9 text-xs">
+                <SelectValue placeholder="部门" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部部门</SelectItem>
+                {addDialogDepts.map((d) => (
+                  <SelectItem key={d} value={d!}>{d}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={addMemberPositionFilter} onValueChange={setAddMemberPositionFilter}>
+              <SelectTrigger className="w-28 h-9 text-xs">
+                <SelectValue placeholder="职位" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部职位</SelectItem>
+                {addDialogPositions.map((p) => (
+                  <SelectItem key={p} value={p!}>{p}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {(addMemberSearch || addMemberDeptFilter !== "all" || addMemberPositionFilter !== "all") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9 text-xs text-slate-500"
+                onClick={() => { setAddMemberSearch(""); setAddMemberDeptFilter("all"); setAddMemberPositionFilter("all"); }}
+              >
+                <X className="h-3.5 w-3.5 mr-1" />
+                清除
+              </Button>
+            )}
           </div>
-        ))}
-      </div>
-
-      {/* 按角色分组的用户列表 */}
-      {roleGroups.map((group) => {
-        const groupUsers = users.filter((u) => (u.role || "user") === group.role);
-        return (
-          <div key={group.role} className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <Badge variant="outline" className={group.badgeColor}>
-                  {group.label}
-                </Badge>
-                <span className="text-gray-400">{groupUsers.length} 人</span>
-              </h4>
-            </div>
-            {groupUsers.length === 0 ? (
-              <p className="text-sm text-gray-400 pl-2">暂无{group.label}</p>
+          <div className="max-h-72 overflow-y-auto space-y-1 py-1">
+            {addableUsers.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">所有用户已在此角色中</p>
+            ) : filteredAddableUsers.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">无匹配用户，请调整筛选条件</p>
             ) : (
-              <div className="space-y-1">
-                {groupUsers.map((user) => (
-                  <div key={user.id} className="flex items-center gap-3 px-4 py-2 rounded-lg bg-white border hover:shadow-sm transition-shadow">
-                    <Avatar className="h-8 w-8">
+              filteredAddableUsers.map((user) => (
+                <label
+                  key={user.id}
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent cursor-pointer"
+                >
+                  <Checkbox
+                    checked={addSelectedIds.has(user.id)}
+                    onCheckedChange={() => {
+                      const next = new Set(addSelectedIds);
+                      if (next.has(user.id)) next.delete(user.id);
+                      else next.add(user.id);
+                      setAddSelectedIds(next);
+                    }}
+                  />
+                  <Avatar className="h-7 w-7">
+                    <AvatarFallback className="bg-blue-500 text-white text-xs">
+                      {getInitials(user.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{user.name}</p>
+                    <p className="text-xs text-gray-400 truncate">{user.department || "-"} · {user.position || "-"} · 当前角色: {roleLabels[user.role || "user"]}</p>
+                  </div>
+                </label>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddMemberOpen({ open: false, role: "" })}>取消</Button>
+            <Button onClick={handleBatchAddToRole} disabled={addSelectedIds.size === 0 || loading} className="bg-blue-500 hover:bg-blue-600">
+              {loading ? "处理中..." : `添加 ${addSelectedIds.size > 0 ? addSelectedIds.size : ""} 人`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 移除成员弹窗 */}
+      <Dialog open={removeMemberOpen.open} onOpenChange={(open) => { if (!open) setRemoveMemberOpen({ open: false, role: "" }); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>从「{roleLabels[removeMemberOpen.role] || removeMemberOpen.role}」移除成员</DialogTitle>
+            <DialogDescription>
+              选中的用户将被变更为「普通用户」角色
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-80 overflow-y-auto space-y-1 py-2">
+            {users
+              .filter((u) => (u.role || "user") === removeMemberOpen.role)
+              .length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">此角色中没有用户</p>
+            ) : (
+              users
+                .filter((u) => (u.role || "user") === removeMemberOpen.role)
+                .map((user) => (
+                  <label
+                    key={user.id}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={removeSelectedIds.has(user.id)}
+                      onCheckedChange={() => {
+                        const next = new Set(removeSelectedIds);
+                        if (next.has(user.id)) next.delete(user.id);
+                        else next.add(user.id);
+                        setRemoveSelectedIds(next);
+                      }}
+                    />
+                    <Avatar className="h-7 w-7">
                       <AvatarFallback className="bg-blue-500 text-white text-xs">
-                        {user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
+                        {getInitials(user.name)}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">{user.name}</p>
-                      <p className="text-xs text-gray-500">{user.department || "-"} · {user.position || "-"}</p>
+                    <div>
+                      <p className="text-sm font-medium">{user.name}</p>
+                      <p className="text-xs text-gray-400">{user.department || "-"} · {user.position || "-"}</p>
                     </div>
-                    {/* Role change dropdown */}
-                    <Select
-                      value={user.role || "user"}
-                      onValueChange={(value) => handleRoleChange(user.id, value)}
-                      disabled={loading}
+                  </label>
+                ))
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRemoveMemberOpen({ open: false, role: "" })}>取消</Button>
+            <Button onClick={handleBatchRemoveFromRole} disabled={removeSelectedIds.size === 0 || loading} className="bg-red-500 hover:bg-red-600">
+              {loading ? "处理中..." : `移除 ${removeSelectedIds.size > 0 ? removeSelectedIds.size : ""} 人`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 按角色分组的用户卡片网格 */}
+      {roleGroups.map((group) => {
+        const groupUsers = users.filter((u) => (u.role || "user") === group.role);
+        const isCollapsed = collapsedGroups.has(group.role);
+        return (
+          <div key={group.role} className="space-y-3">
+            <button
+              type="button"
+              onClick={() => toggleCollapse(group.role)}
+              className="flex items-center gap-2 w-full text-left hover:opacity-80 transition-opacity"
+            >
+              <Badge variant="outline" className={group.badgeColor}>
+                {group.label}
+              </Badge>
+              <span className="text-gray-400 text-sm">{groupUsers.length} 人</span>
+              <span className="flex-1" />
+              <span className="text-xs text-muted-foreground">
+                {isCollapsed ? "展开" : "收起"}
+              </span>
+              {isCollapsed ? (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              )}
+            </button>
+            {!isCollapsed && (
+              groupUsers.length === 0 ? (
+                <p className="text-sm text-gray-400 pl-2">暂无{group.label}</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {groupUsers.map((user) => (
+                    <div
+                      key={user.id}
+                      className={`flex flex-col gap-2 p-4 rounded-lg bg-white border border-l-4 ${group.cardBorder} hover:shadow-md transition-shadow`}
                     >
-                      <SelectTrigger className="w-28 h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="user">普通用户</SelectItem>
-                        <SelectItem value="sub_admin">子管理员</SelectItem>
-                        <SelectItem value="super_admin">超级管理员</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ))}
-              </div>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-10 w-10 flex-shrink-0">
+                          <AvatarFallback className="bg-blue-500 text-white text-xs">
+                            {getInitials(user.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-sm truncate">{user.name}</p>
+                          <p className="text-xs text-gray-400 truncate font-mono">{user.username}</p>
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500 space-y-0.5">
+                        {user.department && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-400">部门:</span>
+                            <span className="truncate">{user.department}</span>
+                          </div>
+                        )}
+                        {user.position && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-400">职位:</span>
+                            <span className="truncate">{user.position}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between mt-1 pt-2 border-t border-border">
+                        <Select
+                          value={user.role || "user"}
+                          onValueChange={(value) => handleRoleChange(user.id, value)}
+                          disabled={loading}
+                        >
+                          <SelectTrigger className="w-28 h-7 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="user">普通用户</SelectItem>
+                            <SelectItem value="sub_admin">子管理员</SelectItem>
+                            <SelectItem value="super_admin">超级管理员</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {!user.is_active && (
+                          <Badge variant="outline" className="text-xs border-red-200 bg-red-50 text-red-600">
+                            已禁用
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
             )}
           </div>
         );
