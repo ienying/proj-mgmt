@@ -26,8 +26,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Edit, Trash2, ChevronRight, ChevronDown, AlertTriangle, Clock, ShieldCheck } from "lucide-react";
+import { Plus, Edit, Trash2, ChevronRight, ChevronDown, AlertTriangle, Clock, ShieldCheck, Users, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
 interface CategoryItem {
   id: string;
@@ -418,6 +420,9 @@ export default function IssueConfigPanel() {
         </div>
       </div>
 
+      {/* 外部工单接收人配置 */}
+      <ExternalReceiversConfig />
+
       {/* 编辑/新增弹窗 */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
@@ -491,5 +496,171 @@ export default function IssueConfigPanel() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ==========================================
+// 外部工单接收人配置 + QR 码展示
+// ==========================================
+function ExternalReceiversConfig() {
+  const [receivers, setReceivers] = useState<Array<{ id: string; user_id: string; user_name: string; is_enabled: boolean }>>([]);
+  const [users, setUsers] = useState<Array<{ id: string; name: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [addOpen, setAddOpen] = useState(false);
+
+  const loadReceivers = async () => {
+    try {
+      const res = await fetch("/api/issue-config/external-receivers");
+      const json = await res.json();
+      if (json.data) setReceivers(json.data);
+    } catch (e) {
+      console.error("加载接收人失败", e);
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const res = await fetch("/api/users");
+      const json = await res.json();
+      if (json.data) {
+        setUsers((json.data || []).map((u: Record<string, unknown>) => ({
+          id: u.id as string,
+          name: u.name as string,
+        })));
+      }
+    } catch (e) {
+      console.error("加载用户失败", e);
+    }
+  };
+
+  useEffect(() => {
+    Promise.all([loadReceivers(), loadUsers()]).finally(() => setLoading(false));
+  }, []);
+
+  const handleAdd = async (userId: string) => {
+    const user = users.find((u) => u.id === userId);
+    if (!user) return;
+    try {
+      await fetch("/api/issue-config/external-receivers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: user.id, user_name: user.name }),
+      });
+      loadReceivers();
+    } catch (e) {
+      console.error("添加接收人失败", e);
+    }
+  };
+
+  const handleToggle = async (r: { id: string; is_enabled: boolean }) => {
+    try {
+      await fetch(`/api/issue-config/external-receivers?id=${r.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_enabled: !r.is_enabled }),
+      });
+      loadReceivers();
+    } catch (e) {
+      console.error("切换状态失败", e);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("确定删除该接收人吗？")) return;
+    try {
+      await fetch(`/api/issue-config/external-receivers?id=${id}`, { method: "DELETE" });
+      loadReceivers();
+    } catch (e) {
+      console.error("删除接收人失败", e);
+    }
+  };
+
+  if (loading) return null;
+
+  return (
+    <>
+      {/* 外部工单接收人 */}
+      <div className="bg-card border border-border rounded-lg p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-green-500" />
+            <h3 className="text-sm font-semibold text-slate-900">外部工单接收人</h3>
+            <span className="text-xs text-slate-400">{receivers.length} 人</span>
+          </div>
+          <Popover open={addOpen} onOpenChange={setAddOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+                <Plus className="h-3 w-3" /> 添加接收人
+                <ChevronsUpDown className="h-3 w-3 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[240px] p-0" align="end">
+              <Command>
+                <CommandInput placeholder="搜索用户名..." />
+                <CommandList>
+                  <CommandEmpty>无匹配用户</CommandEmpty>
+                  <CommandGroup>
+                    {users
+                      .filter((u) => !receivers.some((r) => r.user_id === u.id))
+                      .map((u) => (
+                        <CommandItem key={u.id} value={u.name} onSelect={() => {
+                          handleAdd(u.id);
+                          setAddOpen(false);
+                        }}>
+                          {u.name}
+                        </CommandItem>
+                      ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">
+          外部用户扫码提交的工单将同时推送至所有启用的接收人待办事项中，一人受理后其他人待办自动取消。
+        </p>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[200px]">接收人</TableHead>
+              <TableHead className="w-[80px]">启用</TableHead>
+              <TableHead className="text-right w-[80px]">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {receivers.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={3} className="text-center text-slate-400 py-4">
+                  暂未配置接收人，请添加
+                </TableCell>
+              </TableRow>
+            ) : (
+              receivers.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell className="font-medium">{r.user_name}</TableCell>
+                  <TableCell>
+                    <Switch
+                      checked={r.is_enabled}
+                      onCheckedChange={() => handleToggle(r)}
+                    />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-red-600 hover:text-red-700"
+                      onClick={() => handleDelete(r.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+    </>
   );
 }

@@ -52,32 +52,57 @@ export async function PUT(
 
     // 同步更新待办任务实例状态
     if (status) {
-      // 查询该工单对应的待办任务实例
       const { data: todoItems } = await client.rpc("dp_select", {
         p_table: "todo_task_instances",
       });
       const todoList = (todoItems || []) as Record<string, unknown>[];
-      const matchedTodos = todoItems
-        ? todoList.filter(
-            (t) =>
-              String(t.source_type) === "issue" &&
-              String(t.source_id) === id
-          )
-        : [];
+      const matchedTodos = todoList.filter(
+        (t) =>
+          String(t.source_type) === "issue" &&
+          String(t.source_id) === id
+      );
 
-      for (const todo of matchedTodos) {
-        const updateTodo: Record<string, unknown> = {
-          status: status,
-          is_read: true,
-        };
-        if (status === "completed" || status === "closed") {
-          updateTodo.completed_at = new Date().toISOString();
+      // 检查是否为外部工单
+      const { data: issueData } = await client.rpc("dp_get_by_id", {
+        p_table: "issue_mgmt_issues",
+        p_id: id,
+      });
+      const issue = issueData as Record<string, unknown> | null;
+      const isExternalIssue = issue && String(issue.source) === "external";
+
+      // 外部工单受理：受理人 todo 更新，其他人 todo 取消
+      if (isExternalIssue && action_type === "accept" && operator_id && matchedTodos.length > 0) {
+        for (const todo of matchedTodos) {
+          if (String(todo.assignee_id) === operator_id) {
+            await client.rpc("dp_update", {
+              p_table: "todo_task_instances",
+              p_id: String(todo.id),
+              p_data: { status, is_read: true },
+            });
+          } else {
+            await client.rpc("dp_update", {
+              p_table: "todo_task_instances",
+              p_id: String(todo.id),
+              p_data: { status: "cancelled", is_read: true },
+            });
+          }
         }
-        await client.rpc("dp_update", {
-          p_table: "todo_task_instances",
-          p_id: String(todo.id),
-          p_data: updateTodo,
-        });
+      } else {
+        // 非外部工单或非受理操作：所有匹配的 todo 跟随工单状态
+        for (const todo of matchedTodos) {
+          const updateTodo: Record<string, unknown> = {
+            status: status,
+            is_read: true,
+          };
+          if (status === "completed" || status === "closed") {
+            updateTodo.completed_at = new Date().toISOString();
+          }
+          await client.rpc("dp_update", {
+            p_table: "todo_task_instances",
+            p_id: String(todo.id),
+            p_data: updateTodo,
+          });
+        }
       }
 
       // 转交工单：为新的处理人创建待办任务实例

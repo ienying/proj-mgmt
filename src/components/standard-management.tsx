@@ -88,6 +88,8 @@ export interface TableDefinition {
   sort_order: number;
   is_active: boolean;
   allow_add?: boolean;
+  allow_delete?: boolean;
+  readonly_mode?: "and" | "or";
 }
 
 export interface ColumnConfig {
@@ -98,16 +100,27 @@ export interface ColumnConfig {
   readonly_reason?: string;
   description?: string;
   options?: string[]; // 单选/多选类型的选项列表
+  quick_inputs?: string[]; // 文本类型的快捷语列表
   display_mode?: "dropdown" | "checkbox" | "project" | "system"; // 单选展示方式 或 采购模块数据来源
   multiple?: boolean; // 采购模块选择是否多选
   label?: string;
   max_size?: string; // 视频最大文件大小: "100MB" / "500MB" / "1GB"
   max_count?: number; // 视频最多上传个数
+  format?: "number" | "percent"; // 数字列的显示格式
   reference_config?: {
     source_table_code: string;
     source_column: string;
     match_field?: string;
   };
+}
+
+function dedupeColumnsByName(cols: ColumnConfig[]): ColumnConfig[] {
+  const seen = new Set<string>();
+  return cols.filter((col) => {
+    if (seen.has(col.name)) return false;
+    seen.add(col.name);
+    return true;
+  });
 }
 
 const MODULE_TYPES = [
@@ -138,6 +151,7 @@ const COLUMN_TYPES = [
   { code: "archive", name: "压缩包" },
   { code: "video", name: "视频" },
   { code: "procurement_record", name: "采购模块记录" },
+  { code: "user", name: "用户" },
 ];
 
 interface StandardManagementProps {
@@ -529,6 +543,144 @@ function ProductModuleField({
   );
 }
 
+// 用户下拉选择字段组件（用于规范管理数据编辑）
+function UserField({
+  col,
+  value,
+  onChange,
+  users,
+  disabled,
+}: {
+  col: { name: string; multiple?: boolean; type?: string; display_mode?: string; options?: string[]; required?: boolean; description?: string; readonly?: boolean; label?: string };
+  value: string;
+  onChange: (val: string) => void;
+  users: Array<{ id: string; name: string; username: string }>;
+  disabled?: boolean;
+}) {
+  const [search, setSearch] = useState("");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const isMultiple = !!col.multiple;
+  const selectedIds = isMultiple ? value.split(",").filter(Boolean) : value ? [value] : [];
+  const filtered = users.filter((u) => {
+    const s = search.toLowerCase();
+    return u.name.toLowerCase().includes(s) || u.username.toLowerCase().includes(s);
+  });
+
+  const getUserDisplay = (id: string) => {
+    const u = users.find((u) => u.id === id);
+    return u ? `${u.name} (${u.username})` : id;
+  };
+
+  // 点击外部关闭
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [dropdownOpen]);
+
+  if (disabled) {
+    return (
+      <div className="w-full min-h-[36px] rounded-md border px-3 py-1 text-sm bg-muted cursor-not-allowed">
+        {selectedIds.length > 0 ? (
+          <span className="flex flex-wrap gap-1">
+            {selectedIds.map((id) => (
+              <span key={id} className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">{getUserDisplay(id)}</span>
+            ))}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={dropdownRef} className="relative w-full">
+      <button
+        type="button"
+        className="w-full min-h-[36px] rounded-md border px-3 py-1 text-left text-sm cursor-pointer hover:border-primary flex items-center justify-between"
+        onClick={() => setDropdownOpen(!dropdownOpen)}
+      >
+        <span className="flex flex-wrap gap-1">
+          {selectedIds.length > 0 ? (
+            selectedIds.map((id) => (
+              <span key={id} className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">{getUserDisplay(id)}</span>
+            ))
+          ) : (
+            <span className="text-muted-foreground">选择用户...</span>
+          )}
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+      </button>
+      {dropdownOpen && (
+        <div className="absolute z-[9999] top-full left-0 mt-1 w-72 rounded-md border bg-popover shadow-lg">
+          <div className="p-2 border-b">
+            <Input
+              placeholder="搜索用户..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8 text-sm"
+              autoFocus
+            />
+          </div>
+          <div className="max-h-48 overflow-y-auto px-1 pb-1">
+            {filtered.length === 0 ? (
+              <div className="px-2 py-4 text-center text-xs text-muted-foreground">无匹配用户</div>
+            ) : (
+              filtered.map((user) => {
+                const isSelected = selectedIds.includes(user.id);
+                return (
+                  <button
+                    key={user.id}
+                    type="button"
+                    className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent ${isSelected ? "bg-accent/50" : ""}`}
+                    onClick={() => {
+                      if (isMultiple) {
+                        const newIds = isSelected
+                          ? selectedIds.filter((id) => id !== user.id)
+                          : [...selectedIds, user.id];
+                        onChange(newIds.join(","));
+                      } else {
+                        onChange(user.id);
+                        setDropdownOpen(false);
+                        setSearch("");
+                      }
+                    }}
+                  >
+                    {isMultiple && <Checkbox checked={isSelected} />}
+                    <div className="flex flex-col items-start">
+                      <span>{user.name}</span>
+                      <span className="text-[10px] text-muted-foreground">{user.username}</span>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+          {isMultiple && selectedIds.length > 0 && (
+            <div className="border-t p-1">
+              <button
+                type="button"
+                className="w-full rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+                onClick={() => onChange("")}
+              >
+                清除选择
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function StandardManagement({
   definitions,
   projectTypes,
@@ -542,6 +694,12 @@ export function StandardManagement({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedProjectType, setSelectedProjectType] = useState<string>("all");
   const [selectedModule, setSelectedModule] = useState<string>("all");
+  const [selectedStage, setSelectedStage] = useState<string>("all");
+  const [searchName, setSearchName] = useState("");
+
+  // 抽屉式展开编辑
+  const [expandedDefId, setExpandedDefId] = useState<string | null>(null);
+  const [drawerFormData, setDrawerFormData] = useState<TableDefinition | null>(null);
 
   // 规范定义列表拖拽排序
   const [dragDefIndex, setDragDefIndex] = useState<number | null>(null);
@@ -582,12 +740,31 @@ export function StandardManagement({
         const res = await fetch("/api/dicts?type=product_module_types");
         const json = await res.json();
         if (json.data && Array.isArray(json.data)) {
-          const names = json.data.map((item: Record<string, unknown>) => item.module_name).filter(Boolean) as string[];
+          const names = [...new Set(json.data.map((item: Record<string, unknown>) => item.module_name).filter(Boolean) as string[])];
           setProductModuleNames(names);
         }
       } catch { /* ignore */ }
     };
     fetchModuleNames();
+  }, []);
+  const [userList, setUserList] = useState<Array<{ id: string; name: string; username: string }>>([]);
+
+  // 加载系统用户列表
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch("/api/users");
+        const json = await res.json();
+        if (json.data && Array.isArray(json.data)) {
+          setUserList(json.data.map((item: Record<string, unknown>) => ({
+            id: String(item.id),
+            name: String(item.name || ""),
+            username: String(item.username || ""),
+          })));
+        }
+      } catch { /* ignore */ }
+    };
+    fetchUsers();
   }, []);
   const [editingRecord, setEditingRecord] = useState<Record<string, unknown> | null>(null);
   const [recordFormData, setRecordFormData] = useState<Record<string, unknown>>({});
@@ -812,6 +989,15 @@ export function StandardManagement({
         return false;
       }
     }
+    if (selectedStage !== "all" && !def.apply_project_stages.includes(selectedStage)) {
+      return false;
+    }
+    if (searchName) {
+      const keyword = searchName.toLowerCase();
+      const nameMatch = def.table_name?.toLowerCase().includes(keyword);
+      const codeMatch = def.table_code?.toLowerCase().includes(keyword);
+      if (!nameMatch && !codeMatch) return false;
+    }
     return true;
   });
 
@@ -836,8 +1022,13 @@ export function StandardManagement({
   const openEditDialog = (def: TableDefinition) => {
     setEditingId(def.id);
     // 兼容旧数据：确保 module_type 是数组
+    const dedupedColumns = dedupeColumnsByName(def.columns_config || []);
+    if (dedupedColumns.length < (def.columns_config || []).length) {
+      toast.warning(`检测到 ${(def.columns_config || []).length - dedupedColumns.length} 个重复列名，已自动去除`);
+    }
     const normalizedDef = {
       ...def,
+      columns_config: dedupedColumns,
       module_type: Array.isArray(def.module_type)
         ? def.module_type
         : def.module_type
@@ -850,10 +1041,16 @@ export function StandardManagement({
   };
 
   const handleSubmit = () => {
+    const cols = formData.columns_config || [];
+    const deduped = dedupeColumnsByName(cols);
+    if (deduped.length < cols.length) {
+      toast.warning(`检测到 ${cols.length - deduped.length} 个重复列名，已自动去除`);
+    }
+    const cleanFormData = { ...formData, columns_config: deduped };
     if (editingId) {
-      onUpdate(editingId, formData);
+      onUpdate(editingId, cleanFormData);
     } else {
-      onCreate(formData);
+      onCreate(cleanFormData);
     }
     setDialogOpen(false);
   };
@@ -903,6 +1100,25 @@ export function StandardManagement({
     }));
   };
 
+  const addColumnQuickInput = (colIndex: number, phrase: string) => {
+    if (!phrase.trim()) return;
+    setFormData((prev) => ({
+      ...prev,
+      columns_config: prev.columns_config?.map((col, i) =>
+        i === colIndex ? { ...col, quick_inputs: [...(col.quick_inputs || []), phrase.trim()] } : col
+      ),
+    }));
+  };
+
+  const removeColumnQuickInput = (colIndex: number, qiIndex: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      columns_config: prev.columns_config?.map((col, i) =>
+        i === colIndex ? { ...col, quick_inputs: (col.quick_inputs || []).filter((_, qii) => qii !== qiIndex) } : col
+      ),
+    }));
+  };
+
   // 导出列配置为 Excel
   const handleExportColumns = async () => {
     const cols = formData.columns_config || [];
@@ -920,6 +1136,8 @@ export function StandardManagement({
         "只读": col.readonly ? "是" : "否",
         "描述": col.description || "",
         "选项": (col.options || []).join(", "),
+        "快捷语": (col.quick_inputs || []).join(", "),
+        "显示格式": col.format || "",
       }));
       const worksheet = xlsxLib.utils.json_to_sheet(exportData);
       const workbook = xlsxLib.utils.book_new();
@@ -966,6 +1184,7 @@ export function StandardManagement({
         "压缩包": "archive", "archive": "archive",
         "视频": "video", "video": "video",
         "采购模块记录": "procurement_record", "procurement_record": "procurement_record",
+        "用户": "user", "user": "user",
       };
 
       const imported: ColumnConfig[] = jsonData.map((row) => {
@@ -973,6 +1192,11 @@ export function StandardManagement({
         const type = typeMap[rawType] || rawType;
         const optionsStr = String(row["选项"] ?? row["options"] ?? "");
         const options = optionsStr ? optionsStr.split(/[,，]/).map((s: string) => s.trim()).filter(Boolean) : [];
+        const quickInputsStr = String(row["快捷语"] ?? row["quick_inputs"] ?? "");
+        const quickInputs = quickInputsStr ? quickInputsStr.split(/[,，]/).map((s: string) => s.trim()).filter(Boolean) : [];
+
+        const rawFormat = String(row["显示格式"] ?? row["format"] ?? "");
+        const format = (rawFormat === "percent" || rawFormat === "百分比") ? "percent" : (rawFormat === "number" || rawFormat === "普通数字") ? undefined : undefined;
 
         return {
           name: String(row["列名"] ?? row["name"] ?? ""),
@@ -981,6 +1205,8 @@ export function StandardManagement({
           readonly: String(row["只读"] ?? row["readonly"] ?? "") === "是",
           description: String(row["描述"] ?? row["description"] ?? "") || undefined,
           options: options.length > 0 ? options : undefined,
+          quick_inputs: quickInputs.length > 0 ? quickInputs : undefined,
+          format: format as ColumnConfig["format"],
         };
       }).filter((col) => col.name);
 
@@ -1041,9 +1267,147 @@ export function StandardManagement({
     }));
   };
 
+  // ============ 抽屉式编辑面板 ============
+  const openDrawer = (def: TableDefinition) => {
+    if (expandedDefId === def.id) {
+      setExpandedDefId(null);
+      setDrawerFormData(null);
+      return;
+    }
+    setExpandedDefId(def.id);
+    setDrawerFormData({
+      ...def,
+      module_type: Array.isArray(def.module_type) ? [...def.module_type] : def.module_type ? [def.module_type] : [],
+      columns_config: (def.columns_config || []).map((c) => ({ ...c })),
+      references_config: (def.references_config || []).map((r) => ({ ...r })),
+      apply_project_types: [...(def.apply_project_types || [])],
+      apply_project_stages: [...(def.apply_project_stages || [])],
+    });
+  };
+
+  const closeDrawer = () => {
+    setExpandedDefId(null);
+    setDrawerFormData(null);
+  };
+
+  const handleDrawerSave = () => {
+    if (!drawerFormData || !expandedDefId) return;
+    const deduped = dedupeColumnsByName(drawerFormData.columns_config || []);
+    if (deduped.length < (drawerFormData.columns_config || []).length) {
+      toast.warning(`检测到 ${(drawerFormData.columns_config || []).length - deduped.length} 个重复列名，已自动去除`);
+    }
+    onUpdate(expandedDefId, { ...drawerFormData, columns_config: deduped });
+    closeDrawer();
+  };
+
+  const drawerUpdateField = (field: string, value: unknown) => {
+    setDrawerFormData((prev) => (prev ? { ...prev, [field]: value } : null));
+  };
+
+  const drawerToggleModule = (code: string) => {
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      const modules = prev.module_type || [];
+      return { ...prev, module_type: modules.includes(code) ? modules.filter((m) => m !== code) : [...modules, code] };
+    });
+  };
+
+  const drawerToggleProjectType = (code: string) => {
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      const types = prev.apply_project_types || [];
+      return { ...prev, apply_project_types: types.includes(code) ? types.filter((t) => t !== code) : [...types, code] };
+    });
+  };
+
+  const drawerToggleProjectStage = (code: string) => {
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      const stages = prev.apply_project_stages || [];
+      return { ...prev, apply_project_stages: stages.includes(code) ? stages.filter((s) => s !== code) : [...stages, code] };
+    });
+  };
+
+  const drawerAddColumn = () => {
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        columns_config: [...(prev.columns_config || []), { name: "", type: "text", required: false, readonly: false, description: "", options: [] }],
+      };
+    });
+  };
+
+  const drawerRemoveColumn = (index: number) => {
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      return { ...prev, columns_config: (prev.columns_config || []).filter((_, i) => i !== index) };
+    });
+  };
+
+  const drawerUpdateColumn = (index: number, field: string, value: unknown) => {
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        columns_config: (prev.columns_config || []).map((col, i) => (i === index ? { ...col, [field]: value } : col)),
+      };
+    });
+  };
+
+  const drawerAddColumnOption = (colIndex: number, option: string) => {
+    if (!option.trim()) return;
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        columns_config: (prev.columns_config || []).map((col, i) =>
+          i === colIndex ? { ...col, options: [...(col.options || []), option.trim()] } : col
+        ),
+      };
+    });
+  };
+
+  const drawerRemoveColumnOption = (colIndex: number, optIndex: number) => {
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        columns_config: (prev.columns_config || []).map((col, i) =>
+          i === colIndex ? { ...col, options: (col.options || []).filter((_, oi) => oi !== optIndex) } : col
+        ),
+      };
+    });
+  };
+
+  const drawerAddColumnQuickInput = (colIndex: number, phrase: string) => {
+    if (!phrase.trim()) return;
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        columns_config: (prev.columns_config || []).map((col, i) =>
+          i === colIndex ? { ...col, quick_inputs: [...(col.quick_inputs || []), phrase.trim()] } : col
+        ),
+      };
+    });
+  };
+
+  const drawerRemoveColumnQuickInput = (colIndex: number, qiIndex: number) => {
+    setDrawerFormData((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        columns_config: (prev.columns_config || []).map((col, i) =>
+          i === colIndex ? { ...col, quick_inputs: (col.quick_inputs || []).filter((_, qii) => qii !== qiIndex) } : col
+        ),
+      };
+    });
+  };
+
   // 打开数据记录对话框
   const openDataDialog = async (def: TableDefinition) => {
-    setCurrentTableDef(def);
+    setCurrentTableDef({ ...def, columns_config: dedupeColumnsByName(def.columns_config || []) });
     setDataDialogOpen(true);
     await loadTableData(def.table_code);
   };
@@ -1704,6 +2068,103 @@ export function StandardManagement({
                                     </TableCell>
                                   </TableRow>
                                 )}
+                                {col.type === "text" && (
+                                  <TableRow
+                                    key={`qi-${index}`}
+                                    className={`${dragColIndex === index ? "opacity-40 bg-muted/20" : ""} ${dragOverColIndex === index && dragColIndex !== index ? "ring-2 ring-primary ring-inset" : ""} transition-all`}
+                                    onDragOver={(e) => {
+                                      e.preventDefault();
+                                      e.dataTransfer.dropEffect = "move";
+                                      setDragOverColIndex(index);
+                                    }}
+                                    onDrop={(e) => {
+                                      e.preventDefault();
+                                      if (dragColIndex !== null && dragColIndex !== index) {
+                                        moveColumn(dragColIndex, index);
+                                      }
+                                      setDragColIndex(null);
+                                      setDragOverColIndex(null);
+                                    }}
+                                  >
+                                    <TableCell colSpan={7} className="bg-muted/30 px-4 py-3">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-xs text-muted-foreground shrink-0">快捷语:</span>
+                                        {(col.quick_inputs || []).map((phrase, qi) => (
+                                          <span key={qi} className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">
+                                            {phrase}
+                                            <button
+                                              type="button"
+                                              onClick={() => removeColumnQuickInput(index, qi)}
+                                              className="hover:text-destructive"
+                                            >
+                                              <X className="w-3 h-3" />
+                                            </button>
+                                          </span>
+                                        ))}
+                                        <input
+                                          type="text"
+                                          placeholder="输入快捷语后回车"
+                                          className="h-6 text-xs border-b border-dashed border-muted-foreground/30 bg-transparent outline-none focus:border-primary w-32"
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                              e.preventDefault();
+                                              const val = (e.target as HTMLInputElement).value;
+                                              if (val.trim()) {
+                                                addColumnQuickInput(index, val);
+                                                (e.target as HTMLInputElement).value = "";
+                                              }
+                                            }
+                                          }}
+                                        />
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                                {col.type === "number" && (
+                                  <TableRow
+                                    key={`fmt-${index}`}
+                                    className={`${dragColIndex === index ? "opacity-40 bg-muted/20" : ""} ${dragOverColIndex === index && dragColIndex !== index ? "ring-2 ring-primary ring-inset" : ""} transition-all`}
+                                    onDragOver={(e) => {
+                                      e.preventDefault();
+                                      e.dataTransfer.dropEffect = "move";
+                                      setDragOverColIndex(index);
+                                    }}
+                                    onDrop={(e) => {
+                                      e.preventDefault();
+                                      if (dragColIndex !== null && dragColIndex !== index) {
+                                        moveColumn(dragColIndex, index);
+                                      }
+                                      setDragColIndex(null);
+                                      setDragOverColIndex(null);
+                                    }}
+                                  >
+                                    <TableCell colSpan={7} className="bg-muted/30 px-4 py-3">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-muted-foreground shrink-0">显示格式:</span>
+                                        <div className="flex gap-1">
+                                          <Button
+                                            type="button"
+                                            variant={col.format !== "percent" ? "default" : "outline"}
+                                            size="sm"
+                                            className="h-6 text-xs px-2"
+                                            onClick={() => updateColumn(index, "format", undefined)}
+                                          >
+                                            普通数字
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            variant={col.format === "percent" ? "default" : "outline"}
+                                            size="sm"
+                                            className="h-6 text-xs px-2"
+                                            onClick={() => updateColumn(index, "format", "percent")}
+                                          >
+                                            百分比
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
                                 {(col.type as string) === "procurement_module" && (
                                   <TableRow
                                     key={`pm-${index}`}
@@ -1815,6 +2276,37 @@ export function StandardManagement({
                                     </TableCell>
                                   </TableRow>
                                 )}
+                                {(col.type as string) === 'user' && (
+                                  <TableRow>
+                                    <TableCell colSpan={5} className="py-2 px-3 bg-muted/30">
+                                      <div className="flex items-center gap-6">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs text-muted-foreground shrink-0">选择方式:</span>
+                                          <div className="flex gap-1">
+                                            <Button
+                                              type="button"
+                                              variant={!col.multiple ? "default" : "outline"}
+                                              size="sm"
+                                              className="h-6 text-xs px-2"
+                                              onClick={() => updateColumn(index, "multiple", false)}
+                                            >
+                                              单选
+                                            </Button>
+                                            <Button
+                                              type="button"
+                                              variant={col.multiple ? "default" : "outline"}
+                                              size="sm"
+                                              className="h-6 text-xs px-2"
+                                              onClick={() => updateColumn(index, "multiple", true)}
+                                            >
+                                              多选
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
                                 </Fragment>
                               ))}
                             </TableBody>
@@ -1897,7 +2389,16 @@ export function StandardManagement({
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="space-y-1">
+            <Label className="text-xs">名称</Label>
+            <Input
+              value={searchName}
+              onChange={(e) => setSearchName(e.target.value)}
+              placeholder="搜索表代码/名称..."
+              className="w-[180px] h-9"
+            />
+          </div>
           <div className="space-y-1">
             <Label className="text-xs">项目类型</Label>
             <Select value={selectedProjectType} onValueChange={setSelectedProjectType}>
@@ -1909,6 +2410,22 @@ export function StandardManagement({
                 {projectTypes.map((type) => (
                   <SelectItem key={type.code} value={type.code}>
                     {type.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">适用阶段</Label>
+            <Select value={selectedStage} onValueChange={setSelectedStage}>
+              <SelectTrigger className="w-full min-w-[120px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部阶段</SelectItem>
+                {projectStages.map((stage) => (
+                  <SelectItem key={stage.code} value={stage.code}>
+                    {stage.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1933,6 +2450,54 @@ export function StandardManagement({
         </div>
       </div>
 
+      {/* 统计卡片 */}
+      <div className="px-6 pt-3">
+        <div className="grid grid-cols-4 gap-3">
+          <Card className="shadow-sm">
+            <CardContent className="p-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">总表数</p>
+                <p className="text-xl font-bold">{definitions.length}</p>
+              </div>
+              <Database className="w-5 h-5 text-muted-foreground opacity-50" />
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm">
+            <CardContent className="p-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">覆盖模块</p>
+                <p className="text-xl font-bold">
+                  {new Set(definitions.flatMap(d => Array.isArray(d.module_type) ? d.module_type : d.module_type ? [d.module_type] : [])).size}
+                </p>
+              </div>
+              <Layers className="w-5 h-5 text-muted-foreground opacity-50" />
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm">
+            <CardContent className="p-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">覆盖类型</p>
+                <p className="text-xl font-bold">
+                  {new Set(definitions.flatMap(d => d.apply_project_types || [])).size}
+                </p>
+              </div>
+              <Settings className="w-5 h-5 text-muted-foreground opacity-50" />
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm">
+            <CardContent className="p-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">覆盖阶段</p>
+                <p className="text-xl font-bold">
+                  {new Set(definitions.flatMap(d => d.apply_project_stages || [])).size}
+                </p>
+              </div>
+              <RefreshCw className="w-5 h-5 text-muted-foreground opacity-50" />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
         {filteredDefinitions.length === 0 ? (
@@ -1942,11 +2507,10 @@ export function StandardManagement({
             <p className="text-sm">点击&quot;新建数据表&quot;创建第一个模板</p>
           </div>
         ) : (
-          <Table>
+          <Table className="table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10"></TableHead>
-                <TableHead>表代码</TableHead>
                 <TableHead>表名称</TableHead>
                 <TableHead>模块</TableHead>
                 <TableHead>适用类型</TableHead>
@@ -1957,116 +2521,559 @@ export function StandardManagement({
             </TableHeader>
             <TableBody>
               {filteredDefinitions.map((def, index) => (
-                <TableRow
-                  key={def.id}
-                  draggable
-                  onDragStart={() => setDragDefIndex(index)}
-                  onDragOver={(e) => { e.preventDefault(); setDragOverDefIndex(index); }}
-                  onDrop={() => {
-                    if (dragDefIndex !== null && dragDefIndex !== index) {
-                      onReorder(dragDefIndex, index);
-                    }
-                    setDragDefIndex(null);
-                    setDragOverDefIndex(null);
-                  }}
-                  onDragEnd={() => { setDragDefIndex(null); setDragOverDefIndex(null); }}
-                  className={`${dragDefIndex === index ? "opacity-50 bg-muted/50" : ""} ${dragOverDefIndex === index && dragDefIndex !== index ? "border-t-2 border-t-primary" : ""} transition-colors cursor-grab active:cursor-grabbing`}
-                >
-                  <TableCell>
-                    <GripVertical className="w-4 h-4 text-muted-foreground" />
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">{def.table_code}</TableCell>
-                  <TableCell className="font-medium">{def.table_name}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {(() => {
-                        const modules = Array.isArray(def.module_type)
-                          ? def.module_type
-                          : def.module_type
-                          ? [def.module_type]
-                          : [];
-                        return modules.length === 0 ? (
-                          <span className="text-muted-foreground text-sm">-</span>
+                <Fragment key={def.id}>
+                  <TableRow
+                    draggable
+                    onDragStart={() => setDragDefIndex(index)}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverDefIndex(index); }}
+                    onDrop={() => {
+                      if (dragDefIndex !== null && dragDefIndex !== index) {
+                        onReorder(dragDefIndex, index);
+                      }
+                      setDragDefIndex(null);
+                      setDragOverDefIndex(null);
+                    }}
+                    onDragEnd={() => { setDragDefIndex(null); setDragOverDefIndex(null); }}
+                    onClick={() => openDrawer(def)}
+                    className={`${dragDefIndex === index ? "opacity-50 bg-muted/50" : ""} ${dragOverDefIndex === index && dragDefIndex !== index ? "border-t-2 border-t-primary" : ""} transition-colors cursor-pointer ${expandedDefId === def.id ? "bg-accent/80 border-l-2 border-l-primary" : ""}`}
+                  >
+                    <TableCell>
+                      <GripVertical className="w-4 h-4 text-muted-foreground" />
+                    </TableCell>
+                    <TableCell className="font-medium">{def.table_name}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {(() => {
+                          const modules = Array.isArray(def.module_type)
+                            ? def.module_type
+                            : def.module_type
+                            ? [def.module_type]
+                            : [];
+                          return modules.length === 0 ? (
+                            <span className="text-muted-foreground text-sm">-</span>
+                          ) : (
+                            modules.map((mod) => (
+                              <Badge key={mod} variant="outline" className="text-xs">
+                                {moduleTypes.find((m) => m.code === mod)?.name || mod}
+                              </Badge>
+                            ))
+                          );
+                        })()}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {def.apply_project_types.length === 0 ? (
+                          <span className="text-muted-foreground text-sm">全部</span>
                         ) : (
-                          modules.map((mod) => (
-                            <Badge key={mod} variant="outline" className="text-xs">
-                              {moduleTypes.find((m) => m.code === mod)?.name || mod}
+                          def.apply_project_types.map((type) => (
+                            <Badge key={type} variant="secondary" className="text-xs">
+                              {projectTypes.find((t) => t.code === type)?.name || type}
                             </Badge>
                           ))
-                        );
-                      })()}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {def.apply_project_types.length === 0 ? (
-                        <span className="text-muted-foreground text-sm">全部</span>
-                      ) : (
-                        def.apply_project_types.map((type) => (
-                          <Badge key={type} variant="secondary" className="text-xs">
-                            {projectTypes.find((t) => t.code === type)?.name || type}
-                          </Badge>
-                        ))
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {def.apply_project_stages.length === 0 ? (
-                        <span className="text-muted-foreground text-sm">全部</span>
-                      ) : (
-                        def.apply_project_stages.map((stage) => (
-                          <Badge key={stage} variant="outline" className="text-xs">
-                            {projectStages.find((s) => s.code === stage)?.name || stage}
-                          </Badge>
-                        ))
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={def.is_active ? "default" : "secondary"}>
-                      {def.is_active ? "启用" : "禁用"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
-                        onClick={() => openEditDialog(def)}
-                      >
-                        编辑
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
-                        title="查看数据"
-                        onClick={() => openDataDialog(def)}
-                      >
-                        数据
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2 text-xs text-blue-600 hover:text-blue-700"
-                        onClick={() => openSyncDialog(def)}
-                      >
-                        同步
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        title="删除表定义"
-                        onClick={() => onDelete(def.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {def.apply_project_stages.length === 0 ? (
+                          <span className="text-muted-foreground text-sm">全部</span>
+                        ) : (
+                          def.apply_project_stages.map((stage) => (
+                            <Badge key={stage} variant="outline" className="text-xs">
+                              {projectStages.find((s) => s.code === stage)?.name || stage}
+                            </Badge>
+                          ))
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={def.is_active ? "default" : "secondary"}>
+                        {def.is_active ? "启用" : "禁用"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+                          onClick={() => openEditDialog(def)}
+                        >
+                          编辑
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+                          title="查看数据"
+                          onClick={() => openDataDialog(def)}
+                        >
+                          数据
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-xs text-blue-600 hover:text-blue-700"
+                          onClick={() => openSyncDialog(def)}
+                        >
+                          同步
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          title="删除表定义"
+                          onClick={() => onDelete(def.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                  {/* 抽屉式编辑面板 */}
+                  {expandedDefId === def.id && drawerFormData && (
+                    <TableRow className="bg-muted/20 hover:bg-muted/20">
+                      <TableCell colSpan={7} className="p-0">
+                        <div className="overflow-hidden">
+                        <div className="px-6 py-4 space-y-4 border-b-2 border-b-primary/20 max-h-[65vh] overflow-y-auto">
+                          {/* Row 1: 基本信息 */}
+                          <div className="rounded-lg border bg-card p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <span className="font-medium text-sm">基本信息</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label className="text-xs font-medium">
+                                  表代码 <span className="text-destructive">*</span>
+                                </Label>
+                                <Input
+                                  value={drawerFormData.table_code || ""}
+                                  onChange={(e) => drawerUpdateField("table_code", e.target.value)}
+                                  placeholder="如: scope_wbs"
+                                  disabled
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-xs font-medium">
+                                  表名称 <span className="text-destructive">*</span>
+                                </Label>
+                                <Input
+                                  value={drawerFormData.table_name || ""}
+                                  onChange={(e) => drawerUpdateField("table_name", e.target.value)}
+                                  placeholder="如: WBS分解表"
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-2 mt-3">
+                              <Label className="text-xs font-medium">描述</Label>
+                              <Input
+                                value={drawerFormData.description || ""}
+                                onChange={(e) => drawerUpdateField("description", e.target.value)}
+                                placeholder="表描述"
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                            <div className="flex items-center justify-between pt-3 mt-3 border-t">
+                              <div className="space-y-0.5">
+                                <Label className="text-xs font-medium">允许项目添加记录</Label>
+                                <p className="text-xs text-muted-foreground">关闭后，项目模块管理中不显示"添加记录"按钮</p>
+                              </div>
+                              <Switch
+                                checked={drawerFormData.allow_add !== false}
+                                onCheckedChange={(checked: boolean) => drawerUpdateField("allow_add", checked)}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Row 2: 所属模块 + 适用范围 */}
+                          <div className="grid grid-cols-2 gap-4">
+                            {/* 所属模块 */}
+                            <div className="rounded-lg border bg-card p-4">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Layers className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <span className="font-medium text-sm">所属模块</span>
+                                <Badge variant="secondary" className="ml-auto text-xs shrink-0">
+                                  {(drawerFormData.module_type || []).length}
+                                </Badge>
+                              </div>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                {moduleTypes.map((module) => (
+                                  <label
+                                    key={module.code}
+                                    className="flex items-center gap-2 rounded-md px-2 py-1 text-xs cursor-pointer hover:bg-accent transition-colors has-[:checked]:bg-primary/10 has-[:checked]:text-primary"
+                                  >
+                                    <Checkbox
+                                      checked={(drawerFormData.module_type || []).includes(module.code)}
+                                      onCheckedChange={() => drawerToggleModule(module.code)}
+                                      className="h-3.5 w-3.5"
+                                    />
+                                    <span className="truncate">{module.name}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* 适用范围 */}
+                            <div className="rounded-lg border bg-card p-4">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Settings className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <span className="font-medium text-sm">适用范围</span>
+                                <Badge variant="secondary" className="ml-auto text-xs shrink-0">
+                                  {(drawerFormData.apply_project_types || []).length + (drawerFormData.apply_project_stages || []).length || 0}
+                                </Badge>
+                              </div>
+                              <div className="space-y-3">
+                                <div>
+                                  <Label className="text-xs font-medium mb-1.5 block">
+                                    适用项目类型 <span className="text-muted-foreground font-normal">(可多选)</span>
+                                  </Label>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {projectTypes.map((type) => (
+                                      <button
+                                        key={type.code}
+                                        type="button"
+                                        onClick={() => drawerToggleProjectType(type.code)}
+                                        className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
+                                          (drawerFormData.apply_project_types || []).includes(type.code)
+                                            ? "bg-primary text-primary-foreground border-primary"
+                                            : "hover:bg-muted border-border"
+                                        }`}
+                                      >
+                                        {type.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div>
+                                  <Label className="text-xs font-medium mb-1.5 block">
+                                    适用项目阶段 <span className="text-muted-foreground font-normal">(可多选)</span>
+                                  </Label>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {projectStages.map((stage) => (
+                                      <button
+                                        key={stage.code}
+                                        type="button"
+                                        onClick={() => drawerToggleProjectStage(stage.code)}
+                                        className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
+                                          (drawerFormData.apply_project_stages || []).includes(stage.code)
+                                            ? "bg-primary text-primary-foreground border-primary"
+                                            : "hover:bg-muted border-border"
+                                        }`}
+                                      >
+                                        {stage.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Row 3: 列配置 —— 矩阵式布局（独立横向滚动） */}
+                          <div className="rounded-lg border bg-card p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <Database className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <span className="font-medium text-sm">列配置</span>
+                              <Badge variant="secondary" className="ml-auto text-xs shrink-0">
+                                {(drawerFormData.columns_config || []).length}
+                              </Badge>
+                            </div>
+
+                            {(drawerFormData.columns_config || []).length === 0 ? (
+                              <div className="text-center py-6 text-muted-foreground">
+                                <Database className="w-6 h-6 mx-auto mb-1.5 opacity-50" />
+                                <p className="text-sm">暂无列定义</p>
+                              </div>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <div className="flex gap-3 min-w-max">
+                                  {(drawerFormData.columns_config || []).map((col, ci) => (
+                                    <div key={`colcard-${ci}`} className="w-[210px] shrink-0 rounded-md border bg-muted/30 p-3 space-y-3">
+                                      {/* 列名 */}
+                                      <div className="space-y-1">
+                                        <Label className="text-xs text-muted-foreground">列名</Label>
+                                        <Input
+                                          value={col.name}
+                                          onChange={(e) => drawerUpdateColumn(ci, "name", e.target.value)}
+                                          placeholder="列名"
+                                          className="h-8 text-sm"
+                                        />
+                                      </div>
+
+                                      {/* 必填 + 只读 */}
+                                      <div className="flex items-center gap-4">
+                                        <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                                          <Checkbox
+                                            checked={col.required}
+                                            onCheckedChange={(checked) => drawerUpdateColumn(ci, "required", checked)}
+                                            className="h-3.5 w-3.5"
+                                          />
+                                          <span className="text-muted-foreground">必填</span>
+                                        </label>
+                                        <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                                          <Checkbox
+                                            checked={col.readonly || false}
+                                            onCheckedChange={(checked) => drawerUpdateColumn(ci, "readonly", checked)}
+                                            className="h-3.5 w-3.5"
+                                          />
+                                          <span className="text-muted-foreground">只读</span>
+                                        </label>
+                                      </div>
+
+                                      {/* 类型 */}
+                                      <div className="space-y-1">
+                                        <Label className="text-xs text-muted-foreground">类型</Label>
+                                        <Select
+                                          value={col.type}
+                                          onValueChange={(value) => drawerUpdateColumn(ci, "type", value)}
+                                        >
+                                          <SelectTrigger className="h-8 text-sm w-full">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {COLUMN_TYPES.map((type) => (
+                                              <SelectItem key={type.code} value={type.code}>
+                                                {type.name}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+
+                                      {/* 描述 */}
+                                      <div className="space-y-1">
+                                        <Label className="text-xs text-muted-foreground">描述</Label>
+                                        <Input
+                                          value={col.description || ""}
+                                          onChange={(e) => drawerUpdateColumn(ci, "description", e.target.value)}
+                                          placeholder="列描述"
+                                          className="h-8 text-sm"
+                                        />
+                                      </div>
+
+                                      {/* select/multiple_select: 选项 */}
+                                      {(col.type === "select" || col.type === "multiple_select") && (
+                                        <div className="space-y-2 pt-1 border-t">
+                                          <Label className="text-xs text-muted-foreground">选项</Label>
+                                          <div className="flex flex-wrap items-center gap-1 min-h-[28px]">
+                                            {(col.options || []).map((opt, oi) => (
+                                              <span key={oi} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs px-1.5 py-0.5 rounded-full">
+                                                {opt}
+                                                <button type="button" onClick={() => drawerRemoveColumnOption(ci, oi)} className="hover:text-destructive">
+                                                  <X className="w-3 h-3" />
+                                                </button>
+                                              </span>
+                                            ))}
+                                          </div>
+                                          <input
+                                            type="text"
+                                            placeholder="输入选项后回车"
+                                            className="h-7 text-xs border-b border-dashed border-muted-foreground/30 bg-transparent outline-none focus:border-primary w-full"
+                                            onKeyDown={(e) => {
+                                              if (e.key === "Enter") {
+                                                e.preventDefault();
+                                                const val = (e.target as HTMLInputElement).value;
+                                                drawerAddColumnOption(ci, val);
+                                                (e.target as HTMLInputElement).value = "";
+                                              }
+                                            }}
+                                          />
+                                        </div>
+                                      )}
+
+                                      {/* select: 展示方式 */}
+                                      {col.type === "select" && (
+                                        <div className="space-y-1 pt-1 border-t">
+                                          <Label className="text-xs text-muted-foreground">展示方式</Label>
+                                          <div className="flex gap-1">
+                                            <Button type="button" variant={col.display_mode !== "checkbox" ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "display_mode", "dropdown")}>下拉</Button>
+                                            <Button type="button" variant={col.display_mode === "checkbox" ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "display_mode", "checkbox")}>单选框</Button>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* text: 快捷语 */}
+                                      {col.type === "text" && (
+                                        <div className="space-y-2 pt-1 border-t">
+                                          <Label className="text-xs text-muted-foreground">快捷语</Label>
+                                          <div className="flex flex-wrap items-center gap-1 min-h-[28px]">
+                                            {(col.quick_inputs || []).map((phrase, qi) => (
+                                              <span key={qi} className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs px-1.5 py-0.5 rounded-full">
+                                                {phrase}
+                                                <button type="button" onClick={() => drawerRemoveColumnQuickInput(ci, qi)} className="hover:text-destructive">
+                                                  <X className="w-3 h-3" />
+                                                </button>
+                                              </span>
+                                            ))}
+                                          </div>
+                                          <input
+                                            type="text"
+                                            placeholder="输入快捷语后回车"
+                                            className="h-7 text-xs border-b border-dashed border-muted-foreground/30 bg-transparent outline-none focus:border-primary w-full"
+                                            onKeyDown={(e) => {
+                                              if (e.key === "Enter") {
+                                                e.preventDefault();
+                                                const val = (e.target as HTMLInputElement).value;
+                                                drawerAddColumnQuickInput(ci, val);
+                                                (e.target as HTMLInputElement).value = "";
+                                              }
+                                            }}
+                                          />
+                                        </div>
+                                      )}
+
+                                      {/* number: 显示格式 */}
+                                      {col.type === "number" && (
+                                        <div className="space-y-1 pt-1 border-t">
+                                          <Label className="text-xs text-muted-foreground">显示格式</Label>
+                                          <div className="flex gap-1">
+                                            <Button type="button" variant={col.format !== "percent" ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "format", undefined)}>普通数字</Button>
+                                            <Button type="button" variant={col.format === "percent" ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "format", "percent")}>百分比</Button>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* procurement_module: 数据来源 + 选择方式 */}
+                                      {col.type === "procurement_module" && (
+                                        <div className="space-y-2 pt-1 border-t">
+                                          <div className="space-y-1">
+                                            <Label className="text-xs text-muted-foreground">数据来源</Label>
+                                            <div className="flex gap-1 flex-wrap">
+                                              <Button type="button" variant={col.display_mode !== "system" ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "display_mode", "project")}>项目采购模块</Button>
+                                              <Button type="button" variant={col.display_mode === "system" ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "display_mode", "system")}>系统产品模块</Button>
+                                            </div>
+                                          </div>
+                                          <div className="space-y-1">
+                                            <Label className="text-xs text-muted-foreground">选择方式</Label>
+                                            <div className="flex gap-1">
+                                              <Button type="button" variant={!col.multiple ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "multiple", false)}>单选</Button>
+                                              <Button type="button" variant={col.multiple ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "multiple", true)}>多选</Button>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* user: 选择方式 */}
+                                      {col.type === "user" && (
+                                        <div className="space-y-1 pt-1 border-t">
+                                          <Label className="text-xs text-muted-foreground">选择方式</Label>
+                                          <div className="flex gap-1">
+                                            <Button type="button" variant={!col.multiple ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "multiple", false)}>单选</Button>
+                                            <Button type="button" variant={col.multiple ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "multiple", true)}>多选</Button>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* video: 文件限制 */}
+                                      {col.type === "video" && (
+                                        <div className="space-y-2 pt-1 border-t">
+                                          <div className="space-y-1">
+                                            <Label className="text-xs text-muted-foreground">最大文件</Label>
+                                            <Select value={col.max_size || "1GB"} onValueChange={(v) => drawerUpdateColumn(ci, "max_size", v)}>
+                                              <SelectTrigger className="h-7 text-xs w-full"><SelectValue /></SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="100MB">100MB</SelectItem>
+                                                <SelectItem value="500MB">500MB</SelectItem>
+                                                <SelectItem value="1GB">1GB</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                          <div className="space-y-1">
+                                            <Label className="text-xs text-muted-foreground">最多上传</Label>
+                                            <Select value={String(col.max_count || 5)} onValueChange={(v) => drawerUpdateColumn(ci, "max_count", Number(v))}>
+                                              <SelectTrigger className="h-7 text-xs w-full"><SelectValue /></SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="1">1个</SelectItem>
+                                                <SelectItem value="3">3个</SelectItem>
+                                                <SelectItem value="5">5个</SelectItem>
+                                                <SelectItem value="10">10个</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* 删除列 */}
+                                      <div className="pt-1 border-t flex justify-center">
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7"
+                                          onClick={() => drawerRemoveColumn(ci)}
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="mt-3 pt-3 border-t">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={drawerAddColumn}
+                                className="h-8 text-xs gap-1"
+                              >
+                                <Plus className="h-3.5 w-3.5" /> 添加列
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Row 4: 引用配置概览 */}
+                          <div className="rounded-lg border bg-card p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <LinkIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <span className="font-medium text-sm">引用关系</span>
+                              <Badge variant="secondary" className="ml-auto text-xs shrink-0">
+                                {(drawerFormData.references_config || []).length}
+                              </Badge>
+                            </div>
+                            {(drawerFormData.references_config || []).length === 0 ? (
+                              <p className="text-xs text-muted-foreground py-2">暂无引用关系</p>
+                            ) : (
+                              <div className="space-y-1.5">
+                                {(drawerFormData.references_config || []).map((ref) => {
+                                  const sourceDef = definitions.find(d => d.table_code === ref.source_table_code);
+                                  return (
+                                    <div key={ref.id} className="flex items-center gap-2 text-xs py-1 px-2 rounded bg-muted/50">
+                                      <span className="font-medium">{ref.name}</span>
+                                      <span className="text-muted-foreground">
+                                        → {sourceDef?.table_name || ref.source_table_code}.{ref.match_condition.source_column}
+                                      </span>
+                                      <span className="text-muted-foreground">
+                                        入口: {ref.entry_column}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 操作按钮 */}
+                        <div className="px-6 py-3 border-t bg-muted/30 flex justify-end gap-2">
+                          <Button variant="outline" size="sm" onClick={closeDrawer}>
+                            取消
+                          </Button>
+                          <Button size="sm" onClick={handleDrawerSave}>
+                            保存
+                          </Button>
+                        </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
               ))}
             </TableBody>
           </Table>
@@ -2247,8 +3254,20 @@ export function StandardManagement({
                         <TableCell key={col.name}>
                           {col.type === "boolean"
                             ? (record[col.name] ? "是" : "否")
+                            : (col.type as string) === "user"
+                            ? (() => {
+                                const raw = String(record[col.name] ?? "");
+                                if (!raw) return "-";
+                                const ids = raw.split(",").filter(Boolean);
+                                return ids.map((id) => {
+                                  const u = userList.find((u) => u.id === id);
+                                  return u ? u.name : id;
+                                }).join(", ") || "-";
+                              })()
                             : ["office", "pdf", "md", "image", "archive"].includes(col.type as string)
                             ? renderFileCellDisplay(String(record[col.name] ?? ""), col.type as string)
+                            : col.type === "number" && col.format === "percent"
+                            ? `${String(record[col.name] ?? "-")}%`
                             : String(record[col.name] ?? "-")}
                         </TableCell>
                       ))}
@@ -2307,7 +3326,12 @@ export function StandardManagement({
           </DialogHeader>
           <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto px-1">
             {currentTableDef?.columns_config?.map((col) => {
-              const isReadonly = Boolean(col.readonly && editingRecord && editingRecord.data_source === "standard_sync"); // 仅规范同步数据的只读列禁用，手动/导入的可编辑
+              const rowReadonly = editingRecord?._readonly === true;
+              const colReadonly = !!col.readonly;
+              const isOrMode = currentTableDef?.readonly_mode === "or";
+              const isReadonly = isOrMode
+                ? (colReadonly || rowReadonly)
+                : (colReadonly && rowReadonly);
               return (
                 <div key={col.name} className="space-y-1.5">
                   <Label className={`text-sm ${isReadonly ? "text-muted-foreground" : ""}`}>
@@ -2327,24 +3351,46 @@ export function StandardManagement({
                       title={isReadonly ? (col.readonly_reason || "只读字段，不可编辑") : ""}
                     />
                   ) : col.type === "text" ? (
-                    <Input
-                      value={String(recordFormData[col.name] || "")}
-                      onChange={(e) => setRecordFormData((prev) => ({ ...prev, [col.name]: e.target.value }))}
-                      placeholder={col.description || `请输入${col.name}`}
-                      disabled={isReadonly}
-                      className={isReadonly ? "bg-muted cursor-not-allowed" : ""}
-                      title={isReadonly ? (col.readonly_reason || "只读字段，不可编辑") : ""}
-                    />
+                    <div className="space-y-2">
+                      {(col.quick_inputs || []).length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {(col.quick_inputs || []).map((phrase) => (
+                            <button
+                              key={phrase}
+                              type="button"
+                              disabled={isReadonly}
+                              onClick={() => setRecordFormData((prev) => ({ ...prev, [col.name]: phrase }))}
+                              className="inline-flex items-center gap-1 bg-green-50 text-green-700 text-xs px-2.5 py-1 rounded-full border border-green-200 hover:bg-green-100 hover:border-green-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {phrase}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <Input
+                        value={String(recordFormData[col.name] || "")}
+                        onChange={(e) => setRecordFormData((prev) => ({ ...prev, [col.name]: e.target.value }))}
+                        placeholder={col.description || `请输入${col.name}`}
+                        disabled={isReadonly}
+                        className={isReadonly ? "bg-muted cursor-not-allowed" : ""}
+                        title={isReadonly ? (col.readonly_reason || "只读字段，不可编辑") : ""}
+                      />
+                    </div>
                   ) : col.type === "number" ? (
-                    <Input
-                      type="number"
-                      value={String(recordFormData[col.name] || "")}
-                      onChange={(e) => setRecordFormData((prev) => ({ ...prev, [col.name]: e.target.value }))}
-                      placeholder={col.description || `请输入${col.name}`}
-                      disabled={isReadonly}
-                      className={isReadonly ? "bg-muted cursor-not-allowed" : ""}
-                      title={isReadonly ? (col.readonly_reason || "只读字段，不可编辑") : ""}
-                    />
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        value={String(recordFormData[col.name] || "")}
+                        onChange={(e) => setRecordFormData((prev) => ({ ...prev, [col.name]: e.target.value }))}
+                        placeholder={col.description || `请输入${col.name}`}
+                        disabled={isReadonly}
+                        className={`${isReadonly ? "bg-muted cursor-not-allowed" : ""} ${col.format === "percent" ? "pr-8" : ""}`}
+                        title={isReadonly ? (col.readonly_reason || "只读字段，不可编辑") : ""}
+                      />
+                      {col.format === "percent" && (
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">%</span>
+                      )}
+                    </div>
                   ) : col.type === "date" ? (
                     <Input
                       type="date"
@@ -2429,6 +3475,14 @@ export function StandardManagement({
                         value={String(recordFormData[col.name] || "")}
                         onChange={(val) => setRecordFormData((prev) => ({ ...prev, [col.name]: val }))}
                         moduleNames={productModuleNames}
+                        disabled={isReadonly}
+                      />
+                  ) : (col.type as string) === "user" ? (
+                      <UserField
+                        col={col}
+                        value={String(recordFormData[col.name] || "")}
+                        onChange={(val) => setRecordFormData((prev) => ({ ...prev, [col.name]: val }))}
+                        users={userList}
                         disabled={isReadonly}
                       />
                   ) : ["office", "pdf", "md", "image", "archive"].includes(col.type as string) ? (

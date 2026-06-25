@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: checkError.message }, { status: 500 });
     }
 
-    if (tableCheck?.[0]?.exists_flag) {
+    if ((tableCheck as Array<Record<string, unknown>>)?.[0]?.exists_flag) {
       // 表已存在，检查并补充缺失的 _module_code 列
       await ensureModuleCodeColumn(client, projectSchema, tableCode);
       return NextResponse.json({ existed: true });
@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
     columnDefs.push("updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()");
     columnDefs.push("created_by VARCHAR(36)");
     columnDefs.push("allow_delete BOOLEAN DEFAULT true");
+    columnDefs.push('"_readonly" BOOLEAN DEFAULT false');
     columnDefs.push("data_source TEXT DEFAULT 'standard'");
 
     // 如果有 procurement_record 类型列，添加 _module_code
@@ -123,7 +124,7 @@ async function ensureModuleCodeColumn(
               WHERE table_schema = '${projectSchema}' AND table_name = '${tableCode}' AND column_name = '_module_code'`,
     });
 
-    if (!colCheck || colCheck.length === 0) {
+    if (!colCheck || (colCheck as Array<unknown>).length === 0) {
       await client.rpc("execute_sql", {
         p_sql: `ALTER TABLE ${projectSchema}."${tableCode}" ADD COLUMN "_module_code" VARCHAR(255)`,
       });

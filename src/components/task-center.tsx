@@ -496,53 +496,59 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
     </div>
   );
 
+  const taskMetroTiles = useMemo(() => {
+    const tiles = [
+      { key: "published", label: "我的发布", icon: <ClipboardList className="w-4 h-4" />, color: "#2672ec", count: defs.length },
+      { key: "todos", label: "我的待办", icon: <CheckSquare className="w-4 h-4" />, color: "#f09609", count: instances.length },
+      { key: "all", label: "全部", icon: <BarChart3 className="w-4 h-4" />, color: "#60a917", count: defs.length + instances.length },
+    ];
+    return tiles.map(t => ({ ...t, isActive: activeTab === t.key }));
+  }, [activeTab, defs.length, instances.length]);
+
   return (
     <div className="h-full flex flex-col bg-gray-50">
-      {/* 页面标题 */}
-      <div className="p-6">
-        <h2 className="text-2xl font-semibold flex items-center gap-2">
-          <CheckSquare className="w-6 h-6" />
-          任务中心
-        </h2>
-        <p className="text-sm text-muted-foreground mt-1">管理和追踪流程任务与项目任务</p>
-      </div>
-
-      {/* Tab 栏 — 胶囊式 */}
-      <div className="flex items-center justify-between gap-1.5 px-4 py-2 bg-gray-50 border-b">
-        <div className="flex items-center gap-1.5">
-          {[
-            { key: "published", label: "我发布的", icon: <ClipboardList className="w-4 h-4" /> },
-            { key: "todos", label: "我的待办", icon: <CheckSquare className="w-4 h-4" /> },
-            { key: "all", label: "全部", icon: <BarChart3 className="w-4 h-4" /> },
-          ].map((tab) => {
-            const isActive = activeTab === tab.key;
-            const count = tab.key === "todos" ? instances.length : tab.key === "published" ? defs.length : 0;
-            return (
-              <button key={tab.key}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 text-sm rounded-full transition-all duration-200 ${
-                  isActive
-                    ? "bg-blue-50 text-blue-600 font-medium shadow-sm ring-1 ring-blue-200"
-                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-                }`}
-                onClick={() => setActiveTab(tab.key)}>
-                <span className={isActive ? "text-blue-500" : "text-gray-400"}>{tab.icon}</span>
-                {tab.label}
-                {count > 0 && (
-                  <span className={`ml-0.5 min-w-[18px] h-[18px] rounded-full text-[10px] font-medium flex items-center justify-center px-1 ${
-                    isActive ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-500"
-                  }`}>{count > 99 ? '99+' : count}</span>
-                )}
-              </button>
-            );
-          })}
+      {/* 页面标题 + Metro 磁贴 */}
+      <div className="shrink-0 bg-gray-50">
+        <div className="px-6 pt-4 pb-1 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold flex items-center gap-2">
+              <CheckSquare className="w-6 h-6" />
+              任务中心
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">管理和追踪流程任务与项目任务</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={loadData} disabled={loading} className="h-8 w-8 p-0">
+              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            </Button>
+            <Button size="sm" onClick={() => setShowWizard(true)} className="bg-blue-600 hover:bg-blue-700 shadow-sm">
+              <Plus className="w-4 h-4 mr-1" />新建任务
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={loadData} disabled={loading} className="h-8 w-8 p-0">
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-          <Button size="sm" onClick={() => setShowWizard(true)} className="bg-blue-600 hover:bg-blue-700 shadow-sm">
-            <Plus className="w-4 h-4 mr-1" />新建任务
-          </Button>
+
+        {/* Metro 磁贴导航 */}
+        <div className="px-3 pb-2 grid grid-cols-3 gap-1.5">
+          {taskMetroTiles.map(tile => (
+            <button
+              key={tile.key}
+              onClick={() => setActiveTab(tile.key)}
+              className={`
+                relative flex items-center justify-center gap-1.5 rounded-lg text-white text-center py-1.5
+                transition-all duration-150 select-none cursor-pointer overflow-hidden
+                ${tile.isActive ? "ring-2 ring-white/60 ring-offset-1 ring-offset-gray-200 scale-[0.95]" : "hover:scale-[1.03]"}
+              `}
+              style={{ backgroundColor: tile.color }}
+            >
+              <span className="opacity-90 shrink-0">{tile.icon}</span>
+              <div className="flex flex-col items-start leading-tight min-w-0">
+                <span className="font-medium text-[10px] truncate">{tile.label}</span>
+                <span className="font-bold text-sm leading-none">
+                  {tile.count > 0 ? (tile.count > 99 ? "99+" : tile.count) : "—"}
+                </span>
+              </div>
+            </button>
+          ))}
         </div>
       </div>
 

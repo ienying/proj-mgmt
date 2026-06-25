@@ -3,7 +3,7 @@ import { parse } from 'url';
 import next from 'next';
 
 const dev = process.env.COZE_PROJECT_ENV !== 'PROD';
-const hostname = process.env.HOSTNAME || 'localhost';
+const hostname = process.env.HOSTNAME || '0.0.0.0';
 const port = parseInt(process.env.PORT || '5000', 10);
 
 // Create Next.js app
@@ -20,6 +20,15 @@ app.prepare().then(() => {
       res.statusCode = 500;
       res.end('Internal server error');
     }
+  });
+  server.timeout = 0; // no socket timeout
+  server.keepAliveTimeout = 0; // never timeout idle connections
+  server.headersTimeout = 0; // never timeout waiting for headers (default 60s)
+  server.requestTimeout = 0; // never timeout incoming requests
+  server.on('connection', (socket) => {
+    socket.on('close', () => {
+      console.log(`[conn] socket closed, remote=${socket.remoteAddress}:${socket.remotePort}`);
+    });
   });
   server.once('error', err => {
     console.error(err);

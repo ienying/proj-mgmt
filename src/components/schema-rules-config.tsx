@@ -215,6 +215,12 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
           body: JSON.stringify({ id: editingId, ...formData }),
         });
         if (!response.ok) throw new Error("更新失败");
+        // 直接更新本地 state，避免 loadRules 时序问题导致 UI 不刷新
+        setRules((prev) =>
+          prev.map((r) =>
+            r.id === editingId ? { ...r, ...formData } as SchemaRule : r
+          )
+        );
         toast.success("规则更新成功");
       } else {
         // 创建
@@ -225,9 +231,9 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
         });
         if (!response.ok) throw new Error("创建失败");
         toast.success("规则创建成功");
+        loadRules();
       }
       setDialogOpen(false);
-      loadRules();
     } catch (error) {
       toast.error("操作失败");
     }
@@ -365,17 +371,17 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                         <div>
                           <p className="text-sm font-medium text-foreground mb-1">类型阶段规则</p>
                           <ul className="list-disc list-inside space-y-0.5">
-                            <li>三个条件（类型/阶段/状态）都是可选的，留空 = 不限</li>
-                            <li>非空条件之间是 <strong className="text-foreground">AND</strong> 关系，必须全部匹配</li>
-                            <li>多规则命中时，按匹配条件数排序（精确匹配 &gt; 部分匹配 &gt; 通用规则）</li>
+                            <li>三个条件（类型/阶段/状态）<strong className="text-foreground">必须全部精确匹配</strong>，缺一不可</li>
+                            <li>任一条件不满足则整个规则不命中</li>
+                            <li>多条规则同时命中时，<strong className="text-foreground">全部合并收集</strong>（Set 去重）</li>
                           </ul>
                         </div>
                         <div>
                           <p className="text-sm font-medium text-foreground mb-1">产品规则</p>
                           <ul className="list-disc list-inside space-y-0.5">
                             <li>模块必须有交集（<strong className="text-foreground">AND</strong>，硬性条件）</li>
-                            <li>模块命中后再过滤阶段和状态（可选，留空不限）</li>
-                            <li>阶段/状态过滤是 <strong className="text-foreground">AND</strong> 关系</li>
+                            <li>三个条件（类型/阶段/状态）<strong className="text-foreground">必须全部精确匹配</strong></li>
+                            <li>以上条件全部满足才命中</li>
                           </ul>
                         </div>
                         <div className="border-t pt-2">
@@ -490,21 +496,20 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                           {/* 附加过滤条件：项目阶段 + 项目状态 */}
                           <div className="grid grid-cols-2 gap-4 pt-2 border-t">
                             <div className="space-y-2">
-                              <Label className="text-xs">项目阶段（可选）</Label>
+                              <Label className="text-xs">项目阶段</Label>
                               <Select
-                                value={formData.project_stage || "all"}
+                                value={formData.project_stage || ""}
                                 onValueChange={(value) =>
                                   setFormData((prev) => ({
                                     ...prev,
-                                    project_stage: value === "all" ? null : value,
+                                    project_stage: value || null,
                                   }))
                                 }
                               >
                                 <SelectTrigger className="h-9">
-                                  <SelectValue placeholder="全部阶段" />
+                                  <SelectValue placeholder="请选择阶段" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="all">全部阶段</SelectItem>
                                   {projectStages.map((stage) => (
                                     <SelectItem key={stage.code} value={stage.code}>
                                       {stage.name}
@@ -514,21 +519,20 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                               </Select>
                             </div>
                             <div className="space-y-2">
-                              <Label className="text-xs">项目状态（可选）</Label>
+                              <Label className="text-xs">项目状态</Label>
                               <Select
-                                value={formData.project_status || "all"}
+                                value={formData.project_status || ""}
                                 onValueChange={(value) =>
                                   setFormData((prev) => ({
                                     ...prev,
-                                    project_status: value === "all" ? null : value,
+                                    project_status: value || null,
                                   }))
                                 }
                               >
                                 <SelectTrigger className="h-9">
-                                  <SelectValue placeholder="全部状态" />
+                                  <SelectValue placeholder="请选择状态" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="all">全部状态</SelectItem>
                                   {(projectStatuses.length > 0 ? projectStatuses : []).map((status) => (
                                     <SelectItem key={status.code} value={status.code}>
                                       {status.name}
@@ -545,19 +549,18 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                             <div className="space-y-2">
                               <Label className="text-xs">项目类型</Label>
                               <Select
-                                value={formData.project_type || "all"}
+                                value={formData.project_type || ""}
                                 onValueChange={(value) =>
                                   setFormData((prev) => ({
                                     ...prev,
-                                    project_type: value === "all" ? null : value,
+                                    project_type: value || null,
                                   }))
                                 }
                               >
                                 <SelectTrigger className="h-9">
-                                  <SelectValue placeholder="全部类型" />
+                                  <SelectValue placeholder="请选择类型" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="all">全部类型</SelectItem>
                                   {projectTypes.map((type) => (
                                     <SelectItem key={type.code} value={type.code}>
                                       {type.name}
@@ -569,19 +572,18 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                             <div className="space-y-2">
                               <Label className="text-xs">项目阶段</Label>
                               <Select
-                                value={formData.project_stage || "all"}
+                                value={formData.project_stage || ""}
                                 onValueChange={(value) =>
                                   setFormData((prev) => ({
                                     ...prev,
-                                    project_stage: value === "all" ? null : value,
+                                    project_stage: value || null,
                                   }))
                                 }
                               >
                                 <SelectTrigger className="h-9">
-                                  <SelectValue placeholder="全部阶段" />
+                                  <SelectValue placeholder="请选择阶段" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="all">全部阶段</SelectItem>
                                   {projectStages.map((stage) => (
                                     <SelectItem key={stage.code} value={stage.code}>
                                       {stage.name}
@@ -593,19 +595,18 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                             <div className="space-y-2">
                               <Label className="text-xs">项目状态</Label>
                               <Select
-                                value={formData.project_status || "all"}
+                                value={formData.project_status || ""}
                                 onValueChange={(value) =>
                                   setFormData((prev) => ({
                                     ...prev,
-                                    project_status: value === "all" ? null : value,
+                                    project_status: value || null,
                                   }))
                                 }
                               >
                                 <SelectTrigger className="h-9">
-                                  <SelectValue placeholder="全部状态" />
+                                  <SelectValue placeholder="请选择状态" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="all">全部状态</SelectItem>
                                   {projectStatuses.map((status) => (
                                     <SelectItem key={status.code} value={status.code}>
                                       {status.name}
@@ -616,7 +617,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                             </div>
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            留空表示不限制该项。规则优先级：精确匹配（类型+阶段+状态） &gt; 类型+阶段 &gt; 类型+状态 &gt; 阶段+状态 &gt; 单条件匹配 &gt; 通用规则
+                            三项均为必选，必须与项目完全匹配才命中。多条规则同时命中时全部合并（Set 去重）。
                           </p>
                         </>
                       )}

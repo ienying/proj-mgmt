@@ -104,22 +104,45 @@ export async function PUT(
 
     const tableName = `std_definition_${tableCode}`;
 
-    // 获取表定义，找出只读字段
+    // 获取表定义，包含 readonly_mode 配置
     const { data: tableDef } = await client.rpc("dp_select", { p_table: "data_table_definitions" });
-    const def = (tableDef as Array<{ table_code: string; columns_config: ColumnConfig[] }>)?.find(
+    const def = (tableDef as Array<{ table_code: string; columns_config: ColumnConfig[]; readonly_mode?: string }>)?.find(
       (t) => t.table_code === tableCode
     );
-    
-    // 获取只读字段列表
-    const readonlyColumns = def?.columns_config
+    const readonlyMode = (def as Record<string, unknown> | null)?.readonly_mode || "and";
+    const isOrMode = readonlyMode === "or";
+
+    // 获取当前记录行只读状态
+    let rowReadonly = false;
+    try {
+      const { data: rowData } = await client.rpc("execute_sql", {
+        p_sql: `SELECT "_readonly" FROM design_public."${tableName}" WHERE id = '${String(id).replace(/'/g, "''")}'`,
+      });
+      const rows = rowData as Array<Record<string, unknown>>;
+      rowReadonly = rows?.[0]?._readonly === true;
+    } catch { /* 列不存在则忽略 */ }
+
+    // 根据 AND/OR 模式决定哪些列真正被锁定
+    const colReadonlyNames = def?.columns_config
       ?.filter((col) => col.readonly)
       ?.map((col) => col.name) || [];
+    const allColNames = (def?.columns_config || []).map((col) => col.name);
 
-    // 系统字段也是只读的
+    const lockedColumns = (() => {
+      if (isOrMode) {
+        // OR 模式: 列只读 OR 行只读 → 锁定
+        if (rowReadonly) return allColNames;   // 行只读 → 全部锁定
+        return colReadonlyNames;               // 仅列只读 → 只锁该列
+      }
+      // AND 模式: 列只读 AND 行只读才锁定
+      return rowReadonly ? colReadonlyNames : [];
+    })();
+
+    // 系统字段始终只读
     const systemReadonlyColumns = ["id", "created_at", "created_by", "updated_at", "sort_order", "data_source"];
-    const allReadonlyColumns = [...readonlyColumns, ...systemReadonlyColumns];
+    const allReadonlyColumns = [...lockedColumns, ...systemReadonlyColumns];
 
-    // 过滤掉只读字段
+    // 过滤掉被锁定字段
     const filteredData = { ...updateData };
     allReadonlyColumns.forEach((col) => delete filteredData[col]);
 

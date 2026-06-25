@@ -8,7 +8,7 @@ import {
   MoreHorizontal, Edit, Trash2, LayoutGrid, List,
   Building2, Phone, Mail, Tag, FileText, Layers,
   MapPin, Globe, Lock, Flag, Palette, ChevronRight, ArrowRight,
-  SlidersHorizontal, Download, ChevronDown,
+  SlidersHorizontal, Download, ChevronDown, CheckIcon, Package,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger,
@@ -16,6 +16,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -153,9 +155,12 @@ export function ProjectManagement({
   const [filterManager, setFilterManager] = useState("all");
   const [filterYear, setFilterYear] = useState("all");
   const [filterMonth, setFilterMonth] = useState("all");
-  const [showMoreFilters, setShowMoreFilters] = useState(false);
+
   const [projectTypes, setProjectTypes] = useState<ProjectType[]>([]);
   const [projectStages, setProjectStages] = useState<ProjectStage[]>([]);
+  const [customerTypes, setCustomerTypes] = useState<{ code: string; name: string }[]>([]);
+  const [deploymentModes, setDeploymentModes] = useState<{ code: string; name: string }[]>([]);
+  const [departmentDict, setDepartmentDict] = useState<{ code: string; name: string }[]>([]);
   const [projectStatuses, setProjectStatuses] = useState<{name: string; code: string}[]>([]);
   const [procurementModules, setProcurementModules] = useState<ProcurementModule[]>([]);
   const [memberRoles, setMemberRoles] = useState<MemberRole[]>([]);
@@ -167,6 +172,8 @@ export function ProjectManagement({
   const [showAddMember, setShowAddMember] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedRoleType, setSelectedRoleType] = useState("");
+  const [userSearchOpen, setUserSearchOpen] = useState(false);
+  const [modSearch, setModSearch] = useState("");
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
 
   // 加载项目成员和权限
@@ -381,14 +388,35 @@ export function ProjectManagement({
     setProjectTypes(initialProjectTypes);
     setProjectStages(initialProjectStages);
     setProcurementModules(initialProcurementModules);
-    // 加载项目状态
+    // 加载项目状态、客户类型、部署模式
     fetch("/api/dicts?type=project_statuses")
       .then(res => res.json())
       .then(data => {
         if (data.data) setProjectStatuses(data.data.map((item: {name: string; code: string; is_enabled: boolean}) => item.is_enabled !== false ? {name: item.name, code: item.code || item.name} : null).filter(Boolean));
       })
       .catch(() => {});
+    fetch("/api/dicts?type=customer_types")
+      .then(res => res.json())
+      .then(data => {
+        if (data.data) setCustomerTypes(data.data.filter((item: { is_enabled: boolean }) => item.is_enabled !== false).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
+      })
+      .catch(() => {});
+    fetch("/api/dicts?type=deployment_modes")
+      .then(res => res.json())
+      .then(data => {
+        if (data.data) setDeploymentModes(data.data.filter((item: { is_enabled: boolean }) => item.is_enabled !== false).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
+      })
+      .catch(() => {});
+    fetch("/api/dicts?type=departments")
+      .then(res => res.json())
+      .then(data => {
+        if (data.data) setDepartmentDict(data.data.filter((item: { is_enabled: boolean }) => item.is_enabled !== false).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
+      })
+      .catch(() => {});
   }, [initialProjectTypes, initialProjectStages, initialProcurementModules]);
+
+  // 切换项目时清空搜索
+  useEffect(() => { setModSearch(""); }, [selectedProject?.id]);
 
   const getStatusBadge = (status?: string) => {
     const styles: Record<string, string> = {
@@ -414,6 +442,25 @@ export function ProjectManagement({
         {stageName}
       </span>
     );
+  };
+
+  // 将存储值（JSON数组字符串/逗号分隔字符串/数组）解析为 code 数组，并转为名称展示
+  const formatCodeList = (raw: unknown, dict: { code: string; name: string }[]): string => {
+    if (!raw) return "";
+    let codes: string[] = [];
+    if (Array.isArray(raw)) {
+      codes = raw.map(String);
+    } else if (typeof raw === "string") {
+      // 兼容 JSON 数组格式 ["junior"] 和逗号分隔格式 junior,senior
+      const trimmed = raw.trim();
+      if (trimmed.startsWith("[")) {
+        try { const p = JSON.parse(trimmed); if (Array.isArray(p)) codes = p.map(String); } catch { /* fall through */ }
+      }
+      if (codes.length === 0) {
+        codes = trimmed.split(",").map(s => s.trim()).filter(Boolean);
+      }
+    }
+    return codes.map(c => dict.find(d => d.code === c)?.name || c).join("、");
   };
 
   // 项目详情面板
@@ -454,19 +501,25 @@ export function ProjectManagement({
             {selectedProject.project_type && (
               <div>
                 <span className="text-[11px] text-slate-400">项目类型</span>
-                <p className="text-xs font-medium text-slate-700 truncate">{selectedProject.project_type}</p>
+                <p className="text-xs font-medium text-slate-700 truncate">
+                  {projectTypes.find(t => t.code === selectedProject.project_type)?.name || selectedProject.project_type}
+                </p>
               </div>
             )}
             {selectedProject.department && (
               <div>
                 <span className="text-[11px] text-slate-400">部门</span>
-                <p className="text-xs font-medium text-slate-700 truncate">{selectedProject.department}</p>
+                <p className="text-xs font-medium text-slate-700 truncate">
+                  {departmentDict.find(d => d.code === selectedProject.department)?.name || selectedProject.department}
+                </p>
               </div>
             )}
             {selectedProject.customer_type && (
               <div>
                 <span className="text-[11px] text-slate-400">客户类型</span>
-                <p className="text-xs font-medium text-slate-700 truncate">{selectedProject.customer_type}</p>
+                <p className="text-xs font-medium text-slate-700 truncate">
+                  {formatCodeList(selectedProject.customer_type, customerTypes)}
+                </p>
               </div>
             )}
             {typeof selectedProject.customer_info === 'object' && selectedProject.customer_info !== null && (() => {
@@ -509,7 +562,9 @@ export function ProjectManagement({
             {selectedProject.deployment_mode && (
               <div>
                 <span className="text-[11px] text-slate-400">部署方式</span>
-                <p className="text-xs font-medium text-slate-700 truncate">{selectedProject.deployment_mode}</p>
+                <p className="text-xs font-medium text-slate-700 truncate">
+                  {formatCodeList(selectedProject.deployment_mode, deploymentModes)}
+                </p>
               </div>
             )}
             {selectedProject.description && (
@@ -544,6 +599,46 @@ export function ProjectManagement({
           )}
         </div>
 
+        {/* 采购模块 */}
+        {selectedProject.procurement_modules && (selectedProject.procurement_modules as string[]).length > 0 && (() => {
+          const modules = selectedProject.procurement_modules as string[];
+          const filtered = modSearch
+            ? modules.filter((code) => {
+                const mod = procurementModules.find(m => m.code === code);
+                const name = mod?.name || code;
+                return name.toLowerCase().includes(modSearch.toLowerCase()) || code.toLowerCase().includes(modSearch.toLowerCase());
+              })
+            : modules;
+          return (
+            <div className="p-4 border-t border-slate-200">
+              <h3 className="text-sm font-medium text-slate-500 flex items-center gap-1.5 mb-2">
+                <Package className="w-3.5 h-3.5" />
+                采购模块
+                <span className="text-xs text-slate-400 ml-1">{modules.length} 个</span>
+              </h3>
+              <Input
+                placeholder="搜索模块..."
+                value={modSearch}
+                onChange={(e) => setModSearch(e.target.value)}
+                className="h-7 text-xs mb-2"
+              />
+              <div className="max-h-36 overflow-y-auto space-y-1">
+                {filtered.map((code) => {
+                  const mod = procurementModules.find(m => m.code === code);
+                  return (
+                    <div key={code} className="text-xs text-slate-700 py-0.5 px-2 rounded bg-slate-50 truncate">
+                      {mod?.name || code}
+                    </div>
+                  );
+                })}
+                {filtered.length === 0 && (
+                  <div className="text-xs text-slate-400 text-center py-2">无匹配模块</div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* 成员与权限 */}
         <div className="p-4 border-t border-slate-200">
           <div className="flex items-center justify-between mb-3">
@@ -568,20 +663,42 @@ export function ProjectManagement({
           {/* 添加成员表单 */}
           {showAddMember && (
             <div className="p-3 bg-slate-50 rounded-lg mb-3 space-y-2">
-              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="选择用户" />
-                </SelectTrigger>
-                <SelectContent>
-                  {users
-                    .filter((u) => !projectMembers.some((m) => (m.user_id || m.id) === u.id))
-                    .map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              <Popover open={userSearchOpen} onOpenChange={setUserSearchOpen}>
+                <PopoverTrigger asChild>
+                  <button className="flex w-full items-center justify-between h-8 rounded-md border border-input bg-transparent px-3 py-1 text-xs hover:bg-accent hover:text-accent-foreground">
+                    {selectedUserId
+                      ? users.find((u) => u.id === selectedUserId)?.name || "未知用户"
+                      : <span className="text-muted-foreground">选择用户</span>}
+                    <ChevronDown className="h-3.5 w-3.5 opacity-50" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[260px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="搜索用户姓名..." className="h-8 text-xs" />
+                    <CommandList>
+                      <CommandEmpty className="text-xs py-3">未找到匹配用户</CommandEmpty>
+                      <CommandGroup>
+                        {users
+                          .filter((u) => !projectMembers.some((m) => (m.user_id || m.id) === u.id))
+                          .map((u) => (
+                            <CommandItem
+                              key={u.id}
+                              value={u.name}
+                              onSelect={() => {
+                                setSelectedUserId(selectedUserId === u.id ? "" : u.id);
+                                setUserSearchOpen(false);
+                              }}
+                              className="text-xs"
+                            >
+                              <CheckIcon className={`mr-2 h-3.5 w-3.5 ${selectedUserId === u.id ? "opacity-100" : "opacity-0"}`} />
+                              {u.name}
+                            </CommandItem>
+                          ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               <Select value={selectedRoleType} onValueChange={setSelectedRoleType}>
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue placeholder="选择角色" />
@@ -938,7 +1055,7 @@ export function ProjectManagement({
                 </div>
                 <div className="flex items-center justify-between text-slate-500">
                   <span>部署模式</span>
-                  <span className="text-slate-700">{project.deployment_mode || '-'}</span>
+                  <span className="text-slate-700">{formatCodeList(project.deployment_mode, deploymentModes) || '-'}</span>
                 </div>
               </div>
             </div>
@@ -1081,26 +1198,56 @@ export function ProjectManagement({
                 <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="项目类型" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">全部类型</SelectItem>
-                  {projectTypes.map((t: { name: string; code: string }) => <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>)}
+                  {projectTypes.filter(t => t.code).map((t: { name: string; code: string }) => <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filterStage} onValueChange={(v) => setFilterStage(v)}>
                 <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="项目阶段" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">全部阶段</SelectItem>
-                  {projectStages.map((s: { name: string; code: string }) => <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>)}
+                  {projectStages.filter(s => s.code).map((s: { name: string; code: string }) => <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 gap-1.5"
-                onClick={() => setShowMoreFilters(!showMoreFilters)}
-              >
-                <SlidersHorizontal className="w-3.5 h-3.5" />
-                更多筛选
-                <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showMoreFilters && "rotate-180")} />
-              </Button>
+              <Select value={filterDept === "all" ? "all" : filterDept} onValueChange={(v) => setFilterDept(v)}>
+                <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="所属部门" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部部门</SelectItem>
+                  {[...new Set(projects.map((p: Project) => p.department).filter(Boolean) as string[])].map((d: string) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterDeployMode === "all" ? "all" : filterDeployMode} onValueChange={(v) => setFilterDeployMode(v)}>
+                <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="部署模式" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部模式</SelectItem>
+                  {[...new Set(projects.map((p: Project) => p.deployment_mode).filter(Boolean) as string[])].map((m: string) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterManager === "all" ? "all" : filterManager} onValueChange={(v) => setFilterManager(v)}>
+                <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="项目经理" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部经理</SelectItem>
+                  {[...new Set(projects.map((p: Project) => p.role_project_manager).filter(Boolean) as string[])].map((m: string) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterYear === "all" ? "all" : filterYear} onValueChange={(v) => setFilterYear(v)}>
+                <SelectTrigger className="w-[110px] h-9"><SelectValue placeholder="年份" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部年份</SelectItem>
+                  {[...new Set(projects.map((p: Project) => p.created_at ? new Date(p.created_at).getFullYear().toString() : "").filter(Boolean) as string[])].sort().map((y: string) => <SelectItem key={y} value={y}>{y}年</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterMonth === "all" ? "all" : filterMonth} onValueChange={(v) => setFilterMonth(v)}>
+                <SelectTrigger className="w-[110px] h-9"><SelectValue placeholder="月份" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部月份</SelectItem>
+                  {Array.from({length: 12}, (_, i) => (i + 1).toString()).map((m: string) => <SelectItem key={m} value={m}>{m}月</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {(filterDept !== "all" || filterDeployMode !== "all" || filterManager !== "all" || filterYear !== "all" || filterMonth !== "all") && (
+                <Button variant="ghost" size="sm" className="h-9 text-gray-500" onClick={() => { setFilterDept("all"); setFilterDeployMode("all"); setFilterManager("all"); setFilterYear("all"); setFilterMonth("all"); }}>
+                  清除筛选
+                  </Button>
+                )}
               <div className="flex-1" />
               <Button
                 variant="outline"
@@ -1116,51 +1263,6 @@ export function ProjectManagement({
                 新建项目
               </Button>
             </div>
-            {/* 更多筛选条件（可折叠） */}
-            {showMoreFilters && (
-              <div className="flex items-center gap-3 flex-wrap pt-2 border-t border-gray-100">
-                <Select value={filterDept === "all" ? "all" : filterDept} onValueChange={(v) => setFilterDept(v)}>
-                  <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="所属部门" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部部门</SelectItem>
-                    {[...new Set(projects.map((p: Project) => p.department).filter(Boolean) as string[])].map((d: string) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={filterDeployMode === "all" ? "all" : filterDeployMode} onValueChange={(v) => setFilterDeployMode(v)}>
-                  <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="部署模式" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部模式</SelectItem>
-                    {[...new Set(projects.map((p: Project) => p.deployment_mode).filter(Boolean) as string[])].map((m: string) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={filterManager === "all" ? "all" : filterManager} onValueChange={(v) => setFilterManager(v)}>
-                  <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="项目经理" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部经理</SelectItem>
-                    {[...new Set(projects.map((p: Project) => p.role_project_manager).filter(Boolean) as string[])].map((m: string) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={filterYear === "all" ? "all" : filterYear} onValueChange={(v) => setFilterYear(v)}>
-                  <SelectTrigger className="w-[110px] h-9"><SelectValue placeholder="年份" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部年份</SelectItem>
-                    {[...new Set(projects.map((p: Project) => p.created_at ? new Date(p.created_at).getFullYear().toString() : "").filter(Boolean) as string[])].sort().map((y: string) => <SelectItem key={y} value={y}>{y}年</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={filterMonth === "all" ? "all" : filterMonth} onValueChange={(v) => setFilterMonth(v)}>
-                  <SelectTrigger className="w-[110px] h-9"><SelectValue placeholder="月份" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部月份</SelectItem>
-                    {Array.from({length: 12}, (_, i) => (i + 1).toString()).map((m: string) => <SelectItem key={m} value={m}>{m}月</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {(filterDept !== "all" || filterDeployMode !== "all" || filterManager !== "all" || filterYear !== "all" || filterMonth !== "all") && (
-                  <Button variant="ghost" size="sm" className="h-9 text-gray-500" onClick={() => { setFilterDept("all"); setFilterDeployMode("all"); setFilterManager("all"); setFilterYear("all"); setFilterMonth("all"); }}>
-                    清除筛选
-                  </Button>
-                )}
-              </div>
-            )}
           </div>
         </div>
         {/* 项目表单弹窗 */}
@@ -1171,7 +1273,7 @@ export function ProjectManagement({
           onSuccess={() => { setShowProjectForm(false); setEditingProject(null); refreshProjects(); }}
           projectTypes={projectTypes}
           projectStages={projectStages}
-          memberRoles={memberRoles.map(r => r.name)}
+          memberRoles={memberRoles.map(r => r.name).filter(Boolean)}
           productModules={procurementModules.map(m => ({ module_code: m.code, module_name: m.name, product_name: m.name }))}
           users={users}
         />

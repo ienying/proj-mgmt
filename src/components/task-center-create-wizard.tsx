@@ -147,7 +147,8 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
 
   // Feedback column editing for board records
   const [editingRefId, setEditingRefId] = useState<string | null>(null);
-  const [newFbCol, setNewFbCol] = useState({ label: "", type: "text", required: false, assigned_node_id: "" });
+  const [newFbCol, setNewFbCol] = useState({ label: "", type: "text", required: false, assigned_node_id: "", options: [] as string[] });
+  const [fbColOptInput, setFbColOptInput] = useState("");
 
   // Table definitions map: table_code → Chinese table_name
   const [tableDefsMap, setTableDefsMap] = useState<Record<string, string>>({});
@@ -693,9 +694,11 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                           type: newFbCol.type,
                           required: newFbCol.required,
                           assigned_node_id: newFbCol.assigned_node_id || "",
+                          options: newFbCol.options && newFbCol.options.length > 0 ? newFbCol.options : undefined,
                         });
                         setBoardRecords([...boardRecords]);
-                        setNewFbCol({ label: "", type: "text", required: false, assigned_node_id: "" });
+                        setNewFbCol({ label: "", type: "text", required: false, assigned_node_id: "", options: [] });
+                        setFbColOptInput("");
                       }
                     }} />
                   <Select value={newFbCol.type}
@@ -705,12 +708,19 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                       {COLUMN_TYPES.map((t) => (<SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>))}
                     </SelectContent>
                   </Select>
+                  {newFbCol.type === "select" && (
+                    <div className="w-full mt-1">
+                      <Input placeholder="选项 (逗号分隔)" className="h-7 text-xs w-full border-dashed" value={fbColOptInput}
+                        onFocus={() => setEditingRefId(ref.ref_id)}
+                        onChange={(e) => { setFbColOptInput(e.target.value); setNewFbCol({ ...newFbCol, options: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) }); }} />
+                    </div>
+                  )}
                   {workflowNodes.length > 0 ? (
                     <Select value={newFbCol.assigned_node_id || ""}
                       onValueChange={(v) => { setEditingRefId(ref.ref_id); setNewFbCol({ ...newFbCol, assigned_node_id: v }); }}>
                       <SelectTrigger className="h-7 text-xs w-28"><SelectValue placeholder="绑定节点" /></SelectTrigger>
                       <SelectContent>
-                        {workflowNodes.map((n) => (<SelectItem key={n.id} value={n.id}>{n.name}</SelectItem>))}
+                        {workflowNodes.map((n, ni) => (<SelectItem key={n.id} value={n.id}>{ni + 1}. {n.name}</SelectItem>))}
                       </SelectContent>
                     </Select>
                   ) : (
@@ -728,9 +738,11 @@ export default function TaskCenterCreateWizard({ open, onOpenChange, currentUser
                       type: newFbCol.type,
                       required: newFbCol.required,
                       assigned_node_id: newFbCol.assigned_node_id || "",
+                      options: newFbCol.options && newFbCol.options.length > 0 ? newFbCol.options : undefined,
                     });
                     setBoardRecords([...boardRecords]);
-                    setNewFbCol({ label: "", type: "text", required: false, assigned_node_id: "" });
+                    setNewFbCol({ label: "", type: "text", required: false, assigned_node_id: "", options: [] });
+                    setFbColOptInput("");
                     setEditingRefId(null);
                   }}>
                   <Plus className="w-3.5 h-3.5 mr-1" />添加反馈列

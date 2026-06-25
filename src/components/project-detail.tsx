@@ -10,9 +10,10 @@ import {
   ShoppingCart, Briefcase, Archive,
   Columns3, GitBranch, FileSearch, GanttChart, Group,
   ChevronDown, ChevronRight as ChevronRightIcon,
-  Settings2, Route, BarChart3, Trash2, Download, Upload, Filter,
-  Link as LinkIcon, Search, Table as TableIcon,
+  Settings2, Trash2, Download, Upload, Filter,
+  Link as LinkIcon, Search, Table as TableIcon, Sparkles, Copy, Loader2,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -23,6 +24,8 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Markdown } from "@/components/markdown";
+import { AIPromptDialog } from "@/components/ai-prompt-dialog";
 import {
   Select,
   SelectContent,
@@ -58,7 +61,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Target, TrendingUp, Check, DollarSign, UsersIcon, MessageSquare, Shield,
   ShoppingCart, Briefcase, Archive, Layers, FolderKanban, Users, Building2,
   LayoutGrid, List, Columns3, GitBranch, GanttChart, Group, FileSearch,
-  ArrowLeft, Plus, Pencil, X, Settings2, Route, BarChart3, Trash2, Download, Upload, Filter,
+  ArrowLeft, Plus, Pencil, X, Settings2, Trash2, Download, Upload, Filter,
 };
 
 const PROJECT_MODULES = [
@@ -79,11 +82,11 @@ const MODULE_COLORS: Record<string, { bg: string; light: string; border: string;
   scope:         { bg: "bg-blue-500",    light: "bg-blue-50",    border: "border-blue-200",    text: "text-blue-600",    badge: "bg-blue-100 text-blue-700",    header: "bg-gradient-to-r from-blue-500 to-blue-600",    hoverRow: "hover:bg-blue-50/50",    ring: "ring-blue-200", hex: "#3b82f6" },
   schedule:      { bg: "bg-emerald-500", light: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-600", badge: "bg-emerald-100 text-emerald-700", header: "bg-gradient-to-r from-emerald-500 to-emerald-600", hoverRow: "hover:bg-emerald-50/50", ring: "ring-emerald-200", hex: "#10b981" },
   quality:       { bg: "bg-violet-500",  light: "bg-violet-50",  border: "border-violet-200",  text: "text-violet-600",  badge: "bg-violet-100 text-violet-700",  header: "bg-gradient-to-r from-violet-500 to-violet-600",  hoverRow: "hover:bg-violet-50/50", ring: "ring-violet-200", hex: "#8b5cf6" },
-  cost:          { bg: "bg-amber-500",   light: "bg-amber-50",   border: "border-amber-200",   text: "text-amber-600",   badge: "bg-amber-100 text-amber-700",   header: "bg-gradient-to-r from-amber-500 to-amber-600",   hoverRow: "hover:bg-amber-50/50", ring: "ring-amber-200", hex: "#f59e0b" },
+  cost:          { bg: "bg-amber-400",   light: "bg-amber-50",   border: "border-amber-200",   text: "text-amber-500",   badge: "bg-amber-50 text-amber-600",    header: "bg-gradient-to-r from-amber-300 to-amber-400",   hoverRow: "hover:bg-amber-50/50", ring: "ring-amber-200", hex: "#fbbf24" },
   collaboration: { bg: "bg-cyan-500",    light: "bg-cyan-50",    border: "border-cyan-200",    text: "text-cyan-600",    badge: "bg-cyan-100 text-cyan-700",     header: "bg-gradient-to-r from-cyan-500 to-cyan-600",     hoverRow: "hover:bg-cyan-50/50", ring: "ring-cyan-200", hex: "#06b6d4" },
-  communication: { bg: "bg-pink-500",    light: "bg-pink-50",    border: "border-pink-200",    text: "text-pink-600",    badge: "bg-pink-100 text-pink-700",     header: "bg-gradient-to-r from-pink-500 to-pink-600",     hoverRow: "hover:bg-pink-50/50", ring: "ring-pink-200", hex: "#ec4899" },
+  communication: { bg: "bg-pink-400",    light: "bg-pink-50",    border: "border-pink-200",    text: "text-pink-500",    badge: "bg-pink-50 text-pink-600",      header: "bg-gradient-to-r from-pink-300 to-pink-400",      hoverRow: "hover:bg-pink-50/50", ring: "ring-pink-200", hex: "#f472b6" },
   risk:          { bg: "bg-red-500",     light: "bg-red-50",     border: "border-red-200",     text: "text-red-600",     badge: "bg-red-100 text-red-700",       header: "bg-gradient-to-r from-red-500 to-red-600",       hoverRow: "hover:bg-red-50/50", ring: "ring-red-200", hex: "#ef4444" },
-  procurement:   { bg: "bg-orange-500",  light: "bg-orange-50",  border: "border-orange-200",  text: "text-orange-600",  badge: "bg-orange-100 text-orange-700", header: "bg-gradient-to-r from-orange-500 to-orange-600", hoverRow: "hover:bg-orange-50/50", ring: "ring-orange-200", hex: "#f97316" },
+  procurement:   { bg: "bg-orange-400",  light: "bg-orange-50",  border: "border-orange-200",  text: "text-orange-500",  badge: "bg-orange-50 text-orange-600",  header: "bg-gradient-to-r from-orange-300 to-orange-400", hoverRow: "hover:bg-orange-50/50", ring: "ring-orange-200", hex: "#fb923c" },
   resource:      { bg: "bg-teal-500",    light: "bg-teal-50",    border: "border-teal-200",    text: "text-teal-600",    badge: "bg-teal-100 text-teal-700",     header: "bg-gradient-to-r from-teal-500 to-teal-600",     hoverRow: "hover:bg-teal-50/50", ring: "ring-teal-200", hex: "#14b8a6" },
   document:      { bg: "bg-indigo-500",  light: "bg-indigo-50",  border: "border-indigo-200",  text: "text-indigo-600",  badge: "bg-indigo-100 text-indigo-700", header: "bg-gradient-to-r from-indigo-500 to-indigo-600", hoverRow: "hover:bg-indigo-50/50", ring: "ring-indigo-200", hex: "#6366f1" },
 };
@@ -127,6 +130,7 @@ interface ColumnConfig {
   required: boolean;
   readonly?: boolean;
   options?: string[];
+  quick_inputs?: string[]; // 文本类型的快捷语列表
   multiple?: boolean;
   display_mode?: "dropdown" | "checkbox" | "project" | "system";
   max_size?: string; // 视频最大文件大小: "100MB" / "500MB" / "1GB"
@@ -144,6 +148,7 @@ interface TableDefinition {
   table_name: string;
   module_codes: string[];
   allow_add?: boolean;
+  readonly_mode?: "and" | "or";
   columns_config: ColumnConfig[];
   references_config?: Array<{
     id: string;
@@ -160,6 +165,15 @@ interface TableDefinition {
 interface TableData {
   id: string;
   [key: string]: unknown;
+}
+
+function dedupeColumnsByName(columns: ColumnConfig[]): ColumnConfig[] {
+  const seen = new Set<string>();
+  return columns.filter((col) => {
+    if (seen.has(col.name)) return false;
+    seen.add(col.name);
+    return true;
+  });
 }
 
 // 采购模块搜索选择组件
@@ -183,7 +197,7 @@ function ProcurementModuleSelect({
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const isMultiple = col.multiple || false;
   const isSystem = col.display_mode === "system";
-  const modules = isSystem ? systemModules : projectModules;
+  const modules = [...new Set(isSystem ? systemModules : projectModules)];
   const filtered = modules.filter((m: string) => m.toLowerCase().includes(search.toLowerCase()));
 
   const currentValues: string[] = (() => {
@@ -332,13 +346,146 @@ export function ProjectDetail({
   const [tableDefinitions, setTableDefinitions] = useState<TableDefinition[]>([]);
   const [tableDataMap, setTableDataMap] = useState<Record<string, TableData[]>>({});
   const [loading, setLoading] = useState(true);
+
+  // 关联的流程任务
+  const [linkedTasksMap, setLinkedTasksMap] = useState<Record<string, any[]>>({});
+  const [linkedTasksOpen, setLinkedTasksOpen] = useState<string | null>(null);
+
+  // AI 分析状态
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<{ analysis: string; tableCount: number; totalRows: number } | null>(null);
+  const [aiError, setAiError] = useState("");
+  const [aiAnalyzingTable, setAiAnalyzingTable] = useState("");
+  const [aiConversationHistory, setAiConversationHistory] = useState<Array<{ role: string; content: string }>>([]);
+  const [aiFollowUpQuestion, setAiFollowUpQuestion] = useState("");
+  const [aiFollowUpLoading, setAiFollowUpLoading] = useState(false);
+  const [aiPromptDialogOpen, setAiPromptDialogOpen] = useState(false);
+  const [aiPendingTableCode, setAiPendingTableCode] = useState<string>("");
+  const [aiCustomSystemMessage, setAiCustomSystemMessage] = useState("");
+  const [aiCustomUserPrompt, setAiCustomUserPrompt] = useState("");
+
+  // AI 按钮 → 打开提示词对话框
+  const openAIPromptDialog = useCallback((tableCode?: string) => {
+    setAiPendingTableCode(tableCode || "");
+    setAiPromptDialogOpen(true);
+  }, []);
+
+  // 提示词对话框 → 执行分析
+  const handleAIPromptSubmit = useCallback((result: { systemMessage: string; userPrompt: string; templateId?: string }) => {
+    setAiCustomSystemMessage(result.systemMessage);
+    setAiCustomUserPrompt(result.userPrompt);
+    setAiPromptDialogOpen(false);
+    // 触发分析
+    handleAIAnalysis(aiPendingTableCode || undefined, result.systemMessage, result.userPrompt);
+  }, [aiPendingTableCode]);
+
+  const handleAIAnalysis = useCallback(async (tableCode?: string, customSystem?: string, customUserPrompt?: string) => {
+    setAiDialogOpen(true);
+    setAiLoading(true);
+    setAiResult(null);
+    setAiError("");
+    setAiAnalyzingTable(tableCode || "");
+    setAiConversationHistory([]);
+    setAiFollowUpQuestion("");
+
+    try {
+      const res = await fetch("/api/ai/analyze-project", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectSchema: project.project_schema,
+          projectName: project.project_name,
+          moduleName: activeModule,
+          tableCode: tableCode || undefined,
+          ...(customSystem ? { systemMessage: customSystem } : {}),
+          ...(customUserPrompt ? { userPrompt: customUserPrompt } : {}),
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        if (json.code === "NO_KEY") {
+          setAiError("NO_KEY");
+        } else {
+          setAiError(json.error || "分析失败");
+        }
+        return;
+      }
+
+      if (json.data) {
+        setAiResult({
+          analysis: json.data.analysis || "",
+          tableCount: json.data.tableCount || 0,
+          totalRows: json.data.totalRows || 0,
+        });
+        if (json.data.conversationHistory) {
+          setAiConversationHistory(json.data.conversationHistory);
+        }
+      }
+    } catch (e) {
+      setAiError(String(e));
+    } finally {
+      setAiLoading(false);
+    }
+  }, [project.project_schema, activeModule]);
+
+  const handleAIFollowUp = useCallback(async () => {
+    const q = aiFollowUpQuestion.trim();
+    if (!q || aiConversationHistory.length === 0) return;
+
+    setAiFollowUpLoading(true);
+    setAiFollowUpQuestion("");
+
+    // 乐观更新：先显示用户问题
+    const updatedHistory = [
+      ...aiConversationHistory,
+      { role: "user", content: q },
+    ];
+    setAiConversationHistory(updatedHistory);
+
+    try {
+      const res = await fetch("/api/ai/analyze-project", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectSchema: project.project_schema,
+          question: q,
+          conversationHistory: aiConversationHistory,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        toast.error(json.error || "追问失败");
+        // 回滚用户消息
+        setAiConversationHistory(aiConversationHistory);
+        return;
+      }
+
+      if (json.data?.analysis) {
+        const finalHistory = [
+          ...updatedHistory,
+          { role: "assistant", content: json.data.analysis },
+        ];
+        setAiConversationHistory(finalHistory);
+        // 用最新回复更新展示
+        setAiResult((prev) => prev ? { ...prev, analysis: json.data.analysis } : null);
+      }
+    } catch (e) {
+      toast.error("追问失败: " + String(e));
+      setAiConversationHistory(aiConversationHistory);
+    } finally {
+      setAiFollowUpLoading(false);
+    }
+  }, [aiFollowUpQuestion, aiConversationHistory, project.project_schema]);
   
   // 编辑状态
   const [editingCell, setEditingCell] = useState<{ tableCode: string; rowId: string; column: string } | null>(null);
-  const [viewMode, setViewMode] = useState<"card" | "compact" | "kanban" | "tree" | "form" | "gantt" | "group" | "trace" | "progress">(() => {
+  const [viewMode, setViewMode] = useState<"card" | "compact" | "kanban" | "tree" | "form" | "gantt" | "group">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("project_detail_view_mode");
-      return (saved === "card" || saved === "compact" || saved === "kanban" || saved === "tree" || saved === "form" || saved === "gantt" || saved === "group" || saved === "trace" || saved === "progress") ? saved : "compact";
+      return (saved === "card" || saved === "compact" || saved === "kanban" || saved === "tree" || saved === "form" || saved === "gantt" || saved === "group") ? saved : "compact";
     }
     return "compact";
   });
@@ -435,7 +582,7 @@ export function ProjectDetail({
         const res = await fetch("/api/dicts?type=product_module_types");
         const json = await res.json();
         if (json.data && Array.isArray(json.data)) {
-          const names = json.data.map((item: Record<string, unknown>) => item.module_name).filter(Boolean) as string[];
+          const names = [...new Set(json.data.map((item: Record<string, unknown>) => item.module_name).filter(Boolean) as string[])];
           setProductModuleNames(names);
         }
       } catch { /* ignore */ }
@@ -502,6 +649,33 @@ export function ProjectDetail({
     fetchModuleConfig();
   }, [project.project_type, project.project_stage]);
 
+  // Fetch task center workflows linked to records in the current project tables
+  const fetchLinkedTasks = async (definitions: TableDefinition[], dataMap: Record<string, TableData[]>) => {
+    try {
+      const schema = project.project_schema;
+      const newMap: Record<string, any[]> = {};
+
+      for (const def of definitions) {
+        const tableName = def.table_code;
+        if (!tableName) continue;
+        const res = await fetch(`/api/tasks/by-source-record?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(tableName)}`);
+        const json = await res.json();
+        if (!json.data || !Array.isArray(json.data) || json.data.length === 0) continue;
+
+        for (const defEntry of json.data) {
+          for (const recordId of defEntry.referenced_record_ids || []) {
+            if (!newMap[recordId]) newMap[recordId] = [];
+            newMap[recordId].push(defEntry);
+          }
+        }
+      }
+
+      setLinkedTasksMap(newMap);
+    } catch (err) {
+      console.error("加载关联流程失败:", err);
+    }
+  };
+
   const loadTableDefinitionsAndData = async () => {
     setLoading(true);
     try {
@@ -518,7 +692,8 @@ export function ProjectDetail({
             table_name: d.table_name as string,
             module_codes: (d.module_type as string[]) || ["scope"],
             allow_add: d.allow_add as boolean | undefined,
-            columns_config: (d.columns_config as ColumnConfig[]).map(col => ({ ...col, key: col.key || col.name })),
+            readonly_mode: d.readonly_mode as ("and" | "or") | undefined,
+            columns_config: dedupeColumnsByName(d.columns_config as ColumnConfig[]).map(col => ({ ...col, key: col.key || col.name })),
           }));
 
         // 检测含有采购模块记录类型列的表，自动设置 allow_add = false
@@ -528,26 +703,28 @@ export function ProjectDetail({
           }
         });
 
-        setTableDefinitions(definitions);
-        
-        // 2. 确保所有表都存在（不存在则自动创建），并获取数据
+        // 查询 schema 中实际存在的表，只展示规则匹配创建的表
+        const existingTableSet = new Set<string>();
+        try {
+          const existingRes = await fetch(`/api/project-data/tables?schema=${encodeURIComponent(project.project_schema)}`);
+          const existingData = await existingRes.json();
+          if (existingData.tables && Array.isArray(existingData.tables)) {
+            existingData.tables.forEach((t: string) => existingTableSet.add(t));
+          }
+        } catch {
+          // 查不到就不过滤
+        }
+        const visibleDefs = existingTableSet.size > 0
+          ? definitions.filter((def: TableDefinition) => existingTableSet.has(def.table_code))
+          : definitions;
+
+        setTableDefinitions(visibleDefs);
+
+        // 并获取数据
         const dataMap: Record<string, TableData[]> = {};
-        // 并行调用 ensure-table 确保所有表存在
-        await Promise.all(
-          definitions.map((def: TableDefinition) =>
-            fetch("/api/project-data/ensure-table", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                projectSchema: project.project_schema,
-                tableCode: def.table_code,
-              }),
-            }).catch(() => null)
-          )
-        );
         // 并行获取所有表数据
         const dataResults = await Promise.all(
-          definitions.map((def: TableDefinition) =>
+          visibleDefs.map((def: TableDefinition) =>
             fetch(
               `/api/project-data?projectSchema=${project.project_schema}&tableCode=${def.table_code}`
             )
@@ -562,10 +739,10 @@ export function ProjectDetail({
 
         // 3. 同步采购模块记录：对于含有 procurement_record 类型列的表，
         //    确保每个采购模块都有一条对应记录
-        await sortProcurementModuleRecords(definitions, dataMap);
+        await sortProcurementModuleRecords(visibleDefs, dataMap);
 
         // 4. 触发引用关系双向同步
-        const hasReferences = definitions.some((def: TableDefinition) =>
+        const hasReferences = visibleDefs.some((def: TableDefinition) =>
           def.references_config && def.references_config.length > 0
         );
         if (hasReferences) {
@@ -577,7 +754,7 @@ export function ProjectDetail({
             });
             // 同步后重新获取相关表数据
             const refTableCodes = new Set<string>();
-            definitions.forEach((def: TableDefinition) => {
+            visibleDefs.forEach((def: TableDefinition) => {
               if (def.references_config?.length) refTableCodes.add(def.table_code);
               def.references_config?.forEach(ref => refTableCodes.add(ref.source_table_code));
             });
@@ -594,6 +771,9 @@ export function ProjectDetail({
         }
 
         setTableDataMap(dataMap);
+
+        // Fetch linked task center workflows for records in these tables
+        fetchLinkedTasks(visibleDefs, dataMap);
       }
     } catch (error) {
       console.error("加载数据失败:", error);
@@ -652,21 +832,37 @@ export function ProjectDetail({
   };
 
   // 简易编辑入口（自动从数据中取值）
-  // 判断某列在某行是否只读
+  // 判断某列在某行是否只读（AND/OR 模式）
   const isCellReadonly = (tableCode: string, rowId: string, column: string): boolean => {
     const table = tableDefinitions.find(t => t.table_code === tableCode);
     if (!table) return false;
     const col = table.columns_config.find(c => (c.key || c.name) === column);
-    // 只读列无论数据来源都不可编辑
-    return !!col?.readonly;
+    if (!col?.readonly) return false; // 列未设只读 → 可编辑
+
+    const data = tableDataMap[tableCode] || [];
+    const row = data.find(r => r.id === rowId);
+    const rowReadonly = row?._readonly === true;
+    const isOrMode = table.readonly_mode === "or";
+
+    if (isOrMode) return true;      // OR 模式: 列只读即锁定
+    return rowReadonly;             // AND 模式: 列只读 + 行只读才锁定
   };
 
-  // 判断某行是否有任何只读列（用于决定是否显示编辑按钮）
+  // 判断整行是否全部锁定（用于决定是否隐藏编辑按钮）
   const isRowReadonly = (tableCode: string, rowId: string): boolean => {
     const table = tableDefinitions.find(t => t.table_code === tableCode);
     if (!table) return false;
-    // 只要该表存在任何只读列，整行视为只读行
-    return table.columns_config.some((col: ColumnConfig) => col.readonly);
+
+    const data = tableDataMap[tableCode] || [];
+    const row = data.find(r => r.id === rowId);
+    const rowReadonly = row?._readonly === true;
+    const isOrMode = table.readonly_mode === "or";
+
+    if (isOrMode && rowReadonly) return true;  // OR: 行只读 → 全行锁定
+    if (!isOrMode && rowReadonly && table.columns_config.every(c => c.readonly)) {
+      return true;  // AND: 全部列只读 + 行只读 → 全行锁定
+    }
+    return false;
   };
 
   const startEditCell = (tableCode: string, rowId: string, column: string) => {
@@ -772,10 +968,14 @@ export function ProjectDetail({
         }),
       });
       
-      if (!response.ok) throw new Error("新增失败");
-      
       const result = await response.json();
-      
+
+      if (!response.ok) {
+        const errMsg = result?.error || `HTTP ${response.status}`;
+        console.error("新增记录失败:", errMsg, result);
+        throw new Error(errMsg);
+      }
+
       // 更新本地状态（补充 data_source 和 allow_delete，后端 RETURNING * 可能不返回）
       const newRecord = { ...result.data, data_source: "manual", allow_delete: true };
       setTableDataMap(prev => ({
@@ -785,11 +985,13 @@ export function ProjectDetail({
           newRecord,
         ],
       }));
-      
+
       toast.success("新增成功");
       setAddDialogOpen(false);
     } catch (error) {
-      toast.error("新增失败");
+      const message = error instanceof Error ? error.message : "新增失败";
+      console.error("新增记录异常:", message, error);
+      toast.error(message || "新增失败");
     }
   };
 
@@ -835,89 +1037,6 @@ export function ProjectDetail({
       <span className={cn("px-2.5 py-1 text-xs font-semibold rounded-full", styles[status] || "bg-gray-100 text-gray-700 ring-1 ring-gray-200")}>
         {labels[status] || status}
       </span>
-    );
-  };
-
-  // 渲染概览面板
-  const renderOverview = () => {
-    const projectType = projectTypes.find(t => t.code === project.project_type)?.name || project.project_type;
-    const projectStage = projectStages.find(s => s.code === project.project_stage)?.name || project.project_stage;
-
-    const mc = getModuleColor(activeModule);
-
-    return (
-      <div className="space-y-4">
-        {/* 项目概览 */}
-        <div className="rounded-xl border border-slate-200/80 overflow-hidden shadow-sm">
-          <div className={cn("px-4 py-2.5", mc.header)}>
-            <h2 className="font-semibold text-white text-sm flex items-center gap-2">
-              <FolderKanban className="w-4 h-4" />
-              项目概览
-            </h2>
-          </div>
-          <div className="p-4 space-y-4 bg-white">
-            {/* 基本信息 */}
-            <div>
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">基本信息</h3>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="bg-slate-50 rounded-lg p-2.5">
-                  <span className="text-xs text-slate-400">项目名称</span>
-                  <p className="text-slate-900 font-medium mt-0.5 truncate">{project.project_name}</p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-2.5">
-                  <span className="text-xs text-slate-400">项目编号</span>
-                  <p className="text-slate-900 font-mono mt-0.5">{project.project_code}</p>
-                </div>
-                <div className={cn("rounded-lg p-2.5", mc.light)}>
-                  <span className={cn("text-xs", mc.text)}>项目类型</span>
-                  <p className="text-slate-900 mt-0.5">{projectType || "-"}</p>
-                </div>
-                <div className={cn("rounded-lg p-2.5", mc.light)}>
-                  <span className={cn("text-xs", mc.text)}>项目阶段</span>
-                  <p className="text-slate-900 mt-0.5">{projectStage || "-"}</p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-2.5">
-                  <span className="text-xs text-slate-400">状态</span>
-                  <div className="mt-0.5">{getStatusBadge(project.status)}</div>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-2.5">
-                  <span className="text-xs text-slate-400">创建时间</span>
-                  <p className="text-slate-900 mt-0.5">{new Date(project.created_at).toLocaleDateString()}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* 客户信息 */}
-            {project.customer_info && (
-              <div className="pt-3 border-t border-slate-100">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">客户信息</h3>
-                <div className="space-y-2 text-sm">
-                  {project.customer_info.company_name && (
-                    <div className={cn("flex items-center gap-2.5 rounded-lg px-3 py-2", mc.light)}>
-                      <Building2 className={cn("w-4 h-4 shrink-0", mc.text)} />
-                      <span className="text-slate-900">{project.customer_info.company_name}</span>
-                    </div>
-                  )}
-                  {project.customer_info.contact_person && (
-                    <div className="flex items-center gap-2.5 rounded-lg px-3 py-2 bg-slate-50">
-                      <Users className="w-4 h-4 shrink-0 text-slate-400" />
-                      <span className="text-slate-900">{project.customer_info.contact_person}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* 项目描述 */}
-            {project.description && (
-              <div className="pt-3 border-t border-slate-100">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">项目描述</h3>
-                <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 rounded-lg p-3">{project.description}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
     );
   };
 
@@ -1100,6 +1219,26 @@ export function ProjectDetail({
             className="h-7 text-sm"
             autoFocus
           />
+        ) : col.type === "text" && (col.quick_inputs || []).length > 0 ? (
+          <div className="flex items-center gap-1 flex-1">
+            {(col.quick_inputs || []).map((phrase) => (
+              <button
+                key={phrase}
+                type="button"
+                onClick={() => { setEditValue(phrase); saveEdit(phrase); }}
+                className="inline-flex items-center gap-1 bg-green-50 text-green-700 text-[10px] px-2 py-0.5 rounded-full border border-green-200 hover:bg-green-100 hover:border-green-300 transition-colors whitespace-nowrap"
+              >
+                {phrase}
+              </button>
+            ))}
+            <Input
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") cancelEdit(); }}
+              className="h-7 text-sm flex-1"
+              autoFocus
+            />
+          </div>
         ) : (
           <Input
             value={editValue}
@@ -1129,11 +1268,9 @@ export function ProjectDetail({
       { key: "form" as const, label: "表单", icon: FileSearch },
       { key: "gantt" as const, label: "甘特", icon: GanttChart },
       { key: "group" as const, label: "分组", icon: Group },
-      { key: "trace" as const, label: "色标脉络", icon: Route },
-      { key: "progress" as const, label: "进度条", icon: BarChart3 },
     ];
     // 判断当前视图是否有可配置项
-    const configurableViews = ["kanban", "group", "gantt", "compact", "tree", "trace", "progress"];
+    const configurableViews = ["kanban", "group", "gantt", "compact", "tree"];
     const hasSettings = configurableViews.includes(viewMode);
 
     return (
@@ -1152,6 +1289,13 @@ export function ProjectDetail({
             {label}
           </button>
         ))}
+        <button
+          onClick={() => openAIPromptDialog()}
+          className="px-2 py-1 rounded text-[11px] leading-tight font-medium transition-all whitespace-nowrap text-center text-teal-600 hover:bg-teal-50 flex items-center gap-1"
+        >
+          <Sparkles className="w-3 h-3" />
+          AI 分析
+        </button>
       </div>
     );
   };
@@ -1457,129 +1601,6 @@ export function ProjectDetail({
       );
     };
 
-    const renderTraceSettings = () => {
-      // 脉络视图共享配置：分组字段、分支字段、主行字段(1-3)、串联字段
-      const groupField = (getTableSetting(tc, "trace_group_field") as string) || (allFields[0]?.key || allFields[0]?.name || "");
-      const branchField = (getTableSetting(tc, "trace_branch_field") as string) || (selectFields.length > 0 ? (selectFields[0]?.key || selectFields[0]?.name) : (allFields.length > 1 ? (allFields[1]?.key || allFields[1]?.name) : ""));
-      const mainFields = (getTableSetting(tc, "trace_main_fields") as string[]) || (allFields.length > 1 ? [allFields[0]?.key || allFields[0]?.name || ""] : []);
-      const chainFields = (getTableSetting(tc, "trace_chain_fields") as string[]) || allFields.slice(1, 6).map(f => f.key || f.name).filter(Boolean);
-
-      const addMainField = () => {
-        const used = new Set(mainFields);
-        const next = allFields.find(f => !used.has(f.key || f.name));
-        if (next) setTableSetting(tc, "trace_main_fields", [...mainFields, next.key || next.name]);
-      };
-      const removeMainField = (idx: number) => {
-        setTableSetting(tc, "trace_main_fields", mainFields.filter((_, i) => i !== idx));
-      };
-      const updateMainField = (idx: number, val: string) => {
-        const next = [...mainFields]; next[idx] = val; setTableSetting(tc, "trace_main_fields", next);
-      };
-
-      const addChainField = () => {
-        const used = new Set(chainFields);
-        const next = allFields.find(f => !used.has(f.key || f.name));
-        if (next) setTableSetting(tc, "trace_chain_fields", [...chainFields, next.key || next.name]);
-      };
-      const removeChainField = (idx: number) => {
-        setTableSetting(tc, "trace_chain_fields", chainFields.filter((_, i) => i !== idx));
-      };
-      const updateChainField = (idx: number, val: string) => {
-        const next = [...chainFields]; next[idx] = val; setTableSetting(tc, "trace_chain_fields", next);
-      };
-      const moveChainField = (idx: number, dir: -1 | 1) => {
-        const target = idx + dir;
-        if (target < 0 || target >= chainFields.length) return;
-        const next = [...chainFields]; [next[idx], next[target]] = [next[target], next[idx]];
-        setTableSetting(tc, "trace_chain_fields", next);
-      };
-
-      return (
-        <div className="space-y-3">
-          {/* 分组字段 */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">分组字段 <span className="text-red-400">*</span></Label>
-            <Select value={groupField} onValueChange={v => setTableSetting(tc, "trace_group_field", v)}>
-              <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="选择分组字段" /></SelectTrigger>
-              <SelectContent>
-                {allFields.map(f => (
-                  <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-[10px] text-muted-foreground">值相同的记录归为一组</p>
-          </div>
-
-          {/* 分支字段 */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">分支字段 <span className="text-red-400">*</span></Label>
-            <Select value={branchField} onValueChange={v => setTableSetting(tc, "trace_branch_field", v)}>
-              <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="选择分支字段" /></SelectTrigger>
-              <SelectContent>
-                {allFields.map(f => (
-                  <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-[10px] text-muted-foreground">值不同的记录成为组内并行线</p>
-          </div>
-
-          {/* 主行字段 */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">主行字段</Label>
-            {mainFields.map((mf, i) => (
-              <div key={i} className="flex items-center gap-1">
-                <Select value={mf} onValueChange={v => updateMainField(i, v)}>
-                  <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {allFields.map(f => (
-                      <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => removeMainField(i)}>
-                  <X className="w-3 h-3" />
-                </Button>
-              </div>
-            ))}
-            {mainFields.length < 3 && (
-              <Button variant="ghost" size="sm" className="h-6 text-xs text-blue-500" onClick={addMainField}>+ 添加</Button>
-            )}
-            <p className="text-[10px] text-muted-foreground">显示在每组标题区，最多3个</p>
-          </div>
-
-          {/* 串联字段 */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">串联字段 <span className="text-red-400">*</span></Label>
-            {chainFields.map((cf, i) => {
-              const col = allFields.find(f => (f.key || f.name) === cf);
-              return (
-                <div key={i} className="flex items-center gap-1">
-                  <span className="text-[10px] text-gray-400 w-4 text-right shrink-0">{i + 1}</span>
-                  <Select value={cf} onValueChange={v => updateChainField(i, v)}>
-                    <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {allFields.map(f => (
-                        <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => moveChainField(i, -1)} disabled={i === 0}>↑</Button>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => moveChainField(i, 1)} disabled={i === chainFields.length - 1}>↓</Button>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => removeChainField(i)}>
-                    <X className="w-3 h-3" />
-                  </Button>
-                </div>
-              );
-            })}
-            {chainFields.length < allFields.length && (
-              <Button variant="ghost" size="sm" className="h-6 text-xs text-blue-500" onClick={addChainField}>+ 添加</Button>
-            )}
-            <p className="text-[10px] text-muted-foreground">按顺序排列，形成每条线的节点流</p>
-          </div>
-        </div>
-      );
-    };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const settingsMap: Record<string, () => any> = {
@@ -1588,8 +1609,6 @@ export function ProjectDetail({
       gantt: renderGanttSettings,
       compact: renderCompactSettings,
       tree: renderTreeSettings,
-      trace: renderTraceSettings,
-      progress: renderTraceSettings,
     };
 
     const viewLabels: Record<string, string> = {
@@ -1598,13 +1617,11 @@ export function ProjectDetail({
       gantt: "甘特图",
       compact: "表格",
       tree: "树形",
-      trace: "色标脉络",
-      progress: "进度条",
     };
 
     if (!settingsMap[viewMode]) return null;
-    // compact, kanban, tree, gantt, trace, progress have inline settings in toolbar
-    if (["compact", "kanban", "tree", "gantt", "trace", "progress", "group"].includes(viewMode)) return null;
+    // compact, kanban, tree, gantt have inline settings in toolbar
+    if (["compact", "kanban", "tree", "gantt", "group"].includes(viewMode)) return null;
 
     return (
       <Popover>
@@ -1614,7 +1631,7 @@ export function ProjectDetail({
             设置
           </Button>
         </PopoverTrigger>
-        <PopoverContent className={cn("p-3", ["trace", "progress"].includes(viewMode) ? "w-80" : viewMode === "group" ? "w-72 max-h-[70vh] overflow-y-auto" : "w-64")} align="end">
+        <PopoverContent className={cn("p-3", viewMode === "group" ? "w-72 max-h-[70vh] overflow-y-auto" : "w-64")} align="end">
           <div className="space-y-1 mb-3">
             <h4 className="text-sm font-medium">{viewLabels[viewMode]}设置</h4>
           </div>
@@ -1683,6 +1700,12 @@ export function ProjectDetail({
               )}
             </PopoverContent>
           </Popover>
+          <button
+            onClick={() => openAIPromptDialog(table.table_code)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
+          >
+            <Sparkles className="h-3 w-3" />AI
+          </button>
         </div>
         {/* 卡片列表 */}
         <div className="space-y-3 p-2">
@@ -1700,8 +1723,8 @@ export function ProjectDetail({
                 isRowEditing && mc.ring
               )}>
                 {/* 卡片头部：第一个字段 + 操作 */}
-                <div className={cn("px-4 py-2 flex items-center justify-between", mc.light, "border-b border-slate-100")}>
-                  <span className={cn("font-medium text-sm", mc.text)}>
+                <div className={cn("px-4 py-2 flex items-center justify-between", mc.header)}>
+                  <span className="font-semibold text-sm text-white">
                     {columns[0] ? String(row[columns[0].name] ?? "-") : `记录 ${row.id}`}
                   </span>
                   <div className="flex items-center gap-1">
@@ -1723,7 +1746,7 @@ export function ProjectDetail({
                     const isEditing = editingCell?.tableCode === table.table_code && 
                                      editingCell?.rowId === row.id && 
                                      editingCell?.column === col.name;
-                    const isReadonly = !!col.readonly;
+                    const isReadonly = table.readonly_mode === "or" ? (!!col.readonly || row?._readonly === true) : (!!col.readonly && row?._readonly === true);
                     return (
                       <div key={col.name} className="min-w-0">
                         <div className="text-xs text-slate-400 mb-0.5 flex items-center gap-1">
@@ -1790,6 +1813,11 @@ export function ProjectDetail({
     document.body.style.userSelect = "none";
   }, []);
 
+  const getColWidthForTable = (tableCode: string, colName: string) => {
+    const key = `${tableCode}:${colName}`;
+    return colWidths[key] || DEFAULT_COL_WIDTH;
+  };
+
   const renderCompactView = (table: TableDefinition) => {
     const data = tableDataMap[table.table_code] || [];
     const columns = table.columns_config;
@@ -1797,10 +1825,7 @@ export function ProjectDetail({
     const FREEZE_COLS = (getTableSetting(table.table_code, "compact_freeze_cols") as number) ?? 1;
     const FREEZE_ROWS = (getTableSetting(table.table_code, "compact_freeze_rows") as number) ?? 1;
 
-    const getColWidth = (colName: string) => {
-      const key = `${table.table_code}:${colName}`;
-      return colWidths[key] || DEFAULT_COL_WIDTH;
-    };
+    const getColWidth = (colName: string) => getColWidthForTable(table.table_code, colName);
 
     // 筛选逻辑
     type FilterItem = { field: string; operator: string; value: string };
@@ -2017,6 +2042,12 @@ export function ProjectDetail({
               </div>
             </PopoverContent>
           </Popover>
+          <button
+            onClick={() => openAIPromptDialog(table.table_code)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
+          >
+            <Sparkles className="h-3 w-3" />AI
+          </button>
         </div>
         {/* 表格区域 */}
         <div className="relative overflow-auto max-h-[520px]" style={{ overscrollBehavior: "contain" }}>
@@ -2081,15 +2112,15 @@ export function ProjectDetail({
                       const isEditing = editingCell?.tableCode === table.table_code &&
                                        editingCell?.rowId === row.id &&
                                        editingCell?.column === col.name;
-                      const isReadonly = !!col.readonly;
+                      const isReadonly = table.readonly_mode === "or" ? (!!col.readonly || row?._readonly === true) : (!!col.readonly && row?._readonly === true);
                       const isFrozen = idx < FREEZE_COLS;
                       return (
                         <td key={col.name} className={cn(
                           "px-2 py-1.5 text-sm border-r border-slate-100 last:border-r-0 align-top",
-                          isFrozen && "sticky left-0 z-10 bg-white border-r-2 border-slate-200",
-                          isRowEditing && isFrozen && "bg-white",
+                          isFrozen && "sticky left-0 z-[15] bg-white border-r-2 border-slate-200",
+                          isRowEditing && isFrozen && "!bg-white",
                           isRowEditing && !isFrozen && "bg-white",
-                          isFrozen && rowIdx % 2 === 1 && "bg-slate-50/50"
+                          isFrozen && rowIdx % 2 === 1 && "!bg-slate-50"
                         )}>
                           {isEditing ? (
                             renderEditCell(col, !!isReadonly, row[col.name])
@@ -2116,6 +2147,76 @@ export function ProjectDetail({
                     })}
                     <td className="px-2 py-1.5 text-right border-l border-slate-100 sticky right-0 z-10 bg-white">
                       <div className="flex items-center justify-end gap-1">
+                        {/* Task center workflow badge */}
+                        {linkedTasksMap[row.id as string] && linkedTasksMap[row.id as string].length > 0 && (
+                          <Popover open={linkedTasksOpen === `${table.table_code}:${row.id}`} onOpenChange={(o) => setLinkedTasksOpen(o ? `${table.table_code}:${row.id}` : null)}>
+                            <PopoverTrigger asChild>
+                              <Badge className="text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 cursor-pointer border-purple-300">
+                                <GitBranch className="w-3 h-3 mr-0.5" />
+                                流程 ({linkedTasksMap[row.id as string].length})
+                              </Badge>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80 p-0" align="end">
+                              <div className="p-3 border-b">
+                                <span className="text-sm font-semibold">关联流程任务</span>
+                              </div>
+                              <div className="max-h-64 overflow-auto">
+                                {linkedTasksMap[row.id as string].map((entry: any, ei: number) => {
+                                  const STATUS_LABELS: Record<string, string> = {
+                                    pending: "待处理", in_progress: "进行中", completed: "已完成",
+                                    returned: "已退回", cancelled: "已撤回", terminated: "已终止",
+                                  };
+                                  const STATUS_COLORS: Record<string, string> = {
+                                    pending: "bg-yellow-100 text-yellow-700",
+                                    in_progress: "bg-blue-100 text-blue-700",
+                                    completed: "bg-green-100 text-green-700",
+                                    returned: "bg-orange-100 text-orange-700",
+                                    cancelled: "bg-gray-100 text-gray-500",
+                                    terminated: "bg-red-100 text-red-700",
+                                  };
+                                  return (
+                                    <div key={ei} className="p-3 border-b last:border-b-0 hover:bg-gray-50">
+                                      <div className="flex items-center justify-between mb-1.5">
+                                        <span className="text-sm font-medium text-gray-800">{entry.task_name}</span>
+                                        <Badge className={`text-xs ${STATUS_COLORS[entry.instances?.[0]?.status] || "bg-gray-100"}`}>
+                                          {STATUS_LABELS[entry.instances?.[0]?.status] || "—"}
+                                        </Badge>
+                                      </div>
+                                      {entry.instances && entry.instances.length > 0 && (
+                                        <div className="space-y-1 mt-2">
+                                          {entry.instances.slice(0, 3).map((inst: any, ii: number) => {
+                                            const nodes = entry.workflow_nodes || [];
+                                            const ci = inst.current_node_index ?? 0;
+                                            return (
+                                              <div key={ii} className="text-xs text-gray-500">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                  <span className="text-gray-400">#{ii + 1}</span>
+                                                  {nodes.map((n: any, ni: number) => {
+                                                    const done = ni < ci || (inst.node_history || []).some((h: any) => h.node_id === n.id && h.action === "submit");
+                                                    const active = ni === ci && inst.status !== "completed";
+                                                    return (
+                                                      <span key={n.id} className={`inline-flex items-center gap-0.5 ${done ? "text-green-600" : active ? "text-blue-600 font-medium" : "text-gray-300"}`}>
+                                                        <span className={`w-1.5 h-1.5 rounded-full ${done ? "bg-green-400" : active ? "bg-blue-400" : "bg-gray-200"}`} />
+                                                        {n.name}
+                                                      </span>
+                                                    );
+                                                  })}
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                          {entry.instances.length > 3 && (
+                                            <div className="text-xs text-gray-400">...共 {entry.instances.length} 个实例</div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        )}
                         {!isRowReadonly(table.table_code, row.id as string) && (
                         <Button
                           size="sm"
@@ -2260,14 +2361,20 @@ export function ProjectDetail({
               </div>
             </PopoverContent>
           </Popover>
+          <button
+            onClick={() => openAIPromptDialog(table.table_code)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
+          >
+            <Sparkles className="h-3 w-3" />AI
+          </button>
         </div>
         {/* 看板列 */}
         <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: 300 }}>
         {groups.map((group) => (
           <div key={group.label} className="flex-shrink-0 w-72">
-            <div className="rounded-t-lg px-3 py-2 font-medium text-sm" style={{ backgroundColor: mc.light, color: mc.text, borderTop: `3px solid ${mc.border}` }}>
+            <div className={cn("rounded-t-lg px-3 py-2 font-semibold text-sm text-white", mc.header)}>
               {group.label}
-              <span className="ml-2 text-xs opacity-70">({group.items.length})</span>
+              <span className="ml-2 text-xs text-white/70">({group.items.length})</span>
             </div>
             <div className="bg-gray-50 rounded-b-lg p-2 space-y-2 min-h-[200px]">
               {group.items.length === 0 && (
@@ -2278,14 +2385,37 @@ export function ProjectDetail({
                 const canDelete = row.data_source === 'manual' || row.allow_delete !== false;
                 return (
                   <div key={rowId} className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-default">
-                    {visibleCols.map((col: ColumnConfig) => (
-                      <div key={col.key} className="mb-1">
-                        <span className="text-[10px] text-gray-400 mr-1">{col.label || col.key}:</span>
-                        <span className="text-xs">{renderCellValue(col, row[col.key ?? col.name])}</span>
-                      </div>
-                    ))}
+                    {visibleCols.map((col: ColumnConfig) => {
+                      const colKey = col.key ?? col.name;
+                      const isEditing = editingCell?.tableCode === table.table_code &&
+                                       editingCell?.rowId === rowId &&
+                                       editingCell?.column === col.name;
+                      const isReadonly = table.readonly_mode === "or" ? (!!col.readonly || row?._readonly === true) : (!!col.readonly && row?._readonly === true);
+                      return (
+                        <div key={col.key} className="mb-1">
+                          <span className="text-[10px] text-gray-400 mr-1">{col.label || col.key}:</span>
+                          {isEditing ? (
+                            <span className="text-xs">{renderEditCell(col, isReadonly, row[colKey])}</span>
+                          ) : (
+                            <span
+                              className={!isReadonly ? "text-xs cursor-pointer hover:bg-blue-50 rounded px-1 -mx-1 inline-block" : "text-xs"}
+                              onClick={() => !isReadonly && startEdit(table.table_code, rowId, col.name, row[colKey])}
+                            >
+                              {isReadonly ? (
+                                renderCellValue(col, row[colKey])
+                              ) : (
+                                <span className="group inline-flex items-center gap-1">
+                                  {renderCellValue(col, row[colKey])}
+                                  <Pencil className="w-2.5 h-2.5 text-slate-300 opacity-0 group-hover:opacity-100 shrink-0" />
+                                </span>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                     <div className="flex gap-1 mt-2 pt-1 border-t border-gray-50">
-                      {!isRowReadonly(table.table_code, rowId) && <button onClick={() => startEditCell(table.table_code, rowId, visibleCols[0]?.key || '')} className="text-[10px] px-2 py-0.5 rounded text-gray-500 hover:bg-gray-100">编辑</button>}
+                      {!isRowReadonly(table.table_code, rowId) && <button onClick={() => startEdit(table.table_code, rowId, visibleCols[0]?.name || '', row[visibleCols[0]?.key ?? visibleCols[0]?.name ?? ''])} className="text-[10px] px-2 py-0.5 rounded text-gray-500 hover:bg-gray-100">编辑</button>}
                       {canDelete && (
                         <button onClick={() => handleDeleteRow(table.table_code, rowId)} className="text-[10px] px-2 py-0.5 rounded text-red-500 hover:bg-red-50">删除</button>
                       )}
@@ -2446,7 +2576,7 @@ export function ProjectDetail({
                           const cellKey = col.key ?? col.name;
                           const cellValue = row[cellKey];
                           const isEditingThis = isEditing && editingCell?.column === cellKey;
-                          const isReadonlyCol = !!col.readonly;
+                          const isReadonlyCol = table.readonly_mode === "or" ? (!!col.readonly || row?._readonly === true) : (!!col.readonly && row?._readonly === true);
                           return (
                             <td
                               key={cellKey}
@@ -2473,7 +2603,10 @@ export function ProjectDetail({
                         >
                           <div className="flex gap-1 opacity-0 group-hover/row:opacity-100">
                             <button
-                              onClick={() => startEditCell(table.table_code, rowId, displayCols[0]?.key || '')}
+                              onClick={() => {
+                                const colKey = displayCols[0]?.key || columns[0]?.key || '';
+                                if (colKey) startEditCell(table.table_code, rowId, colKey);
+                              }}
                               className="px-1.5 py-0.5 rounded text-gray-500 hover:bg-gray-100 text-[10px]"
                             >
                               编辑
@@ -2500,7 +2633,7 @@ export function ProjectDetail({
                                   const cellValue = row[cellKey];
                                   const isNodeField = levelKeys.has(col.key);
                                   const isEditingThis = isEditing && editingCell?.column === cellKey;
-                                  const isReadonlyCol = !!col.readonly;
+                                  const isReadonlyCol = table.readonly_mode === "or" ? (!!col.readonly || row?._readonly === true) : (!!col.readonly && row?._readonly === true);
                                   return (
                                     <div key={cellKey} className="flex items-start gap-2 text-xs">
                                       <span className={cn("shrink-0 text-gray-400 min-w-[120px] text-right", isNodeField && "font-medium text-blue-500")}>
@@ -2521,7 +2654,10 @@ export function ProjectDetail({
                               </div>
                               <div className="flex gap-2 mt-3 pt-2 border-t border-blue-100">
                                 <button
-                                  onClick={() => startEditCell(table.table_code, rowId, displayCols[0]?.key || '')}
+                                  onClick={() => {
+                                    const colKey = displayCols[0]?.key || columns[0]?.key || '';
+                                    if (colKey) startEditCell(table.table_code, rowId, colKey);
+                                  }}
                                   className="px-3 py-1 rounded text-xs bg-white border border-gray-200 hover:bg-gray-50 text-gray-600"
                                 >
                                   编辑
@@ -2645,6 +2781,12 @@ export function ProjectDetail({
           <span className="text-[10px] text-gray-400">
             {levelDesc} · {data.length} 条记录
           </span>
+          <button
+            onClick={() => openAIPromptDialog(table.table_code)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
+          >
+            <Sparkles className="h-3 w-3" />AI
+          </button>
         </div>
         {/* 树形内容 */}
         <div className="space-y-1">
@@ -2688,24 +2830,56 @@ export function ProjectDetail({
             >
               下一条 ▶
             </button>
+            <button
+              onClick={() => openAIPromptDialog(table.table_code)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
+            >
+              <Sparkles className="h-3 w-3" />AI
+            </button>
           </div>
         </div>
 
         <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-          <div className="px-6 py-3 font-medium text-sm" style={{ backgroundColor: mc.light, color: mc.text, borderTop: `3px solid ${mc.border}` }}>
+          <div className={cn("px-6 py-3 font-semibold text-sm text-white", mc.header)}>
             {columns[0] && String(currentRow[columns[0].key] || '记录详情')}
           </div>
           <div className="p-6 space-y-4">
-            {columns.map((col: ColumnConfig) => (
-              <div key={col.key} className="flex items-start border-b border-gray-50 pb-3">
-                <div className="w-28 flex-shrink-0 text-sm font-medium text-gray-500">{col.label || col.key}</div>
-                <div className="flex-1 text-sm">{renderCellValue(col, currentRow[col.key ?? col.name])}</div>
-              </div>
-            ))}
+            {columns.map((col: ColumnConfig) => {
+              const cellKey = col.key ?? col.name;
+              const cellValue = currentRow[cellKey];
+              const isEditingThis = editingCell?.tableCode === table.table_code &&
+                                   editingCell?.rowId === rowId &&
+                                   editingCell?.column === col.name;
+              const isReadonlyCol = table.readonly_mode === "or" ? (!!col.readonly || currentRow?._readonly === true) : (!!col.readonly && currentRow?._readonly === true);
+              return (
+                <div key={col.key} className="flex items-start border-b border-gray-50 pb-3">
+                  <div className="w-28 flex-shrink-0 text-sm font-medium text-gray-500">{col.label || col.key}</div>
+                  <div className="flex-1 text-sm">
+                    {isEditingThis ? (
+                      renderEditCell(col, isReadonlyCol, cellValue)
+                    ) : (
+                      <div
+                        className={cn(!isReadonlyCol && "cursor-pointer hover:bg-blue-50 rounded px-1 -mx-1")}
+                        onClick={() => !isReadonlyCol && startEdit(table.table_code, rowId, col.name, cellValue)}
+                      >
+                        {isReadonlyCol ? (
+                          <span className="text-gray-400">{renderCellValue(col, cellValue) || "-"}</span>
+                        ) : (
+                          <span className="group inline-flex items-center gap-1">
+                            {renderCellValue(col, cellValue) || "-"}
+                            <Pencil className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 shrink-0" />
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           <div className="px-6 py-3 bg-gray-50 flex gap-2">
             <button
-              onClick={() => !isRowReadonly(table.table_code, rowId) && startEditCell(table.table_code, rowId, columns[0]?.key || '')}
+              onClick={() => !isRowReadonly(table.table_code, rowId) && startEdit(table.table_code, rowId, columns[0]?.name || '', currentRow[columns[0]?.key ?? columns[0]?.name ?? ''])}
               className="px-4 py-1.5 rounded text-sm text-white"
               style={{ backgroundColor: mc.border }}
             >
@@ -3269,6 +3443,12 @@ export function ProjectDetail({
               </button>
             ))}
           </div>
+          <button
+            onClick={() => openAIPromptDialog(table.table_code)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors ml-auto"
+          >
+            <Sparkles className="h-3 w-3" />AI
+          </button>
         </div>
         {/* 甘特图容器 */}
         <div className="overflow-auto">
@@ -3359,6 +3539,7 @@ export function ProjectDetail({
     const columns = table.columns_config;
     const mc = getModuleColor(activeModule);
     const tc = table.table_code;
+    const getColWidth = (colName: string) => getColWidthForTable(tc, colName);
 
     // 分组字段（支持多个）
     const groupFieldKeys = (getTableSetting(tc, "group_fields") as string[]) || [];
@@ -3446,26 +3627,67 @@ export function ProjectDetail({
               )}
               {/* 最底层：显示数据表格 */}
               {node.children.length === 0 && displayCols.length > 0 && (
-                <table className="w-full text-sm">
+                <table className="w-full text-sm" style={{ tableLayout: "fixed" }}>
+                  <colgroup>
+                    {displayCols.map((col: ColumnConfig) => (
+                      <col key={col.key} style={{ width: getColWidth(col.name) }} />
+                    ))}
+                    <col style={{ width: 80 }} />
+                  </colgroup>
                   <thead>
                     <tr className="bg-gray-50 text-xs text-gray-500">
                       {displayCols.map((col: ColumnConfig) => (
-                        <th key={col.key} className="px-4 py-2 text-left font-medium">{col.label || col.key}</th>
+                        <th key={col.key} className="px-2 py-2 text-left font-medium relative">
+                          {col.label || col.key}
+                          <div
+                            className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400 transition-colors"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleResize(`${tc}:${col.name}`, getColWidth(col.name), e.clientX);
+                            }}
+                          />
+                        </th>
                       ))}
-                      <th className="px-4 py-2 text-right font-medium w-24">操作</th>
+                      <th className="px-2 py-2 text-right font-medium" style={{ width: 80 }}>操作</th>
                     </tr>
                   </thead>
                   <tbody>
                     {node.rows.map((row: Record<string, unknown>) => {
                       const rowId = String(row.id || '');
                       const canDelete = row.data_source === 'manual' || row.allow_delete !== false;
+                      const isEditing = editingCell?.tableCode === tc && editingCell?.rowId === rowId;
                       return (
                         <tr key={rowId} className="border-t border-gray-50 hover:bg-gray-50">
-                          {displayCols.map((col: ColumnConfig) => (
-                            <td key={col.key} className="px-4 py-2">{renderCellValue(col, row[col.key ?? col.name])}</td>
-                          ))}
-                          <td className="px-4 py-2 text-right">
-                            {!isRowReadonly(tc, rowId) && <button onClick={() => startEditCell(tc, rowId, displayCols[0]?.key || '')} className="text-xs text-gray-500 hover:text-gray-700 mr-2">编辑</button>}
+                          {displayCols.map((col: ColumnConfig) => {
+                            const cellKey = col.key ?? col.name;
+                            const cellValue = row[cellKey];
+                            const isEditingThis = isEditing && editingCell?.column === col.name;
+                            const isReadonlyCol = table.readonly_mode === "or" ? (!!col.readonly || row?._readonly === true) : (!!col.readonly && row?._readonly === true);
+                            return (
+                              <td key={col.key} className="px-2 py-1.5">
+                                {isEditingThis ? (
+                                  renderEditCell(col, isReadonlyCol, cellValue)
+                                ) : (
+                                  <div
+                                    className={cn(!isReadonlyCol && "cursor-pointer hover:bg-blue-50 rounded px-1 -mx-1")}
+                                    onClick={() => !isReadonlyCol && startEdit(tc, rowId, col.name, cellValue)}
+                                  >
+                                    {isReadonlyCol ? (
+                                      <span className="text-gray-400">{renderCellValue(col, cellValue)}</span>
+                                    ) : (
+                                      <span className="group inline-flex items-center gap-1">
+                                        {renderCellValue(col, cellValue)}
+                                        <Pencil className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 shrink-0" />
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                            );
+                          })}
+                          <td className="px-2 py-1.5 text-right">
+                            {!isRowReadonly(tc, rowId) && <button onClick={() => startEdit(tc, rowId, displayCols[0]?.name || '', row[displayCols[0]?.key ?? displayCols[0]?.name ?? ''])} className="text-xs text-gray-500 hover:text-gray-700 mr-2">编辑</button>}
                             {canDelete && (
                               <button onClick={() => handleDeleteRow(tc, rowId)} className="text-xs text-red-500 hover:text-red-700">删除</button>
                             )}
@@ -3500,9 +3722,106 @@ export function ProjectDetail({
 
     const groupLabels = groupCols.map(c => c.label || c.key).join(' → ');
 
+    // 分组字段设置（内联）
+    const allGroupFields = columns;
+    const groupFieldsForUI: string[] = effectiveGroupKeys;
+    const groupDisplayFields = displayFieldKeys;
+
+    // 分组设置 Popover 内容
+    const renderGroupSettingsInline = () => (
+      <div className="space-y-2">
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">分组字段（支持多级）</Label>
+          {groupFieldsForUI.map((fKey: string, i: number) => (
+            <div key={i} className="flex items-center gap-1">
+              <span className="text-[10px] text-gray-400 shrink-0 w-4">{i + 1}.</span>
+              <Select value={fKey} onValueChange={v => {
+                const next = [...groupFieldsForUI];
+                next[i] = v;
+                setTableSetting(tc, "group_fields", next);
+              }}>
+                <SelectTrigger className="h-7 text-xs flex-1"><SelectValue placeholder="选择字段" /></SelectTrigger>
+                <SelectContent>
+                  {allGroupFields.map(f => (
+                    <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => {
+                const next = groupFieldsForUI.filter((_: string, j: number) => j !== i);
+                setTableSetting(tc, "group_fields", next);
+              }}>
+                <X className="w-3 h-3" />
+              </Button>
+            </div>
+          ))}
+          {groupFieldsForUI.length < allGroupFields.length && (
+            <Button variant="ghost" size="sm" className="h-6 text-xs text-blue-500 w-full" onClick={() => {
+              const used = new Set(groupFieldsForUI);
+              const next = allGroupFields.find(f => !used.has(f.key || f.name));
+              if (next) setTableSetting(tc, "group_fields", [...groupFieldsForUI, next.key || next.name]);
+            }}>+ 添加分组字段</Button>
+          )}
+        </div>
+        <div className="border-t" />
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">显示字段</Label>
+          <p className="text-[10px] text-muted-foreground">勾选要在分组内显示的字段</p>
+          <div className="max-h-[160px] overflow-y-auto space-y-1">
+            {nonGroupCols.map((f: ColumnConfig) => {
+              const fKey = f.key || f.name;
+              const checked = !groupFieldsConfigured || groupDisplayFields.includes(fKey);
+              return (
+                <label key={fKey} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
+                  <input type="checkbox" checked={checked} onChange={() => {
+                    const next = checked
+                      ? groupDisplayFields.filter((k: string) => k !== fKey)
+                      : [...groupDisplayFields, fKey];
+                    setTableSetting(tc, "group_display_fields", next);
+                    setTableSetting(tc, "group_display_fields_configured", true);
+                  }} className="rounded" />
+                  {f.label || f.name}
+                </label>
+              );
+            })}
+          </div>
+          {groupFieldsConfigured && (
+            <button
+              onClick={() => {
+                setTableSetting(tc, "group_display_fields", []);
+                setTableSetting(tc, "group_display_fields_configured", false);
+              }}
+              className="text-[10px] text-blue-500 hover:bg-blue-50 px-2 py-0.5 rounded w-full text-left"
+            >重置为全部显示</button>
+          )}
+        </div>
+      </div>
+    );
+
     return (
       <div className="space-y-2">
-        <div className="text-xs text-gray-400 mb-2">按「{groupLabels}」分组 · {data.length} 条记录</div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-gray-400">按「{groupLabels}」分组 · {data.length} 条记录</span>
+          <div className="flex items-center gap-1">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-gray-600 hover:bg-gray-200 transition-colors">
+                  <Settings2 className="h-3 w-3" />
+                  分组设置
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 max-h-[70vh] overflow-y-auto p-3" align="end">
+                {renderGroupSettingsInline()}
+              </PopoverContent>
+            </Popover>
+            <button
+              onClick={() => openAIPromptDialog(table.table_code)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-teal-600 hover:bg-teal-50 transition-colors"
+            >
+              <Sparkles className="h-3 w-3" />AI
+            </button>
+          </div>
+        </div>
         {groupTree.map(node => renderGroupNode(node, 0))}
         {groupTree.length === 0 && (
           <div className="text-center py-8 text-gray-400 text-sm">暂无数据</div>
@@ -3514,483 +3833,6 @@ export function ProjectDetail({
   // ==================== 脉络视图共享逻辑 ====================
 
   /** 获取脉络视图的配置（3种视图共享） */
-  const getTraceConfig = (table: TableDefinition) => {
-    const tc = table.table_code;
-    const cols = table.columns_config;
-    const findCol = (key: string) => key ? cols.find((c: ColumnConfig) => (c.key || c.name) === key) : null;
-
-    const groupFieldKey = (getTableSetting(tc, "trace_group_field") as string) || (cols[0]?.key || cols[0]?.name || "");
-    const branchFieldKey = (getTableSetting(tc, "trace_branch_field") as string) || (cols.length > 1 ? (cols[1]?.key || cols[1]?.name) : "");
-    const mainFieldKeys = (getTableSetting(tc, "trace_main_fields") as string[]) || [];
-    const chainFieldKeys = (getTableSetting(tc, "trace_chain_fields") as string[]) || cols.slice(1, 6).map((f: ColumnConfig) => f.key || f.name).filter(Boolean);
-
-    const groupCol = findCol(groupFieldKey) || cols[0];
-    const branchCol = findCol(branchFieldKey) || cols[1];
-    const mainCols = mainFieldKeys.map((k: string) => findCol(k)).filter(Boolean) as ColumnConfig[];
-    const chainCols = chainFieldKeys.map((k: string) => findCol(k)).filter(Boolean) as ColumnConfig[];
-
-    return { groupCol, branchCol, mainCols, chainCols, groupFieldKey, branchFieldKey };
-  };
-
-  /** 按分组字段分组，每组内按分支字段分出并行线 */
-  const buildTraceGroups = (data: Record<string, unknown>[], config: ReturnType<typeof getTraceConfig>) => {
-    const { groupCol, branchCol, chainCols } = config;
-    if (!groupCol || !branchCol) return [];
-
-    // 按分组字段分组
-    const groupMap = new Map<string, Record<string, unknown>[]>();
-    data.forEach((row) => {
-      const gKey = String(row[groupCol.key] || "未分组");
-      if (!groupMap.has(gKey)) groupMap.set(gKey, []);
-      groupMap.get(gKey)!.push(row);
-    });
-
-    // 每组内按分支字段分出并行线
-    return Array.from(groupMap.entries()).map(([groupKey, rows]) => {
-      const branchMap = new Map<string, Record<string, unknown>[]>();
-      rows.forEach((row) => {
-        const bKey = String(row[branchCol.key] || "未指定");
-        if (!branchMap.has(bKey)) branchMap.set(bKey, []);
-        branchMap.get(bKey)!.push(row);
-      });
-      const branches = Array.from(branchMap.entries()).map(([branchKey, branchRows]) => ({
-        branchKey,
-        rows: branchRows,
-        // 获取串联字段值
-        chainValues: chainCols.map(col => {
-          // 取第一条记录的值（分支下可能有多条记录，取最后一条——最新）
-          const lastRow = branchRows[branchRows.length - 1];
-          return {
-            col,
-            value: String(lastRow?.[col.key] ?? ""),
-          };
-        }),
-      }));
-
-      return { groupKey, rows, branches };
-    });
-  };
-
-  /** 计算整体状态 */
-  const calcTraceStatus = (branches: { chainValues: { value: string }[] }[], expectFieldKey?: string) => {
-    // 判断每条并行线是否完成：最后一个串联字段有值
-    const totalBranches = branches.length;
-    const completedBranches = branches.filter(b => {
-      const lastVal = b.chainValues[b.chainValues.length - 1]?.value;
-      return lastVal && lastVal !== "" && lastVal !== "undefined" && lastVal !== "null";
-    }).length;
-    const completionRate = totalBranches > 0 ? completedBranches / totalBranches : 0;
-    const allDone = completedBranches === totalBranches && totalBranches > 0;
-    const noneStarted = branches.every(b => b.chainValues.every(cv => !cv.value || cv.value === "" || cv.value === "undefined"));
-
-    return { totalBranches, completedBranches, completionRate, allDone, noneStarted };
-  };
-
-  /** 获取节点状态色标 */
-  const getNodeStatus = (value: string, prevValue: string): "done" | "active" | "delayed" | "pending" => {
-    if (!value || value === "" || value === "undefined" || value === "null") return "pending";
-    if (prevValue && prevValue !== "" && prevValue !== "undefined") return "done";
-    return "done";
-  };
-
-  const STATUS_COLORS: Record<string, { dot: string; bg: string; text: string; bar: string }> = {
-    done: { dot: "🟢", bg: "bg-emerald-100", text: "text-emerald-700", bar: "bg-emerald-500" },
-    active: { dot: "🟡", bg: "bg-amber-100", text: "text-amber-700", bar: "bg-amber-400" },
-    delayed: { dot: "🔴", bg: "bg-red-100", text: "text-red-700", bar: "bg-red-500" },
-    pending: { dot: "⬜", bg: "bg-gray-100", text: "text-gray-400", bar: "bg-gray-200" },
-  };
-
-  // ===== D1 状态色标脉络 =====
-  const renderTraceView = (table: TableDefinition) => {
-    const data = tableDataMap[table.table_code] || [];
-    const mc = getModuleColor(activeModule);
-    const tc = table.table_code;
-    const columns = table.columns_config;
-    const config = getTraceConfig(table);
-
-    // Trace settings inline
-    const tAllFields = columns;
-    const tSelectFields = columns.filter((f: ColumnConfig) => f.type === 'select' || f.type === 'radio');
-    const traceGroupField = (getTableSetting(tc, "trace_group_field") as string) || (tAllFields[0]?.key || tAllFields[0]?.name || "");
-    const traceBranchField = (getTableSetting(tc, "trace_branch_field") as string) || (tSelectFields.length > 0 ? (tSelectFields[0]?.key || tSelectFields[0]?.name) : (tAllFields.length > 1 ? (tAllFields[1]?.key || tAllFields[1]?.name) : ""));
-    const traceMainFields = (getTableSetting(tc, "trace_main_fields") as string[]) || (tAllFields.length > 1 ? [tAllFields[0]?.key || tAllFields[0]?.name || ""] : []);
-    const traceChainFields = (getTableSetting(tc, "trace_chain_fields") as string[]) || tAllFields.slice(1, 6).map((f: ColumnConfig) => f.key || f.name).filter(Boolean);
-
-    if (!config.groupCol || !config.branchCol || config.chainCols.length === 0) {
-      return (
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-gray-50/50">
-            <Popover>
-              <PopoverTrigger asChild>
-                <button className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-gray-600 hover:bg-gray-200 transition-colors">
-                  <Settings2 className="h-3 w-3" />设置
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-72 max-h-[70vh] overflow-y-auto p-3" align="start">
-                <div className="text-xs font-semibold mb-2">脉络配置</div>
-                <div className="space-y-2">
-                  <div className="space-y-1">
-                    <Label className="text-[10px] text-gray-500">分组字段 <span className="text-red-400">*</span></Label>
-                    <Select value={traceGroupField} onValueChange={v => setTableSetting(tc, "trace_group_field", v)}>
-                      <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>{tAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[10px] text-gray-500">分支字段 <span className="text-red-400">*</span></Label>
-                    <Select value={traceBranchField} onValueChange={v => setTableSetting(tc, "trace_branch_field", v)}>
-                      <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>{tAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[10px] text-gray-500">主行字段</Label>
-                    {traceMainFields.map((mf: string, i: number) => (
-                      <div key={i} className="flex items-center gap-1">
-                        <Select value={mf} onValueChange={v => { const n = [...traceMainFields]; n[i] = v; setTableSetting(tc, "trace_main_fields", n); }}>
-                          <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                          <SelectContent>{tAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <button onClick={() => setTableSetting(tc, "trace_main_fields", traceMainFields.filter((_: string, j: number) => j !== i))} className="p-1 hover:bg-gray-100 rounded"><X className="w-3 h-3" /></button>
-                      </div>
-                    ))}
-                    {traceMainFields.length < 3 && <button onClick={() => { const used = new Set(traceMainFields); const next = tAllFields.find(f => !used.has(f.key || f.name)); if (next) setTableSetting(tc, "trace_main_fields", [...traceMainFields, next.key || next.name]); }} className="text-[10px] text-blue-500 hover:bg-blue-50 px-1">+ 添加</button>}
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[10px] text-gray-500">串联字段 <span className="text-red-400">*</span></Label>
-                    {traceChainFields.map((cf: string, i: number) => (
-                      <div key={i} className="flex items-center gap-1">
-                        <span className="text-[9px] text-gray-400 w-3">{i+1}</span>
-                        <Select value={cf} onValueChange={v => { const n = [...traceChainFields]; n[i] = v; setTableSetting(tc, "trace_chain_fields", n); }}>
-                          <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                          <SelectContent>{tAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <button onClick={() => setTableSetting(tc, "trace_chain_fields", traceChainFields.filter((_: string, j: number) => j !== i))} className="p-1 hover:bg-gray-100 rounded"><X className="w-3 h-3" /></button>
-                      </div>
-                    ))}
-                    {traceChainFields.length < tAllFields.length && <button onClick={() => { const used = new Set(traceChainFields); const next = tAllFields.find(f => !used.has(f.key || f.name)); if (next) setTableSetting(tc, "trace_chain_fields", [...traceChainFields, next.key || next.name]); }} className="text-[10px] text-blue-500 hover:bg-blue-50 px-1">+ 添加</button>}
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-          <div className="text-center py-8 text-gray-500 text-sm">请先配置分组字段、分支字段和串联字段</div>
-        </div>
-      );
-    }
-
-    const groups = buildTraceGroups(data, config);
-
-    if (groups.length === 0) {
-      return <div className="text-center py-8 text-gray-500">暂无数据</div>;
-    }
-
-    return (
-      <div className="flex flex-col">
-        {/* 工具栏 */}
-        <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-gray-50/50">
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-gray-600 hover:bg-gray-200 transition-colors">
-                <Settings2 className="h-3 w-3" />设置
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-72 max-h-[70vh] overflow-y-auto p-3" align="start">
-              <div className="text-xs font-semibold mb-2">脉络配置</div>
-              <div className="space-y-2">
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-gray-500">分组字段 <span className="text-red-400">*</span></Label>
-                  <Select value={traceGroupField} onValueChange={v => setTableSetting(tc, "trace_group_field", v)}>
-                    <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>{tAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-gray-500">分支字段 <span className="text-red-400">*</span></Label>
-                  <Select value={traceBranchField} onValueChange={v => setTableSetting(tc, "trace_branch_field", v)}>
-                    <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>{tAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-gray-500">主行字段</Label>
-                  {traceMainFields.map((mf: string, i: number) => (
-                    <div key={i} className="flex items-center gap-1">
-                      <Select value={mf} onValueChange={v => { const n = [...traceMainFields]; n[i] = v; setTableSetting(tc, "trace_main_fields", n); }}>
-                        <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>{tAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <button onClick={() => setTableSetting(tc, "trace_main_fields", traceMainFields.filter((_: string, j: number) => j !== i))} className="p-1 hover:bg-gray-100 rounded"><X className="w-3 h-3" /></button>
-                    </div>
-                  ))}
-                  {traceMainFields.length < 3 && <button onClick={() => { const used = new Set(traceMainFields); const next = tAllFields.find(f => !used.has(f.key || f.name)); if (next) setTableSetting(tc, "trace_main_fields", [...traceMainFields, next.key || next.name]); }} className="text-[10px] text-blue-500 hover:bg-blue-50 px-1">+ 添加</button>}
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-gray-500">串联字段 <span className="text-red-400">*</span></Label>
-                  {traceChainFields.map((cf: string, i: number) => (
-                    <div key={i} className="flex items-center gap-1">
-                      <span className="text-[9px] text-gray-400 w-3">{i+1}</span>
-                      <Select value={cf} onValueChange={v => { const n = [...traceChainFields]; n[i] = v; setTableSetting(tc, "trace_chain_fields", n); }}>
-                        <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>{tAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <button onClick={() => setTableSetting(tc, "trace_chain_fields", traceChainFields.filter((_: string, j: number) => j !== i))} className="p-1 hover:bg-gray-100 rounded"><X className="w-3 h-3" /></button>
-                    </div>
-                  ))}
-                  {traceChainFields.length < tAllFields.length && <button onClick={() => { const used = new Set(traceChainFields); const next = tAllFields.find(f => !used.has(f.key || f.name)); if (next) setTableSetting(tc, "trace_chain_fields", [...traceChainFields, next.key || next.name]); }} className="text-[10px] text-blue-500 hover:bg-blue-50 px-1">+ 添加</button>}
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-          <span className="text-[10px] text-gray-400">分组: {tAllFields.find(f => (f.key || f.name) === traceGroupField)?.label || traceGroupField} · 分支: {tAllFields.find(f => (f.key || f.name) === traceBranchField)?.label || traceBranchField} · 串联: {traceChainFields.length}个字段</span>
-        </div>
-        {/* 内容 */}
-        <div className="space-y-6 p-4">
-        {groups.map(({ groupKey, branches }) => {
-          const status = calcTraceStatus(branches);
-          return (
-            <div key={groupKey} className="rounded-lg border border-gray-200 overflow-hidden">
-              {/* 组标题 */}
-              <div className={cn("px-4 py-2.5 font-semibold text-sm flex items-center gap-3", mc.light, mc.text)} style={{ borderLeft: `4px solid ${mc.border}` }}>
-                <span>{groupKey}</span>
-                {config.mainCols.map((col, i) => {
-                  const val = branches[0]?.rows[0]?.[col.key];
-                  if (!val || val === "") return null;
-                  return <span key={i} className="text-xs font-normal opacity-70">{col.label || col.name}: {String(val)}</span>;
-                })}
-                <span className="ml-auto text-xs">
-                  {status.allDone ? "✅ 全部完成" : status.noneStarted ? "⬜ 未开始" : `⏳ ${status.completedBranches}/${status.totalBranches} 完成`}
-                </span>
-              </div>
-              {/* 并行线 */}
-              <div className="px-4 py-2 space-y-1.5">
-                {branches.map(({ branchKey, chainValues }) => {
-                  return (
-                    <div key={branchKey} className="flex items-center gap-2 text-sm">
-                      <span className="shrink-0 w-20 text-gray-500 truncate font-medium">{branchKey}</span>
-                      <span className="text-gray-300">──</span>
-                      {chainValues.map((cv, i) => {
-                        const prevVal = i > 0 ? chainValues[i - 1].value : "has_prev";
-                        const nodeStatus = getNodeStatus(cv.value, prevVal);
-                        const sc = STATUS_COLORS[nodeStatus];
-                        return (
-                          <span key={i} className="inline-flex items-center gap-0.5">
-                            {i > 0 && <span className="text-gray-300">→</span>}
-                            <span className={cn("inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs", sc.bg, sc.text)}>
-                              <span className="text-[10px]">{sc.dot}</span>
-                              {cv.value ? cv.value : "—"}
-                            </span>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-              {/* 整体状态 */}
-              {!status.allDone && (
-                <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-500">
-                  整体完成: {status.completionRate > 0 ? `${Math.round(status.completionRate * 100)}%` : "0%"} — 以最慢分支为准
-                </div>
-              )}
-            </div>
-          );
-        })}
-        </div>
-      </div>
-    );
-  };
-
-  // ===== F 并行进度条 =====
-  const renderProgressView = (table: TableDefinition) => {
-    const data = tableDataMap[table.table_code] || [];
-    const mc = getModuleColor(activeModule);
-    const tc = table.table_code;
-    const columns = table.columns_config;
-    const config = getTraceConfig(table);
-
-    // Trace settings inline (same as trace view)
-    const pAllFields = columns;
-    const pSelectFields = columns.filter((f: ColumnConfig) => f.type === 'select' || f.type === 'radio');
-    const pGroupField = (getTableSetting(tc, "trace_group_field") as string) || (pAllFields[0]?.key || pAllFields[0]?.name || "");
-    const pBranchField = (getTableSetting(tc, "trace_branch_field") as string) || (pSelectFields.length > 0 ? (pSelectFields[0]?.key || pSelectFields[0]?.name) : (pAllFields.length > 1 ? (pAllFields[1]?.key || pAllFields[1]?.name) : ""));
-    const pMainFields = (getTableSetting(tc, "trace_main_fields") as string[]) || (pAllFields.length > 1 ? [pAllFields[0]?.key || pAllFields[0]?.name || ""] : []);
-    const pChainFields = (getTableSetting(tc, "trace_chain_fields") as string[]) || pAllFields.slice(1, 6).map((f: ColumnConfig) => f.key || f.name).filter(Boolean);
-
-    const progressSettingsPopover = (
-      <Popover>
-        <PopoverTrigger asChild>
-          <button className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-gray-600 hover:bg-gray-200 transition-colors">
-            <Settings2 className="h-3 w-3" />设置
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-72 max-h-[70vh] overflow-y-auto p-3" align="start">
-          <div className="text-xs font-semibold mb-2">进度条配置</div>
-          <div className="space-y-2">
-            <div className="space-y-1">
-              <Label className="text-[10px] text-gray-500">分组字段 <span className="text-red-400">*</span></Label>
-              <Select value={pGroupField} onValueChange={v => setTableSetting(tc, "trace_group_field", v)}>
-                <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>{pAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] text-gray-500">分支字段 <span className="text-red-400">*</span></Label>
-              <Select value={pBranchField} onValueChange={v => setTableSetting(tc, "trace_branch_field", v)}>
-                <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>{pAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] text-gray-500">主行字段</Label>
-              {pMainFields.map((mf: string, i: number) => (
-                <div key={i} className="flex items-center gap-1">
-                  <Select value={mf} onValueChange={v => { const n = [...pMainFields]; n[i] = v; setTableSetting(tc, "trace_main_fields", n); }}>
-                    <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>{pAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <button onClick={() => setTableSetting(tc, "trace_main_fields", pMainFields.filter((_: string, j: number) => j !== i))} className="p-1 hover:bg-gray-100 rounded"><X className="w-3 h-3" /></button>
-                </div>
-              ))}
-              {pMainFields.length < 3 && <button onClick={() => { const used = new Set(pMainFields); const next = pAllFields.find(f => !used.has(f.key || f.name)); if (next) setTableSetting(tc, "trace_main_fields", [...pMainFields, next.key || next.name]); }} className="text-[10px] text-blue-500 hover:bg-blue-50 px-1">+ 添加</button>}
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] text-gray-500">串联字段 <span className="text-red-400">*</span></Label>
-              {pChainFields.map((cf: string, i: number) => (
-                <div key={i} className="flex items-center gap-1">
-                  <span className="text-[9px] text-gray-400 w-3">{i+1}</span>
-                  <Select value={cf} onValueChange={v => { const n = [...pChainFields]; n[i] = v; setTableSetting(tc, "trace_chain_fields", n); }}>
-                    <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>{pAllFields.map((f: ColumnConfig) => <SelectItem key={f.key || f.name} value={f.key || f.name}>{f.label || f.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <button onClick={() => setTableSetting(tc, "trace_chain_fields", pChainFields.filter((_: string, j: number) => j !== i))} className="p-1 hover:bg-gray-100 rounded"><X className="w-3 h-3" /></button>
-                </div>
-              ))}
-              {pChainFields.length < pAllFields.length && <button onClick={() => { const used = new Set(pChainFields); const next = pAllFields.find(f => !used.has(f.key || f.name)); if (next) setTableSetting(tc, "trace_chain_fields", [...pChainFields, next.key || next.name]); }} className="text-[10px] text-blue-500 hover:bg-blue-50 px-1">+ 添加</button>}
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
-    );
-
-    if (!config.groupCol || !config.branchCol || config.chainCols.length === 0) {
-      return (
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-gray-50/50">
-            {progressSettingsPopover}
-          </div>
-          <div className="text-center py-8 text-gray-500 text-sm">请先配置分组字段、分支字段和串联字段</div>
-        </div>
-      );
-    }
-
-    const groups = buildTraceGroups(data, config);
-
-    if (groups.length === 0) {
-      return <div className="text-center py-8 text-gray-500">暂无数据</div>;
-    }
-
-    // 用串联字段中的日期列来计算进度比例，如果没有日期列则按完成节点数/总节点数
-    const dateCols = config.chainCols.filter(c => c.type === "date");
-
-    return (
-      <div className="flex flex-col">
-        {/* 工具栏 */}
-        <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-gray-50/50">
-          {progressSettingsPopover}
-          <span className="text-[10px] text-gray-400">分组: {pAllFields.find(f => (f.key || f.name) === pGroupField)?.label || pGroupField} · 分支: {pAllFields.find(f => (f.key || f.name) === pBranchField)?.label || pBranchField} · 串联: {pChainFields.length}个字段</span>
-        </div>
-        {/* 内容 */}
-        <div className="space-y-6 p-4">
-        {groups.map(({ groupKey, branches }, gi) => {
-          const status = calcTraceStatus(branches);
-
-          // 计算每条线的进度
-          const branchProgress = branches.map(b => {
-            const completedNodes = b.chainValues.filter(cv => cv.value && cv.value !== "" && cv.value !== "undefined").length;
-            const progress = b.chainValues.length > 0 ? completedNodes / b.chainValues.length : 0;
-            const lastValue = b.chainValues[b.chainValues.length - 1]?.value || "";
-            const isComplete = lastValue !== "" && lastValue !== "undefined";
-
-            // 日期计算（如果有日期列）
-            let dateRange: { start: string; end: string } | null = null;
-            if (dateCols.length >= 1) {
-              const startVal = b.chainValues.find(cv => cv.col.type === "date" && cv.value)?.value;
-              const endVal = [...b.chainValues].reverse().find(cv => cv.col.type === "date" && cv.value)?.value;
-              if (startVal) dateRange = { start: startVal, end: endVal || "" };
-            }
-
-            return { ...b, progress, isComplete, dateRange };
-          });
-
-          // 整体进度
-          const overallProgress = status.totalBranches > 0 ? status.completedBranches / status.totalBranches : 0;
-
-          return (
-            <div key={groupKey} className="rounded-lg border border-gray-200 overflow-hidden">
-              {/* 组标题 */}
-              <div className={cn("px-4 py-2.5 font-semibold text-sm flex items-center gap-3", mc.light, mc.text)} style={{ borderLeft: `4px solid ${mc.border}` }}>
-                <span>{groupKey}</span>
-                {config.mainCols.map((col, i) => {
-                  const val = branches[0]?.rows[0]?.[col.key];
-                  if (!val || val === "") return null;
-                  return <span key={i} className="text-xs font-normal opacity-70">{col.label || col.name}: {String(val)}</span>;
-                })}
-              </div>
-              {/* 进度条区域 */}
-              <div className="px-4 py-3 space-y-2">
-                {branchProgress.map(bp => {
-                  const barColor = bp.isComplete ? "bg-emerald-500" : bp.progress > 0 ? "bg-blue-400" : "bg-gray-200";
-                  const barBg = bp.isComplete ? "bg-emerald-100" : bp.progress > 0 ? "bg-blue-50" : "bg-gray-50";
-                  return (
-                    <div key={bp.branchKey} className="space-y-0.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-medium text-gray-700">{bp.branchKey}</span>
-                        <span className={cn("text-xs", bp.isComplete ? "text-emerald-600" : "text-gray-400")}>
-                          {bp.isComplete ? `✔ ${bp.chainValues[bp.chainValues.length - 1]?.value || ""}` : bp.progress > 0 ? `${Math.round(bp.progress * 100)}%` : "未开始"}
-                        </span>
-                      </div>
-                      <div className={cn("h-2.5 rounded-full overflow-hidden", barBg)}>
-                        <div className={cn("h-full rounded-full transition-all", barColor)} style={{ width: `${Math.max(bp.progress * 100, bp.progress > 0 ? 4 : 0)}%` }} />
-                      </div>
-                      {/* 串联节点标签 */}
-                      <div className="flex items-center gap-1 text-[10px] text-gray-400">
-                        {bp.chainValues.map((cv, i) => (
-                          <span key={i} className={cn(cv.value && cv.value !== "undefined" ? "text-gray-600" : "")}>
-                            {i > 0 && <span className="text-gray-300">›</span>}
-                            {cv.value && cv.value !== "undefined" ? cv.value : "—"}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-                {/* 整体进度 */}
-                <div className="pt-2 mt-2 border-t border-gray-100">
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="font-medium text-gray-600">整体</span>
-                    <span className={cn("text-xs font-medium", status.allDone ? "text-emerald-600" : "text-gray-500")}>
-                      {status.allDone ? "✔ 已完成" : `${Math.round(overallProgress * 100)}%`}
-                    </span>
-                  </div>
-                  <div className="h-3 rounded-full overflow-hidden bg-gray-100">
-                    <div
-                      className={cn("h-full rounded-full transition-all", status.allDone ? "bg-emerald-500" : "bg-blue-400")}
-                      style={{ width: `${Math.max(overallProgress * 100, overallProgress > 0 ? 4 : 0)}%` }}
-                    />
-                  </div>
-                  <div className="text-[10px] text-gray-400 mt-1">
-                    {status.allDone ? "全部完成" : `${status.completedBranches}/${status.totalBranches} 分支完成 · 以最慢分支为准`}
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-        </div>
-      </div>
-    );
-  };
 
   // 主渲染函数
   const renderDataTable = (table: TableDefinition) => {
@@ -4001,12 +3843,15 @@ export function ProjectDetail({
       <div className="rounded-xl border border-slate-200/80 overflow-hidden shadow-sm">
         {/* 表头 */}
         <div className={cn("px-4 py-3", mc.header)}>
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="font-semibold text-white flex items-center gap-2">
-              <Layers className="w-4 h-4" />
-              {table.table_name}
-              <span className="text-white/60 text-xs font-normal ml-1">{data.length} 条</span>
-            </h4>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-3">
+              <h4 className="font-semibold text-white flex items-center gap-2">
+                <Layers className="w-4 h-4" />
+                {table.table_name}
+                <span className="text-white/60 text-xs font-normal ml-1">{data.length} 条</span>
+              </h4>
+              {renderViewModeSwitcher(table)}
+            </div>
             <div className="flex items-center gap-2">
               {renderViewSettingsPopover(table)}
 
@@ -4018,9 +3863,6 @@ export function ProjectDetail({
               )}
             </div>
           </div>
-          <div className="flex justify-center">
-            {renderViewModeSwitcher(table)}
-          </div>
         </div>
         {/* 数据区域 */}
         {viewMode === "card" && renderCardView(table)}
@@ -4030,8 +3872,6 @@ export function ProjectDetail({
         {viewMode === "form" && renderFormView(table)}
         {viewMode === "gantt" && renderGanttView(table)}
         {viewMode === "group" && renderGroupView(table)}
-        {viewMode === "trace" && renderTraceView(table)}
-        {viewMode === "progress" && renderProgressView(table)}
       </div>
     );
   };
@@ -4063,7 +3903,7 @@ export function ProjectDetail({
     }
 
     return (
-      <div className="space-y-4 max-w-6xl mx-auto">
+      <div className="space-y-4">
         {tables.map((table) => (
           <div key={table.id}>
             {renderDataTable(table)}
@@ -4143,10 +3983,12 @@ export function ProjectDetail({
           </div>
         </div>
 
-        {/* 左侧统计 + 中间数据区 + 右侧概览 */}
+        {/* 左侧概览+统计 + 中间数据区 */}
         <div className="flex-1 flex min-h-0">
-          {/* 左侧统计面板 */}
-          <div className="w-72 bg-white border-r border-slate-200/80 p-4 overflow-y-auto space-y-5">
+          {/* 左侧：统计 */}
+          <div className="w-60 bg-white border-r border-slate-200/80 overflow-y-auto flex flex-col shrink-0">
+            {/* 数据统计 */}
+            <div className="p-4 space-y-5 flex-1">
             {/* 数据统计 */}
             <div>
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">数据统计</h3>
@@ -4204,15 +4046,11 @@ export function ProjectDetail({
               })()}
             </div>
           </div>
-
-          {/* 中间数据区 */}
-          <div className="flex-1 p-5 overflow-y-auto">
-            {renderModuleContent()}
           </div>
 
-          {/* 右侧概览面板 */}
-          <div className="w-72 bg-white border-l border-slate-200/80 p-4 overflow-y-auto">
-            {renderOverview()}
+          {/* 中间数据区 */}
+          <div className="flex-1 p-3 overflow-y-auto">
+            {renderModuleContent()}
           </div>
         </div>
       </div>
@@ -4375,14 +4213,35 @@ export function ProjectDetail({
                     value={newRowData[col.name] || ""}
                     onChange={(e) => setNewRowData(prev => ({ ...prev, [col.name]: e.target.value }))}
                     placeholder={`请输入${col.label || col.name}`}
-                    
+
                   />
+                ) : col.type === "text" && (col.quick_inputs || []).length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      {(col.quick_inputs || []).map((phrase) => (
+                        <button
+                          key={phrase}
+                          type="button"
+                          onClick={() => setNewRowData(prev => ({ ...prev, [col.name]: phrase }))}
+                          className="inline-flex items-center gap-1 bg-green-50 text-green-700 text-xs px-2.5 py-1 rounded-full border border-green-200 hover:bg-green-100 hover:border-green-300 transition-colors"
+                        >
+                          {phrase}
+                        </button>
+                      ))}
+                    </div>
+                    <Input
+                      value={newRowData[col.name] || ""}
+                      onChange={(e) => setNewRowData(prev => ({ ...prev, [col.name]: e.target.value }))}
+                      placeholder={`请输入${col.label || col.name}`}
+
+                    />
+                  </div>
                 ) : (
                   <Input
                     value={newRowData[col.name] || ""}
                     onChange={(e) => setNewRowData(prev => ({ ...prev, [col.name]: e.target.value }))}
                     placeholder={`请输入${col.label || col.name}`}
-                    
+
                   />
                 )}
               </div>
@@ -4476,6 +4335,178 @@ export function ProjectDetail({
           <DialogFooter>
             <Button variant="outline" onClick={() => setRefSelectorOpen(false)}>取消</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI 提示词模板弹窗 */}
+      <AIPromptDialog
+        open={aiPromptDialogOpen}
+        onOpenChange={setAiPromptDialogOpen}
+        onSubmit={handleAIPromptSubmit}
+        projectSchema={project.project_schema}
+        promptType={aiPendingTableCode ? "single_table" : "global"}
+        tableName={aiPendingTableCode || undefined}
+      />
+
+      {/* AI 数据分析弹窗 */}
+      <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-teal-500" />
+              AI 数据分析
+              {aiAnalyzingTable ? (
+                <>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-sm font-normal text-gray-500">{aiAnalyzingTable}</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-sm font-normal text-gray-500">{activeModule}</span>
+                </>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 flex-1 overflow-y-auto min-h-0">
+            {aiLoading && (
+              <div className="flex flex-col items-center py-12">
+                <Sparkles className="w-12 h-12 text-teal-400 animate-pulse mb-4" />
+                <p className="text-sm text-gray-500 mb-2">AI 正在分析数据...</p>
+                <p className="text-xs text-gray-400">
+                  {aiAnalyzingTable
+                    ? `正在读取表 ${aiAnalyzingTable} 的 ${Math.min(50, 999)} 条样本数据`
+                    : `正在读取 ${project.project_schema} Schema 下当前模块的数据表`}
+                </p>
+              </div>
+            )}
+
+            {aiError && !aiLoading && (
+              <div className="py-8 text-center">
+                {aiError === "NO_KEY" ? (
+                  <div className="space-y-4">
+                    <div className="w-16 h-16 mx-auto bg-gray-100 rounded-full flex items-center justify-center">
+                      <Sparkles className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <p className="text-gray-500 text-sm">AI 功能尚未配置</p>
+                    <p className="text-gray-400 text-xs">
+                      请联系管理员在 系统设置 &gt; 大模型配置 中设置 DeepSeek API Key
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-red-500 text-sm">分析失败</p>
+                    <p className="text-red-400 text-xs">{aiError}</p>
+                    <Button variant="outline" size="sm" onClick={() => handleAIAnalysis(aiAnalyzingTable || undefined, aiCustomSystemMessage || undefined, aiCustomUserPrompt || undefined)}>
+                      重试
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {aiResult && !aiLoading && (
+              <>
+                {/* 对话历史 */}
+                {aiConversationHistory.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* 初始分析结果：直接展示 markdown */}
+                    <div>
+                      <div className="flex items-center gap-3 text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2 mb-3">
+                        <span>共扫描 {aiResult.tableCount} 张表</span>
+                        <span>·</span>
+                        <span>{aiResult.totalRows.toLocaleString()} 条数据</span>
+                      </div>
+                      <Markdown>{aiResult.analysis}</Markdown>
+                    </div>
+
+                    {/* 追问消息（从第3条开始，跳过 system/user/assistant 初始三轮） */}
+                    {aiConversationHistory.slice(3).map((msg, i) => (
+                      <div key={i} className={msg.role === "user" ? "flex justify-end" : ""}>
+                        <div className={msg.role === "user"
+                          ? "bg-teal-500 text-white rounded-2xl rounded-br-md px-4 py-2.5 max-w-[85%] text-sm"
+                          : "bg-gray-100 text-gray-700 rounded-2xl rounded-bl-md px-4 py-2.5 max-w-[85%] text-sm prose prose-sm"
+                        }>
+                          {msg.role === "user" ? (
+                            msg.content
+                          ) : (
+                            <Markdown>{msg.content}</Markdown>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* 追问加载中 */}
+                    {aiFollowUpLoading && (
+                      <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        AI 思考中...
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {/* 无对话历史：单纯展示结果 */}
+                    <div className="flex items-center gap-3 text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
+                      <span>共扫描 {aiResult.tableCount} 张表</span>
+                      <span>·</span>
+                      <span>{aiResult.totalRows.toLocaleString()} 条数据</span>
+                    </div>
+
+                    <Markdown>{aiResult.analysis}</Markdown>
+                  </>
+                )}
+
+                {/* 操作栏 */}
+                <div className="flex items-center gap-2 pt-2 border-t">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(aiResult.analysis);
+                      toast.success("已复制分析结果");
+                    }}
+                  >
+                    <Copy className="w-3.5 h-3.5 mr-1" />
+                    复制结果
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleAIAnalysis(aiAnalyzingTable || undefined, aiCustomSystemMessage || undefined, aiCustomUserPrompt || undefined)}
+                  >
+                    <Loader2 className="w-3.5 h-3.5 mr-1" />
+                    重新分析
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* 追问输入框（有对话历史时显示） */}
+          {aiResult && !aiLoading && aiConversationHistory.length > 0 && (
+            <div className="border-t pt-3 mt-2">
+              <div className="flex gap-2">
+                <Input
+                  value={aiFollowUpQuestion}
+                  onChange={(e) => setAiFollowUpQuestion(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAIFollowUp(); } }}
+                  placeholder="对分析结果追问，例如：延期风险最大的任务是什么？"
+                  className="flex-1 h-9 text-sm"
+                  disabled={aiFollowUpLoading}
+                />
+                <Button
+                  size="sm"
+                  onClick={handleAIFollowUp}
+                  disabled={aiFollowUpLoading || !aiFollowUpQuestion.trim()}
+                  className="bg-teal-500 hover:bg-teal-600 text-white"
+                >
+                  {aiFollowUpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "发送"}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

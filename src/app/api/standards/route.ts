@@ -16,6 +16,35 @@ function mapColumnType(type: string): string {
   return typeMap[type] || "TEXT";
 }
 
+// 构建创建物理表的 SQL
+function buildCreateTableSQL(tableCode: string, columnsConfig: Array<{name: string; type: string}>): string {
+  const physicalTableName = `std_definition_${tableCode}`;
+
+  const columnDefs: string[] = [
+    "id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()",
+    "project_id VARCHAR(36)",
+    "sort_order INTEGER DEFAULT 0",
+    "created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()",
+    "updated_at TIMESTAMP WITH TIME ZONE",
+    "created_by VARCHAR(36)",
+    "allow_delete BOOLEAN DEFAULT TRUE",
+    "_readonly BOOLEAN DEFAULT FALSE",
+    "data_source TEXT DEFAULT 'standard'",
+  ];
+
+  if (columnsConfig && Array.isArray(columnsConfig)) {
+    for (const col of columnsConfig) {
+      if (col.name) {
+        const pgType = mapColumnType(col.type || "text");
+        const safeName = col.name.replace(/"/g, '""');
+        columnDefs.push(`"${safeName}" ${pgType}`);
+      }
+    }
+  }
+
+  return `CREATE TABLE IF NOT EXISTS design_public.${physicalTableName} (\n      ${columnDefs.join(",\n      ")}\n    )`;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const client = await createServerClient();
@@ -116,37 +145,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. 创建物理表 std_definition_{table_code}
-    const physicalTableName = `std_definition_${table_code}`;
-    
-    // 构建列定义 SQL
-    const columnDefs: string[] = [
-      "id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()",
-      "project_id VARCHAR(36)", // 关联项目
-      "sort_order INTEGER DEFAULT 0", // 排序字段
-      "created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()",
-      "updated_at TIMESTAMP WITH TIME ZONE",
-      "created_by VARCHAR(36)", // 创建人
-      "allow_delete BOOLEAN DEFAULT TRUE", // 是否允许项目删除
-      "data_source TEXT DEFAULT 'standard'", // 数据来源: standard/manual
-    ];
+    const createTableSQL = buildCreateTableSQL(table_code, columns_config || []);
 
-    // 添加用户定义的列
-    if (columns_config && Array.isArray(columns_config)) {
-      for (const col of columns_config) {
-        if (col.name) {
-          const pgType = mapColumnType(col.type || "text");
-          const nullable = ""; // 必填校验在前端处理，数据库层不加 NOT NULL
-          const colName = col.name.toLowerCase().replace(/\s+/g, "_");
-          columnDefs.push(`${colName} ${pgType}${nullable}`);
-        }
-      }
-    }
-
-    const createTableSQL = `CREATE TABLE IF NOT EXISTS design_public.${physicalTableName} (
-      ${columnDefs.join(",\n      ")}
-    )`;
-
-    // 执行创建表
     const { error: createError } = await client.rpc("execute_sql", {
       p_sql: createTableSQL,
     });
@@ -156,10 +156,49 @@ export async function POST(request: NextRequest) {
       // 不回滚元数据插入，因为表定义已保存，可以稍后手动创建物理表
     }
 
-    return NextResponse.json({ data, physicalTable: physicalTableName }, { status: 201 });
+    return NextResponse.json({ data, physicalTable: `std_definition_${table_code}` }, { status: 201 });
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+// 重建物理表（用于修复因列名特殊字符导致建表失败的情况）
+export async function PATCH(request: NextRequest) {
+  try {
+    const client = await createServerClient();
+    const body = await request.json();
+    const { table_code } = body;
+
+    if (!table_code) {
+      return NextResponse.json({ error: "缺少 table_code" }, { status: 400 });
+    }
+
+    // 查找定义
+    const { data: existingData } = await client.rpc("dp_select", {
+      p_table: "data_table_definitions",
+    });
+    const rows = existingData as Array<Record<string, unknown>> | null;
+    const def = rows?.find((r) => r.table_code === table_code);
+    if (!def) {
+      return NextResponse.json({ error: "表定义不存在" }, { status: 404 });
+    }
+
+    const columnsConfig = (def.columns_config as Array<{name: string; type: string}>) || [];
+    const createTableSQL = buildCreateTableSQL(table_code, columnsConfig);
+
+    const { error: createError } = await client.rpc("execute_sql", {
+      p_sql: createTableSQL,
+    });
+
+    if (createError) {
+      return NextResponse.json({ error: createError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, physicalTable: `std_definition_${table_code}` });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

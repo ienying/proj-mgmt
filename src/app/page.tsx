@@ -20,18 +20,15 @@ function LoadingFallback() {
 }
 
 // All heavy components loaded dynamically to prevent SSR issues and ChunkLoadError cascade
-const Dashboard = dynamic(() => import("@/components/dashboard").then(m => ({ default: m.Dashboard })), {
-  ssr: false,
-  loading: () => <LoadingFallback />,
-});
 const ProjectManagement = dynamic(() => import("@/components/project-management"), { ssr: false, loading: () => <LoadingFallback /> });
 const StandardManagement = dynamic(() => import("@/components/standard-management").then(m => ({ default: m.StandardManagement })), { ssr: false, loading: () => <LoadingFallback /> });
 const SystemSettings = dynamic(() => import("@/components/system-settings"), { ssr: false, loading: () => <LoadingFallback /> });
 const IssueManagement = dynamic(() => import("@/components/issue-management"), { ssr: false, loading: () => <LoadingFallback /> });
 const KnowledgeCenter = dynamic(() => import("@/components/knowledge-center").then(m => ({ default: m.default })), { ssr: false, loading: () => <LoadingFallback /> });
-const CaseCenter = dynamic(() => import("@/components/case-center").then(m => ({ default: m.CaseCenter })), { ssr: false, loading: () => <LoadingFallback /> });
 const AboutPage = dynamic(() => import("@/components/about-page"), { ssr: false, loading: () => <LoadingFallback /> });
 const TaskCenter = dynamic(() => import("@/components/task-center"), { ssr: false, loading: () => <LoadingFallback /> });
+const CaseCenter = dynamic(() => import("@/components/case-center"), { ssr: false, loading: () => <LoadingFallback /> });
+const ProjectDashboard = dynamic(() => import("@/components/project-dashboard").then(m => ({ default: m.ProjectDashboard })), { ssr: false, loading: () => <LoadingFallback /> });
 
 import {
   FolderKanban,
@@ -40,10 +37,12 @@ import {
   Settings,
   Wrench,
   AlertTriangle,
-  Briefcase,
+  BriefcaseBusiness,
   Megaphone,
   Info,
   CheckSquare,
+  LayoutDashboard,
+  Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -111,7 +110,7 @@ export default function HomePage() {
   const [projectTypes, setProjectTypes] = useState<{ code: string; name: string }[]>([]);
   const [projectStages, setProjectStages] = useState<{ code: string; name: string }[]>([]);
   const [procurementModules, setProcurementModules] = useState<{ code: string; name: string }[]>([]);
-  const [activeItem, setActiveItem] = useState("dashboard");
+  const [activeItem, setActiveItem] = useState("project-board");
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [projects, setProjects] = useState(mockProjects);
   const [users, setUsers] = useState<{ id: string; username: string; name: string; phone?: string; email?: string; department?: string; position?: string; avatar?: string; role?: "super_admin" | "sub_admin" | "user"; is_active: boolean; created_at: string }[]>([]);
@@ -144,16 +143,16 @@ export default function HomePage() {
   } | null>(null);
 
   const dockItems = [
-    { id: "dashboard", label: "数据看板", icon: <FolderKanban className="w-5 h-5" />, color: "bg-emerald-500" },
+    { id: "project-board", label: "项目看板", icon: <LayoutDashboard className="w-5 h-5" />, color: "bg-teal-500" },
     { id: "projects", label: "项目管理", icon: <FolderKanban className="w-5 h-5" />, color: "bg-blue-500" },
     { id: "tasks", label: "任务中心", icon: <CheckSquare className="w-5 h-5" />, color: "bg-orange-500", badge: badges.tasks },
     { id: "issues", label: "工单提交", icon: <AlertTriangle className="w-5 h-5" />, color: "bg-blue-500", badge: badges.issues },
-    { id: "learning", label: "学习中心", icon: <BookOpen className="w-5 h-5" />, color: "bg-cyan-500" },
-    { id: "case-center", label: "案例中心", icon: <Briefcase className="w-5 h-5" />, color: "bg-cyan-500" },
+    { id: "case-center", label: "案例中心", icon: <BriefcaseBusiness className="w-5 h-5" />, color: "bg-teal-500" },
     { id: "messages", label: "信息广场", icon: <Megaphone className="w-5 h-5" />, color: "bg-purple-500", badge: badges.messages },
     { id: "standards", label: "规范管理", icon: <Wrench className="w-5 h-5" />, color: "bg-violet-500" },
     { id: "settings", label: "设置", icon: <Settings className="w-5 h-5" />, color: "bg-gray-500" },
     { id: "about", label: "关于", icon: <Info className="w-5 h-5" />, color: "bg-indigo-500" },
+    { id: "learning", label: "学习中心", icon: <BookOpen className="w-5 h-5" />, color: "bg-cyan-500" },
   ];
 
 
@@ -201,14 +200,14 @@ export default function HomePage() {
         const typesRes = await fetch("/api/dicts?type=project_types");
         if (typesRes.ok) {
           const typesData = await typesRes.json();
-          setProjectTypes(typesData.data || []);
+          setProjectTypes((typesData.data || []).filter((item: any) => item.code));
         }
 
         // 获取项目阶段
         const stagesRes = await fetch("/api/dicts?type=project_stages");
         if (stagesRes.ok) {
           const stagesData = await stagesRes.json();
-          setProjectStages(stagesData.data || []);
+          setProjectStages((stagesData.data || []).filter((item: any) => item.code));
         }
 
         // 获取采购模块（来源于产品模块数据）
@@ -265,11 +264,11 @@ export default function HomePage() {
 
       if (typesRes.ok) {
         const typesData = await typesRes.json();
-        setProjectTypes(typesData.data || []);
+        setProjectTypes((typesData.data || []).filter((item: any) => item.code));
       }
       if (stagesRes.ok) {
         const stagesData = await stagesRes.json();
-        setProjectStages(stagesData.data || []);
+        setProjectStages((stagesData.data || []).filter((item: any) => item.code));
       }
       if (modulesRes.ok) {
         const modulesData = await modulesRes.json();
@@ -444,12 +443,17 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      
+
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "创建失败");
+        const text = await res.text();
+        let errMsg = text;
+        try {
+          const errorData = JSON.parse(text);
+          errMsg = errorData.error || "创建失败";
+        } catch {}
+        throw new Error(errMsg);
       }
-      
+
       const result = await res.json();
       setStandards((prev) => [...prev, result.data]);
       toast.success("数据表创建成功");
@@ -465,12 +469,17 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, ...data }),
       });
-      
+
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "更新失败");
+        const text = await res.text();
+        let errMsg = text;
+        try {
+          const errorData = JSON.parse(text);
+          errMsg = errorData.error || "更新失败";
+        } catch {}
+        throw new Error(errMsg);
       }
-      
+
       setStandards((prev) =>
         prev.map((s) => (s.id === id ? { ...s, ...data } : s))
       );
@@ -536,29 +545,45 @@ export default function HomePage() {
   };
 
   const renderContent = () => {
+    // 普通用户无权访问规范管理和设置页面
+    if (user?.role === "user" && (activeItem === "standards" || activeItem === "settings")) {
+      return (
+        <div className="h-full flex items-center justify-center">
+          <div className="text-center">
+            <Shield className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+            <h2 className="text-xl font-semibold mb-2">访问受限</h2>
+            <p className="text-muted-foreground">您没有权限访问此页面，请联系管理员。</p>
+          </div>
+        </div>
+      );
+    }
+
     switch (activeItem) {
-      case "dashboard":
+      case "project-board":
         return (
           <ContentErrorBoundary>
-            <Dashboard
-              data={{
-                totalProjects: projects.length,
-                activeProjects: projects.filter((p) => p.status === "active").length,
-                completedProjects: projects.filter((p) => p.status === "completed").length,
-                totalTasks: 0,
-                pendingTasks: 0,
-                completedTasks: 0,
-                totalBudget: 500000,
-                usedBudget: 320000,
+            <ProjectDashboard
+              isSuperAdmin={user?.role === "super_admin"}
+              onViewProject={(projectId) => {
+                const project = projects.find((p) => p.id === projectId);
+                if (project) {
+                  setViewingProject({
+                    id: project.id,
+                    project_name: project.project_name,
+                    project_code: project.project_code,
+                    project_type: project.project_type,
+                    project_stage: project.project_stage,
+                    project_schema: project.project_schema || `yuansu_${project.project_code.toLowerCase()}`,
+                    status: project.status || "active",
+                    created_at: project.created_at || "",
+                    customer_info: project.customer_info as { company_name?: string; contact_person?: string; contact_phone?: string; contact_email?: string } | undefined,
+                    channel_info: project.channel_info as Array<{ company_name: string; contact_person?: string; contact_phone?: string }> | undefined,
+                    procurement_modules: project.procurement_modules as string[] | undefined,
+                    description: project.description,
+                  });
+                  setActiveItem("projects");
+                }
               }}
-              projects={projects.map((p) => ({
-                id: p.id,
-                name: p.project_name,
-                progress: 65,
-                status: p.status as "active" | "completed" | "suspended",
-                deadline: "2024-12-31",
-                teamSize: 8,
-              }))}
             />
           </ContentErrorBoundary>
         );
@@ -629,19 +654,19 @@ export default function HomePage() {
             <AboutPage onNavigate={(viewId) => setActiveItem(viewId)} />
           </ContentErrorBoundary>
         );
-      case "issues":
-        return (
-          <ContentErrorBoundary>
-            <IssueManagement currentUser={currentUser} />
-          </ContentErrorBoundary>
-        );
       case "case-center":
         return (
           <ContentErrorBoundary>
             <CaseCenter currentUser={currentUser} />
           </ContentErrorBoundary>
         );
-      case "messages":
+      case "issues":
+        return (
+          <ContentErrorBoundary>
+            <IssueManagement currentUser={currentUser} />
+          </ContentErrorBoundary>
+        );
+case "messages":
         return (
           <ContentErrorBoundary>
             <KnowledgeCenter currentUser={currentUser} />
@@ -682,7 +707,10 @@ export default function HomePage() {
   return (
     <div className="h-screen flex flex-col bg-background">
       <TopDock
-        items={dockItems}
+        items={dockItems.filter((item) => {
+          if (user?.role !== "user") return true;
+          return item.id !== "standards" && item.id !== "settings";
+        })}
         activeItem={activeItem}
         onItemClick={handleItemClick}
         userName={userName}

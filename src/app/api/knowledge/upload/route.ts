@@ -1,49 +1,57 @@
-import { NextResponse } from 'next/server';
-import { S3Storage } from 'coze-coding-dev-sdk';
+import { NextResponse } from "next/server";
+import { saveFile } from "@/storage/local-filesystem";
 
-const storage = new S3Storage({
-  endpointUrl: process.env.COZE_BUCKET_ENDPOINT_URL,
-  accessKey: '',
-  secretKey: '',
-  bucketName: process.env.COZE_BUCKET_NAME,
-  region: 'cn-beijing',
-});
+const ALLOWED_EXTENSIONS = [
+  ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".pdf",
+  ".zip", ".rar", ".7z", ".tar", ".gz",
+  ".jpg", ".jpeg", ".png", ".gif", ".webp",
+  ".txt", ".csv", ".md",
+  ".mp4", ".webm", ".mov", ".avi", ".mkv",
+];
 
-const VIDEO_EXTENSIONS = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'webm'];
-const DOCUMENT_EXTENSIONS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'];
-
-function getMediaType(fileName: string): string {
-  const ext = fileName.split('.').pop()?.toLowerCase() || '';
-  if (VIDEO_EXTENSIONS.includes(ext)) return 'video';
-  if (DOCUMENT_EXTENSIONS.includes(ext)) return 'document';
-  return 'other';
-}
+const MAX_FILE_SIZE = 1024 * 1024 * 1024; // 1GB
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    const file = formData.get('file') as File | null;
-    if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    const files = formData.getAll("files") as File[];
+    const categoryType = (formData.get("category_type") as string) || "tech_doc";
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const mediaType = getMediaType(file.name);
-    const contentType = mediaType === 'video' ? file.type || 'video/mp4' : file.type || 'application/octet-stream';
+    if (files.length === 0) {
+      return NextResponse.json({ error: "No files provided" }, { status: 400 });
+    }
 
-    const fileKey = await storage.uploadFile({
-      fileContent: buffer,
-      fileName: `knowledge/${file.name}`,
-      contentType,
-    });
+    const results = [];
 
-    return NextResponse.json({
-      data: {
-        file_name: file.name,
-        file_url: fileKey,
-        file_size: file.size,
-        file_type: file.name.split('.').pop()?.toLowerCase() || '',
-        media_type: mediaType,
-      },
-    });
+    for (const file of files) {
+      const ext = "." + (file.name.split(".").pop()?.toLowerCase() || "");
+      if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        return NextResponse.json(
+          { error: `不支持的文件类型: ${ext}` },
+          { status: 400 }
+        );
+      }
+
+      if (file.size > MAX_FILE_SIZE) {
+        return NextResponse.json(
+          { error: `文件 ${file.name} 超过 50MB 限制` },
+          { status: 400 }
+        );
+      }
+
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const result = await saveFile(buffer, file.name, categoryType);
+
+      results.push({
+        file_name: result.file_name,
+        file_path: result.file_path,
+        file_size: result.file_size,
+        mime_type: result.mime_type,
+        file_type: ext.replace(".", ""),
+      });
+    }
+
+    return NextResponse.json({ data: results.length === 1 ? results[0] : results });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

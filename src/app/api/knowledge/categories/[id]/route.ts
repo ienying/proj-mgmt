@@ -8,7 +8,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const body = await request.json();
     const client = await createServerClient();
     const { data, error } = await client.rpc('dp_update', {
-      p_table: 'knowledge_categories',
+      p_table: 'design_info_square.knowledge_categories',
       p_id: id,
       p_data: body,
     });
@@ -24,7 +24,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     const { id } = await params;
     const client = await createServerClient();
     const { data, error } = await client.rpc('dp_delete', {
-      p_table: 'knowledge_categories',
+      p_table: 'design_info_square.knowledge_categories',
       p_id: id,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
