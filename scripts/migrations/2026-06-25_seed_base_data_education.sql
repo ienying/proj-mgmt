@@ -5,19 +5,27 @@
 -- ============================================
 
 -- ============================================
--- 1. 客户类型（偏教育行业）
+-- 1. 客户类型（教育 + 医疗）
 -- ============================================
 INSERT INTO customer_types (code, name, description, sort_order, is_enabled) VALUES
-('university',          '高校/大学',           '本科、研究生等高等教育机构',           0, true),
-('k12_school',          '中小学',              '小学、初中、高中等基础教育学校',       1, true),
-('vocational_college',  '职业院校',            '高职、中职等职业技术院校',             2, true),
-('education_bureau',    '教育局',              '省/市/区县教育主管部门',              3, true),
-('training_org',        '培训机构',            '社会培训、课外辅导等培训组织',         4, true),
-('edu_research',        '教育科研院所',        '教育科学研究院、教研室等',             5, true),
-('preschool',           '学前教育机构',        '幼儿园、早教中心等',                   6, true),
-('online_edu',          '在线教育平台',        '在线教育、远程教育服务商',             7, true),
-('edu_publisher',       '教育出版机构',        '教材、教辅出版发行单位',               8, true),
-('edu_enterprise',      '教育企业',            '教育信息化、教育装备等企业',           9, true)
+-- 教育类（从幼儿园到大学）
+('kindergarten',        '幼儿园',              '学前教育机构，3-6岁幼儿教育',            0, true),
+('primary_school',      '小学',                '义务教育阶段小学',                       1, true),
+('junior_high',         '初中',                '义务教育阶段初中',                       2, true),
+('senior_high',         '高中',                '普通高级中学',                           3, true),
+('vocational_sec',      '中职院校',            '中等职业学校、技工学校',                 4, true),
+('vocational_high',     '高职院校',            '高等职业院校、大专',                     5, true),
+('undergraduate',       '本科院校',            '本科层次高等院校',                       6, true),
+('graduate_school',     '研究生院',            '硕士、博士研究生培养单位',               7, true),
+('education_bureau',    '教育局',              '省/市/区县教育主管部门',                 8, true),
+('edu_research',        '教育科研院所',        '教育科学研究院、教研室等',               9, true),
+('edu_enterprise',      '教育企业',            '教育信息化、教育装备等企业',            10, true),
+-- 医疗类
+('general_hospital',    '综合医院',            '大型综合性医疗机构',                    11, true),
+('specialist_hospital', '专科医院',            '专科特色医疗机构',                      12, true),
+('community_health',    '社区卫生中心',        '社区卫生服务中心/站',                   13, true),
+('health_commission',   '卫健委',              '省/市/区县卫生健康主管部门',           14, true),
+('cdc',                 '疾控中心',            '疾病预防控制中心',                      15, true)
 ON CONFLICT (code) DO NOTHING;
 
 -- ============================================
