@@ -146,6 +146,20 @@ CREATE TABLE IF NOT EXISTS departments (
 );
 CREATE INDEX IF NOT EXISTS departments_code_idx ON departments(code);
 
+-- 施工单位表
+CREATE TABLE IF NOT EXISTS construction_units (
+  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
+  code VARCHAR(50) NOT NULL UNIQUE,
+  name VARCHAR(100) NOT NULL,
+  contact_person VARCHAR(100),
+  phone VARCHAR(50),
+  description TEXT,
+  sort_order INTEGER DEFAULT 0 NOT NULL,
+  is_enabled BOOLEAN DEFAULT true NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS construction_units_code_idx ON construction_units(code);
+
 -- ============================================
 -- Reference Data: Project Types & Stages
 -- ============================================
