@@ -12,6 +12,7 @@ const TABLE_MAP: Record<string, string> = {
   customer_types: "customer_types",
   deployment_modes: "deployment_modes",
   project_statuses: "project_statuses",
+  construction_units: "construction_units",
   todo_statuses: "todo_statuses",
 };
 

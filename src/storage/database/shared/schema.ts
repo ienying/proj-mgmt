@@ -96,6 +96,21 @@ export const project_type_stage_modules = pgTable("project_type_stage_modules", 
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
+// 施工单位表
+export const construction_units = pgTable("construction_units", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  contact_person: varchar("contact_person", { length: 100 }),
+  phone: varchar("phone", { length: 50 }),
+  description: text("description"),
+  sort_order: integer("sort_order").default(0).notNull(),
+  is_enabled: boolean("is_enabled").default(true).notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("construction_units_code_idx").on(table.code),
+]);
+
 // 部门表
 export const departments = pgTable("departments", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
