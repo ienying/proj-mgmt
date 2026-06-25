@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
           contact_person: body.contact_person || null,
           phone: body.phone || null,
           cooperation_level: body.cooperation_level || null,
+          quality_rating: body.quality_rating || null,
         };
         break;
       case "todo_statuses":

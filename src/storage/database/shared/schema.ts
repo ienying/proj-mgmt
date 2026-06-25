@@ -104,6 +104,7 @@ export const construction_units = pgTable("construction_units", {
   contact_person: varchar("contact_person", { length: 100 }),
   phone: varchar("phone", { length: 50 }),
   cooperation_level: varchar("cooperation_level", { length: 50 }),
+  quality_rating: varchar("quality_rating", { length: 50 }),
   description: text("description"),
   sort_order: integer("sort_order").default(0).notNull(),
   is_enabled: boolean("is_enabled").default(true).notNull(),

@@ -96,6 +96,7 @@ interface DictItem {
   contact_phone?: string;
   phone?: string;
   cooperation_level?: string;
+  quality_rating?: string;
   contact_email?: string;
   address?: string;
   [key: string]: string | number | boolean | undefined;
@@ -366,6 +367,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           updateData.contact_person = editingData.contact_person || null;
           updateData.phone = editingData.phone || null;
           updateData.cooperation_level = editingData.cooperation_level || null;
+          updateData.quality_rating = editingData.quality_rating || null;
         }
 
         await apiFetch(`/api/dicts/${editingId}`, {
@@ -410,6 +412,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           insertData.contact_person = editingData.contact_person || null;
           insertData.phone = editingData.phone || null;
           insertData.cooperation_level = editingData.cooperation_level || null;
+          insertData.quality_rating = editingData.quality_rating || null;
         }
 
         await apiFetch("/api/dicts/create", {
@@ -2284,6 +2287,7 @@ function DataTable({
                     <TableHead>单位负责人</TableHead>
                     <TableHead>电话</TableHead>
                     <TableHead>合作等级</TableHead>
+                    <TableHead>施工质量</TableHead>
                     <TableHead>描述</TableHead>
                     <TableHead className="w-24">状态</TableHead>
                   </>
@@ -2347,6 +2351,7 @@ function DataTable({
                       <TableCell className="text-muted-foreground">{item.contact_person || "-"}</TableCell>
                       <TableCell className="text-muted-foreground">{item.phone || "-"}</TableCell>
                       <TableCell className="text-muted-foreground">{item.cooperation_level || "-"}</TableCell>
+                      <TableCell className="text-muted-foreground">{item.quality_rating || "-"}</TableCell>
                       <TableCell className="text-muted-foreground">{item.description || "-"}</TableCell>
                       <TableCell>
                         <Button
@@ -2701,6 +2706,16 @@ function DataTable({
                           setEditingData((prev) => ({ ...prev, cooperation_level: e.target.value }))
                         }
                         placeholder="如：A级、B级、C级"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>施工质量</Label>
+                      <Input
+                        value={editingData.quality_rating || ""}
+                        onChange={(e) =>
+                          setEditingData((prev) => ({ ...prev, quality_rating: e.target.value }))
+                        }
+                        placeholder="如：优秀、良好、一般"
                       />
                     </div>
                   </>

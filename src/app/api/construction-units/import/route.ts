@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
       else if (h.includes("单位负责人")) colMap.contact_person = i;
       else if (h.includes("电话")) colMap.phone = i;
       else if (h.includes("合作等级")) colMap.cooperation_level = i;
+      else if (h.includes("施工质量")) colMap.quality_rating = i;
       else if (h.includes("描述")) colMap.description = i;
       else if (h.includes("排序")) colMap.sort_order = i;
       else if (h.includes("启用")) colMap.is_enabled = i;
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
       const contact_person = (colMap.contact_person !== undefined ? row[colMap.contact_person] : "")?.toString().trim() || null;
       const phone = (colMap.phone !== undefined ? row[colMap.phone] : "")?.toString().trim() || null;
       const cooperation_level = (colMap.cooperation_level !== undefined ? row[colMap.cooperation_level] : "")?.toString().trim() || null;
+      const quality_rating = (colMap.quality_rating !== undefined ? row[colMap.quality_rating] : "")?.toString().trim() || null;
       const description = (colMap.description !== undefined ? row[colMap.description] : "")?.toString().trim() || null;
       const sortOrder = colMap.sort_order !== undefined ? parseInt(row[colMap.sort_order] as string, 10) : 0;
       const isEnabledRaw = colMap.is_enabled !== undefined ? row[colMap.is_enabled]?.toString().trim() : "是";
@@ -79,6 +81,7 @@ export async function POST(request: NextRequest) {
             contact_person,
             phone,
             cooperation_level,
+            quality_rating,
             description,
             sort_order: isNaN(sortOrder) ? 0 : sortOrder,
             is_enabled: isEnabled,
