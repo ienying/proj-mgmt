@@ -821,10 +821,14 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-8">
+        <TabsList className="grid w-full grid-cols-9">
           <TabsTrigger value="project-types" className="gap-1.5 text-xs">
             <Briefcase className="w-3.5 h-3.5" />
             项目类型
+          </TabsTrigger>
+          <TabsTrigger value="construction-units" className="gap-1.5 text-xs">
+            <Hammer className="w-3.5 h-3.5" />
+            施工单位
           </TabsTrigger>
           <TabsTrigger value="project-stages" className="gap-1.5 text-xs">
             <Layers className="w-3.5 h-3.5" />
@@ -853,10 +857,6 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           <TabsTrigger value="deployment-modes" className="gap-1.5 text-xs">
             <Server className="w-3.5 h-3.5" />
             部署模式
-          </TabsTrigger>
-          <TabsTrigger value="construction-units" className="gap-1.5 text-xs">
-            <Hammer className="w-3.5 h-3.5" />
-            施工单位
           </TabsTrigger>
         </TabsList>
 
