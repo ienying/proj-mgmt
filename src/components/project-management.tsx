@@ -87,7 +87,7 @@ interface ProjectManagementProps {
   initialProjectTypes: ProjectType[];
   initialProjectStages: ProjectStage[];
   initialProcurementModules: ProcurementModule[];
-  users: { id: string; name: string }[];
+  users: { id: string; name: string; phone?: string; email?: string; position?: string }[];
   onProjectDelete: (id: string) => Promise<void>;
   onViewProject?: (project: Project) => void;
 }

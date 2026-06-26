@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
       login_username,
       login_password,
       integration_list,
+      custom_dev_info,
     } = body;
 
     // 0. 检查项目编号是否重复
@@ -105,6 +106,7 @@ export async function POST(request: NextRequest) {
       role_presales: body.role_presales || null,
       role_market_product: body.role_market_product || null,
       role_project_manager: body.role_project_manager || null,
+      custom_dev_info: custom_dev_info || [],
       status: "active",
       created_by: body.created_by || "system",
     };

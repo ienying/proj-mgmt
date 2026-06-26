@@ -82,23 +82,61 @@ interface ProjectMember {
   phone: string;
 }
 
+interface IntegrationDoc {
+  id: string;
+  name: string;
+  type: "file" | "link";
+  url?: string;
+  data?: string;
+}
+
 interface IntegrationItem {
   id: string;
   vendor_name: string;
-  category: string;
-  description: string;
-  dev_company: string;
-  dev_leader: string;
-  dev_position: string;
-  dev_contact: string;
-  coop_company: string;
-  coop_leader: string;
-  coop_position: string;
-  coop_contact: string;
-  start_date: string;
-  end_date: string;
-  status: string;
-  priority: string;
+  product_module: string;
+  integration_type: string;
+  brief_description: string;
+  in_contract: string;
+  contract_note: string;
+  our_req_contact: string;
+  our_req_contact_phone: string;
+  our_product_contact: string;
+  our_product_contact_phone: string;
+  our_dev_contact: string;
+  our_dev_contact_phone: string;
+  our_responsibility: string;
+  their_req_contact: string;
+  their_req_contact_phone: string;
+  their_req_contact_position: string;
+  their_req_contact_note: string;
+  their_product_contact: string;
+  their_product_contact_phone: string;
+  their_product_contact_position: string;
+  their_product_contact_note: string;
+  their_dev_contact: string;
+  their_dev_contact_phone: string;
+  their_dev_contact_position: string;
+  their_dev_contact_note: string;
+  their_responsibility: string;
+  integration_docs: IntegrationDoc[];
+  remark: string;
+}
+
+interface CustomDevItem {
+  id: string;
+  product_module: string;
+  custom_content: string;
+  in_contract: string;
+  contract_note: string;
+  customer_req_contact: string;
+  customer_req_contact_phone: string;
+  customer_req_contact_position: string;
+  customer_req_contact_note: string;
+  internal_req_contact: string;
+  internal_req_contact_phone: string;
+  internal_product_contact: string;
+  internal_product_contact_phone: string;
+  req_docs: IntegrationDoc[];
   remark: string;
 }
 
@@ -110,7 +148,7 @@ interface ProjectFormProps {
   projectStages: { code: string; name: string }[];
   memberRoles: string[];
   productModules: { module_code: string; module_name: string; product_name: string }[];
-  users: { id: string; name: string }[];
+  users: { id: string; name: string; phone?: string; position?: string; email?: string }[];
   initialData?: Record<string, unknown> | null; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
@@ -167,12 +205,14 @@ const sectionFocusStyles = `
 function SearchableUserSelect({
   value,
   onChange,
+  onSelectFull,
   users,
   placeholder,
 }: {
   value: string;
   onChange: (name: string) => void;
-  users: { id: string; name: string }[];
+  onSelectFull?: (user: { id: string; name: string; phone?: string; position?: string; email?: string }) => void;
+  users: { id: string; name: string; phone?: string; position?: string; email?: string }[];
   placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -215,12 +255,14 @@ function SearchableUserSelect({
                   value={u.id}
                   onSelect={() => {
                     onChange(u.name);
+                    onSelectFull?.(u);
                     setOpen(false);
                     setSearch("");
                   }}
                   className="text-sm"
                 >
                   {u.name}
+                  {u.phone && <span className="ml-2 text-xs text-slate-400">{u.phone}</span>}
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -680,6 +722,11 @@ export function ProjectForm({
   // 对接信息
   const [integrationList, setIntegrationList] = useState<IntegrationItem[]>([]);
   const [hasIntegration, setHasIntegration] = useState(false);
+  const [devIntegrationTypes, setDevIntegrationTypes] = useState<{ code: string; name: string }[]>([]);
+
+  // 定制开发
+  const [hasCustomDev, setHasCustomDev] = useState(false);
+  const [customDevItems, setCustomDevItems] = useState<CustomDevItem[]>([]);
 
   // 提交状态
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -769,6 +816,66 @@ export function ProjectForm({
       if (Array.isArray(sp)) {
         setSchoolPhotos(sp as string[]);
       }
+
+      // 对接信息
+      const il = d.integration_list as Array<Record<string, unknown>> | null;
+      if (il && il.length > 0) {
+        setHasIntegration(true);
+        setIntegrationList(il.map((item) => ({
+          id: (item.id as string) || "",
+          vendor_name: (item.vendor_name as string) || "",
+          product_module: (item.product_module as string) || "",
+          integration_type: (item.integration_type as string) || (item.category as string) || "",
+          brief_description: (item.brief_description as string) || (item.description as string) || "",
+          in_contract: (item.in_contract as string) || "是",
+          contract_note: (item.contract_note as string) || "",
+          our_req_contact: (item.our_req_contact as string) || (item.dev_leader as string) || "",
+          our_req_contact_phone: (item.our_req_contact_phone as string) || (item.dev_contact as string) || "",
+          our_product_contact: (item.our_product_contact as string) || "",
+          our_product_contact_phone: (item.our_product_contact_phone as string) || "",
+          our_dev_contact: (item.our_dev_contact as string) || "",
+          our_dev_contact_phone: (item.our_dev_contact_phone as string) || "",
+          our_responsibility: (item.our_responsibility as string) || "",
+          their_req_contact: (item.their_req_contact as string) || (item.coop_leader as string) || "",
+          their_req_contact_phone: (item.their_req_contact_phone as string) || (item.coop_contact as string) || "",
+          their_req_contact_position: (item.their_req_contact_position as string) || (item.coop_position as string) || "",
+          their_req_contact_note: (item.their_req_contact_note as string) || "",
+          their_product_contact: (item.their_product_contact as string) || "",
+          their_product_contact_phone: (item.their_product_contact_phone as string) || "",
+          their_product_contact_position: (item.their_product_contact_position as string) || "",
+          their_product_contact_note: (item.their_product_contact_note as string) || "",
+          their_dev_contact: (item.their_dev_contact as string) || "",
+          their_dev_contact_phone: (item.their_dev_contact_phone as string) || "",
+          their_dev_contact_position: (item.their_dev_contact_position as string) || "",
+          their_dev_contact_note: (item.their_dev_contact_note as string) || "",
+          their_responsibility: (item.their_responsibility as string) || "",
+          integration_docs: (item.integration_docs as IntegrationDoc[]) || [],
+          remark: (item.remark as string) || "",
+        })));
+      }
+
+      // 定制开发信息
+      const cd = d.custom_dev_info as Array<Record<string, unknown>> | null;
+      if (cd && cd.length > 0) {
+        setHasCustomDev(true);
+        setCustomDevItems(cd.map((item) => ({
+          id: (item.id as string) || "",
+          product_module: (item.product_module as string) || "",
+          custom_content: (item.custom_content as string) || "",
+          in_contract: (item.in_contract as string) || "是",
+          contract_note: (item.contract_note as string) || "",
+          customer_req_contact: (item.customer_req_contact as string) || "",
+          customer_req_contact_phone: (item.customer_req_contact_phone as string) || "",
+          customer_req_contact_position: (item.customer_req_contact_position as string) || "",
+          customer_req_contact_note: (item.customer_req_contact_note as string) || "",
+          internal_req_contact: (item.internal_req_contact as string) || "",
+          internal_req_contact_phone: (item.internal_req_contact_phone as string) || "",
+          internal_product_contact: (item.internal_product_contact as string) || "",
+          internal_product_contact_phone: (item.internal_product_contact_phone as string) || "",
+          req_docs: (item.req_docs as IntegrationDoc[]) || [],
+          remark: (item.remark as string) || "",
+        })));
+      }
     } else if (open && !initialData) {
       // 新建模式：重置表单
       setProjectName(""); setProjectCode(""); setProjectType(""); setProjectStage("");
@@ -782,6 +889,7 @@ export function ProjectForm({
       setChannelCompanies([{ id: "", company_name: "", contact_person: "", contact_phone: "", remark: "" }]);
       setSelectedModules([]); setProcurementAmount(""); setSoftwareAmount(""); setHardwareAmount("");
       setHasIntegration(false); setIntegrationList([]);
+    setHasCustomDev(false); setCustomDevItems([]);
     }
   }, [open, initialData]);
 
@@ -820,6 +928,19 @@ export function ProjectForm({
         .then((data) => {
           if (data.data) {
             setDepartmentOptions(data.data.filter((item: { is_enabled: boolean; name: string }) => item.is_enabled !== false && item.name).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
+          }
+        })
+        .catch(() => {});
+
+      fetch("/api/dicts?type=dev_integration_types")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.data) {
+            setDevIntegrationTypes(
+              data.data
+                .filter((item: { is_enabled: boolean; code: string }) => item.is_enabled !== false && item.code)
+                .map((item: { code: string; name: string }) => ({ code: item.code, name: item.name }))
+            );
           }
         })
         .catch(() => {});
@@ -979,20 +1100,32 @@ export function ProjectForm({
       {
         id: Date.now().toString(),
         vendor_name: "",
-        category: "",
-        description: "",
-        dev_company: "",
-        dev_leader: "",
-        dev_position: "",
-        dev_contact: "",
-        coop_company: "",
-        coop_leader: "",
-        coop_position: "",
-        coop_contact: "",
-        start_date: "",
-        end_date: "",
-        status: "进行中",
-        priority: "普通",
+        product_module: "",
+        integration_type: "",
+        brief_description: "",
+        in_contract: "是",
+        contract_note: "",
+        our_req_contact: "",
+        our_req_contact_phone: "",
+        our_product_contact: "",
+        our_product_contact_phone: "",
+        our_dev_contact: "",
+        our_dev_contact_phone: "",
+        our_responsibility: "",
+        their_req_contact: "",
+        their_req_contact_phone: "",
+        their_req_contact_position: "",
+        their_req_contact_note: "",
+        their_product_contact: "",
+        their_product_contact_phone: "",
+        their_product_contact_position: "",
+        their_product_contact_note: "",
+        their_dev_contact: "",
+        their_dev_contact_phone: "",
+        their_dev_contact_position: "",
+        their_dev_contact_note: "",
+        their_responsibility: "",
+        integration_docs: [],
         remark: "",
       },
     ]);
@@ -1002,9 +1135,114 @@ export function ProjectForm({
     setIntegrationList(integrationList.filter((item) => item.id !== id));
   };
 
-  const updateIntegration = (id: string, field: keyof IntegrationItem, value: string) => {
+  const updateIntegration = (id: string, field: keyof IntegrationItem, value: string | IntegrationDoc[]) => {
     setIntegrationList(
       integrationList.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    );
+  };
+
+  // 添加上传文件到对接信息
+  const addIntegrationDoc = (itemId: string, file: File | null, linkUrl?: string) => {
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const result = ev.target?.result;
+        if (typeof result === "string") {
+          const doc: IntegrationDoc = { id: Date.now().toString(), name: file.name, type: "file", data: result };
+          setIntegrationList((prev) =>
+            prev.map((item) =>
+              item.id === itemId ? { ...item, integration_docs: [...item.integration_docs, doc] } : item
+            )
+          );
+        }
+      };
+      reader.readAsDataURL(file);
+    } else if (linkUrl) {
+      const doc: IntegrationDoc = { id: Date.now().toString(), name: linkUrl, type: "link", url: linkUrl };
+      setIntegrationList((prev) =>
+        prev.map((item) =>
+          item.id === itemId ? { ...item, integration_docs: [...item.integration_docs, doc] } : item
+        )
+      );
+    }
+  };
+
+  const removeIntegrationDoc = (itemId: string, docId: string) => {
+    setIntegrationList((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? { ...item, integration_docs: item.integration_docs.filter((d) => d.id !== docId) }
+          : item
+      )
+    );
+  };
+
+  // 定制开发 CRUD
+  const addCustomDev = () => {
+    setCustomDevItems([
+      ...customDevItems,
+      {
+        id: Date.now().toString(),
+        product_module: "",
+        custom_content: "",
+        in_contract: "是",
+        contract_note: "",
+        customer_req_contact: "",
+        customer_req_contact_phone: "",
+        customer_req_contact_position: "",
+        customer_req_contact_note: "",
+        internal_req_contact: "",
+        internal_req_contact_phone: "",
+        internal_product_contact: "",
+        internal_product_contact_phone: "",
+        req_docs: [],
+        remark: "",
+      },
+    ]);
+  };
+
+  const removeCustomDev = (id: string) => {
+    setCustomDevItems(customDevItems.filter((item) => item.id !== id));
+  };
+
+  const updateCustomDev = (id: string, field: keyof CustomDevItem, value: string | IntegrationDoc[]) => {
+    setCustomDevItems(
+      customDevItems.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    );
+  };
+
+  const addCustomDevDoc = (itemId: string, file: File | null, linkUrl?: string) => {
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const result = ev.target?.result;
+        if (typeof result === "string") {
+          const doc: IntegrationDoc = { id: Date.now().toString(), name: file.name, type: "file", data: result };
+          setCustomDevItems((prev) =>
+            prev.map((item) =>
+              item.id === itemId ? { ...item, req_docs: [...item.req_docs, doc] } : item
+            )
+          );
+        }
+      };
+      reader.readAsDataURL(file);
+    } else if (linkUrl) {
+      const doc: IntegrationDoc = { id: Date.now().toString(), name: linkUrl, type: "link", url: linkUrl };
+      setCustomDevItems((prev) =>
+        prev.map((item) =>
+          item.id === itemId ? { ...item, req_docs: [...item.req_docs, doc] } : item
+        )
+      );
+    }
+  };
+
+  const removeCustomDevDoc = (itemId: string, docId: string) => {
+    setCustomDevItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? { ...item, req_docs: item.req_docs.filter((d) => d.id !== docId) }
+          : item
+      )
     );
   };
 
@@ -1082,6 +1320,7 @@ export function ProjectForm({
       software_amount: softwareAmount ? parseFloat(softwareAmount) : null,
       hardware_amount: hardwareAmount ? parseFloat(hardwareAmount) : null,
       integration_list: hasIntegration ? integrationList.filter((i) => i.vendor_name) : [],
+      custom_dev_info: hasIntegration && hasCustomDev ? customDevItems.filter((c) => c.product_module) : [],
     };
 
     // 编辑模式下检测类型/阶段/状态是否变更
@@ -1965,19 +2204,17 @@ export function ProjectForm({
                         对接信息 {index + 1}
                         {item.vendor_name && ` - ${item.vendor_name}`}
                       </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          className="text-slate-400 hover:text-red-500 transition-colors"
-                          onClick={() => removeIntegration(item.id)}
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        className="text-slate-400 hover:text-red-500 transition-colors"
+                        onClick={() => removeIntegration(item.id)}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
                     <div className="p-4 space-y-3">
-                      {/* 基本信息 */}
-                      <div className="grid grid-cols-3 gap-3">
+                      {/* 第一行：对接厂商 / 产品模块 / 对接类型 / 对接信息简述 */}
+                      <div className="grid grid-cols-4 gap-3">
                         <div className="space-y-1">
                           <label className="text-xs text-slate-500">对接厂商 *</label>
                           <Input
@@ -1988,129 +2225,412 @@ export function ProjectForm({
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-xs text-slate-500">类别</label>
-                          <Input
-                            value={item.category}
-                            onChange={(e) => updateIntegration(item.id, "category", e.target.value)}
-                            placeholder="如：硬件、软件、服务"
-                            className="h-8 text-sm"
-                          />
+                          <label className="text-xs text-slate-500">产品模块</label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" role="combobox" className="w-full justify-between text-sm font-normal h-8">
+                                {item.product_module || <span className="text-muted-foreground">选择模块...</span>}
+                                <Search className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[280px] p-0" align="start">
+                              <Command>
+                                <CommandInput placeholder="搜索产品模块..." className="h-9" />
+                                <CommandList className="max-h-[200px]">
+                                  <CommandEmpty className="py-2 text-center text-sm">未找到</CommandEmpty>
+                                  <CommandGroup>
+                                    {productModules.map((mod) => (
+                                      <CommandItem
+                                        key={mod.module_code}
+                                        value={mod.module_code}
+                                        onSelect={() => updateIntegration(item.id, "product_module", mod.module_name)}
+                                        className="text-sm"
+                                      >
+                                        {mod.module_name}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-xs text-slate-500">描述</label>
+                          <label className="text-xs text-slate-500">对接类型</label>
+                          <Select value={item.integration_type} onValueChange={(v) => updateIntegration(item.id, "integration_type", v)}>
+                            <SelectTrigger className="w-full h-8 text-sm">
+                              <SelectValue placeholder="选择类型" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {devIntegrationTypes.map((t) => (
+                                <SelectItem key={t.code} value={t.name}>{t.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-500">对接信息简述</label>
                           <Input
-                            value={item.description}
-                            onChange={(e) => updateIntegration(item.id, "description", e.target.value)}
-                            placeholder="对接内容描述"
+                            value={item.brief_description}
+                            onChange={(e) => updateIntegration(item.id, "brief_description", e.target.value)}
+                            placeholder="简述"
                             className="h-8 text-sm"
                           />
                         </div>
                       </div>
 
-                      {/* 开发方 & 配合方 */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <div className="text-xs font-medium text-slate-600 border-b pb-1">开发方</div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <Input
-                              value={item.dev_company}
-                              onChange={(e) => updateIntegration(item.id, "dev_company", e.target.value)}
-                              placeholder="开发方"
-                              className="h-8 text-sm"
+                      {/* 是否在合同内 */}
+                      <div className="flex items-center gap-4">
+                        <label className="text-xs text-slate-500">是否在合同内</label>
+                        <Select value={item.in_contract} onValueChange={(v) => updateIntegration(item.id, "in_contract", v)}>
+                          <SelectTrigger className="w-[100px] h-8 text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="是">是</SelectItem>
+                            <SelectItem value="否">否</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {item.in_contract === "否" && (
+                          <Input
+                            value={item.contract_note}
+                            onChange={(e) => updateIntegration(item.id, "contract_note", e.target.value)}
+                            placeholder="说明不在合同内的原因"
+                            className="h-8 text-sm flex-1"
+                          />
+                        )}
+                      </div>
+
+                      {/* 我方信息 */}
+                      <div className="space-y-2">
+                        <div className="text-xs font-medium text-slate-600 border-b pb-1">我方信息</div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-xs text-slate-500">我方需求对接人</label>
+                            <SearchableUserSelect
+                              value={item.our_req_contact}
+                              onChange={(name) => updateIntegration(item.id, "our_req_contact", name)}
+                              onSelectFull={(u) => updateIntegration(item.id, "our_req_contact_phone", u.phone || "")}
+                              users={users.filter(u => u.name)}
+                              placeholder="选择人员"
                             />
-                            <Input
-                              value={item.dev_leader}
-                              onChange={(e) => updateIntegration(item.id, "dev_leader", e.target.value)}
-                              placeholder="负责人"
-                              className="h-8 text-sm"
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs text-slate-500">联系方式</label>
+                            <Input value={item.our_req_contact_phone} onChange={(e) => updateIntegration(item.id, "our_req_contact_phone", e.target.value)} placeholder="自动带出" className="h-8 text-sm bg-slate-50" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs text-slate-500">我方产品负责人</label>
+                            <SearchableUserSelect
+                              value={item.our_product_contact}
+                              onChange={(name) => updateIntegration(item.id, "our_product_contact", name)}
+                              onSelectFull={(u) => updateIntegration(item.id, "our_product_contact_phone", u.phone || "")}
+                              users={users.filter(u => u.name)}
+                              placeholder="选择人员"
                             />
-                            <Input
-                              value={item.dev_position}
-                              onChange={(e) => updateIntegration(item.id, "dev_position", e.target.value)}
-                              placeholder="职务"
-                              className="h-8 text-sm"
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs text-slate-500">联系方式</label>
+                            <Input value={item.our_product_contact_phone} onChange={(e) => updateIntegration(item.id, "our_product_contact_phone", e.target.value)} placeholder="自动带出" className="h-8 text-sm bg-slate-50" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs text-slate-500">我方开发负责人</label>
+                            <SearchableUserSelect
+                              value={item.our_dev_contact}
+                              onChange={(name) => updateIntegration(item.id, "our_dev_contact", name)}
+                              onSelectFull={(u) => updateIntegration(item.id, "our_dev_contact_phone", u.phone || "")}
+                              users={users.filter(u => u.name)}
+                              placeholder="选择人员"
                             />
-                            <Input
-                              value={item.dev_contact}
-                              onChange={(e) => updateIntegration(item.id, "dev_contact", e.target.value)}
-                              placeholder="联系方式"
-                              className="h-8 text-sm"
-                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs text-slate-500">联系方式</label>
+                            <Input value={item.our_dev_contact_phone} onChange={(e) => updateIntegration(item.id, "our_dev_contact_phone", e.target.value)} placeholder="自动带出" className="h-8 text-sm bg-slate-50" />
                           </div>
                         </div>
-                        <div className="space-y-2">
-                          <div className="text-xs font-medium text-slate-600 border-b pb-1">配合方</div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <Input
-                              value={item.coop_company}
-                              onChange={(e) => updateIntegration(item.id, "coop_company", e.target.value)}
-                              placeholder="配合方"
-                              className="h-8 text-sm"
-                            />
-                            <Input
-                              value={item.coop_leader}
-                              onChange={(e) => updateIntegration(item.id, "coop_leader", e.target.value)}
-                              placeholder="负责人"
-                              className="h-8 text-sm"
-                            />
-                            <Input
-                              value={item.coop_position}
-                              onChange={(e) => updateIntegration(item.id, "coop_position", e.target.value)}
-                              placeholder="职务"
-                              className="h-8 text-sm"
-                            />
-                            <Input
-                              value={item.coop_contact}
-                              onChange={(e) => updateIntegration(item.id, "coop_contact", e.target.value)}
-                              placeholder="联系方式"
-                              className="h-8 text-sm"
-                            />
-                          </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-500">我方负责内容简述</label>
+                          <textarea
+                            value={item.our_responsibility}
+                            onChange={(e) => updateIntegration(item.id, "our_responsibility", e.target.value)}
+                            placeholder="描述我方负责的内容"
+                            className="w-full min-h-[60px] p-2 border rounded-md resize-none text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
                         </div>
                       </div>
 
-                      {/* 其他信息 */}
-                      <div className="grid grid-cols-4 gap-3">
+                      {/* 对方信息 */}
+                      <div className="space-y-2">
+                        <div className="text-xs font-medium text-slate-600 border-b pb-1">对方信息</div>
+                        {([
+                          ["their_req_contact", "对方需求对接人"],
+                          ["their_product_contact", "对方产品负责人"],
+                          ["their_dev_contact", "对方开发负责人"],
+                        ] as const).map(([field, label]) => (
+                          <div key={field} className="grid grid-cols-4 gap-2">
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-500">{label}</label>
+                              <Input
+                                value={(item as unknown as Record<string, string>)[field] || ""}
+                                onChange={(e) => updateIntegration(item.id, field as keyof IntegrationItem, e.target.value)}
+                                placeholder="姓名"
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-500">联系方式</label>
+                              <Input
+                                value={(item as unknown as Record<string, string>)[field + "_phone"] || ""}
+                                onChange={(e) => updateIntegration(item.id, (field + "_phone") as keyof IntegrationItem, e.target.value)}
+                                placeholder="电话"
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-500">职位</label>
+                              <Input
+                                value={(item as unknown as Record<string, string>)[field + "_position"] || ""}
+                                onChange={(e) => updateIntegration(item.id, (field + "_position") as keyof IntegrationItem, e.target.value)}
+                                placeholder="职位"
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-500">备注</label>
+                              <Input
+                                value={(item as unknown as Record<string, string>)[field + "_note"] || ""}
+                                onChange={(e) => updateIntegration(item.id, (field + "_note") as keyof IntegrationItem, e.target.value)}
+                                placeholder="备注"
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                          </div>
+                        ))}
                         <div className="space-y-1">
-                          <label className="text-xs text-slate-500">开始日期</label>
-                          <Input
-                            type="date"
-                            value={item.start_date}
-                            onChange={(e) => updateIntegration(item.id, "start_date", e.target.value)}
-                            className="h-8 text-sm"
+                          <label className="text-xs text-slate-500">对方负责内容简述</label>
+                          <textarea
+                            value={item.their_responsibility}
+                            onChange={(e) => updateIntegration(item.id, "their_responsibility", e.target.value)}
+                            placeholder="描述对方负责的内容"
+                            className="w-full min-h-[60px] p-2 border rounded-md resize-none text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-xs text-slate-500">结束日期</label>
-                          <Input
-                            type="date"
-                            value={item.end_date}
-                            onChange={(e) => updateIntegration(item.id, "end_date", e.target.value)}
-                            className="h-8 text-sm"
-                          />
+                      </div>
+
+                      {/* 对接文档附件 */}
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-slate-600">对接文档附件</label>
+                        <div className="flex flex-wrap gap-2">
+                          {item.integration_docs.map((doc) => (
+                            <div key={doc.id} className="relative group border rounded px-2 py-1 text-xs bg-slate-50 flex items-center gap-1.5">
+                              {doc.type === "link" ? (
+                                <a href={doc.url} target="_blank" rel="noreferrer" className="text-blue-600 underline max-w-[150px] truncate">{doc.name}</a>
+                              ) : (
+                                <span className="max-w-[150px] truncate">{doc.name}</span>
+                              )}
+                              <button type="button" className="text-slate-400 hover:text-red-500" onClick={() => removeIntegrationDoc(item.id, doc.id)}>
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                          <label className="border border-dashed rounded px-2 py-1 text-xs text-slate-400 hover:text-slate-600 cursor-pointer flex items-center gap-1">
+                            <Plus className="h-3 w-3" />文件
+                            <input type="file" accept=".doc,.docx,.xls,.xlsx,.md,.zip,.rar,.7z" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) addIntegrationDoc(item.id, f); e.target.value = ""; }} />
+                          </label>
+                          <button type="button" className="border border-dashed rounded px-2 py-1 text-xs text-slate-400 hover:text-slate-600" onClick={() => { const url = prompt("输入链接URL:"); if (url) addIntegrationDoc(item.id, null, url); }}>
+                            <Plus className="h-3 w-3 mr-0.5" />链接
+                          </button>
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-xs text-slate-500">状态</label>
-                          <select
-                            value={item.status}
-                            onChange={(e) => updateIntegration(item.id, "status", e.target.value)}
-                            className="w-full h-8 text-sm border rounded px-2"
-                          >
-                            <option value="未开始">未开始</option>
-                            <option value="进行中">进行中</option>
-                            <option value="已完成">已完成</option>
-                            <option value="已暂停">已暂停</option>
-                          </select>
+                      </div>
+
+                      {/* 备注 */}
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-500">备注</label>
+                        <textarea
+                          value={item.remark}
+                          onChange={(e) => updateIntegration(item.id, "remark", e.target.value)}
+                          placeholder="备注信息"
+                          className="w-full min-h-[60px] p-2 border rounded-md resize-none text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+
+                      {/* 定制信息板块 */}
+                      <div className="border-t pt-3 mt-2">
+                        <div className="flex items-center gap-3 mb-3">
+                          <label className="text-xs font-medium text-slate-700">是否含定制开发</label>
+                          <Select value={(() => { const cd = customDevItems.find((c) => c.id === `cd_${item.id}`); return cd ? 'yes' : 'no'; })()} onValueChange={(v) => {
+                            if (v === 'yes' && !customDevItems.find((c) => c.id === `cd_${item.id}`)) {
+                              setCustomDevItems([...customDevItems, {
+                                id: `cd_${item.id}`,
+                                product_module: "",
+                                custom_content: "",
+                                in_contract: "是",
+                                contract_note: "",
+                                customer_req_contact: "",
+                                customer_req_contact_phone: "",
+                                customer_req_contact_position: "",
+                                customer_req_contact_note: "",
+                                internal_req_contact: "",
+                                internal_req_contact_phone: "",
+                                internal_product_contact: "",
+                                internal_product_contact_phone: "",
+                                req_docs: [],
+                                remark: "",
+                              }]);
+                            } else if (v === 'no') {
+                              setCustomDevItems(customDevItems.filter((c) => c.id !== `cd_${item.id}`));
+                            }
+                          }}>
+                            <SelectTrigger className="w-[80px] h-8 text-sm">
+                              <SelectValue placeholder="否" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="no">否</SelectItem>
+                              <SelectItem value="yes">是</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-xs text-slate-500">备注</label>
-                          <Input
-                            value={item.remark}
-                            onChange={(e) => updateIntegration(item.id, "remark", e.target.value)}
-                            placeholder="备注"
-                            className="h-8 text-sm"
-                          />
-                        </div>
+                        {(() => {
+                          const cd = customDevItems.find((c) => c.id === `cd_${item.id}`);
+                          if (!cd) return null;
+                          return (
+                            <div className="space-y-3 pl-2 border-l-2 border-amber-300">
+                              <div className="text-xs font-medium text-amber-700">定制开发详情</div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <label className="text-xs text-slate-500">产品模块</label>
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <Button variant="outline" role="combobox" className="w-full justify-between text-sm font-normal h-8">
+                                        {cd.product_module || <span className="text-muted-foreground">选择模块...</span>}
+                                        <Search className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[280px] p-0" align="start">
+                                      <Command>
+                                        <CommandInput placeholder="搜索产品模块..." className="h-9" />
+                                        <CommandList className="max-h-[200px]">
+                                          <CommandEmpty className="py-2 text-center text-sm">未找到</CommandEmpty>
+                                          <CommandGroup>
+                                            {productModules.map((mod) => (
+                                              <CommandItem
+                                                key={mod.module_code}
+                                                value={mod.module_code}
+                                                onSelect={() => updateCustomDev(cd.id, "product_module", mod.module_name)}
+                                                className="text-sm"
+                                              >
+                                                {mod.module_name}
+                                              </CommandItem>
+                                            ))}
+                                          </CommandGroup>
+                                        </CommandList>
+                                      </Command>
+                                    </PopoverContent>
+                                  </Popover>
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-xs text-slate-500">定制内容简述</label>
+                                  <Input value={cd.custom_content} onChange={(e) => updateCustomDev(cd.id, "custom_content", e.target.value)} placeholder="简述定制内容" className="h-8 text-sm" />
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <label className="text-xs text-slate-500">是否在合同内</label>
+                                <Select value={cd.in_contract} onValueChange={(v) => updateCustomDev(cd.id, "in_contract", v)}>
+                                  <SelectTrigger className="w-[100px] h-8 text-sm"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="是">是</SelectItem>
+                                    <SelectItem value="否">否</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                {cd.in_contract === "否" && (
+                                  <Input value={cd.contract_note} onChange={(e) => updateCustomDev(cd.id, "contract_note", e.target.value)} placeholder="说明原因" className="h-8 text-sm flex-1" />
+                                )}
+                              </div>
+                              {/* 客户需求提出人 */}
+                              <div className="grid grid-cols-4 gap-2">
+                                <div className="space-y-1">
+                                  <label className="text-xs text-slate-500">客户需求提出人</label>
+                                  <Input value={cd.customer_req_contact} onChange={(e) => updateCustomDev(cd.id, "customer_req_contact", e.target.value)} placeholder="姓名" className="h-8 text-sm" />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-xs text-slate-500">联系方式</label>
+                                  <Input value={cd.customer_req_contact_phone} onChange={(e) => updateCustomDev(cd.id, "customer_req_contact_phone", e.target.value)} placeholder="电话" className="h-8 text-sm" />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-xs text-slate-500">职位</label>
+                                  <Input value={cd.customer_req_contact_position} onChange={(e) => updateCustomDev(cd.id, "customer_req_contact_position", e.target.value)} placeholder="职位" className="h-8 text-sm" />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-xs text-slate-500">备注</label>
+                                  <Input value={cd.customer_req_contact_note} onChange={(e) => updateCustomDev(cd.id, "customer_req_contact_note", e.target.value)} placeholder="备注" className="h-8 text-sm" />
+                                </div>
+                              </div>
+                              {/* 内部对接人 */}
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <label className="text-xs text-slate-500">内部需求对接人</label>
+                                  <SearchableUserSelect
+                                    value={cd.internal_req_contact}
+                                    onChange={(name) => updateCustomDev(cd.id, "internal_req_contact", name)}
+                                    onSelectFull={(u) => updateCustomDev(cd.id, "internal_req_contact_phone", u.phone || "")}
+                                    users={users.filter(u => u.name)}
+                                    placeholder="选择人员"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-xs text-slate-500">联系方式</label>
+                                  <Input value={cd.internal_req_contact_phone} onChange={(e) => updateCustomDev(cd.id, "internal_req_contact_phone", e.target.value)} placeholder="自动带出" className="h-8 text-sm bg-slate-50" />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <label className="text-xs text-slate-500">内部产品负责人</label>
+                                  <SearchableUserSelect
+                                    value={cd.internal_product_contact}
+                                    onChange={(name) => updateCustomDev(cd.id, "internal_product_contact", name)}
+                                    onSelectFull={(u) => updateCustomDev(cd.id, "internal_product_contact_phone", u.phone || "")}
+                                    users={users.filter(u => u.name)}
+                                    placeholder="选择人员"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-xs text-slate-500">联系方式</label>
+                                  <Input value={cd.internal_product_contact_phone} onChange={(e) => updateCustomDev(cd.id, "internal_product_contact_phone", e.target.value)} placeholder="自动带出" className="h-8 text-sm bg-slate-50" />
+                                </div>
+                              </div>
+                              {/* 需求文档附件 */}
+                              <div className="space-y-1">
+                                <label className="text-xs font-medium text-slate-600">需求文档附件</label>
+                                <div className="flex flex-wrap gap-2">
+                                  {cd.req_docs.map((doc) => (
+                                    <div key={doc.id} className="relative group border rounded px-2 py-1 text-xs bg-slate-50 flex items-center gap-1.5">
+                                      {doc.type === "link" ? (
+                                        <a href={doc.url} target="_blank" rel="noreferrer" className="text-blue-600 underline max-w-[150px] truncate">{doc.name}</a>
+                                      ) : (
+                                        <span className="max-w-[150px] truncate">{doc.name}</span>
+                                      )}
+                                      <button type="button" className="text-slate-400 hover:text-red-500" onClick={() => removeCustomDevDoc(cd.id, doc.id)}>
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                  <label className="border border-dashed rounded px-2 py-1 text-xs text-slate-400 hover:text-slate-600 cursor-pointer flex items-center gap-1">
+                                    <Plus className="h-3 w-3" />文件
+                                    <input type="file" accept=".doc,.docx,.xls,.xlsx,.md,.zip,.rar,.7z" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) addCustomDevDoc(cd.id, f); e.target.value = ""; }} />
+                                  </label>
+                                  <button type="button" className="border border-dashed rounded px-2 py-1 text-xs text-slate-400 hover:text-slate-600" onClick={() => { const url = prompt("输入链接URL:"); if (url) addCustomDevDoc(cd.id, null, url); }}>
+                                    <Plus className="h-3 w-3 mr-0.5" />链接
+                                  </button>
+                                </div>
+                              </div>
+                              {/* 备注 */}
+                              <div className="space-y-1">
+                                <label className="text-xs text-slate-500">备注</label>
+                                <textarea value={cd.remark} onChange={(e) => updateCustomDev(cd.id, "remark", e.target.value)} placeholder="定制开发备注" className="w-full min-h-[50px] p-2 border rounded-md resize-none text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -2341,13 +2861,33 @@ export function ProjectForm({
                       <div key={i} className="bg-white rounded-lg p-2.5 border text-sm">
                         <div className="flex items-center justify-between">
                           <span className="font-medium">{item.vendor_name}</span>
-                          <span className="text-xs text-slate-400">{item.category}</span>
+                          <span className="text-xs text-slate-400">{item.integration_type}</span>
                         </div>
-                        {(item.dev_leader || item.coop_leader) && (
+                        {item.product_module && (
+                          <div className="text-xs text-slate-500 mt-0.5">模块: {item.product_module}</div>
+                        )}
+                        {item.brief_description && (
+                          <div className="text-xs text-slate-400 mt-0.5 line-clamp-1">{item.brief_description}</div>
+                        )}
+                        {(item.our_req_contact || item.our_dev_contact) && (
                           <div className="text-xs text-slate-500 mt-1">
-                            开发: {item.dev_leader || "-"} | 配合: {item.coop_leader || "-"}
+                            我方: {[item.our_req_contact, item.our_product_contact, item.our_dev_contact].filter(Boolean).join(" / ") || "-"}
                           </div>
                         )}
+                        {item.integration_docs.length > 0 && (
+                          <div className="text-xs text-slate-400 mt-0.5">{item.integration_docs.length} 个附件</div>
+                        )}
+                        {(() => {
+                          const cd = customDevItems.find((c) => c.id === `cd_${item.id}`);
+                          if (!cd) return null;
+                          return (
+                            <div className="mt-1.5 pt-1.5 border-t border-dashed">
+                              <span className="text-xs text-amber-600 font-medium">定制开发:</span>
+                              <span className="text-xs text-slate-500 ml-1">{cd.product_module || "未指定模块"}</span>
+                              {cd.custom_content && <div className="text-xs text-slate-400 mt-0.5 line-clamp-1">{cd.custom_content}</div>}
+                            </div>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>

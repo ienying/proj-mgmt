@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS projects (
   role_market_product VARCHAR(100),
   role_project_manager VARCHAR(100),
   integration_list JSONB DEFAULT '[]'::jsonb,
+  custom_dev_info JSONB DEFAULT '[]'::jsonb,
   created_by VARCHAR(36) NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE
