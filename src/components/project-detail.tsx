@@ -653,16 +653,18 @@ export function ProjectDetail({
   const fetchLinkedTasks = async (definitions: TableDefinition[], dataMap: Record<string, TableData[]>) => {
     try {
       const schema = project.project_schema;
+      const tableNames = definitions.map(d => d.table_code).filter(Boolean);
+      if (tableNames.length === 0) return;
+
+      // 批量查询：一次请求查所有表的关联流程
+      const res = await fetch(`/api/tasks/by-source-record-batch?schema=${encodeURIComponent(schema)}&tables=${encodeURIComponent(tableNames.join(","))}`);
+      const json = await res.json();
+      if (!json.data || Object.keys(json.data).length === 0) return;
+
       const newMap: Record<string, any[]> = {};
-
-      for (const def of definitions) {
-        const tableName = def.table_code;
-        if (!tableName) continue;
-        const res = await fetch(`/api/tasks/by-source-record?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(tableName)}`);
-        const json = await res.json();
-        if (!json.data || !Array.isArray(json.data) || json.data.length === 0) continue;
-
-        for (const defEntry of json.data) {
+      // json.data 格式: { tableName: [{ def_id, task_name, referenced_record_ids, instances, ... }] }
+      for (const tableEntries of Object.values(json.data) as any[]) {
+        for (const defEntry of tableEntries) {
           for (const recordId of defEntry.referenced_record_ids || []) {
             if (!newMap[recordId]) newMap[recordId] = [];
             newMap[recordId].push(defEntry);

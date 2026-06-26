@@ -392,6 +392,7 @@ export function ProjectForm({
 
   // 客户信息
   const [companyName, setCompanyName] = useState("");
+  const [implementationUnit, setImplementationUnit] = useState("");
   const [contactPersons, setContactPersons] = useState<ContactPerson[]>([
     { id: "1", name: "", phone: "", email: "", position: "" },
   ]);
@@ -469,6 +470,7 @@ export function ProjectForm({
         { label: "初验日期(YYYY-MM-DD)" },
         { label: "终验日期(YYYY-MM-DD)" },
         { label: "客户公司名称" },
+        { label: "项目实施单位" },
         { label: "联系人姓名(多个用、分隔)" },
         { label: "联系人电话(多个用、分隔)" },
         { label: "联系人职务(多个用、分隔)" },
@@ -482,11 +484,18 @@ export function ProjectForm({
         { label: "渠道公司名称(多个用、分隔)" },
         { label: "渠道联系人(多个用、分隔)" },
         { label: "渠道电话(多个用、分隔)" },
+        { label: "施工单位公司名称(多个用、分隔)" },
+        { label: "施工单位施工质量(多个用、分隔)" },
+        { label: "施工单位联系人(多个用、分隔)" },
+        { label: "施工单位联系电话(多个用、分隔)" },
+        { label: "施工单位施工内容(多个用、分隔)" },
         { label: "项目成员姓名(多个用、分隔)" },
         { label: "项目成员角色(多个用、分隔)" },
         { label: "采购总金额(元)" },
         { label: "软件金额(元)" },
         { label: "硬件金额(元)" },
+        { label: "对接厂商(多个用、分隔)" },
+        { label: "对接产品模块(多个用、分隔)" },
       ];
 
       const ws1 = wb.addWorksheet("项目信息");
@@ -630,6 +639,9 @@ export function ProjectForm({
       setFinalAcceptanceDate(normalizeDate(get("终验日期(YYYY-MM-DD)")));
 
       setCompanyName(get("客户公司名称"));
+
+      setImplementationUnit(get("项目实施单位"));
+
       const cpNames = get("联系人姓名(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
       const cpPhones = get("联系人电话(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
       const cpPositions = get("联系人职务(多个用、分隔)").split(/[、,，]/).map(s => s.trim()).filter(Boolean);
@@ -1315,6 +1327,7 @@ export function ProjectForm({
       customer_type: selectedCustomerTypes.length > 0 ? selectedCustomerTypes : null,
       deployment_mode: deploymentMode || null,
       channel_info: channelCompanies.filter((cc) => cc.company_name),
+      implementation_unit: implementationUnit || null,
       members: projectMembers.filter((pm) => pm.name),
       procurement_modules: selectedModules,
       procurement_amount: procurementAmount ? parseFloat(procurementAmount) : null,

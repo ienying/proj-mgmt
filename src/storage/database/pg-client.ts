@@ -10,9 +10,9 @@ function getPool(): Pool {
     }
     pool = new Pool({
       connectionString,
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+      max: 40,
+      idleTimeoutMillis: 60000,
+      connectionTimeoutMillis: 15000,
     });
   }
   return pool;
@@ -24,15 +24,16 @@ export interface RpcResult<T = unknown> {
 }
 
 async function query<T = unknown>(sql: string, params?: unknown[]): Promise<RpcResult<T>> {
-  const client: PoolClient = await getPool().connect();
+  let client: PoolClient | null = null;
   try {
+    client = await getPool().connect();
     const result = await client.query(sql, params);
     return { data: result.rows as T, error: null };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Database error';
     return { data: null, error: { message } };
   } finally {
-    client.release();
+    if (client) client.release();
   }
 }
 
