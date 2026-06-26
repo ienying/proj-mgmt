@@ -208,8 +208,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
     notify_users: [] as { id: string; name: string }[],
     category_id: undefined as string | undefined,
     sub_category_id: undefined as string | undefined,
-    product_module_ids: [] as string[],
-    product_module_names: [] as string[],
+    product_module_id: undefined as string | undefined,
     is_major: false,
     urgency_id: undefined as string | undefined,
     warranty_status_id: undefined as string | undefined,
@@ -412,7 +411,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
       handler_id: undefined, handler_name: "", handler_phone: "",
       notify_users: [],
       category_id: undefined, sub_category_id: undefined,
-      product_module_ids: [], product_module_names: [],
+      product_module_id: undefined,
       is_major: false, urgency_id: undefined, warranty_status_id: undefined,
       description: "", is_first_report: true, has_similar_history: false,
       remarks: "", expected_handle_time: "",
@@ -422,7 +421,10 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
 
   const handleSubmit = async () => {
     if (!form.title.trim()) { alert("请输入问题标题"); return; }
+    if (!form.project_id && !form.project_name.trim()) { alert("请选择所属项目"); return; }
+    if (!form.handler_id) { alert("请选择指定处理人"); return; }
     if (!form.category_id && !form.sub_category_id) { alert("请选择问题类别"); return; }
+    if (!form.product_module_id) { alert("请选择对应产品模块"); return; }
     if (!form.urgency_id) { alert("请选择紧急程度"); return; }
 
     try {
@@ -439,9 +441,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         handler_name: form.handler_name || null,
         handler_phone: form.handler_phone || null,
         category_id: categoryId,
-        product_module_id: form.product_module_ids.length > 0 ? form.product_module_ids[0] : null,
-        product_module_ids: form.product_module_ids,
-        product_module_names: form.product_module_names,
+        product_module_id: form.product_module_id || null,
         is_major: form.is_major,
         urgency_id: form.urgency_id,
         warranty_status_id: form.warranty_status_id || null,
@@ -725,7 +725,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                     <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="请输入问题标题" className="bg-gray-50/80" />
                   </div>
                   <div className="col-span-2">
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">所属项目 <span className="text-gray-400 font-normal">可选择已有项目或手动输入</span></label>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">所属项目 <span className="text-red-400">*</span></label>
                     <div className="flex gap-2">
                       <Input value={form.project_name} onChange={e => setForm(f => ({ ...f, project_name: e.target.value, project_id: undefined }))}
                         placeholder="输入或选择项目" className="flex-1 bg-gray-50/80" />
@@ -794,7 +794,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">指定处理人</label>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">指定处理人 <span className="text-red-400">*</span></label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <button className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-gray-50/80 px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] data-[state=open]:border-ring">
@@ -903,52 +903,13 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                     )}
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">对应产品模块 <span className="text-gray-400 font-normal">可多选</span></label>
-                    <div className="flex flex-wrap gap-1.5 items-center">
-                      {form.product_module_names.map((name, idx) => (
-                        <span key={idx} className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 text-xs px-2 py-0.5 rounded border border-amber-100">
-                          {name}
-                          <button type="button" className="text-amber-400 hover:text-red-500 ml-0.5" onClick={() => {
-                            setForm(f => ({
-                              ...f,
-                              product_module_ids: f.product_module_ids.filter((_, i) => i !== idx),
-                              product_module_names: f.product_module_names.filter((_, i) => i !== idx),
-                            }));
-                          }}>×</button>
-                        </span>
-                      ))}
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md border border-input bg-gray-50/80 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground">
-                            + 选择模块
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[280px] p-0" align="start">
-                          <Command>
-                            <CommandInput placeholder="搜索模块名称..." />
-                            <CommandList>
-                              <CommandEmpty>无匹配模块</CommandEmpty>
-                              <CommandGroup>
-                                {productModules.filter(m => !form.product_module_ids.includes(m.id)).map(m => (
-                                  <CommandItem key={m.id} value={m.module_name} onSelect={() => {
-                                    setForm(f => ({
-                                      ...f,
-                                      product_module_ids: [...f.product_module_ids, m.id],
-                                      product_module_names: [...f.product_module_names, m.module_name],
-                                    }));
-                                  }}>
-                                    <div className="flex flex-col">
-                                      <span>{m.module_name}</span>
-                                      {m.product_name && <span className="text-[10px] text-muted-foreground">{m.product_name}</span>}
-                                    </div>
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">对应产品模块 <span className="text-red-400">*</span></label>
+                    <Select value={form.product_module_id} onValueChange={v => setForm(f => ({ ...f, product_module_id: v }))}>
+                      <SelectTrigger className="w-full bg-gray-50/80"><SelectValue placeholder="选择产品模块" /></SelectTrigger>
+                      <SelectContent>
+                        {productModules.map(m => <SelectItem key={m.id} value={m.id}>{m.module_name}{m.product_name ? ` (${m.product_name})` : ""}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <label className="text-xs font-medium text-gray-600 mb-1 block">是否重大问题</label>
