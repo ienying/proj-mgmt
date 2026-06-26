@@ -43,6 +43,7 @@ import {
   Upload,
   Copy,
   ClipboardList,
+  Hammer,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -1320,7 +1321,7 @@ export function ProjectForm({
       software_amount: softwareAmount ? parseFloat(softwareAmount) : null,
       hardware_amount: hardwareAmount ? parseFloat(hardwareAmount) : null,
       integration_list: hasIntegration ? integrationList.filter((i) => i.vendor_name) : [],
-      custom_dev_info: hasIntegration && hasCustomDev ? customDevItems.filter((c) => c.product_module) : [],
+      custom_dev_info: hasCustomDev ? customDevItems.filter((c) => c.product_module) : [],
     };
 
     // 编辑模式下检测类型/阶段/状态是否变更
@@ -1551,8 +1552,6 @@ export function ProjectForm({
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-5">
                 <div className="space-y-1.5">
                   <Label>
                     项目状态 <span className="text-red-500">*</span>
@@ -2176,7 +2175,7 @@ export function ProjectForm({
             <Section
               title="对接信息"
               icon={<Link className="h-4 w-4 text-indigo-600" />}
-              defaultOpen={false}
+              defaultOpen={true}
               count={hasIntegration ? integrationList.filter((i) => i.vendor_name).length : 0}
             >
               <div className="space-y-3">
@@ -2454,184 +2453,6 @@ export function ProjectForm({
                         />
                       </div>
 
-                      {/* 定制信息板块 */}
-                      <div className="border-t pt-3 mt-2">
-                        <div className="flex items-center gap-3 mb-3">
-                          <label className="text-xs font-medium text-slate-700">是否含定制开发</label>
-                          <Select value={(() => { const cd = customDevItems.find((c) => c.id === `cd_${item.id}`); return cd ? 'yes' : 'no'; })()} onValueChange={(v) => {
-                            if (v === 'yes' && !customDevItems.find((c) => c.id === `cd_${item.id}`)) {
-                              setCustomDevItems([...customDevItems, {
-                                id: `cd_${item.id}`,
-                                product_module: "",
-                                custom_content: "",
-                                in_contract: "是",
-                                contract_note: "",
-                                customer_req_contact: "",
-                                customer_req_contact_phone: "",
-                                customer_req_contact_position: "",
-                                customer_req_contact_note: "",
-                                internal_req_contact: "",
-                                internal_req_contact_phone: "",
-                                internal_product_contact: "",
-                                internal_product_contact_phone: "",
-                                req_docs: [],
-                                remark: "",
-                              }]);
-                            } else if (v === 'no') {
-                              setCustomDevItems(customDevItems.filter((c) => c.id !== `cd_${item.id}`));
-                            }
-                          }}>
-                            <SelectTrigger className="w-[80px] h-8 text-sm">
-                              <SelectValue placeholder="否" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="no">否</SelectItem>
-                              <SelectItem value="yes">是</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {(() => {
-                          const cd = customDevItems.find((c) => c.id === `cd_${item.id}`);
-                          if (!cd) return null;
-                          return (
-                            <div className="space-y-3 pl-2 border-l-2 border-amber-300">
-                              <div className="text-xs font-medium text-amber-700">定制开发详情</div>
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1">
-                                  <label className="text-xs text-slate-500">产品模块</label>
-                                  <Popover>
-                                    <PopoverTrigger asChild>
-                                      <Button variant="outline" role="combobox" className="w-full justify-between text-sm font-normal h-8">
-                                        {cd.product_module || <span className="text-muted-foreground">选择模块...</span>}
-                                        <Search className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
-                                      </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-[280px] p-0" align="start">
-                                      <Command>
-                                        <CommandInput placeholder="搜索产品模块..." className="h-9" />
-                                        <CommandList className="max-h-[200px]">
-                                          <CommandEmpty className="py-2 text-center text-sm">未找到</CommandEmpty>
-                                          <CommandGroup>
-                                            {productModules.map((mod) => (
-                                              <CommandItem
-                                                key={mod.module_code}
-                                                value={mod.module_code}
-                                                onSelect={() => updateCustomDev(cd.id, "product_module", mod.module_name)}
-                                                className="text-sm"
-                                              >
-                                                {mod.module_name}
-                                              </CommandItem>
-                                            ))}
-                                          </CommandGroup>
-                                        </CommandList>
-                                      </Command>
-                                    </PopoverContent>
-                                  </Popover>
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-xs text-slate-500">定制内容简述</label>
-                                  <Input value={cd.custom_content} onChange={(e) => updateCustomDev(cd.id, "custom_content", e.target.value)} placeholder="简述定制内容" className="h-8 text-sm" />
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-4">
-                                <label className="text-xs text-slate-500">是否在合同内</label>
-                                <Select value={cd.in_contract} onValueChange={(v) => updateCustomDev(cd.id, "in_contract", v)}>
-                                  <SelectTrigger className="w-[100px] h-8 text-sm"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="是">是</SelectItem>
-                                    <SelectItem value="否">否</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                {cd.in_contract === "否" && (
-                                  <Input value={cd.contract_note} onChange={(e) => updateCustomDev(cd.id, "contract_note", e.target.value)} placeholder="说明原因" className="h-8 text-sm flex-1" />
-                                )}
-                              </div>
-                              {/* 客户需求提出人 */}
-                              <div className="grid grid-cols-4 gap-2">
-                                <div className="space-y-1">
-                                  <label className="text-xs text-slate-500">客户需求提出人</label>
-                                  <Input value={cd.customer_req_contact} onChange={(e) => updateCustomDev(cd.id, "customer_req_contact", e.target.value)} placeholder="姓名" className="h-8 text-sm" />
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-xs text-slate-500">联系方式</label>
-                                  <Input value={cd.customer_req_contact_phone} onChange={(e) => updateCustomDev(cd.id, "customer_req_contact_phone", e.target.value)} placeholder="电话" className="h-8 text-sm" />
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-xs text-slate-500">职位</label>
-                                  <Input value={cd.customer_req_contact_position} onChange={(e) => updateCustomDev(cd.id, "customer_req_contact_position", e.target.value)} placeholder="职位" className="h-8 text-sm" />
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-xs text-slate-500">备注</label>
-                                  <Input value={cd.customer_req_contact_note} onChange={(e) => updateCustomDev(cd.id, "customer_req_contact_note", e.target.value)} placeholder="备注" className="h-8 text-sm" />
-                                </div>
-                              </div>
-                              {/* 内部对接人 */}
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1">
-                                  <label className="text-xs text-slate-500">内部需求对接人</label>
-                                  <SearchableUserSelect
-                                    value={cd.internal_req_contact}
-                                    onChange={(name) => updateCustomDev(cd.id, "internal_req_contact", name)}
-                                    onSelectFull={(u) => updateCustomDev(cd.id, "internal_req_contact_phone", u.phone || "")}
-                                    users={users.filter(u => u.name)}
-                                    placeholder="选择人员"
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-xs text-slate-500">联系方式</label>
-                                  <Input value={cd.internal_req_contact_phone} onChange={(e) => updateCustomDev(cd.id, "internal_req_contact_phone", e.target.value)} placeholder="自动带出" className="h-8 text-sm bg-slate-50" />
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1">
-                                  <label className="text-xs text-slate-500">内部产品负责人</label>
-                                  <SearchableUserSelect
-                                    value={cd.internal_product_contact}
-                                    onChange={(name) => updateCustomDev(cd.id, "internal_product_contact", name)}
-                                    onSelectFull={(u) => updateCustomDev(cd.id, "internal_product_contact_phone", u.phone || "")}
-                                    users={users.filter(u => u.name)}
-                                    placeholder="选择人员"
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-xs text-slate-500">联系方式</label>
-                                  <Input value={cd.internal_product_contact_phone} onChange={(e) => updateCustomDev(cd.id, "internal_product_contact_phone", e.target.value)} placeholder="自动带出" className="h-8 text-sm bg-slate-50" />
-                                </div>
-                              </div>
-                              {/* 需求文档附件 */}
-                              <div className="space-y-1">
-                                <label className="text-xs font-medium text-slate-600">需求文档附件</label>
-                                <div className="flex flex-wrap gap-2">
-                                  {cd.req_docs.map((doc) => (
-                                    <div key={doc.id} className="relative group border rounded px-2 py-1 text-xs bg-slate-50 flex items-center gap-1.5">
-                                      {doc.type === "link" ? (
-                                        <a href={doc.url} target="_blank" rel="noreferrer" className="text-blue-600 underline max-w-[150px] truncate">{doc.name}</a>
-                                      ) : (
-                                        <span className="max-w-[150px] truncate">{doc.name}</span>
-                                      )}
-                                      <button type="button" className="text-slate-400 hover:text-red-500" onClick={() => removeCustomDevDoc(cd.id, doc.id)}>
-                                        <X className="h-3 w-3" />
-                                      </button>
-                                    </div>
-                                  ))}
-                                  <label className="border border-dashed rounded px-2 py-1 text-xs text-slate-400 hover:text-slate-600 cursor-pointer flex items-center gap-1">
-                                    <Plus className="h-3 w-3" />文件
-                                    <input type="file" accept=".doc,.docx,.xls,.xlsx,.md,.zip,.rar,.7z" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) addCustomDevDoc(cd.id, f); e.target.value = ""; }} />
-                                  </label>
-                                  <button type="button" className="border border-dashed rounded px-2 py-1 text-xs text-slate-400 hover:text-slate-600" onClick={() => { const url = prompt("输入链接URL:"); if (url) addCustomDevDoc(cd.id, null, url); }}>
-                                    <Plus className="h-3 w-3 mr-0.5" />链接
-                                  </button>
-                                </div>
-                              </div>
-                              {/* 备注 */}
-                              <div className="space-y-1">
-                                <label className="text-xs text-slate-500">备注</label>
-                                <textarea value={cd.remark} onChange={(e) => updateCustomDev(cd.id, "remark", e.target.value)} placeholder="定制开发备注" className="w-full min-h-[50px] p-2 border rounded-md resize-none text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
                     </div>
                   </div>
                 ))}
@@ -2646,6 +2467,171 @@ export function ProjectForm({
                   </div>
                 )}
                   </>
+                )}
+              </div>
+            </Section>
+
+            {/* 含定制开发 */}
+            <Section
+              title="含定制开发"
+              icon={<Hammer className="h-4 w-4 text-amber-600" />}
+              defaultOpen={false}
+              count={hasCustomDev ? customDevItems.length : 0}
+              color="amber"
+            >
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <label className="text-sm font-medium text-slate-700">是否含定制开发</label>
+                  <Select value={hasCustomDev ? 'yes' : 'no'} onValueChange={(v) => { setHasCustomDev(v === 'yes'); if (v === 'no') setCustomDevItems([]); }}>
+                    <SelectTrigger className="w-[120px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="no">否</SelectItem>
+                      <SelectItem value="yes">是</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {hasCustomDev && (
+                  <>
+                    <Button type="button" variant="outline" size="sm" onClick={addCustomDev}>
+                      <Plus className="h-3.5 w-3.5 mr-1" /> 添加定制开发
+                    </Button>
+                    {customDevItems.map((cd, index) => (
+                      <div key={cd.id} className="border rounded-lg overflow-hidden">
+                        <div className="bg-amber-50 px-4 py-2 flex items-center justify-between border-b">
+                          <span className="text-sm font-medium text-amber-800">
+                            定制开发 {index + 1}
+                            {cd.product_module && ` - ${cd.product_module}`}
+                          </span>
+                          <button type="button" className="text-slate-400 hover:text-red-500 transition-colors" onClick={() => removeCustomDev(cd.id)}>
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <div className="p-4 space-y-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-500">产品模块</label>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button variant="outline" role="combobox" className="w-full justify-between text-sm font-normal h-8">
+                                    {cd.product_module || <span className="text-muted-foreground">选择模块...</span>}
+                                    <Search className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[280px] p-0" align="start">
+                                  <Command>
+                                    <CommandInput placeholder="搜索产品模块..." className="h-9" />
+                                    <CommandList className="max-h-[200px]">
+                                      <CommandEmpty className="py-2 text-center text-sm">未找到</CommandEmpty>
+                                      <CommandGroup>
+                                        {productModules.map((mod) => (
+                                          <CommandItem key={mod.module_code} value={mod.module_code} onSelect={() => updateCustomDev(cd.id, "product_module", mod.module_name)} className="text-sm">
+                                            {mod.module_name}
+                                          </CommandItem>
+                                        ))}
+                                      </CommandGroup>
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-500">定制内容简述</label>
+                              <Input value={cd.custom_content} onChange={(e) => updateCustomDev(cd.id, "custom_content", e.target.value)} placeholder="简述定制内容" className="h-8 text-sm" />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <label className="text-xs text-slate-500">是否在合同内</label>
+                            <Select value={cd.in_contract} onValueChange={(v) => updateCustomDev(cd.id, "in_contract", v)}>
+                              <SelectTrigger className="w-[100px] h-8 text-sm"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="是">是</SelectItem>
+                                <SelectItem value="否">否</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {cd.in_contract === "否" && (
+                              <Input value={cd.contract_note} onChange={(e) => updateCustomDev(cd.id, "contract_note", e.target.value)} placeholder="说明原因" className="h-8 text-sm flex-1" />
+                            )}
+                          </div>
+                          {/* 客户需求提出人 */}
+                          <div className="grid grid-cols-4 gap-2">
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-500">客户需求提出人</label>
+                              <Input value={cd.customer_req_contact} onChange={(e) => updateCustomDev(cd.id, "customer_req_contact", e.target.value)} placeholder="姓名" className="h-8 text-sm" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-500">联系方式</label>
+                              <Input value={cd.customer_req_contact_phone} onChange={(e) => updateCustomDev(cd.id, "customer_req_contact_phone", e.target.value)} placeholder="电话" className="h-8 text-sm" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-500">职位</label>
+                              <Input value={cd.customer_req_contact_position} onChange={(e) => updateCustomDev(cd.id, "customer_req_contact_position", e.target.value)} placeholder="职位" className="h-8 text-sm" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-500">备注</label>
+                              <Input value={cd.customer_req_contact_note} onChange={(e) => updateCustomDev(cd.id, "customer_req_contact_note", e.target.value)} placeholder="备注" className="h-8 text-sm" />
+                            </div>
+                          </div>
+                          {/* 内部对接人 */}
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-500">内部需求对接人</label>
+                              <SearchableUserSelect value={cd.internal_req_contact} onChange={(name) => updateCustomDev(cd.id, "internal_req_contact", name)} onSelectFull={(u) => updateCustomDev(cd.id, "internal_req_contact_phone", u.phone || "")} users={users.filter(u => u.name)} placeholder="选择人员" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-500">联系方式</label>
+                              <Input value={cd.internal_req_contact_phone} onChange={(e) => updateCustomDev(cd.id, "internal_req_contact_phone", e.target.value)} placeholder="自动带出" className="h-8 text-sm bg-slate-50" />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-500">内部产品负责人</label>
+                              <SearchableUserSelect value={cd.internal_product_contact} onChange={(name) => updateCustomDev(cd.id, "internal_product_contact", name)} onSelectFull={(u) => updateCustomDev(cd.id, "internal_product_contact_phone", u.phone || "")} users={users.filter(u => u.name)} placeholder="选择人员" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-500">联系方式</label>
+                              <Input value={cd.internal_product_contact_phone} onChange={(e) => updateCustomDev(cd.id, "internal_product_contact_phone", e.target.value)} placeholder="自动带出" className="h-8 text-sm bg-slate-50" />
+                            </div>
+                          </div>
+                          {/* 需求文档附件 */}
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-slate-600">需求文档附件</label>
+                            <div className="flex flex-wrap gap-2">
+                              {cd.req_docs.map((doc) => (
+                                <div key={doc.id} className="relative group border rounded px-2 py-1 text-xs bg-slate-50 flex items-center gap-1.5">
+                                  {doc.type === "link" ? (
+                                    <a href={doc.url} target="_blank" rel="noreferrer" className="text-blue-600 underline max-w-[150px] truncate">{doc.name}</a>
+                                  ) : (
+                                    <span className="max-w-[150px] truncate">{doc.name}</span>
+                                  )}
+                                  <button type="button" className="text-slate-400 hover:text-red-500" onClick={() => removeCustomDevDoc(cd.id, doc.id)}><X className="h-3 w-3" /></button>
+                                </div>
+                              ))}
+                              <label className="border border-dashed rounded px-2 py-1 text-xs text-slate-400 hover:text-slate-600 cursor-pointer flex items-center gap-1">
+                                <Plus className="h-3 w-3" />文件
+                                <input type="file" accept=".doc,.docx,.xls,.xlsx,.md,.zip,.rar,.7z" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) addCustomDevDoc(cd.id, f); e.target.value = ""; }} />
+                              </label>
+                              <button type="button" className="border border-dashed rounded px-2 py-1 text-xs text-slate-400 hover:text-slate-600" onClick={() => { const url = prompt("输入链接URL:"); if (url) addCustomDevDoc(cd.id, null, url); }}>
+                                <Plus className="h-3 w-3 mr-0.5" />链接
+                              </button>
+                            </div>
+                          </div>
+                          {/* 备注 */}
+                          <div className="space-y-1">
+                            <label className="text-xs text-slate-500">备注</label>
+                            <textarea value={cd.remark} onChange={(e) => updateCustomDev(cd.id, "remark", e.target.value)} placeholder="定制开发备注" className="w-full min-h-[50px] p-2 border rounded-md resize-none text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {customDevItems.length === 0 && (
+                      <div className="text-sm text-slate-400 text-center py-4">暂无定制开发，点击上方按钮添加</div>
+                    )}
+                  </>
+                )}
+                {!hasCustomDev && (
+                  <div className="text-sm text-slate-400 text-center py-4">选择"是"后可添加定制开发信息</div>
                 )}
               </div>
             </Section>
@@ -2877,22 +2863,32 @@ export function ProjectForm({
                         {item.integration_docs.length > 0 && (
                           <div className="text-xs text-slate-400 mt-0.5">{item.integration_docs.length} 个附件</div>
                         )}
-                        {(() => {
-                          const cd = customDevItems.find((c) => c.id === `cd_${item.id}`);
-                          if (!cd) return null;
-                          return (
-                            <div className="mt-1.5 pt-1.5 border-t border-dashed">
-                              <span className="text-xs text-amber-600 font-medium">定制开发:</span>
-                              <span className="text-xs text-slate-500 ml-1">{cd.product_module || "未指定模块"}</span>
-                              {cd.custom_content && <div className="text-xs text-slate-400 mt-0.5 line-clamp-1">{cd.custom_content}</div>}
-                            </div>
-                          );
-                        })()}
                       </div>
                     ))}
                   </div>
                 ) : (
                   <div className="text-xs text-slate-400">选择"是"后添加对接信息</div>
+                )}
+              </div>
+
+              {/* 含定制开发 */}
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">含定制开发</div>
+                {!hasCustomDev ? (
+                  <div className="text-xs text-slate-400">无定制开发</div>
+                ) : customDevItems.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {customDevItems.map((cd, i) => (
+                      <div key={i} className="bg-white rounded-lg p-2.5 border text-sm">
+                        <span className="font-medium">{cd.product_module || "未指定模块"}</span>
+                        {cd.custom_content && <div className="text-xs text-slate-400 mt-0.5 line-clamp-1">{cd.custom_content}</div>}
+                        {cd.in_contract === "否" && <span className="text-xs text-red-400 ml-1">(合同外)</span>}
+                        {cd.req_docs.length > 0 && <div className="text-xs text-slate-400 mt-0.5">{cd.req_docs.length} 个文档</div>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-400">选择"是"后添加定制开发信息</div>
                 )}
               </div>
             </div>
