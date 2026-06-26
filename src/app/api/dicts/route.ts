@@ -49,6 +49,9 @@ export async function GET(request: Request) {
       case "custom_dev_types":
         tableName = "custom_dev_types";
         break;
+      case "dev_integration_types":
+        tableName = "dev_integration_types";
+        break;
       case "todo_statuses":
         tableName = "todo_statuses";
         break;

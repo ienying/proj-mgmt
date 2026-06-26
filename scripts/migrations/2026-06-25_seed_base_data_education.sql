@@ -130,3 +130,14 @@ FROM (VALUES
   ('performance_opt', '性能优化',        '系统性能调优、架构升级改造',                     7, true)
 ) AS v(code, name, description, sort_order, is_enabled)
 WHERE NOT EXISTS (SELECT 1 FROM custom_dev_types WHERE code = v.code);
+
+-- ============================================
+-- 9. 开发对接类型
+-- ============================================
+INSERT INTO dev_integration_types (code, name, description, sort_order, is_enabled)
+SELECT v.code, v.name, v.description, v.sort_order, v.is_enabled
+FROM (VALUES
+  ('api_docking',     '接口对接',        '与第三方系统的API接口联调对接',                  0, true),
+  ('db_docking',      '数据库对接',      '与第三方系统的数据库层面数据对接',               1, true)
+) AS v(code, name, description, sort_order, is_enabled)
+WHERE NOT EXISTS (SELECT 1 FROM dev_integration_types WHERE code = v.code);

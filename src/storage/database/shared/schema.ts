@@ -154,6 +154,19 @@ export const project_stages = pgTable("project_stages", {
   index("project_stages_sort_idx").on(table.sort_order),
 ]);
 
+// 开发对接类型表
+export const dev_integration_types = pgTable("dev_integration_types", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  sort_order: integer("sort_order").default(0).notNull(),
+  is_enabled: boolean("is_enabled").default(true).notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("dev_integration_types_code_idx").on(table.code),
+]);
+
 // 定制开发类型表
 export const custom_dev_types = pgTable("custom_dev_types", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),

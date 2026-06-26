@@ -54,6 +54,7 @@ import {
   Square,
   CheckSquare,
   Hammer,
+  Wrench,
 } from "lucide-react";
 import {
   DndContext,
@@ -180,6 +181,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
   const [todoStatuses, setTodoStatuses] = useState<DictItem[]>([]);
   const [constructionUnits, setConstructionUnits] = useState<DictItem[]>([]);
   const [customDevTypes, setCustomDevTypes] = useState<DictItem[]>([]);
+  const [devIntegrationTypes, setDevIntegrationTypes] = useState<DictItem[]>([]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -251,6 +253,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
         case "todo_statuses": setTodoStatuses(data); break;
         case "construction_units": setConstructionUnits(data); break;
         case "custom_dev_types": setCustomDevTypes(data); break;
+        case "dev_integration_types": setDevIntegrationTypes(data); break;
       }
     } catch (error) {
       console.error("加载数据失败:", error);
@@ -275,6 +278,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
       setTodoStatuses(batch.todo_statuses || []);
       setConstructionUnits(batch.construction_units || []);
       setCustomDevTypes(batch.custom_dev_types || []);
+      setDevIntegrationTypes(batch.dev_integration_types || []);
     } catch (error) {
       console.error("加载基础数据失败:", error);
     }
@@ -299,6 +303,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
       case "product-categories": return { data: productCategories, setData: setProductCategories, table: "product_categories", type: "product_categories" };
       case "construction-units": return { data: constructionUnits, setData: setConstructionUnits, table: "construction_units", type: "construction_units" };
       case "custom-dev-types": return { data: customDevTypes, setData: setCustomDevTypes, table: "custom_dev_types", type: "custom_dev_types" };
+      case "dev-integration-types": return { data: devIntegrationTypes, setData: setDevIntegrationTypes, table: "dev_integration_types", type: "dev_integration_types" };
       default: return { data: [], setData: () => {}, table: "", type: "" };
     }
   };
@@ -831,7 +836,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-10">
+        <TabsList className="grid w-full grid-cols-11">
           <TabsTrigger value="project-types" className="gap-1.5 text-xs">
             <Briefcase className="w-3.5 h-3.5" />
             项目类型
@@ -863,6 +868,10 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           <TabsTrigger value="product-modules" className="gap-1.5 text-xs">
             <Package className="w-3.5 h-3.5" />
             产品模块
+          </TabsTrigger>
+          <TabsTrigger value="dev-integration-types" className="gap-1.5 text-xs">
+            <Wrench className="w-3.5 h-3.5" />
+            开发对接类型
           </TabsTrigger>
           <TabsTrigger value="custom-dev-types" className="gap-1.5 text-xs">
             <LayoutGrid className="w-3.5 h-3.5" />
@@ -1063,6 +1072,27 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
               setImportData([]);
               setImportResult(null);
             }}
+            onBatchDelete={handleBatchDelete}
+          />
+        </TabsContent>
+
+        {/* 开发对接类型 */}
+        <TabsContent value="dev-integration-types" className="mt-4">
+          <DataTable
+            data={devIntegrationTypes}
+            onEdit={openEditDialog}
+            onDelete={handleDelete}
+            onReorder={handleReorder}
+            onToggleActive={handleToggleActive}
+            onCreate={openCreateDialog}
+            dialogOpen={dialogOpen}
+            setDialogOpen={setDialogOpen}
+            editingId={editingId}
+            editingData={editingData}
+            setEditingData={setEditingData}
+            handleSubmit={handleSubmit}
+            activeTab={activeTab}
+            productCategories={productCategories}
             onBatchDelete={handleBatchDelete}
           />
         </TabsContent>
