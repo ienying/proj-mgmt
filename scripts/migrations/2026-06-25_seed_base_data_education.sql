@@ -45,18 +45,16 @@ INSERT INTO project_types (code, name, description, sort_order, is_enabled) VALU
 ON CONFLICT (code) DO NOTHING;
 
 -- ============================================
--- 3. 项目阶段
+-- 3. 项目阶段（七大阶段）
 -- ============================================
 INSERT INTO project_stages (code, name, description, sort_order, is_enabled) VALUES
-('requirement',         '需求调研',            '了解客户需求，编制需求文档',           0, true),
-('solution_design',     '方案设计',            '编制技术方案、实施方案',               1, true),
-('bidding',             '招投标',              '编制标书、投标、谈判',                 2, true),
-('contract',            '合同签订',            '合同评审与签订',                       3, true),
-('implementation',      '实施部署',            '设备安装、系统部署、联调测试',         4, true),
-('training',            '培训交付',            '用户培训、管理员培训',                 5, true),
-('acceptance',          '验收交付',            '竣工验收、资料移交',                   6, true),
-('warranty',            '质保运维',            '质保期内运维服务',                     7, true),
-('post_warranty',       '过保服务',            '质保期满后的持续服务',                 8, true)
+('stage_1',  '第一阶段：内部启动会',            '项目立项、组建团队、明确目标与范围',           0, true),
+('stage_2',  '第二阶段：需求调研与方案确认',    '深入调研客户需求，确认技术方案与实施计划',     1, true),
+('stage_3',  '第三阶段：环境部署与平台搭建',    '硬件环境准备、基础平台部署与联调',             2, true),
+('stage_4',  '第四阶段：核心系统开发与集成',    '核心功能开发、第三方系统集成对接',             3, true),
+('stage_5',  '第五阶段：用户培训与试运行',      '用户培训、UAT测试、试运行问题修复',            4, true),
+('stage_6',  '第六阶段：正式上线与全面切换',    '生产环境上线、数据迁移、业务全面切换',         5, true),
+('stage_7',  '第七阶段：项目验收与交付',        '竣工验收、文档交付、项目总结',                 6, true)
 ON CONFLICT (code) DO NOTHING;
 
 -- ============================================
