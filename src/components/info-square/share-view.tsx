@@ -225,7 +225,7 @@ export default function ShareView({ token }: { token: string }) {
             <Markdown>{post.content || ""}</Markdown>
           ) : (
             <div
-              className="prose prose-sm max-w-none break-words [overflow-wrap:anywhere] [&_img]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_table]:block [&_table]:overflow-x-auto"
+              className="prose prose-sm max-w-none post-content break-words [overflow-wrap:anywhere] [&_img]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_table]:block [&_table]:overflow-x-auto"
               dangerouslySetInnerHTML={{ __html: post.content || "" }}
             />
           )}
