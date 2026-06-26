@@ -171,7 +171,7 @@ pie showData
 export async function getPromptTemplates(params: { projectSchema: string; promptType?: string }) {
   const client = await createServerClient();
   await ensureAITables();
-  const { data } = await client.rpc("dp_select", { p_table: "ai_prompt_templates" });
+  const { data } = await client.rpc("dp_select", { p_table: "design_public.ai_prompt_templates" });
   const rows = (data as Record<string, unknown>[]) || [];
   const matched = rows.filter((r) => {
     const ps = String(r.project_schema || "");
@@ -197,14 +197,14 @@ export async function savePromptTemplate(params: {
   await ensureAITables();
 
   if (params.id) {
-    const { data: existing } = await client.rpc("dp_select", { p_table: "ai_prompt_templates" });
+    const { data: existing } = await client.rpc("dp_select", { p_table: "design_public.ai_prompt_templates" });
     const rows = (existing as Record<string, unknown>[]) || [];
     const found = rows.find((r) => r.id === params.id);
     if (!found) throw new Error("模板不存在");
     if (found.is_default === true) throw new Error("默认模板不可编辑");
 
     await client.rpc("dp_update", {
-      p_table: "ai_prompt_templates",
+      p_table: "design_public.ai_prompt_templates",
       p_id: params.id,
       p_data: {
         name: params.name,
@@ -217,7 +217,7 @@ export async function savePromptTemplate(params: {
   }
 
   const result = await client.rpc("dp_insert", {
-    p_table: "ai_prompt_templates",
+    p_table: "design_public.ai_prompt_templates",
     p_data: {
       project_schema: params.project_schema,
       name: params.name,
@@ -238,13 +238,13 @@ export async function savePromptTemplate(params: {
 
 export async function deletePromptTemplate(id: string) {
   const client = await createServerClient();
-  const { data: existing } = await client.rpc("dp_select", { p_table: "ai_prompt_templates" });
+  const { data: existing } = await client.rpc("dp_select", { p_table: "design_public.ai_prompt_templates" });
   const rows = (existing as Record<string, unknown>[]) || [];
   const found = rows.find((r) => r.id === id);
   if (!found) throw new Error("模板不存在");
   if (found.is_default === true) throw new Error("默认模板不可删除");
 
-  await client.rpc("dp_delete", { p_table: "ai_prompt_templates", p_id: id });
+  await client.rpc("dp_delete", { p_table: "design_public.ai_prompt_templates", p_id: id });
 }
 
 // ==================== 配置读写 ====================
@@ -257,7 +257,7 @@ export async function getAISettings(): Promise<{
   try {
     const client = await createServerClient();
     const { data } = await client.rpc("dp_select", {
-      p_table: "ai_settings",
+      p_table: "design_public.ai_settings",
     });
     const rows = (data as Record<string, unknown>[]) || [];
     const active = rows.find((r) => r.is_active === true);
@@ -287,18 +287,18 @@ export async function saveAISettings(params: {
 
   // 先删后插，确保干净
   const { data: existing } = await client.rpc("dp_select", {
-    p_table: "ai_settings",
+    p_table: "design_public.ai_settings",
   });
   const rows = (existing as Record<string, unknown>[]) || [];
   for (const row of rows) {
     await client.rpc("dp_delete", {
-      p_table: "ai_settings",
+      p_table: "design_public.ai_settings",
       p_id: row.id as string,
     });
   }
 
   await client.rpc("dp_insert", {
-    p_table: "ai_settings",
+    p_table: "design_public.ai_settings",
     p_data: {
       key_name: "DeepSeek",
       api_key: params.apiKey,

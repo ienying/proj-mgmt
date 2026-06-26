@@ -11,7 +11,7 @@ export async function logAIUsage(params: {
   try {
     const client = await createServerClient();
     await client.rpc("dp_insert", {
-      p_table: "ai_usage_logs",
+      p_table: "design_public.ai_usage_logs",
       p_data: {
         user_id: params.userId,
         user_name: params.userName || null,
