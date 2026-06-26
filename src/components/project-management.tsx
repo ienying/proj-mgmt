@@ -129,6 +129,47 @@ const PROJECT_PERMISSIONS = [
 
 // 卡片顶部装饰色（统一蓝色）
 
+// 紧凑多选下拉组件 - 样式与 Select 保持一致
+function MultiSelectBadge({ label, options, selected, onChange }: {
+  label: string;
+  options: string[];
+  selected: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className={`inline-flex items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm hover:bg-accent hover:text-accent-foreground h-8 gap-1 min-w-[100px] ${selected.length > 0 ? 'border-blue-400 bg-blue-50 text-blue-700' : ''}`}
+        >
+          <span className={selected.length === 0 ? 'text-muted-foreground' : ''}>
+            {selected.length > 0 ? `${label}(${selected.length})` : label}
+          </span>
+          <svg className="h-3 w-3 opacity-50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[220px] p-1" align="start">
+        <div className="max-h-[200px] overflow-y-auto space-y-0.5">
+          {options.length === 0 && <div className="text-xs text-gray-400 text-center py-3">暂无数据</div>}
+          {options.map((opt) => (
+            <label key={opt} className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs hover:bg-gray-100 ${selected.includes(opt) ? 'bg-blue-50' : ''}`}>
+              <Checkbox checked={selected.includes(opt)} onCheckedChange={(c) => {
+                onChange(c ? [...selected, opt] : selected.filter(s => s !== opt));
+              }} />
+              {opt}
+            </label>
+          ))}
+        </div>
+        {selected.length > 0 && (
+          <div className="border-t pt-1 mt-1">
+            <button className="text-xs text-red-500 hover:underline w-full text-center" onClick={() => onChange([])}>清除全部</button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export function ProjectManagement({
   projects: initialProjects,
@@ -153,8 +194,23 @@ export function ProjectManagement({
   const [filterDept, setFilterDept] = useState("all");
   const [filterDeployMode, setFilterDeployMode] = useState("all");
   const [filterManager, setFilterManager] = useState("all");
-  const [filterYear, setFilterYear] = useState("all");
-  const [filterMonth, setFilterMonth] = useState("all");
+  // 新增筛选项
+  const [filterImplementationUnit, setFilterImplementationUnit] = useState<string[]>([]);
+  const [filterSales, setFilterSales] = useState("all");
+  const [filterPresales, setFilterPresales] = useState("all");
+  const [filterMarketProduct, setFilterMarketProduct] = useState("all");
+  const [filterCustomerTypes, setFilterCustomerTypes] = useState<string[]>([]);
+  const [filterEntryDateFrom, setFilterEntryDateFrom] = useState("");
+  const [filterEntryDateTo, setFilterEntryDateTo] = useState("");
+  const [filterInitialDateFrom, setFilterInitialDateFrom] = useState("");
+  const [filterInitialDateTo, setFilterInitialDateTo] = useState("");
+  const [filterFinalDateFrom, setFilterFinalDateFrom] = useState("");
+  const [filterFinalDateTo, setFilterFinalDateTo] = useState("");
+  const [filterChannelCompanies, setFilterChannelCompanies] = useState<string[]>([]);
+  const [filterProjectMembers, setFilterProjectMembers] = useState<string[]>([]);
+  const [filterProcurementModules, setFilterProcurementModules] = useState<string[]>([]);
+  const [filterIntegrationModule, setFilterIntegrationModule] = useState("all");
+  const [filterCustomDevModule, setFilterCustomDevModule] = useState("all");
 
   const [projectTypes, setProjectTypes] = useState<ProjectType[]>([]);
   const [projectStages, setProjectStages] = useState<ProjectStage[]>([]);
@@ -337,14 +393,49 @@ export function ProjectManagement({
     return Object.entries(typeCounts).map(([name, value]) => ({ name, value }));
   }, [projects, projectTypes]);
 
-  // 筛选项目
+  // 筛选项目 - 计算可选值
   const departments = useMemo(() => [...new Set(projects.map(p => p.department).filter(Boolean))].sort(), [projects]);
   const deployModes = useMemo(() => [...new Set(projects.map(p => p.deployment_mode).filter(Boolean))].sort(), [projects]);
   const managers = useMemo(() => [...new Set(projects.map(p => p.role_project_manager).filter(Boolean))].sort(), [projects]);
+  const implementationUnits = useMemo(() => [...new Set(projects.map(p => (p as unknown as Record<string,string>).implementation_unit).filter(Boolean) as string[])].sort(), [projects]);
+  const salesList = useMemo(() => [...new Set(projects.map(p => p.role_sales).filter(Boolean))].sort(), [projects]);
+  const presalesList = useMemo(() => [...new Set(projects.map(p => p.role_presales).filter(Boolean))].sort(), [projects]);
+  const marketProductList = useMemo(() => [...new Set(projects.map(p => p.role_market_product).filter(Boolean))].sort(), [projects]);
+  const allCustomerTypes = useMemo(() => [...new Set(projects.flatMap(p => {
+    const ct = (p as unknown as Record<string,unknown>).customer_type;
+    if (Array.isArray(ct)) return ct as string[];
+    if (typeof ct === "string") { try { const arr = JSON.parse(ct); return Array.isArray(arr) ? arr : [ct]; } catch { return [ct]; } }
+    return [];
+  }).filter(Boolean))].sort(), [projects]);
+  const allChannelCompanies = useMemo(() => [...new Set(projects.flatMap(p => {
+    const ci = p.channel_info;
+    if (Array.isArray(ci)) return (ci as Array<Record<string,string>>).map(c => c.company_name).filter(Boolean);
+    return [];
+  }))].sort(), [projects]);
+  const allProjectMembers = useMemo(() => [...new Set(projects.flatMap(p => {
+    const ci = p.customer_info as Record<string, unknown> | null;
+    const cp = ci?.contact_persons as Array<Record<string,string>> | null;
+    if (cp && cp.length > 0) return cp.map(c => c.name).filter(Boolean);
+    return [];
+  }))].sort(), [projects]);
+  const allProcurementModules = useMemo(() => [...new Set(projects.flatMap(p => {
+    const pm = p.procurement_modules;
+    return Array.isArray(pm) ? pm as string[] : [];
+  }))].sort(), [projects]);
+  const allIntegrationModules = useMemo(() => [...new Set(projects.flatMap(p => {
+    const il = (p as unknown as Record<string,unknown>).integration_list;
+    if (Array.isArray(il)) return (il as Array<Record<string,string>>).map(i => i.product_module || i.integration_type).filter(Boolean);
+    return [];
+  }))].sort(), [projects]);
+  const allCustomDevModules = useMemo(() => [...new Set(projects.flatMap(p => {
+    const cd = (p as unknown as Record<string,unknown>).custom_dev_info;
+    if (Array.isArray(cd)) return (cd as Array<Record<string,string>>).map(c => c.product_module).filter(Boolean);
+    return [];
+  }))].sort(), [projects]);
 
   const filteredProjects = useMemo(() => {
     return projects.filter(p => {
-      const matchSearch = p.project_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      const matchSearch = !searchQuery || p.project_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          p.project_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          (p.department || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchType = filterType === "all" || p.project_type === filterType;
@@ -353,33 +444,103 @@ export function ProjectManagement({
       const matchDept = filterDept === "all" || p.department === filterDept;
       const matchDeployMode = filterDeployMode === "all" || p.deployment_mode === filterDeployMode;
       const matchManager = filterManager === "all" || p.role_project_manager === filterManager;
-      const matchYear = filterYear === "all" || (p.created_at && new Date(p.created_at).getFullYear().toString() === filterYear);
-      const matchMonth = filterMonth === "all" || (p.created_at && (new Date(p.created_at).getMonth() + 1).toString().padStart(2, "0") === filterMonth);
-      return matchSearch && matchType && matchStage && matchStatus && matchDept && matchDeployMode && matchManager && matchYear && matchMonth;
+      // 新增筛选
+      const matchImplUnit = filterImplementationUnit.length === 0 || filterImplementationUnit.includes((p as unknown as Record<string,string>).implementation_unit || "");
+      const matchSales = filterSales === "all" || p.role_sales === filterSales;
+      const matchPresales = filterPresales === "all" || p.role_presales === filterPresales;
+      const matchMarketProduct = filterMarketProduct === "all" || p.role_market_product === filterMarketProduct;
+      const matchCustomerTypes = filterCustomerTypes.length === 0 || (() => {
+        const ct = (p as unknown as Record<string,unknown>).customer_type;
+        let arr: string[] = [];
+        if (Array.isArray(ct)) arr = ct as string[];
+        else if (typeof ct === "string") { try { arr = JSON.parse(ct); if (!Array.isArray(arr)) arr = [ct]; } catch { arr = [ct]; } }
+        return filterCustomerTypes.some(fc => arr.includes(fc));
+      })();
+      const matchEntryDate = (!filterEntryDateFrom || (p.entry_date && p.entry_date >= filterEntryDateFrom)) &&
+                             (!filterEntryDateTo || (p.entry_date && p.entry_date <= filterEntryDateTo));
+      const matchInitialDate = (!filterInitialDateFrom || (p.initial_acceptance_date && p.initial_acceptance_date >= filterInitialDateFrom)) &&
+                               (!filterInitialDateTo || (p.initial_acceptance_date && p.initial_acceptance_date <= filterInitialDateTo));
+      const matchFinalDate = (!filterFinalDateFrom || (p.final_acceptance_date && p.final_acceptance_date >= filterFinalDateFrom)) &&
+                             (!filterFinalDateTo || (p.final_acceptance_date && p.final_acceptance_date <= filterFinalDateTo));
+      const matchChannel = filterChannelCompanies.length === 0 || (() => {
+        const ci = p.channel_info;
+        if (Array.isArray(ci)) return (ci as Array<Record<string,string>>).some(c => filterChannelCompanies.includes(c.company_name));
+        return false;
+      })();
+      const matchMembers = filterProjectMembers.length === 0 || (() => {
+        const ci = p.customer_info as Record<string, unknown> | null;
+        const cp = ci?.contact_persons as Array<Record<string,string>> | null;
+        if (cp && cp.length > 0) return cp.some(c => filterProjectMembers.includes(c.name));
+        return false;
+      })();
+      const matchProcurement = filterProcurementModules.length === 0 || (() => {
+        const pm = p.procurement_modules;
+        if (Array.isArray(pm)) return filterProcurementModules.some(fm => (pm as string[]).includes(fm));
+        return false;
+      })();
+      const matchIntegration = filterIntegrationModule === "all" || (() => {
+        const il = (p as unknown as Record<string,unknown>).integration_list;
+        if (Array.isArray(il)) return (il as Array<Record<string,string>>).some(i => (i.product_module || i.integration_type) === filterIntegrationModule);
+        return false;
+      })();
+      const matchCustomDev = filterCustomDevModule === "all" || (() => {
+        const cd = (p as unknown as Record<string,unknown>).custom_dev_info;
+        if (Array.isArray(cd)) return (cd as Array<Record<string,string>>).some(c => c.product_module === filterCustomDevModule);
+        return false;
+      })();
+      return matchSearch && matchType && matchStage && matchStatus && matchDept && matchDeployMode && matchManager &&
+             matchImplUnit && matchSales && matchPresales && matchMarketProduct && matchCustomerTypes &&
+             matchEntryDate && matchInitialDate && matchFinalDate &&
+             matchChannel && matchMembers && matchProcurement && matchIntegration && matchCustomDev;
     });
-  }, [projects, searchQuery, filterType, filterStage, filterStatus, filterDept, filterDeployMode, filterManager, filterYear, filterMonth]);
+  }, [projects, searchQuery, filterType, filterStage, filterStatus, filterDept, filterDeployMode, filterManager,
+      filterImplementationUnit, filterSales, filterPresales, filterMarketProduct, filterCustomerTypes,
+      filterEntryDateFrom, filterEntryDateTo, filterInitialDateFrom, filterInitialDateTo, filterFinalDateFrom, filterFinalDateTo,
+      filterChannelCompanies, filterProjectMembers, filterProcurementModules, filterIntegrationModule, filterCustomDevModule]);
 
   // 导出项目列表
-  const handleExport = useCallback(() => {
-    const headers = ["项目名称", "项目编号", "客户名称", "所属部门", "项目经理", "部署模式", "项目类型", "项目阶段", "项目状态", "创建时间"];
-    const rows = filteredProjects.map((p: Project) => [
-      p.project_name || "",
-      p.project_code || "",
-      (p.customer_info as Record<string, string>)?.company_name || "",
-      p.department || "",
-      p.role_project_manager || "",
-      p.deployment_mode || "",
-      p.project_type || "",
-      p.project_stage || "",
-      p.status || "",
-      p.created_at ? new Date(p.created_at).toLocaleDateString("zh-CN") : ""
-    ]);
-    const csvContent = "\uFEFF" + [headers, ...rows].map(r => r.map(c => `"${c}"`).join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+  const handleExport = useCallback(async () => {
+    const headers = ["项目名称", "项目编号", "客户名称", "项目实施单位", "所属部门", "销售", "售前", "市场产品", "项目经理", "客户类型", "部署模式", "项目类型", "项目阶段", "项目状态", "进场时间", "初验时间", "终验时间", "渠道公司", "采购模块", "对接模块", "定制模块", "创建时间"];
+    const rows = filteredProjects.map((p: Project) => {
+      const ct = (p as unknown as Record<string,unknown>).customer_type;
+      let customerTypes = "";
+      if (Array.isArray(ct)) customerTypes = (ct as string[]).join("、");
+      else if (typeof ct === "string") customerTypes = ct;
+      const ci = Array.isArray(p.channel_info) ? (p.channel_info as Array<Record<string,string>>).map(c => c.company_name).join("、") : "";
+      const pm = Array.isArray(p.procurement_modules) ? (p.procurement_modules as string[]).join("、") : "";
+      const il = (p as unknown as Record<string,unknown>).integration_list;
+      const integrationModules = Array.isArray(il) ? (il as Array<Record<string,string>>).map(i => i.product_module || i.integration_type).filter(Boolean).join("、") : "";
+      const cd = (p as unknown as Record<string,unknown>).custom_dev_info;
+      const customDevModules = Array.isArray(cd) ? (cd as Array<Record<string,string>>).map(c => c.product_module).filter(Boolean).join("、") : "";
+      return [
+        p.project_name || "", p.project_code || "",
+        (p.customer_info as Record<string, string>)?.company_name || "",
+        (p as unknown as Record<string,string>).implementation_unit || "",
+        p.department || "", p.role_sales || "", p.role_presales || "",
+        p.role_market_product || "", p.role_project_manager || "",
+        customerTypes, p.deployment_mode || "",
+        p.project_type || "", p.project_stage || "",
+        p.project_status || p.status || "",
+        p.entry_date || "", p.initial_acceptance_date || "", p.final_acceptance_date || "",
+        ci, pm, integrationModules, customDevModules,
+        p.created_at ? new Date(p.created_at).toLocaleDateString("zh-CN") : ""
+      ];
+    });
+    const ExcelJS = await import("exceljs");
+    const Excel = (ExcelJS as { default?: unknown }).default || ExcelJS;
+    const wb = new Excel.Workbook();
+    const ws = wb.addWorksheet("项目列表");
+    ws.columns = headers.map(h => ({ header: h, key: h, width: 20 }));
+    rows.forEach(row => { ws.addRow(row); });
+    const headerRow = ws.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE3F2FD" } };
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `项目列表_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `项目列表_${new Date().toISOString().slice(0, 10)}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   }, [filteredProjects]);
@@ -1174,95 +1335,102 @@ export function ProjectManagement({
         {/* 筛选工具栏 */}
         <div className="p-6 pb-0">
           <div className="border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm">
-            {/* 第一行：搜索 + 基本筛选 + 操作按钮 */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="relative flex-1 min-w-[200px] max-w-[320px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  placeholder="搜索项目名称、编号..."
-                  value={searchQuery}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-                  className="pl-9 h-9"
-                />
+            {/* 第一行：核心筛选 */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative w-[180px] shrink-0">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                <Input placeholder="搜索项目名称..." value={searchQuery} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)} className="pl-8 h-8 text-xs" />
               </div>
-              <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v)}>
-                <SelectTrigger className="w-[120px] h-9"><SelectValue placeholder="项目状态" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部状态</SelectItem>
-                  <SelectItem value="进行中">进行中</SelectItem>
-                  <SelectItem value="已完成">已完成</SelectItem>
-                  <SelectItem value="已暂停">已暂停</SelectItem>
-                </SelectContent>
-              </Select>
               <Select value={filterType} onValueChange={(v) => setFilterType(v)}>
-                <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="项目类型" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部类型</SelectItem>
-                  {projectTypes.filter(t => t.code).map((t: { name: string; code: string }) => <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>)}
-                </SelectContent>
+                <SelectTrigger className="w-[130px] h-8 text-xs"><SelectValue placeholder="项目类型" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">项目类型</SelectItem>{projectTypes.filter(t => t.code).map((t: { name: string; code: string }) => <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>)}</SelectContent>
               </Select>
               <Select value={filterStage} onValueChange={(v) => setFilterStage(v)}>
-                <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="项目阶段" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部阶段</SelectItem>
-                  {projectStages.filter(s => s.code).map((s: { name: string; code: string }) => <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>)}
-                </SelectContent>
+                <SelectTrigger className="w-[130px] h-8 text-xs"><SelectValue placeholder="项目阶段" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">项目阶段</SelectItem>{projectStages.filter(s => s.code).map((s: { name: string; code: string }) => <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>)}</SelectContent>
               </Select>
-              <Select value={filterDept === "all" ? "all" : filterDept} onValueChange={(v) => setFilterDept(v)}>
-                <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="所属部门" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部部门</SelectItem>
-                  {[...new Set(projects.map((p: Project) => p.department).filter(Boolean) as string[])].map((d: string) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                </SelectContent>
+              <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v)}>
+                <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue placeholder="项目状态" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">项目状态</SelectItem><SelectItem value="进行中">进行中</SelectItem><SelectItem value="已完成">已完成</SelectItem><SelectItem value="已暂停">已暂停</SelectItem></SelectContent>
               </Select>
-              <Select value={filterDeployMode === "all" ? "all" : filterDeployMode} onValueChange={(v) => setFilterDeployMode(v)}>
-                <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="部署模式" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部模式</SelectItem>
-                  {[...new Set(projects.map((p: Project) => p.deployment_mode).filter(Boolean) as string[])].map((m: string) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                </SelectContent>
+              <Select value={filterDept} onValueChange={(v) => setFilterDept(v)}>
+                <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue placeholder="部门" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">部门</SelectItem>{departments.map((d: string) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
               </Select>
-              <Select value={filterManager === "all" ? "all" : filterManager} onValueChange={(v) => setFilterManager(v)}>
-                <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="项目经理" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部经理</SelectItem>
-                  {[...new Set(projects.map((p: Project) => p.role_project_manager).filter(Boolean) as string[])].map((m: string) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                </SelectContent>
+              <Select value={filterSales} onValueChange={(v) => setFilterSales(v)}>
+                <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue placeholder="销售" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">销售</SelectItem>{salesList.map((s: string) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
-              <Select value={filterYear === "all" ? "all" : filterYear} onValueChange={(v) => setFilterYear(v)}>
-                <SelectTrigger className="w-[110px] h-9"><SelectValue placeholder="年份" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部年份</SelectItem>
-                  {[...new Set(projects.map((p: Project) => p.created_at ? new Date(p.created_at).getFullYear().toString() : "").filter(Boolean) as string[])].sort().map((y: string) => <SelectItem key={y} value={y}>{y}年</SelectItem>)}
-                </SelectContent>
+              <Select value={filterPresales} onValueChange={(v) => setFilterPresales(v)}>
+                <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue placeholder="售前" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">售前</SelectItem>{presalesList.map((s: string) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
-              <Select value={filterMonth === "all" ? "all" : filterMonth} onValueChange={(v) => setFilterMonth(v)}>
-                <SelectTrigger className="w-[110px] h-9"><SelectValue placeholder="月份" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部月份</SelectItem>
-                  {Array.from({length: 12}, (_, i) => (i + 1).toString()).map((m: string) => <SelectItem key={m} value={m}>{m}月</SelectItem>)}
-                </SelectContent>
+              <Select value={filterMarketProduct} onValueChange={(v) => setFilterMarketProduct(v)}>
+                <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue placeholder="市场产品" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">市场产品</SelectItem>{marketProductList.map((s: string) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
-              {(filterDept !== "all" || filterDeployMode !== "all" || filterManager !== "all" || filterYear !== "all" || filterMonth !== "all") && (
-                <Button variant="ghost" size="sm" className="h-9 text-gray-500" onClick={() => { setFilterDept("all"); setFilterDeployMode("all"); setFilterManager("all"); setFilterYear("all"); setFilterMonth("all"); }}>
-                  清除筛选
-                  </Button>
-                )}
+              <Select value={filterManager} onValueChange={(v) => setFilterManager(v)}>
+                <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue placeholder="项目经理" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">项目经理</SelectItem>{managers.map((m: string) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+              </Select>
+              <MultiSelectBadge label="客户类型" options={allCustomerTypes} selected={filterCustomerTypes} onChange={setFilterCustomerTypes} />
               <div className="flex-1" />
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 gap-1.5"
-                onClick={handleExport}
-              >
-                <Download className="w-3.5 h-3.5" />
-                导出
-              </Button>
-              <Button size="sm" className="h-9 gap-1.5 bg-indigo-600 hover:bg-indigo-700" onClick={() => { setEditingProject(null); setShowProjectForm(true); }}>
-                <Plus className="w-3.5 h-3.5" />
-                新建项目
-              </Button>
+              <Button variant="ghost" size="sm" className="h-8 text-xs text-gray-500" onClick={() => {
+                setFilterDept("all"); setFilterType("all"); setFilterStage("all"); setFilterStatus("all");
+                setFilterSales("all"); setFilterPresales("all"); setFilterMarketProduct("all"); setFilterManager("all");
+                setFilterImplementationUnit([]); setFilterCustomerTypes([]);
+                setFilterEntryDateFrom(""); setFilterEntryDateTo("");
+                setFilterInitialDateFrom(""); setFilterInitialDateTo("");
+                setFilterFinalDateFrom(""); setFilterFinalDateTo("");
+                setFilterChannelCompanies([]); setFilterProjectMembers([]); setFilterProcurementModules([]);
+                setFilterIntegrationModule("all"); setFilterCustomDevModule("all");
+                setSearchQuery("");
+              }}>清除</Button>
+              <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={handleExport}><Download className="w-3 h-3" />导出</Button>
+              <Button size="sm" className="h-8 gap-1 text-xs bg-indigo-600 hover:bg-indigo-700" onClick={() => { setEditingProject(null); setShowProjectForm(true); }}><Plus className="w-3 h-3" />新建项目</Button>
             </div>
+            {/* 第二行：扩展筛选 - 多选 + 时间 + 模块 */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <MultiSelectBadge label="实施单位" options={implementationUnits} selected={filterImplementationUnit} onChange={setFilterImplementationUnit} />
+              <MultiSelectBadge label="渠道公司" options={allChannelCompanies} selected={filterChannelCompanies} onChange={setFilterChannelCompanies} />
+              <MultiSelectBadge label="项目成员" options={allProjectMembers} selected={filterProjectMembers} onChange={setFilterProjectMembers} />
+              <MultiSelectBadge label="采购模块" options={allProcurementModules} selected={filterProcurementModules} onChange={setFilterProcurementModules} />
+              <Select value={filterIntegrationModule} onValueChange={(v) => setFilterIntegrationModule(v)}>
+                <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue placeholder="对接模块" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">对接模块</SelectItem>{allIntegrationModules.map((m: string) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select value={filterCustomDevModule} onValueChange={(v) => setFilterCustomDevModule(v)}>
+                <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue placeholder="定制模块" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">定制模块</SelectItem>{allCustomDevModules.map((m: string) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+              </Select>
+              <div className="flex items-center gap-1 text-xs"><span className="text-gray-500 shrink-0">进场</span><Input type="date" value={filterEntryDateFrom} onChange={(e) => setFilterEntryDateFrom(e.target.value)} className="w-[140px] h-8 text-xs" /><span className="text-gray-400">-</span><Input type="date" value={filterEntryDateTo} onChange={(e) => setFilterEntryDateTo(e.target.value)} className="w-[140px] h-8 text-xs" /></div>
+              <div className="flex items-center gap-1 text-xs"><span className="text-gray-500 shrink-0">初验</span><Input type="date" value={filterInitialDateFrom} onChange={(e) => setFilterInitialDateFrom(e.target.value)} className="w-[140px] h-8 text-xs" /><span className="text-gray-400">-</span><Input type="date" value={filterInitialDateTo} onChange={(e) => setFilterInitialDateTo(e.target.value)} className="w-[140px] h-8 text-xs" /></div>
+              <div className="flex items-center gap-1 text-xs"><span className="text-gray-500 shrink-0">终验</span><Input type="date" value={filterFinalDateFrom} onChange={(e) => setFilterFinalDateFrom(e.target.value)} className="w-[140px] h-8 text-xs" /><span className="text-gray-400">-</span><Input type="date" value={filterFinalDateTo} onChange={(e) => setFilterFinalDateTo(e.target.value)} className="w-[140px] h-8 text-xs" /></div>
+            </div>
+            {/* 活跃筛选标签 */}
+            {(() => {
+              const tags: { label: string; onClear: () => void }[] = [];
+              if (filterImplementationUnit.length > 0) tags.push({ label: `实施:${filterImplementationUnit.length}`, onClear: () => setFilterImplementationUnit([]) });
+              if (filterCustomerTypes.length > 0) tags.push({ label: `客户类型:${filterCustomerTypes.length}`, onClear: () => setFilterCustomerTypes([]) });
+              if (filterChannelCompanies.length > 0) tags.push({ label: `渠道:${filterChannelCompanies.length}`, onClear: () => setFilterChannelCompanies([]) });
+              if (filterProjectMembers.length > 0) tags.push({ label: `成员:${filterProjectMembers.length}`, onClear: () => setFilterProjectMembers([]) });
+              if (filterProcurementModules.length > 0) tags.push({ label: `采购:${filterProcurementModules.length}`, onClear: () => setFilterProcurementModules([]) });
+              if (filterIntegrationModule !== "all") tags.push({ label: `对接:${filterIntegrationModule}`, onClear: () => setFilterIntegrationModule("all") });
+              if (filterCustomDevModule !== "all") tags.push({ label: `定制:${filterCustomDevModule}`, onClear: () => setFilterCustomDevModule("all") });
+              if (filterEntryDateFrom || filterEntryDateTo) tags.push({ label: "进场时间", onClear: () => { setFilterEntryDateFrom(""); setFilterEntryDateTo(""); } });
+              if (filterInitialDateFrom || filterInitialDateTo) tags.push({ label: "初验时间", onClear: () => { setFilterInitialDateFrom(""); setFilterInitialDateTo(""); } });
+              if (filterFinalDateFrom || filterFinalDateTo) tags.push({ label: "终验时间", onClear: () => { setFilterFinalDateFrom(""); setFilterFinalDateTo(""); } });
+              if (tags.length === 0) return null;
+              return (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {tags.map((t, i) => (
+                    <Badge key={i} variant="secondary" className="text-xs gap-1 cursor-pointer hover:bg-red-50" onClick={t.onClear}>
+                      {t.label} <X className="h-3 w-3" />
+                    </Badge>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </div>
         {/* 项目表单弹窗 */}
