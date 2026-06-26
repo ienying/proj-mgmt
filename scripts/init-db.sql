@@ -383,6 +383,7 @@ CREATE TABLE IF NOT EXISTS project_schema_rules (
   rule_type VARCHAR(20) DEFAULT 'type_stage' NOT NULL,
   project_type VARCHAR(50),
   project_stage VARCHAR(50),
+  project_status VARCHAR(20),
   module_codes JSONB NOT NULL DEFAULT '[]'::jsonb,
   table_definitions JSONB NOT NULL DEFAULT '[]'::jsonb,
   is_enabled BOOLEAN DEFAULT true NOT NULL,
@@ -393,6 +394,7 @@ CREATE TABLE IF NOT EXISTS project_schema_rules (
 );
 CREATE INDEX IF NOT EXISTS project_schema_rules_type_idx ON project_schema_rules(project_type);
 CREATE INDEX IF NOT EXISTS project_schema_rules_stage_idx ON project_schema_rules(project_stage);
+CREATE INDEX IF NOT EXISTS project_schema_rules_status_idx ON project_schema_rules(project_status);
 
 -- ============================================
 -- To-do System
