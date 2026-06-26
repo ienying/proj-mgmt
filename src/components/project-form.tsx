@@ -2181,7 +2181,42 @@ export function ProjectForm({
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <label className="text-sm font-medium text-slate-700">是否有对接</label>
-                  <Select value={hasIntegration ? 'yes' : 'no'} onValueChange={(v) => setHasIntegration(v === 'yes')}>
+                  <Select value={hasIntegration ? 'yes' : 'no'} onValueChange={(v) => {
+                    setHasIntegration(v === 'yes');
+                    if (v === 'yes' && integrationList.length === 0) {
+                      setIntegrationList([{
+                        id: Date.now().toString(),
+                        vendor_name: "",
+                        product_module: "",
+                        integration_type: "",
+                        brief_description: "",
+                        in_contract: "是",
+                        contract_note: "",
+                        our_req_contact: "",
+                        our_req_contact_phone: "",
+                        our_product_contact: "",
+                        our_product_contact_phone: "",
+                        our_dev_contact: "",
+                        our_dev_contact_phone: "",
+                        our_responsibility: "",
+                        their_req_contact: "",
+                        their_req_contact_phone: "",
+                        their_req_contact_position: "",
+                        their_req_contact_note: "",
+                        their_product_contact: "",
+                        their_product_contact_phone: "",
+                        their_product_contact_position: "",
+                        their_product_contact_note: "",
+                        their_dev_contact: "",
+                        their_dev_contact_phone: "",
+                        their_dev_contact_position: "",
+                        their_dev_contact_note: "",
+                        their_responsibility: "",
+                        integration_docs: [],
+                        remark: "",
+                      }]);
+                    }
+                  }}>
                     <SelectTrigger className="w-[120px]">
                       <SelectValue />
                     </SelectTrigger>
@@ -2200,8 +2235,7 @@ export function ProjectForm({
                   <div key={item.id} className="border rounded-lg overflow-hidden">
                     <div className="bg-slate-50 px-4 py-2 flex items-center justify-between border-b">
                       <span className="text-sm font-medium text-slate-700">
-                        对接信息 {index + 1}
-                        {item.vendor_name && ` - ${item.vendor_name}`}
+                        对接信息{index + 1}{item.product_module ? ` - ${item.product_module}` : item.vendor_name ? ` - ${item.vendor_name}` : ""}
                       </span>
                       <button
                         type="button"
@@ -2212,7 +2246,7 @@ export function ProjectForm({
                       </button>
                     </div>
                     <div className="p-4 space-y-3">
-                      {/* 第一行：对接厂商 / 产品模块 / 对接类型 / 对接信息简述 */}
+                      {/* 第一行：对接厂商 / 产品模块 / 是否在合同内 / 对接类型 */}
                       <div className="grid grid-cols-4 gap-3">
                         <div className="space-y-1">
                           <label className="text-xs text-slate-500">对接厂商 *</label>
@@ -2255,6 +2289,23 @@ export function ProjectForm({
                           </Popover>
                         </div>
                         <div className="space-y-1">
+                          <label className="text-xs text-slate-500">是否在合同内</label>
+                          <div className="flex items-center gap-2">
+                            <Select value={item.in_contract} onValueChange={(v) => updateIntegration(item.id, "in_contract", v)}>
+                              <SelectTrigger className="h-8 text-sm">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="是">是</SelectItem>
+                                <SelectItem value="否">否</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {item.in_contract === "否" && (
+                              <Input value={item.contract_note} onChange={(e) => updateIntegration(item.id, "contract_note", e.target.value)} placeholder="原因" className="h-8 text-sm flex-1" />
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-1">
                           <label className="text-xs text-slate-500">对接类型</label>
                           <Select value={item.integration_type} onValueChange={(v) => updateIntegration(item.id, "integration_type", v)}>
                             <SelectTrigger className="w-full h-8 text-sm">
@@ -2267,37 +2318,11 @@ export function ProjectForm({
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-xs text-slate-500">对接信息简述</label>
-                          <Input
-                            value={item.brief_description}
-                            onChange={(e) => updateIntegration(item.id, "brief_description", e.target.value)}
-                            placeholder="简述"
-                            className="h-8 text-sm"
-                          />
-                        </div>
                       </div>
-
-                      {/* 是否在合同内 */}
-                      <div className="flex items-center gap-4">
-                        <label className="text-xs text-slate-500">是否在合同内</label>
-                        <Select value={item.in_contract} onValueChange={(v) => updateIntegration(item.id, "in_contract", v)}>
-                          <SelectTrigger className="w-[100px] h-8 text-sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="是">是</SelectItem>
-                            <SelectItem value="否">否</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {item.in_contract === "否" && (
-                          <Input
-                            value={item.contract_note}
-                            onChange={(e) => updateIntegration(item.id, "contract_note", e.target.value)}
-                            placeholder="说明不在合同内的原因"
-                            className="h-8 text-sm flex-1"
-                          />
-                        )}
+                      {/* 对接信息简述 */}
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-500">对接信息简述</label>
+                        <textarea value={item.brief_description} onChange={(e) => updateIntegration(item.id, "brief_description", e.target.value)} placeholder="对接信息简述" className="w-full min-h-[60px] p-2 border rounded-md resize-none text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                       </div>
 
                       {/* 我方信息 */}
@@ -2482,7 +2507,28 @@ export function ProjectForm({
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <label className="text-sm font-medium text-slate-700">是否含定制开发</label>
-                  <Select value={hasCustomDev ? 'yes' : 'no'} onValueChange={(v) => { setHasCustomDev(v === 'yes'); if (v === 'no') setCustomDevItems([]); }}>
+                  <Select value={hasCustomDev ? 'yes' : 'no'} onValueChange={(v) => {
+                    setHasCustomDev(v === 'yes');
+                    if (v === 'yes' && customDevItems.length === 0) {
+                      setCustomDevItems([{
+                        id: Date.now().toString(),
+                        product_module: "",
+                        custom_content: "",
+                        in_contract: "是",
+                        contract_note: "",
+                        customer_req_contact: "",
+                        customer_req_contact_phone: "",
+                        customer_req_contact_position: "",
+                        customer_req_contact_note: "",
+                        internal_req_contact: "",
+                        internal_req_contact_phone: "",
+                        internal_product_contact: "",
+                        internal_product_contact_phone: "",
+                        req_docs: [],
+                        remark: "",
+                      }]);
+                    } else if (v === 'no') setCustomDevItems([]);
+                  }}>
                     <SelectTrigger className="w-[120px]">
                       <SelectValue />
                     </SelectTrigger>
@@ -2537,22 +2583,24 @@ export function ProjectForm({
                               </Popover>
                             </div>
                             <div className="space-y-1">
-                              <label className="text-xs text-slate-500">定制内容简述</label>
-                              <Input value={cd.custom_content} onChange={(e) => updateCustomDev(cd.id, "custom_content", e.target.value)} placeholder="简述定制内容" className="h-8 text-sm" />
+                              <label className="text-xs text-slate-500">是否在合同内</label>
+                              <div className="flex items-center gap-2">
+                                <Select value={cd.in_contract} onValueChange={(v) => updateCustomDev(cd.id, "in_contract", v)}>
+                                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="是">是</SelectItem>
+                                    <SelectItem value="否">否</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                {cd.in_contract === "否" && (
+                                  <Input value={cd.contract_note} onChange={(e) => updateCustomDev(cd.id, "contract_note", e.target.value)} placeholder="说明原因" className="h-8 text-sm flex-1" />
+                                )}
+                              </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-4">
-                            <label className="text-xs text-slate-500">是否在合同内</label>
-                            <Select value={cd.in_contract} onValueChange={(v) => updateCustomDev(cd.id, "in_contract", v)}>
-                              <SelectTrigger className="w-[100px] h-8 text-sm"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="是">是</SelectItem>
-                                <SelectItem value="否">否</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            {cd.in_contract === "否" && (
-                              <Input value={cd.contract_note} onChange={(e) => updateCustomDev(cd.id, "contract_note", e.target.value)} placeholder="说明原因" className="h-8 text-sm flex-1" />
-                            )}
+                          <div className="space-y-1">
+                            <label className="text-xs text-slate-500">定制内容简述</label>
+                            <textarea value={cd.custom_content} onChange={(e) => updateCustomDev(cd.id, "custom_content", e.target.value)} placeholder="简述定制内容" className="w-full min-h-[60px] p-2 border rounded-md resize-none text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
                           </div>
                           {/* 客户需求提出人 */}
                           <div className="grid grid-cols-4 gap-2">
