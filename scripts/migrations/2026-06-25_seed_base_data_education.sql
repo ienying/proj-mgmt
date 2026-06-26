@@ -113,3 +113,20 @@ FROM (VALUES
   ('document',        '资料管理',    'FileText',       'slate',      '项目文档、图纸、报告、归档管理',               9, true)
 ) AS v(code, name, icon, color, description, sort_order, is_enabled)
 WHERE NOT EXISTS (SELECT 1 FROM project_module_types WHERE code = v.code);
+
+-- ============================================
+-- 8. 定制开发类型
+-- ============================================
+INSERT INTO custom_dev_types (code, name, description, sort_order, is_enabled)
+SELECT v.code, v.name, v.description, v.sort_order, v.is_enabled
+FROM (VALUES
+  ('custom_dev',      '定制开发',        '根据客户需求从零定制开发软件系统',               0, true),
+  ('secondary_dev',   '二次开发',        '基于现有产品进行二次定制开发',                   1, true),
+  ('integration',     '系统集成',        '多系统之间的数据对接与业务集成',                 2, true),
+  ('api_docking',     '接口对接',        '与第三方系统的API接口联调对接',                  3, true),
+  ('data_migration',  '数据迁移',        '历史数据清洗、转换、迁移服务',                   4, true),
+  ('feature_extend',  '功能扩展',        '在现有系统基础上扩展新功能模块',                 5, true),
+  ('saas_config',     'SaaS配置',        'SaaS产品的个性化配置与部署',                     6, true),
+  ('performance_opt', '性能优化',        '系统性能调优、架构升级改造',                     7, true)
+) AS v(code, name, description, sort_order, is_enabled)
+WHERE NOT EXISTS (SELECT 1 FROM custom_dev_types WHERE code = v.code);

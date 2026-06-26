@@ -154,6 +154,19 @@ export const project_stages = pgTable("project_stages", {
   index("project_stages_sort_idx").on(table.sort_order),
 ]);
 
+// 定制开发类型表
+export const custom_dev_types = pgTable("custom_dev_types", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  sort_order: integer("sort_order").default(0).notNull(),
+  is_enabled: boolean("is_enabled").default(true).notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("custom_dev_types_code_idx").on(table.code),
+]);
+
 // 采购模块类型表
 export const product_module_types = pgTable("product_module_types", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),

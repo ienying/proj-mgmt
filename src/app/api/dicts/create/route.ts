@@ -96,6 +96,9 @@ export async function POST(request: NextRequest) {
           quality_rating: body.quality_rating || null,
         };
         break;
+      case "custom_dev_types":
+        tableName = "custom_dev_types";
+        break;
       case "todo_statuses":
         tableName = "todo_statuses";
         insertData = {

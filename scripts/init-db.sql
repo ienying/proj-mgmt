@@ -198,6 +198,18 @@ CREATE TABLE IF NOT EXISTS member_role_types (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
 
+-- 定制开发类型表
+CREATE TABLE IF NOT EXISTS custom_dev_types (
+  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
+  code VARCHAR(50) NOT NULL UNIQUE,
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  sort_order INTEGER DEFAULT 0 NOT NULL,
+  is_enabled BOOLEAN DEFAULT true NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS custom_dev_types_code_idx ON custom_dev_types(code);
+
 CREATE TABLE IF NOT EXISTS project_module_types (
   id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(100) NOT NULL,
