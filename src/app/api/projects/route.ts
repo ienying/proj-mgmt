@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
       login_username,
       login_password,
       integration_list,
+      custom_dev_info,
     } = body;
 
     // 0. 检查项目编号是否重复
@@ -105,6 +106,7 @@ export async function POST(request: NextRequest) {
       role_presales: body.role_presales || null,
       role_market_product: body.role_market_product || null,
       role_project_manager: body.role_project_manager || null,
+      custom_dev_info: custom_dev_info || [],
       status: "active",
       created_by: body.created_by || "system",
     };
@@ -347,20 +349,28 @@ async function copyTableDefinitionsToSchema(
 
         // 2. 复制数据（从 std_definition_{table_code} 表）
         const sourceTable = `design_public.std_definition_${tableCode}`;
-        
+
+        // 确保源表有 _readonly 列（兼容旧表）
+        try {
+          await client.rpc("execute_sql", {
+            p_sql: `ALTER TABLE ${sourceTable} ADD COLUMN IF NOT EXISTS _readonly BOOLEAN DEFAULT FALSE`,
+          });
+        } catch { /* ignore */ }
+
         // 获取用户定义的列名（排除系统字段）
         const userColumns = columnsConfig.map((col) => col.name);
         
         // 直接尝试复制数据（如果源表不存在会失败，但可以忽略）
         if (userColumns.length > 0) {
           try {
-            // 复制数据（包含 allow_delete 和 data_source）
+            // 复制数据（包含 _readonly, allow_delete 和 data_source）
             const columnsList = userColumns.map((col) => `"${col}"`).join(", ");
             const copyDataSQL = `
-              INSERT INTO ${projectSchema}."${tableCode}" 
-                (${columnsList}, allow_delete, data_source, sort_order, created_at)
-              SELECT 
-                ${columnsList}, 
+              INSERT INTO ${projectSchema}."${tableCode}"
+                (${columnsList}, _readonly, allow_delete, data_source, sort_order, created_at)
+              SELECT
+                ${columnsList},
+                COALESCE(_readonly, false) as _readonly,
                 COALESCE(allow_delete, true) as allow_delete,
                 COALESCE(data_source, 'standard') as data_source,
                 0 as sort_order,

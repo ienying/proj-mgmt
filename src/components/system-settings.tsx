@@ -1699,15 +1699,6 @@ function RolePermissionPanel({ users, onUserUpdate }: { users: User[]; onUserUpd
   // 移除成员弹窗
   const [removeMemberOpen, setRemoveMemberOpen] = useState<{ open: boolean; role: string }>({ open: false, role: "" });
   const [removeSelectedIds, setRemoveSelectedIds] = useState<Set<string>>(new Set());
-  // 权限编辑
-  const [editingPermsRole, setEditingPermsRole] = useState<string | null>(null);
-  const [newPermInput, setNewPermInput] = useState("");
-  // 可编辑的权限副本
-  const [editablePerms, setEditablePerms] = useState<Record<string, string[]>>({
-    super_admin: ["用户管理", "角色分配", "系统配置", "基础数据管理", "模块管理", "工单配置", "AI 配置", "全部数据访问"],
-    sub_admin: ["用户管理", "基础数据管理", "模块管理", "工单配置"],
-    user: ["创建项目", "项目内权限由管理员分配"],
-  });
 
   const roleLabels: Record<string, string> = {
     super_admin: "超级管理员",
@@ -1719,6 +1710,13 @@ function RolePermissionPanel({ users, onUserUpdate }: { users: User[]; onUserUpd
     super_admin: "拥有系统所有权限，可管理用户角色、系统配置等",
     sub_admin: "由超级管理员授权，可管理用户、基础数据等",
     user: "普通用户，可创建项目，项目内权限由管理员或项目经理分配",
+  };
+
+  // 各角色权限清单（只读展示）
+  const rolePermissions: Record<string, string[]> = {
+    super_admin: ["用户管理", "角色分配", "系统配置", "基础数据管理", "模块管理", "工单配置", "AI 配置", "全部数据访问"],
+    sub_admin: ["用户管理", "基础数据管理", "模块管理", "工单配置"],
+    user: ["创建项目", "项目内权限由管理员分配"],
   };
 
   const toggleCollapse = (role: string) => {
@@ -1829,24 +1827,6 @@ function RolePermissionPanel({ users, onUserUpdate }: { users: User[]; onUserUpd
       .slice(0, 2);
   };
 
-  // 权限编辑操作
-  const handleRemovePerm = (role: string, perm: string) => {
-    setEditablePerms((prev) => ({
-      ...prev,
-      [role]: (prev[role] || []).filter((p) => p !== perm),
-    }));
-  };
-
-  const handleAddPerm = (role: string) => {
-    const trimmed = newPermInput.trim();
-    if (!trimmed) return;
-    setEditablePerms((prev) => ({
-      ...prev,
-      [role]: [...(prev[role] || []), trimmed],
-    }));
-    setNewPermInput("");
-  };
-
   // Group users by role
   const roleGroups = [
     { role: "super_admin", label: "超级管理员", color: "bg-red-50 border-red-200", badgeColor: "border-red-200 bg-red-50 text-red-700", iconColor: "text-red-600", cardBorder: "border-l-red-400", btnClass: "hover:bg-red-100" },
@@ -1890,8 +1870,7 @@ function RolePermissionPanel({ users, onUserUpdate }: { users: User[]; onUserUpd
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {roleGroups.map((group) => {
           const groupUsers = users.filter((u) => (u.role || "user") === group.role);
-          const perms = editablePerms[group.role] || [];
-          const isEditingPerms = editingPermsRole === group.role;
+          const perms = rolePermissions[group.role] || [];
           return (
             <div key={group.role} className={`p-4 rounded-lg border ${group.color} flex flex-col transition-all`}>
               <div className="flex items-center gap-2 mb-2">
@@ -1900,42 +1879,13 @@ function RolePermissionPanel({ users, onUserUpdate }: { users: User[]; onUserUpd
                 <span className="text-xs text-muted-foreground ml-auto">{groupUsers.length} 人</span>
               </div>
               <p className="text-sm text-gray-600 mb-3">{roleDescriptions[group.role]}</p>
-              {/* 权限标签 — 可编辑 */}
+              {/* 权限标签 — 只读展示 */}
               <div className="flex flex-wrap gap-1 mb-3">
                 {perms.map((perm) => (
-                  <Badge key={perm} variant="outline" className={`text-xs bg-white/60 ${isEditingPerms ? "pr-0.5" : ""}`}>
+                  <Badge key={perm} variant="outline" className="text-xs bg-white/60">
                     {perm}
-                    {isEditingPerms && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemovePerm(group.role, perm)}
-                        className="ml-1 hover:text-red-500 inline-flex items-center"
-                        title="移除权限"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
                   </Badge>
                 ))}
-                {isEditingPerms && (
-                  <div className="flex items-center gap-1">
-                    <Input
-                      value={newPermInput}
-                      onChange={(e) => setNewPermInput(e.target.value)}
-                      placeholder="新权限..."
-                      className="h-6 w-24 text-xs"
-                      onKeyDown={(e) => { if (e.key === "Enter") handleAddPerm(group.role); }}
-                    />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 w-6 p-0"
-                      onClick={() => handleAddPerm(group.role)}
-                    >
-                      <Plus className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
               </div>
               {/* 操作按钮 */}
               <div className="flex items-center gap-1.5 mt-auto pt-3 border-t border-border/50">
@@ -1966,32 +1916,6 @@ function RolePermissionPanel({ users, onUserUpdate }: { users: User[]; onUserUpd
                 >
                   <Trash2 className="h-3.5 w-3.5 mr-1" />
                   移除成员
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className={`h-7 text-xs ml-auto ${isEditingPerms ? "bg-white text-blue-600" : group.btnClass}`}
-                  onClick={() => {
-                    if (isEditingPerms) {
-                      setEditingPermsRole(null);
-                      setNewPermInput("");
-                    } else {
-                      setEditingPermsRole(group.role);
-                      setNewPermInput("");
-                    }
-                  }}
-                >
-                  {isEditingPerms ? (
-                    <>
-                      <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                      完成编辑
-                    </>
-                  ) : (
-                    <>
-                      <Edit className="h-3.5 w-3.5 mr-1" />
-                      编辑权限
-                    </>
-                  )}
                 </Button>
               </div>
             </div>

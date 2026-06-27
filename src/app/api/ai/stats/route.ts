@@ -9,7 +9,7 @@ export async function GET() {
 
     // 获取全部使用日志
     const { data: logsData } = await client.rpc("dp_select", {
-      p_table: "ai_usage_logs",
+      p_table: "design_public.ai_usage_logs",
     });
     const logs = (logsData as Record<string, unknown>[]) || [];
 

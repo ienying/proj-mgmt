@@ -347,6 +347,10 @@ export function ProjectDetail({
   const [tableDataMap, setTableDataMap] = useState<Record<string, TableData[]>>({});
   const [loading, setLoading] = useState(true);
 
+  // 当前选中的表（侧边栏导航用）
+  const [selectedTableCode, setSelectedTableCode] = useState<string | null>(null);
+  const prevModuleRef = useRef<string | null>(null);
+
   // 关联的流程任务
   const [linkedTasksMap, setLinkedTasksMap] = useState<Record<string, any[]>>({});
   const [linkedTasksOpen, setLinkedTasksOpen] = useState<string | null>(null);
@@ -570,6 +574,27 @@ export function ProjectDetail({
     return tableDefinitions.filter(t => t.module_codes.includes(activeModule));
   }, [tableDefinitions, activeModule]);
 
+  // 模块切换或数据加载后自动选中第一个表
+  useEffect(() => {
+    const tables = tableDefinitions.filter(t => t.module_codes.includes(activeModule));
+    if (tables.length === 0) {
+      setSelectedTableCode(null);
+      return;
+    }
+    // 模块切换 或 当前选中不在模块内 → 选第一个
+    if (
+      prevModuleRef.current !== activeModule ||
+      (selectedTableCode && !tables.some(t => t.table_code === selectedTableCode))
+    ) {
+      setSelectedTableCode(tables[0].table_code);
+    }
+    // 初次加载且尚未选中 → 选第一个
+    if (prevModuleRef.current === null && !selectedTableCode) {
+      setSelectedTableCode(tables[0].table_code);
+    }
+    prevModuleRef.current = activeModule;
+  }, [activeModule, tableDefinitions, selectedTableCode]);
+
   // 加载表定义和数据
   useEffect(() => {
     loadTableDefinitionsAndData();
@@ -653,16 +678,18 @@ export function ProjectDetail({
   const fetchLinkedTasks = async (definitions: TableDefinition[], dataMap: Record<string, TableData[]>) => {
     try {
       const schema = project.project_schema;
+      const tableNames = definitions.map(d => d.table_code).filter(Boolean);
+      if (tableNames.length === 0) return;
+
+      // 批量查询：一次请求查所有表的关联流程
+      const res = await fetch(`/api/tasks/by-source-record-batch?schema=${encodeURIComponent(schema)}&tables=${encodeURIComponent(tableNames.join(","))}`);
+      const json = await res.json();
+      if (!json.data || Object.keys(json.data).length === 0) return;
+
       const newMap: Record<string, any[]> = {};
-
-      for (const def of definitions) {
-        const tableName = def.table_code;
-        if (!tableName) continue;
-        const res = await fetch(`/api/tasks/by-source-record?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(tableName)}`);
-        const json = await res.json();
-        if (!json.data || !Array.isArray(json.data) || json.data.length === 0) continue;
-
-        for (const defEntry of json.data) {
+      // json.data 格式: { tableName: [{ def_id, task_name, referenced_record_ids, instances, ... }] }
+      for (const tableEntries of Object.values(json.data) as any[]) {
+        for (const defEntry of tableEntries) {
           for (const recordId of defEntry.referenced_record_ids || []) {
             if (!newMap[recordId]) newMap[recordId] = [];
             newMap[recordId].push(defEntry);
@@ -694,6 +721,7 @@ export function ProjectDetail({
             allow_add: d.allow_add as boolean | undefined,
             readonly_mode: d.readonly_mode as ("and" | "or") | undefined,
             columns_config: dedupeColumnsByName(d.columns_config as ColumnConfig[]).map(col => ({ ...col, key: col.key || col.name })),
+            references_config: d.references_config as TableDefinition['references_config'],
           }));
 
         // 检测含有采购模块记录类型列的表，自动设置 allow_add = false
@@ -1274,12 +1302,12 @@ export function ProjectDetail({
     const hasSettings = configurableViews.includes(viewMode);
 
     return (
-      <div className="flex items-center gap-px bg-slate-100/80 rounded-lg p-0.5 flex-wrap justify-center">
+      <div className="flex items-center gap-px bg-slate-100/80 p-0.5 flex-wrap justify-center">
         {modes.map(({ key, label }) => (
           <button
             key={key}
             className={cn(
-              "px-2 py-1 rounded text-[11px] leading-tight font-medium transition-all whitespace-nowrap text-center",
+              "px-2 py-1 text-[11px] leading-tight font-medium transition-all whitespace-nowrap text-center",
               viewMode === key
                 ? "bg-white text-slate-900 shadow-sm"
                 : "text-slate-400 hover:text-slate-600"
@@ -1291,7 +1319,7 @@ export function ProjectDetail({
         ))}
         <button
           onClick={() => openAIPromptDialog()}
-          className="px-2 py-1 rounded text-[11px] leading-tight font-medium transition-all whitespace-nowrap text-center text-teal-600 hover:bg-teal-50 flex items-center gap-1"
+          className="px-2 py-1 text-[11px] leading-tight font-medium transition-all whitespace-nowrap text-center text-teal-600 hover:bg-teal-50 flex items-center gap-1"
         >
           <Sparkles className="w-3 h-3" />
           AI 分析
@@ -1710,7 +1738,7 @@ export function ProjectDetail({
         {/* 卡片列表 */}
         <div className="space-y-3 p-2">
         {data.length === 0 ? (
-          <div className={cn("px-3 py-10 text-center rounded-lg border border-dashed", mc.border, mc.text, "opacity-50")}>
+          <div className={cn("px-3 py-10 text-center border border-dashed", mc.border, mc.text, "opacity-50")}>
             {table.allow_add !== false ? '暂无数据，点击上方"添加"按钮新增记录' : "暂无数据"}
           </div>
         ) : (
@@ -1718,7 +1746,7 @@ export function ProjectDetail({
             const isRowEditing = editingCell?.tableCode === table.table_code && editingCell?.rowId === row.id;
             return (
               <div key={row.id || ri} className={cn(
-                "rounded-lg border border-slate-200/80 overflow-hidden transition-all hover:shadow-md",
+                "border border-slate-200/80 overflow-hidden transition-all hover:shadow-md",
                 isRowEditing && "ring-2 ring-offset-1",
                 isRowEditing && mc.ring
               )}>
@@ -2372,11 +2400,11 @@ export function ProjectDetail({
         <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: 300 }}>
         {groups.map((group) => (
           <div key={group.label} className="flex-shrink-0 w-72">
-            <div className={cn("rounded-t-lg px-3 py-2 font-semibold text-sm text-white", mc.header)}>
+            <div className={cn("px-3 py-2 font-semibold text-sm text-white", mc.header)}>
               {group.label}
               <span className="ml-2 text-xs text-white/70">({group.items.length})</span>
             </div>
-            <div className="bg-gray-50 rounded-b-lg p-2 space-y-2 min-h-[200px]">
+            <div className="bg-gray-50 p-2 space-y-2 min-h-[200px]">
               {group.items.length === 0 && (
                 <div className="text-center py-4 text-xs text-gray-400">暂无数据</div>
               )}
@@ -3840,7 +3868,7 @@ export function ProjectDetail({
     const mc = getModuleColor(activeModule);
 
     return (
-      <div className="rounded-xl border border-slate-200/80 overflow-hidden shadow-sm">
+      <div className="flex flex-col h-full">
         {/* 表头 */}
         <div className={cn("px-4 py-3", mc.header)}>
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -3865,50 +3893,15 @@ export function ProjectDetail({
           </div>
         </div>
         {/* 数据区域 */}
-        {viewMode === "card" && renderCardView(table)}
-        {viewMode === "compact" && renderCompactView(table)}
-        {viewMode === "kanban" && renderKanbanView(table)}
-        {viewMode === "tree" && renderTreeView(table)}
-        {viewMode === "form" && renderFormView(table)}
-        {viewMode === "gantt" && renderGanttView(table)}
-        {viewMode === "group" && renderGroupView(table)}
-      </div>
-    );
-  };
-
-  // 渲染模块内容
-  const renderModuleContent = () => {
-    const currentModule = PROJECT_MODULES.find(m => m.code === activeModule);
-    const tables = moduleTables;
-
-    if (loading) {
-      return (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-slate-500">加载中...</div>
+        <div className="flex-1">
+          {viewMode === "card" && renderCardView(table)}
+          {viewMode === "compact" && renderCompactView(table)}
+          {viewMode === "kanban" && renderKanbanView(table)}
+          {viewMode === "tree" && renderTreeView(table)}
+          {viewMode === "form" && renderFormView(table)}
+          {viewMode === "gantt" && renderGanttView(table)}
+          {viewMode === "group" && renderGroupView(table)}
         </div>
-      );
-    }
-
-    if (tables.length === 0) {
-      const currentModuleDef = PROJECT_MODULES.find(m => m.code === activeModule);
-      const mc = getModuleColor(activeModule);
-      const IconComponent = currentModuleDef?.icon || FolderKanban;
-      return (
-        <div className={cn("rounded-xl border-2 border-dashed p-12 text-center", mc.border, mc.light)}>
-          <IconComponent className={cn("w-12 h-12 mx-auto mb-4", mc.text, "opacity-40")} />
-          <p className={cn("font-medium mb-1", mc.text)}>该模块暂无数据表</p>
-          <p className="text-sm text-slate-400">请在规范管理中配置对应的数据表</p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-4">
-        {tables.map((table) => (
-          <div key={table.id}>
-            {renderDataTable(table)}
-          </div>
-        ))}
       </div>
     );
   };
@@ -3993,11 +3986,11 @@ export function ProjectDetail({
             <div>
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">数据统计</h3>
               <div className="space-y-3">
-                <div className={cn("rounded-xl p-4 border-l-4", mc.bg, "border-l-current", mc.light)} style={{ borderLeftColor: "var(--module-color, #3b82f6)" }}>
+                <div className={cn("p-4 border-l-4", mc.bg, "border-l-current", mc.light)} style={{ borderLeftColor: "var(--module-color, #3b82f6)" }}>
                   <div className={cn("text-3xl font-bold", mc.text)}>{projectStats.totalTables}</div>
                   <div className={cn("text-xs mt-1", mc.text, "opacity-70")}>数据表</div>
                 </div>
-                <div className={cn("rounded-xl p-4 border-l-4", mc.bg, "border-l-current", mc.light)} style={{ borderLeftColor: "var(--module-color, #3b82f6)" }}>
+                <div className={cn("p-4 border-l-4", mc.bg, "border-l-current", mc.light)} style={{ borderLeftColor: "var(--module-color, #3b82f6)" }}>
                   <div className={cn("text-3xl font-bold", mc.text)}>{projectStats.totalRecords}</div>
                   <div className={cn("text-xs mt-1", mc.text, "opacity-70")}>数据记录</div>
                 </div>
@@ -4013,16 +4006,16 @@ export function ProjectDetail({
                 const currentModuleRecords = tables.reduce((sum, t) => sum + (tableDataMap[t.table_code] || []).length, 0);
                 return (
                   <div className="space-y-2">
-                    <div className={cn("flex items-center gap-2.5 rounded-lg px-3 py-2", mc.light)}>
+                    <div className={cn("flex items-center gap-2.5 px-3 py-2", mc.light)}>
                       {currentModuleDef && <currentModuleDef.icon className={cn("w-5 h-5", mc.text)} />}
                       <span className={cn("font-semibold text-sm", mc.text)}>{currentModuleDef?.name}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-center">
-                      <div className={cn("rounded-lg p-2.5 border", mc.border)}>
+                      <div className={cn("p-2.5 border", mc.border)}>
                         <div className={cn("text-lg font-bold", mc.text)}>{tables.length}</div>
                         <div className="text-[10px] text-slate-400">表</div>
                       </div>
-                      <div className={cn("rounded-lg p-2.5 border", mc.border)}>
+                      <div className={cn("p-2.5 border", mc.border)}>
                         <div className={cn("text-lg font-bold", mc.text)}>{currentModuleRecords}</div>
                         <div className="text-[10px] text-slate-400">记录</div>
                       </div>
@@ -4032,11 +4025,32 @@ export function ProjectDetail({
                       <div className="space-y-1.5 mt-2">
                         {tables.map((t) => {
                           const count = (tableDataMap[t.table_code] || []).length;
+                          const isSelected = selectedTableCode === t.table_code;
                           return (
-                            <div key={t.table_code} className={cn("flex items-center justify-between text-xs rounded-lg px-3 py-2 border-l-3", mc.border, mc.light)} style={{ borderLeftWidth: 3 }}>
-                              <span className="text-slate-700 truncate mr-2 font-medium">{t.table_name}</span>
-                              <span className={cn("font-mono font-semibold", mc.text)}>{count}</span>
-                            </div>
+                            <button
+                              key={t.table_code}
+                              onClick={() => setSelectedTableCode(t.table_code)}
+                              className={cn(
+                                "flex items-center justify-between text-xs px-3 py-2 w-full text-left transition-all cursor-pointer",
+                                isSelected
+                                  ? cn(mc.bg, "text-white shadow-sm")
+                                  : cn("border-l-3", mc.border, mc.light, "hover:bg-slate-100"),
+                              )}
+                              style={isSelected ? {} : { borderLeftWidth: 3 }}
+                            >
+                              <span className={cn(
+                                "truncate mr-2 font-medium",
+                                isSelected ? "text-white" : "text-slate-700",
+                              )}>
+                                {t.table_name}
+                              </span>
+                              <span className={cn(
+                                "font-mono font-semibold shrink-0",
+                                isSelected ? "text-white/80" : mc.text,
+                              )}>
+                                {count}
+                              </span>
+                            </button>
                           );
                         })}
                       </div>
@@ -4049,8 +4063,38 @@ export function ProjectDetail({
           </div>
 
           {/* 中间数据区 */}
-          <div className="flex-1 p-3 overflow-y-auto">
-            {renderModuleContent()}
+          <div className="flex-1 overflow-y-auto">
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-slate-500">加载中...</div>
+              </div>
+            ) : moduleTables.length === 0 ? (
+              (() => {
+                const currentModuleDef = PROJECT_MODULES.find(m => m.code === activeModule);
+                const IconComponent = currentModuleDef?.icon || FolderKanban;
+                return (
+                  <div className={cn("rounded-xl border-2 border-dashed p-12 text-center", mc.border, mc.light)}>
+                    <IconComponent className={cn("w-12 h-12 mx-auto mb-4", mc.text, "opacity-40")} />
+                    <p className={cn("font-medium mb-1", mc.text)}>该模块暂无数据表</p>
+                    <p className="text-sm text-slate-400">请在规范管理中配置对应的数据表</p>
+                  </div>
+                );
+              })()
+            ) : !selectedTableCode ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-slate-400">请从左侧选择一个数据表</div>
+              </div>
+            ) : (() => {
+              const selectedTable = tableDefinitions.find(t => t.table_code === selectedTableCode);
+              if (!selectedTable) {
+                return (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-slate-400">数据表未找到</div>
+                  </div>
+                );
+              }
+              return renderDataTable(selectedTable);
+            })()}
           </div>
         </div>
       </div>

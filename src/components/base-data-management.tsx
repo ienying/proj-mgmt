@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,6 +53,8 @@ import {
   Flag,
   Square,
   CheckSquare,
+  Hammer,
+  Wrench,
 } from "lucide-react";
 import {
   DndContext,
@@ -91,6 +95,9 @@ interface DictItem {
   scope?: string;
   contact_person?: string;
   contact_phone?: string;
+  phone?: string;
+  cooperation_level?: string;
+  quality_rating?: string;
   contact_email?: string;
   address?: string;
   [key: string]: string | number | boolean | undefined;
@@ -172,7 +179,10 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
   const [deploymentModes, setDeploymentModes] = useState<DictItem[]>([]);
   const [projectStatuses, setProjectStatuses] = useState<DictItem[]>([]);
   const [todoStatuses, setTodoStatuses] = useState<DictItem[]>([]);
-  
+  const [constructionUnits, setConstructionUnits] = useState<DictItem[]>([]);
+  const [customDevTypes, setCustomDevTypes] = useState<DictItem[]>([]);
+  const [devIntegrationTypes, setDevIntegrationTypes] = useState<DictItem[]>([]);
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingData, setEditingData] = useState<Partial<DictItem>>({
@@ -241,6 +251,9 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
         case "deployment_modes": setDeploymentModes(data); break;
         case "project_statuses": setProjectStatuses(data); break;
         case "todo_statuses": setTodoStatuses(data); break;
+        case "construction_units": setConstructionUnits(data); break;
+        case "custom_dev_types": setCustomDevTypes(data); break;
+        case "dev_integration_types": setDevIntegrationTypes(data); break;
       }
     } catch (error) {
       console.error("加载数据失败:", error);
@@ -263,6 +276,9 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
       setDeploymentModes(batch.deployment_modes || []);
       setProjectStatuses(batch.project_statuses || []);
       setTodoStatuses(batch.todo_statuses || []);
+      setConstructionUnits(batch.construction_units || []);
+      setCustomDevTypes(batch.custom_dev_types || []);
+      setDevIntegrationTypes(batch.dev_integration_types || []);
     } catch (error) {
       console.error("加载基础数据失败:", error);
     }
@@ -285,6 +301,9 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
       case "project-statuses": return { data: projectStatuses, setData: setProjectStatuses, table: "project_statuses", type: "project_statuses" };
       case "todo-statuses": return { data: todoStatuses, setData: setTodoStatuses, table: "todo_statuses", type: "todo_statuses" };
       case "product-categories": return { data: productCategories, setData: setProductCategories, table: "product_categories", type: "product_categories" };
+      case "construction-units": return { data: constructionUnits, setData: setConstructionUnits, table: "construction_units", type: "construction_units" };
+      case "custom-dev-types": return { data: customDevTypes, setData: setCustomDevTypes, table: "custom_dev_types", type: "custom_dev_types" };
+      case "dev-integration-types": return { data: devIntegrationTypes, setData: setDevIntegrationTypes, table: "dev_integration_types", type: "dev_integration_types" };
       default: return { data: [], setData: () => {}, table: "", type: "" };
     }
   };
@@ -351,7 +370,15 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
         if (activeTab === "project-statuses" || activeTab === "todo-statuses") {
           updateData.color = editingData.color || null;
         }
-        
+
+        // 施工单位额外字段
+        if (activeTab === "construction-units") {
+          updateData.contact_person = editingData.contact_person || null;
+          updateData.phone = editingData.phone || null;
+          updateData.cooperation_level = editingData.cooperation_level || null;
+          updateData.quality_rating = editingData.quality_rating || null;
+        }
+
         await apiFetch(`/api/dicts/${editingId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -388,7 +415,15 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
         if (activeTab === "project-statuses" || activeTab === "todo-statuses") {
           insertData.color = editingData.color || null;
         }
-        
+
+        // 施工单位额外字段
+        if (activeTab === "construction-units") {
+          insertData.contact_person = editingData.contact_person || null;
+          insertData.phone = editingData.phone || null;
+          insertData.cooperation_level = editingData.cooperation_level || null;
+          insertData.quality_rating = editingData.quality_rating || null;
+        }
+
         await apiFetch("/api/dicts/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -729,6 +764,62 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
     }
   };
 
+  // ========== 施工单位导入/导出 ==========
+  const [cuImporting, setCuImporting] = useState(false);
+  const [cuImportResult, setCuImportResult] = useState<{ created: number; skipped: number; failed: number; total: number; results: { row: number; name: string; status: string; error?: string }[] } | null>(null);
+  const cuFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCuImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCuImporting(true);
+    setCuImportResult(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/construction-units/import", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error || "导入失败"); return; }
+      setCuImportResult(json.data);
+      loadData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "导入失败");
+    } finally {
+      setCuImporting(false);
+      if (cuFileInputRef.current) cuFileInputRef.current.value = "";
+    }
+  };
+
+  const handleCuExport = async () => {
+    try {
+      const res = await fetch("/api/construction-units/export");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "施工单位导出.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("导出失败");
+    }
+  };
+
+  const handleCuDownloadTemplate = async () => {
+    try {
+      const res = await fetch("/api/construction-units/template");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "施工单位导入模板.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("下载模板失败");
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -745,7 +836,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-8">
+        <TabsList className="grid w-full grid-cols-11">
           <TabsTrigger value="project-types" className="gap-1.5 text-xs">
             <Briefcase className="w-3.5 h-3.5" />
             项目类型
@@ -766,6 +857,10 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
             <Building2 className="w-3.5 h-3.5" />
             客户类型
           </TabsTrigger>
+          <TabsTrigger value="construction-units" className="gap-1.5 text-xs">
+            <Hammer className="w-3.5 h-3.5" />
+            施工单位
+          </TabsTrigger>
           <TabsTrigger value="member-roles" className="gap-1.5 text-xs">
             <Users className="w-3.5 h-3.5" />
             成员角色
@@ -773,6 +868,14 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           <TabsTrigger value="product-modules" className="gap-1.5 text-xs">
             <Package className="w-3.5 h-3.5" />
             产品模块
+          </TabsTrigger>
+          <TabsTrigger value="dev-integration-types" className="gap-1.5 text-xs">
+            <Wrench className="w-3.5 h-3.5" />
+            开发对接类型
+          </TabsTrigger>
+          <TabsTrigger value="custom-dev-types" className="gap-1.5 text-xs">
+            <LayoutGrid className="w-3.5 h-3.5" />
+            定制开发类型
           </TabsTrigger>
           <TabsTrigger value="deployment-modes" className="gap-1.5 text-xs">
             <Server className="w-3.5 h-3.5" />
@@ -973,10 +1076,141 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           />
         </TabsContent>
 
+        {/* 开发对接类型 */}
+        <TabsContent value="dev-integration-types" className="mt-4">
+          <DataTable
+            data={devIntegrationTypes}
+            onEdit={openEditDialog}
+            onDelete={handleDelete}
+            onReorder={handleReorder}
+            onToggleActive={handleToggleActive}
+            onCreate={openCreateDialog}
+            dialogOpen={dialogOpen}
+            setDialogOpen={setDialogOpen}
+            editingId={editingId}
+            editingData={editingData}
+            setEditingData={setEditingData}
+            handleSubmit={handleSubmit}
+            activeTab={activeTab}
+            productCategories={productCategories}
+            onBatchDelete={handleBatchDelete}
+          />
+        </TabsContent>
+
+        {/* 定制开发类型 */}
+        <TabsContent value="custom-dev-types" className="mt-4">
+          <DataTable
+            data={customDevTypes}
+            onEdit={openEditDialog}
+            onDelete={handleDelete}
+            onReorder={handleReorder}
+            onToggleActive={handleToggleActive}
+            onCreate={openCreateDialog}
+            dialogOpen={dialogOpen}
+            setDialogOpen={setDialogOpen}
+            editingId={editingId}
+            editingData={editingData}
+            setEditingData={setEditingData}
+            handleSubmit={handleSubmit}
+            activeTab={activeTab}
+            productCategories={productCategories}
+            onBatchDelete={handleBatchDelete}
+          />
+        </TabsContent>
+
         {/* 部署模式 */}
         <TabsContent value="deployment-modes" className="mt-4">
           <DataTable
             data={deploymentModes}
+            onEdit={openEditDialog}
+            onDelete={handleDelete}
+            onReorder={handleReorder}
+            onToggleActive={handleToggleActive}
+            onCreate={openCreateDialog}
+            dialogOpen={dialogOpen}
+            setDialogOpen={setDialogOpen}
+            editingId={editingId}
+            editingData={editingData}
+            setEditingData={setEditingData}
+            handleSubmit={handleSubmit}
+            activeTab={activeTab}
+            productCategories={productCategories}
+            onBatchDelete={handleBatchDelete}
+          />
+        </TabsContent>
+
+        {/* 施工单位 */}
+        <TabsContent value="construction-units" className="mt-4">
+          {/* 隐藏的文件上传 */}
+          <input
+            ref={cuFileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleCuImport}
+            className="hidden"
+          />
+          {/* 顶部操作栏 */}
+          <div className="flex items-center gap-2 mb-3">
+            <Button size="sm" variant="outline" onClick={handleCuDownloadTemplate}>
+              <Download className="w-4 h-4 mr-1" />
+              下载模板
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => cuFileInputRef.current?.click()} disabled={cuImporting}>
+              <Upload className="w-4 h-4 mr-1" />
+              {cuImporting ? "导入中..." : "Excel导入"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleCuExport}>
+              <FileSpreadsheet className="w-4 h-4 mr-1" />
+              导出
+            </Button>
+          </div>
+          {/* 导入结果弹窗 */}
+          <Dialog open={!!cuImportResult} onOpenChange={(open) => { if (!open) setCuImportResult(null); }}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>导入结果</DialogTitle>
+                <DialogDescription>
+                  共 {cuImportResult?.total} 行，成功 {cuImportResult?.created} 行，跳过 {cuImportResult?.skipped} 行，失败 {cuImportResult?.failed} 行
+                </DialogDescription>
+              </DialogHeader>
+              {cuImportResult && (
+                <div className="max-h-80 overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>行号</TableHead>
+                        <TableHead>名称</TableHead>
+                        <TableHead>状态</TableHead>
+                        <TableHead>原因</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {cuImportResult.results.map((r, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-sm">{r.row}</TableCell>
+                          <TableCell className="text-sm font-medium">{r.name}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={cn(
+                              "text-xs",
+                              r.status === "成功" ? "border-emerald-200 bg-emerald-50 text-emerald-700" :
+                              r.status === "跳过" ? "border-amber-200 bg-amber-50 text-amber-700" :
+                              "border-red-200 bg-red-50 text-red-700"
+                            )}>{r.status}</Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-slate-500">{r.error || "-"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+              <DialogFooter>
+                <Button onClick={() => setCuImportResult(null)}>关闭</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <DataTable
+            data={constructionUnits}
             onEdit={openEditDialog}
             onDelete={handleDelete}
             onReorder={handleReorder}
@@ -1856,7 +2090,9 @@ function DataTable({
       const matchCode = (item.code || "").toLowerCase().includes(keyword);
       const matchProductName = (item.product_name || "").toLowerCase().includes(keyword);
       const matchModuleName = (item.module_name || "").toLowerCase().includes(keyword);
-      if (!matchName && !matchCode && !matchProductName && !matchModuleName) {
+      const matchContactPerson = (item.contact_person || "").toLowerCase().includes(keyword);
+      const matchPhone = (item.phone || item.contact_phone || "").toLowerCase().includes(keyword);
+      if (!matchName && !matchCode && !matchProductName && !matchModuleName && !matchContactPerson && !matchPhone) {
         return false;
       }
     }
@@ -2104,6 +2340,16 @@ function DataTable({
                     <TableHead>范围</TableHead>
                     <TableHead className="w-20">状态</TableHead>
                   </>
+                ) : activeTab === "construction-units" ? (
+                  <>
+                    <TableHead>名称</TableHead>
+                    <TableHead>单位负责人</TableHead>
+                    <TableHead>电话</TableHead>
+                    <TableHead>合作等级</TableHead>
+                    <TableHead>施工质量</TableHead>
+                    <TableHead>描述</TableHead>
+                    <TableHead className="w-24">状态</TableHead>
+                  </>
                 ) : (
                   <>
                     <TableHead>名称</TableHead>
@@ -2155,6 +2401,25 @@ function DataTable({
                           onClick={() => onToggleActive(item.id, !item.is_enabled)}
                         >
                           {item.is_enabled ? "启用" : "禁用"}
+                        </Button>
+                      </TableCell>
+                    </>
+                  ) : activeTab === "construction-units" ? (
+                    <>
+                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{item.contact_person || "-"}</TableCell>
+                      <TableCell className="text-muted-foreground">{item.phone || "-"}</TableCell>
+                      <TableCell className="text-muted-foreground">{item.cooperation_level || "-"}</TableCell>
+                      <TableCell className="text-muted-foreground">{item.quality_rating || "-"}</TableCell>
+                      <TableCell className="text-muted-foreground">{item.description || "-"}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant={(item.is_enabled ?? item.is_active) ? "default" : "secondary"}
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={() => onToggleActive(item.id, !(item.is_enabled ?? item.is_active))}
+                        >
+                          {(item.is_enabled ?? item.is_active) ? "启用" : "禁用"}
                         </Button>
                       </TableCell>
                     </>
@@ -2469,6 +2734,50 @@ function DataTable({
                       />
                     </div>
                   </div>
+                )}
+                {activeTab === "construction-units" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>单位负责人</Label>
+                      <Input
+                        value={editingData.contact_person || ""}
+                        onChange={(e) =>
+                          setEditingData((prev) => ({ ...prev, contact_person: e.target.value }))
+                        }
+                        placeholder="请输入单位负责人"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>电话</Label>
+                      <Input
+                        value={editingData.phone || ""}
+                        onChange={(e) =>
+                          setEditingData((prev) => ({ ...prev, phone: e.target.value }))
+                        }
+                        placeholder="请输入电话"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>合作等级</Label>
+                      <Input
+                        value={editingData.cooperation_level || ""}
+                        onChange={(e) =>
+                          setEditingData((prev) => ({ ...prev, cooperation_level: e.target.value }))
+                        }
+                        placeholder="如：A级、B级、C级"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>施工质量</Label>
+                      <Input
+                        value={editingData.quality_rating || ""}
+                        onChange={(e) =>
+                          setEditingData((prev) => ({ ...prev, quality_rating: e.target.value }))
+                        }
+                        placeholder="如：优秀、良好、一般"
+                      />
+                    </div>
+                  </>
                 )}
                 <div className="space-y-2">
                   <Label>描述</Label>

@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS projects (
   role_market_product VARCHAR(100),
   role_project_manager VARCHAR(100),
   integration_list JSONB DEFAULT '[]'::jsonb,
+  custom_dev_info JSONB DEFAULT '[]'::jsonb,
   created_by VARCHAR(36) NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE
@@ -146,6 +147,22 @@ CREATE TABLE IF NOT EXISTS departments (
 );
 CREATE INDEX IF NOT EXISTS departments_code_idx ON departments(code);
 
+-- 施工单位表
+CREATE TABLE IF NOT EXISTS construction_units (
+  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
+  code VARCHAR(50) NOT NULL UNIQUE,
+  name VARCHAR(100) NOT NULL,
+  contact_person VARCHAR(100),
+  phone VARCHAR(50),
+  cooperation_level VARCHAR(50),
+  quality_rating VARCHAR(50),
+  description TEXT,
+  sort_order INTEGER DEFAULT 0 NOT NULL,
+  is_enabled BOOLEAN DEFAULT true NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS construction_units_code_idx ON construction_units(code);
+
 -- ============================================
 -- Reference Data: Project Types & Stages
 -- ============================================
@@ -181,6 +198,30 @@ CREATE TABLE IF NOT EXISTS member_role_types (
   is_enabled BOOLEAN DEFAULT true NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
+
+-- 开发对接类型表
+CREATE TABLE IF NOT EXISTS dev_integration_types (
+  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
+  code VARCHAR(50) NOT NULL UNIQUE,
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  sort_order INTEGER DEFAULT 0 NOT NULL,
+  is_enabled BOOLEAN DEFAULT true NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS dev_integration_types_code_idx ON dev_integration_types(code);
+
+-- 定制开发类型表
+CREATE TABLE IF NOT EXISTS custom_dev_types (
+  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
+  code VARCHAR(50) NOT NULL UNIQUE,
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  sort_order INTEGER DEFAULT 0 NOT NULL,
+  is_enabled BOOLEAN DEFAULT true NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS custom_dev_types_code_idx ON custom_dev_types(code);
 
 CREATE TABLE IF NOT EXISTS project_module_types (
   id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -342,6 +383,7 @@ CREATE TABLE IF NOT EXISTS project_schema_rules (
   rule_type VARCHAR(20) DEFAULT 'type_stage' NOT NULL,
   project_type VARCHAR(50),
   project_stage VARCHAR(50),
+  project_status VARCHAR(20),
   module_codes JSONB NOT NULL DEFAULT '[]'::jsonb,
   table_definitions JSONB NOT NULL DEFAULT '[]'::jsonb,
   is_enabled BOOLEAN DEFAULT true NOT NULL,
@@ -352,6 +394,7 @@ CREATE TABLE IF NOT EXISTS project_schema_rules (
 );
 CREATE INDEX IF NOT EXISTS project_schema_rules_type_idx ON project_schema_rules(project_type);
 CREATE INDEX IF NOT EXISTS project_schema_rules_stage_idx ON project_schema_rules(project_stage);
+CREATE INDEX IF NOT EXISTS project_schema_rules_status_idx ON project_schema_rules(project_status);
 
 -- ============================================
 -- To-do System

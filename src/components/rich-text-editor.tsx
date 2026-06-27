@@ -14,9 +14,48 @@ interface RichTextEditorProps {
 }
 
 var TOOLBAR_CONFIG: Partial<IToolbarConfig> = {
-  excludeKeys: [
-    "group-video", "insertLink", "editLink", "unLink", "viewLink",
-    "codeBlock", "blockquote",
+  // Explicit toolbar keys to guarantee both inline code and code block buttons
+  keys: [
+    "headerSelect",
+    "|",
+    "bold",
+    "underline",
+    "italic",
+    "through",
+    "code", // 行内代码 - inline code
+    "sub",
+    "sup",
+    "clearStyle",
+    "|",
+    "color",
+    "bgColor",
+    "|",
+    "fontSize",
+    "fontFamily",
+    "|",
+    "indent",
+    "delIndent",
+    "justifyLeft",
+    "justifyRight",
+    "justifyCenter",
+    "justifyJustify",
+    "|",
+    "lineHeight",
+    "|",
+    "bulletedList",
+    "numberedList",
+    "todo",
+    "|",
+    "emotion",
+    "uploadImage",
+    "insertTable",
+    "codeBlock", // 代码块 - code block / snippet
+    "divider",
+    "|",
+    "undo",
+    "redo",
+    "|",
+    "fullScreen",
   ],
 };
 

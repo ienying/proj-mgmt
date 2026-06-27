@@ -214,7 +214,10 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: editingId, ...formData }),
         });
-        if (!response.ok) throw new Error("更新失败");
+        if (!response.ok) {
+          const errData = await response.json().catch(() => null);
+          throw new Error(errData?.error || "更新失败");
+        }
         // 直接更新本地 state，避免 loadRules 时序问题导致 UI 不刷新
         setRules((prev) =>
           prev.map((r) =>
@@ -229,13 +232,17 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(formData),
         });
-        if (!response.ok) throw new Error("创建失败");
+        if (!response.ok) {
+          const errData = await response.json().catch(() => null);
+          throw new Error(errData?.error || "创建失败");
+        }
         toast.success("规则创建成功");
         loadRules();
       }
       setDialogOpen(false);
     } catch (error) {
-      toast.error("操作失败");
+      const message = error instanceof Error ? error.message : "操作失败";
+      toast.error(`操作失败: ${message}`);
     }
   };
 

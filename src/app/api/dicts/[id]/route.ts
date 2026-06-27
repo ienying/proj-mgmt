@@ -13,6 +13,9 @@ const VALID_TYPES: Record<string, string> = {
   deployment_modes: "deployment_modes",
   project_statuses: "project_statuses",
   departments: "departments",
+  construction_units: "construction_units",
+  custom_dev_types: "custom_dev_types",
+  dev_integration_types: "dev_integration_types",
   todo_statuses: "todo_statuses",
 };
 

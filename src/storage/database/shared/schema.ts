@@ -64,6 +64,9 @@ export const projects = pgTable("projects", {
   customer_info: jsonb("customer_info"),
   channel_info: jsonb("channel_info"),
   procurement_modules: jsonb("procurement_modules"),
+  implementation_unit: varchar("implementation_unit", { length: 255 }),
+  construction_units_info: jsonb("construction_units_info").default(sql`'[]'::jsonb`),
+  custom_dev_info: jsonb("custom_dev_info").default(sql`'[]'::jsonb`),
   created_by: varchar("created_by", { length: 36 }).notNull(),
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true }),
@@ -95,6 +98,23 @@ export const project_type_stage_modules = pgTable("project_type_stage_modules", 
   sort_order: integer("sort_order").default(0),
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
+
+// 施工单位表
+export const construction_units = pgTable("construction_units", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  contact_person: varchar("contact_person", { length: 100 }),
+  phone: varchar("phone", { length: 50 }),
+  cooperation_level: varchar("cooperation_level", { length: 50 }),
+  quality_rating: varchar("quality_rating", { length: 50 }),
+  description: text("description"),
+  sort_order: integer("sort_order").default(0).notNull(),
+  is_enabled: boolean("is_enabled").default(true).notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("construction_units_code_idx").on(table.code),
+]);
 
 // 部门表
 export const departments = pgTable("departments", {
@@ -135,6 +155,32 @@ export const project_stages = pgTable("project_stages", {
 }, (table) => [
   index("project_stages_code_idx").on(table.code),
   index("project_stages_sort_idx").on(table.sort_order),
+]);
+
+// 开发对接类型表
+export const dev_integration_types = pgTable("dev_integration_types", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  sort_order: integer("sort_order").default(0).notNull(),
+  is_enabled: boolean("is_enabled").default(true).notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("dev_integration_types_code_idx").on(table.code),
+]);
+
+// 定制开发类型表
+export const custom_dev_types = pgTable("custom_dev_types", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  sort_order: integer("sort_order").default(0).notNull(),
+  is_enabled: boolean("is_enabled").default(true).notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("custom_dev_types_code_idx").on(table.code),
 ]);
 
 // 采购模块类型表

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo, useMemo, Fragment, useEffect, useRef, useState } from "react";
+import React, { memo, useMemo, Fragment, useEffect, useRef, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 
 /* ---- 类型 ---- */
@@ -237,6 +237,32 @@ const MermaidChart = memo(function MermaidChart({ chart }: { chart: string }) {
   );
 });
 
+/* ---- 代码块组件（含语言标签 + 复制） ---- */
+function CodeBlock({ lang, text }: { lang: string; text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  }, [text]);
+
+  return (
+    <div className="code-block-wrapper">
+      <div className="code-block-header">
+        <span className="lang-label">{lang || "code"}</span>
+        <button className="copy-btn" onClick={handleCopy}>
+          {copied ? "已复制 ✓" : "复制"}
+        </button>
+      </div>
+      <pre className="bg-gray-900 text-gray-100 rounded-none rounded-b-lg p-4 my-0 overflow-x-auto text-[13px] leading-relaxed font-mono">
+        <code>{text}</code>
+      </pre>
+    </div>
+  );
+}
+
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -271,7 +297,7 @@ function RenderBlock({ block }: { block: Block }) {
     case "h4": return <h4 id={getHeadingId(block)} className="text-sm font-semibold text-gray-700 mt-3 mb-1"><RenderInline tokens={block.tokens} /></h4>;
     case "p": return <p className="text-sm text-gray-700 leading-relaxed my-2"><RenderInline tokens={block.tokens} /></p>;
     case "code":
-      return <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 my-3 overflow-x-auto text-[13px] leading-relaxed font-mono"><code>{block.text}</code></pre>;
+      return <CodeBlock lang={block.lang} text={block.text} />;
     case "chart":
       return <MermaidChart chart={block.text} />;
     case "ul":

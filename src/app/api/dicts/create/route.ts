@@ -86,6 +86,22 @@ export async function POST(request: NextRequest) {
       case "departments":
         tableName = "departments";
         break;
+      case "construction_units":
+        tableName = "construction_units";
+        insertData = {
+          ...insertData,
+          contact_person: body.contact_person || null,
+          phone: body.phone || null,
+          cooperation_level: body.cooperation_level || null,
+          quality_rating: body.quality_rating || null,
+        };
+        break;
+      case "custom_dev_types":
+        tableName = "custom_dev_types";
+        break;
+      case "dev_integration_types":
+        tableName = "dev_integration_types";
+        break;
       case "todo_statuses":
         tableName = "todo_statuses";
         insertData = {
