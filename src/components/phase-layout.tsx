@@ -1,506 +1,390 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
-/* ============================================================
-   Data Layer (panelData, taskData, subContentData, productData)
-   ============================================================ */
+/* ==========================================================================
+   Data — exact mirrors of template panelData / subContentData / taskData
+   ========================================================================== */
 
+/* ── Panel Data (left strip + nav drawer) ── */
 const panelData: Record<string, {
   title: string;
-  items: Array<{ label: string; count?: number; key: string; link?: string }>;
+  items: Array<{ label: string; count?: number; key?: string; link?: string; active?: boolean }>;
 }> = {
-  scope: {
-    title: "SCOPE 范围管理",
-    items: [
-      { label: "需求边界确认", count: 12, key: "req-boundary" },
-      { label: "需求登记表", count: 8, key: "req-form" },
-      { label: "变更申请表", count: 5, key: "change-form" },
-      { label: "变更影响评估", count: 3, key: "change-impact" },
-      { label: "范围确认书", count: 3, key: "scope-confirm" },
-      { label: "WBS工作分解", count: 1, key: "wbs" },
-    ],
-  },
-  demand: {
-    title: "DEMAND 需求管理",
-    items: [
-      { label: "需求池", count: 12, key: "req-pool" },
-      { label: "需求评审记录", count: 8, key: "req-review" },
-      { label: "需求跟踪矩阵", count: 6, key: "req-matrix" },
-      { label: "需求变更记录", count: 5, key: "req-change" },
-      { label: "用户故事地图", count: 3, key: "user-story" },
-      { label: "原型设计稿", count: 4, key: "prototype" },
-    ],
-  },
-  progress: {
-    title: "PROGRESS 进度管理",
-    items: [
-      { label: "里程碑管理", count: 4, key: "milestone" },
-      { label: "日报汇总", count: 6, key: "daily", link: "/daily" },
-      { label: "延期预警", count: 3, key: "delay", link: "/delay" },
-      { label: "甘特图", count: 1, key: "gantt" },
-      { label: "看板视图", count: 1, key: "kanban" },
-      { label: "进度报告", count: 2, key: "progress-report" },
-    ],
-  },
-  quality: {
-    title: "QUALITY 质量管理",
-    items: [
-      { label: "测试计划", count: 3, key: "test-plan" },
-      { label: "缺陷跟踪", count: 6, key: "bug-track" },
-      { label: "测试用例", count: 5, key: "test-case" },
-      { label: "测试报告", count: 3, key: "test-report" },
-      { label: "代码审查记录", count: 4, key: "code-review" },
-      { label: "验收标准", count: 3, key: "accept-criteria" },
-    ],
-  },
-  cost: {
-    title: "COST 成本管理",
-    items: [
-      { label: "项目预算表", count: 3, key: "budget" },
-      { label: "费用报销记录", count: 5, key: "expense" },
-      { label: "采购清单", count: 4, key: "purchase" },
-      { label: "工时统计", count: 3, key: "manhour" },
-      { label: "合同付款节点", count: 3, key: "contract-pay" },
-    ],
-  },
-  communication: {
-    title: "COMMUNICATION 沟通管理",
-    items: [
-      { label: "会议纪要", count: 5, key: "meeting" },
-      { label: "干系人通讯录", count: 4, key: "contacts" },
-      { label: "通知公告", count: 3, key: "notice" },
-      { label: "周例会记录", count: 3, key: "weekly" },
-      { label: "客户沟通记录", count: 4, key: "client-comm" },
-      { label: "内部评审记录", count: 3, key: "internal-review" },
-    ],
-  },
-  risk: {
-    title: "RISK 风险管理",
-    items: [
-      { label: "风险登记册", count: 5, key: "risk-register" },
-      { label: "问题跟踪表", count: 4, key: "issue-track" },
-      { label: "应急预案", count: 3, key: "emergency" },
-      { label: "风险应对措施", count: 3, key: "risk-action" },
-      { label: "依赖关系矩阵", count: 3, key: "dep-matrix" },
-    ],
-  },
-  docs: {
-    title: "DOCS 文档管理",
-    items: [
-      { label: "技术方案", count: 3, key: "tech-plan" },
-      { label: "部署手册", count: 3, key: "deploy-manual" },
-      { label: "用户操作手册", count: 4, key: "user-manual" },
-      { label: "培训材料", count: 3, key: "training" },
-      { label: "验收交付文档", count: 4, key: "accept-doc" },
-      { label: "运维交接文档", count: 3, key: "ops-doc" },
-      { label: "版本发布说明", count: 3, key: "release-note" },
-    ],
-  },
+  scope: { title: "SCOPE 范围管理", items: [
+    { label: "需求边界确认", count: 12, active: true }, { label: "需求登记表", count: 8, key: "req-form" },
+    { label: "变更申请表", count: 5, key: "change-form" }, { label: "变更影响评估", count: 3, key: "change-impact" },
+    { label: "范围确认书", count: 3, key: "scope-confirm" }, { label: "WBS工作分解", count: 1, key: "wbs" },
+  ]},
+  demand: { title: "DEMAND 需求管理", items: [
+    { label: "需求池", count: 24, key: "req-pool" }, { label: "需求评审记录", count: 6, active: true, key: "req-review" },
+    { label: "需求跟踪矩阵", count: 18, key: "req-matrix" }, { label: "需求变更记录", count: 7, key: "req-change" },
+    { label: "用户故事地图", count: 3, key: "user-story" }, { label: "原型设计稿", count: 12, key: "prototype" },
+  ]},
+  progress: { title: "PROGRESS 进度管理", items: [
+    { label: "项目主计划", count: 1, link: "进度-主计划.html" }, { label: "里程碑管理", count: 7, active: true, key: "milestone" },
+    { label: "甘特图", count: 1, link: "进度-甘特图.html" }, { label: "周报汇总", count: 16, link: "进度-周报.html" },
+    { label: "日报汇总", count: 89, key: "daily" }, { label: "延期预警", count: 2, key: "delay" },
+  ]},
+  quality: { title: "QUALITY 质量管理", items: [
+    { label: "测试计划", count: 3, key: "test-plan" }, { label: "缺陷跟踪", count: 47, active: true, key: "bug-track" },
+    { label: "测试用例", count: 156, key: "test-case" }, { label: "测试报告", count: 5, key: "test-report" },
+    { label: "代码审查记录", count: 23, key: "code-review" }, { label: "验收标准", count: 2, key: "accept-criteria" },
+  ]},
+  cost: { title: "COST 成本管理", items: [
+    { label: "项目预算表", count: 1, key: "budget" }, { label: "费用报销记录", count: 28, active: true, key: "expense" },
+    { label: "采购清单", count: 12, key: "purchase" }, { label: "工时统计", count: 4, key: "manhour" }, { label: "合同付款节点", count: 5, key: "contract-pay" },
+  ]},
+  communication: { title: "COMMUNICATION 沟通管理", items: [
+    { label: "会议纪要", count: 22, active: true, key: "meeting" }, { label: "干系人通讯录", count: 8, key: "contacts" },
+    { label: "通知公告", count: 5, key: "notice" }, { label: "周例会记录", count: 16, key: "weekly" },
+    { label: "客户沟通记录", count: 14, key: "client-comm" }, { label: "内部评审记录", count: 9, key: "internal-review" },
+  ]},
+  risk: { title: "RISK 风险管理", items: [
+    { label: "风险登记册", count: 9, active: true, key: "risk-register" }, { label: "问题跟踪表", count: 14, key: "issue-track" },
+    { label: "应急预案", count: 3, key: "emergency" }, { label: "风险应对措施", count: 6, key: "risk-action" }, { label: "依赖关系矩阵", count: 2, key: "dep-matrix" },
+  ]},
+  docs: { title: "DOCS 文档管理", items: [
+    { label: "技术方案", count: 6, key: "tech-plan" }, { label: "部署手册", count: 3, active: true, key: "deploy-manual" },
+    { label: "用户操作手册", count: 4, key: "user-manual" }, { label: "培训材料", count: 12, key: "training" },
+    { label: "验收交付文档", count: 15, key: "accept-doc" }, { label: "运维交接文档", count: 8, key: "ops-doc" }, { label: "版本发布说明", count: 6, key: "release-note" },
+  ]},
 };
 
-/* Phase Stepper Data */
-const phaseLabels = [
-  "项目启动与策划",
-  "需求分析与定义",
-  "方案与深化设计",
-  "开发与系统集成",
-  "测试与质量验证",
-  "部署与上线实施",
-  "验收与项目收尾",
-];
-const phaseDates = [
-  "2025.09 - 2025.12",
-  "2025.11 - 2026.02",
-  "2026.01 - 2026.04",
-  "2026.03 - 2026.07",
-  "2026.06 - 2026.09",
-  "2026.08 - 2026.10",
-  "2026.10 - 2026.12",
-];
+/* ── Phase Stepper Labels ── */
+const phaseLabels = ["内部启动会", "需求调研与方案确认", "环境部署与平台搭建", "核心系统开发与集成", "用户培训与试运行", "正式上线与全面切换", "项目验收与交付"];
+const phaseDates = ["02.20–02.28", "03.01–03.20", "03.21–04.15", "04.16–05.31", "06.01–07.15", "07.16–08.15", "08.16–09.30"];
 const phaseDescriptions = [
-  "完成项目立项审批、团队组建、资源调配和项目章程签署，明确项目范围、目标和关键干系人。",
-  "深入调研用户需求，完成需求规格说明书，进行需求评审和确认，建立需求追踪矩阵。",
-  "完成系统架构设计、详细方案设计、技术选型和原型设计，输出设计方案文档。",
-  "按照设计方案进行编码开发、接口对接、系统集成和联调测试，产出可部署的系统版本。",
-  "执行全面的功能测试、性能测试、安全测试和用户验收测试，确保系统质量达标。",
-  "完成系统部署、数据迁移、用户培训和试运行，确保系统稳定运行。",
-  "完成项目成果交付、文档归档、验收评审和项目总结，正式关闭项目。",
+  "召开公司内部项目启动会，明确项目目标与范围，组建项目团队，制定项目管理制度与沟通机制，完成项目立项审批。",
+  "完成学校现状调研、需求分析、技术方案编制与评审，输出需求规格说明书与项目实施方案，与校方确认建设范围与技术路线。共投入产品经理2人、架构师1人，现场驻场调研12天。",
+  "完成服务器采购上架、网络环境配置、基础平台（统一认证、数据中台）部署，打通与教育局现有系统的接口。共部署12台服务器，完成8个接口对接。",
+  "开发学籍管理、教务排课、成绩管理、选课系统四大核心模块，完成与统一认证和数据中台的集成联调，首轮内部测试通过。修复缺陷47个，交付可部署模块4个。",
+  "组织学校管理员、教师、学生及家长的分批培训，系统进入试运行阶段，收集反馈意见，持续优化功能和用户体验。当前已完成4/6场培训，收集反馈32条，推进优化项18个。",
+  "完成系统正式环境部署，组织全面切换上线，旧系统并行运行1个月后正式下线，系统进入常态化运行阶段。",
+  "整理交付文档，组织项目验收评审，完成系统最终交付，签署验收报告，进入运维保障期。预计需整理验收文档15份，组织评审会2场。",
+];
+const phaseStatuses = ["done", "done", "done", "done", "active", "pending", "pending"];
+const phaseProgressPct = [100, 100, 100, 100, 71, 0, 0];
+const phaseStepsDone = [8, 8, 5, 5, 5, 0, 0];
+const phaseStepsTotal = [8, 8, 5, 5, 7, 3, 5];
+
+/* ── Phase Meta ── */
+const phaseMeta = [
+  { items: [{ v: "3", l: "交付物" }, { v: "9", l: "天" }, { v: "8", l: "人参与" }, { v: "按时", l: "", accent: true, color: "var(--green)" }] },
+  { items: [{ v: "3", l: "交付物" }, { v: "20", l: "天" }, { v: "5", l: "人参与" }, { v: "按时", l: "", accent: true, color: "var(--green)" }] },
+  { items: [{ v: "12", l: "服务器" }, { v: "8", l: "接口对接" }, { v: "26", l: "天" }, { v: "按时", l: "", accent: true, color: "var(--green)" }] },
+  { items: [{ v: "4", l: "交付模块" }, { v: "47", l: "缺陷修复" }, { v: "46", l: "天" }, { v: "按时", l: "", accent: true, color: "var(--green)" }] },
+  { items: [{ v: "4/6", l: "培训场次", accent: true }, { v: "32", l: "反馈" }, { v: "18", l: "优化项" }, { v: "进行中", l: "", accent: true }] },
+  { items: [{ v: "3", l: "上线步骤" }, { v: "07.16", l: "预计启动" }] },
+  { items: [{ v: "15", l: "验收文档" }, { v: "08.16", l: "预计启动" }, { v: "待开始", l: "", muted: true }] },
 ];
 
-/* Task Data per Phase */
-const taskData: Record<string, { name: string; status: string; totalSteps: number; doneSteps: number; startDate: string; endDate: string; desc: string; rows: Array<{ name: string; desc: string; input: string; output: string; role: string; status: string }> }> = {
-  p0: {
-    name: "项目启动与策划",
-    status: "done",
-    totalSteps: 3,
-    doneSteps: 3,
-    startDate: "2025-09-01",
-    endDate: "2025-12-31",
-    desc: "完成项目立项审批、团队组建和项目章程签署，建立项目管理体系。",
-    rows: [
-      { name: "项目立项", desc: "编制项目立项申请报告，进行可行性论证", input: "项目建议书、可行性研究报告", output: "立项批复文件", role: "项目经理", status: "已完成" },
-      { name: "团队组建", desc: "确定项目组织架构，组建核心团队", input: "项目需求、组织结构图", output: "项目团队名单", role: "PMO", status: "已完成" },
-      { name: "章程签署", desc: "制定并签署项目章程，明确项目目标、范围", input: "立项批复、干系人清单", output: "项目章程", role: "发起人", status: "已完成" },
-    ],
-  },
-  p1: {
-    name: "需求分析与定义",
-    status: "done",
-    totalSteps: 4,
-    doneSteps: 4,
-    startDate: "2025-11-15",
-    endDate: "2026-02-28",
-    desc: "深入调研用户需求，完成需求规格说明书。",
-    rows: [
-      { name: "需求调研", desc: "走访用户单位，收集业务需求", input: "调研问卷、访谈提纲", output: "调研报告", role: "需求分析师", status: "已完成" },
-      { name: "需求分析", desc: "分析整理需求，识别功能和非功能需求", input: "调研报告", output: "需求分析文档", role: "需求分析师", status: "已完成" },
-      { name: "需求评审", desc: "组织需求评审会议，确认需求基线", input: "需求规格说明书", output: "评审通过的需求基线", role: "项目经理", status: "已完成" },
-      { name: "需求追踪矩阵", desc: "建立需求追踪矩阵，关联需求与后续产出", input: "需求基线", output: "需求追踪矩阵", role: "QA", status: "已完成" },
-    ],
-  },
-  p2: {
-    name: "方案与深化设计",
-    status: "done",
-    totalSteps: 4,
-    doneSteps: 4,
-    startDate: "2026-01-10",
-    endDate: "2026-04-30",
-    desc: "完成系统架构设计、详细方案设计和技术选型。",
-    rows: [
-      { name: "架构设计", desc: "设计系统整体架构，确定技术路线", input: "需求文档", output: "架构设计文档", role: "架构师", status: "已完成" },
-      { name: "详细设计", desc: "完成模块详细设计，输出接口规范", input: "架构设计", output: "详细设计文档", role: "高级开发", status: "已完成" },
-      { name: "原型设计", desc: "设计系统UI原型和交互流程", input: "需求文档", output: "原型设计稿", role: "UI/UX设计师", status: "已完成" },
-      { name: "技术选型", desc: "确定技术栈、开发框架和第三方组件", input: "架构设计", output: "技术选型报告", role: "技术负责人", status: "已完成" },
-    ],
-  },
-  p3: {
-    name: "开发与系统集成",
-    status: "active",
-    totalSteps: 5,
-    doneSteps: 3,
-    startDate: "2026-03-01",
-    endDate: "2026-07-31",
-    desc: "按照设计方案进行编码开发、接口对接和系统集成。",
-    rows: [
-      { name: "基础框架搭建", desc: "搭建开发环境、CI/CD流水线和基础框架", input: "技术选型报告", output: "开发环境和基础框架", role: "技术负责人", status: "已完成" },
-      { name: "核心模块开发", desc: "完成数据中台、统一认证等核心模块编码", input: "详细设计文档", output: "核心模块代码", role: "开发团队", status: "已完成" },
-      { name: "业务模块开发", desc: "完成各业务子系统功能开发", input: "详细设计、原型", output: "业务模块代码", role: "开发团队", status: "进行中" },
-      { name: "接口对接", desc: "完成各系统间接口对接和数据联调", input: "接口规范", output: "联调通过的系统接口", role: "集成工程师", status: "待开始" },
-      { name: "集成测试", desc: "系统集成后进行端到端功能验证", input: "测试计划", output: "集成测试报告", role: "测试工程师", status: "待开始" },
-    ],
-  },
-  p4: {
-    name: "测试与质量验证",
-    status: "pending",
-    totalSteps: 3,
-    doneSteps: 0,
-    startDate: "2026-06-01",
-    endDate: "2026-09-30",
-    desc: "执行全面的功能测试、性能测试、安全测试和用户验收测试。",
-    rows: [
-      { name: "功能测试", desc: "对所有功能模块进行全面的功能验证测试", input: "测试用例", output: "功能测试报告", role: "测试工程师", status: "待开始" },
-      { name: "性能测试", desc: "进行并发压力测试和性能基准测试", input: "性能测试方案", output: "性能测试报告", role: "性能测试工程师", status: "待开始" },
-      { name: "UAT验收", desc: "组织用户进行验收测试，收集反馈意见", input: "测试环境", output: "UAT测试报告", role: "业务代表", status: "待开始" },
-    ],
-  },
-  p5: {
-    name: "部署与上线实施",
-    status: "pending",
-    totalSteps: 3,
-    doneSteps: 0,
-    startDate: "2026-08-01",
-    endDate: "2026-10-31",
-    desc: "完成系统部署、数据迁移、用户培训和试运行。",
-    rows: [
-      { name: "环境部署", desc: "在生产环境完成系统部署和配置", input: "部署手册", output: "生产环境", role: "运维工程师", status: "待开始" },
-      { name: "数据迁移", desc: "完成历史数据清洗和迁移", input: "数据迁移方案", output: "迁移后的数据", role: "数据工程师", status: "待开始" },
-      { name: "用户培训", desc: "对最终用户进行系统操作培训", input: "培训材料", output: "培训记录", role: "培训讲师", status: "待开始" },
-    ],
-  },
-  p6: {
-    name: "验收与项目收尾",
-    status: "pending",
-    totalSteps: 3,
-    doneSteps: 0,
-    startDate: "2026-10-01",
-    endDate: "2026-12-31",
-    desc: "完成项目成果交付、文档归档、验收评审和项目总结。",
-    rows: [
-      { name: "成果交付", desc: "整理和交付全部项目成果物", input: "交付清单", output: "成果交付确认书", role: "项目经理", status: "待开始" },
-      { name: "最终验收", desc: "组织最终验收评审会议", input: "验收标准", output: "验收报告", role: "验收委员会", status: "待开始" },
-      { name: "项目总结", desc: "编写项目总结报告，归档项目文档", input: "项目全过程文档", output: "项目总结报告", role: "项目经理", status: "待开始" },
-    ],
-  },
-};
-
-/* Sub-Content Data (44 keys across 8 domains) */
-const subContentData: Record<string, {
-  section: string;
-  rows: Array<{ id: string; name: string; priority: string; status: string; owner: string; date: string; desc: string }>;
-}> = {
-  // SCOPE 范围管理
-  "req-boundary": { section: "SCOPE 范围管理", rows: [{ id: "RB-001", name: "统一认证对接范围", priority: "高", status: "已确认", owner: "张明远", date: "2026-03-02", desc: "确认仅对接市教育局LDAP，不含区县级独立认证系统" }, { id: "RB-002", name: "数据中台覆盖范围", priority: "高", status: "已确认", owner: "李文华", date: "2026-03-05", desc: "覆盖全市中小学及幼儿园，含数据采集、存储、计算三层" }, { id: "RB-003", name: "智慧课堂边界", priority: "中", status: "已确认", owner: "王建国", date: "2026-03-08", desc: "仅含互动教学和在线作业模块，不含VR/AR教室" }, { id: "RB-004", name: "家校互通平台范围", priority: "中", status: "评审中", owner: "赵小红", date: "2026-03-10", desc: "含通知公告、成绩查询、在线缴费，不含社交功能" }, { id: "RB-005", name: "运维管理平台边界", priority: "低", status: "待评审", owner: "陈工", date: "2026-03-12", desc: "设备监控和告警管理，不含自动化运维编排" }] },
-  "req-form": { section: "SCOPE 范围管理", rows: [{ id: "RF-001", name: "统一认证系统需求", priority: "高", status: "已确认", owner: "张明远", date: "2026-03-01", desc: "支持LDAP/OAuth2.0/SAML等多种认证协议" }, { id: "RF-002", name: "数据中台需求", priority: "高", status: "已确认", owner: "李文华", date: "2026-03-02", desc: "支持PB级数据存储和实时计算能力" }, { id: "RF-003", name: "智慧课堂需求", priority: "中", status: "已确认", owner: "王建国", date: "2026-03-03", desc: "含互动白板、随堂测验、作业批改功能" }, { id: "RF-004", name: "校园安防需求", priority: "中", status: "评审中", owner: "刘安全", date: "2026-03-04", desc: "视频监控AI分析、访客管理、紧急报警" }, { id: "RF-005", name: "家校互通需求", priority: "中", status: "已确认", owner: "赵小红", date: "2026-03-05", desc: "手机端家长端应用，含通知和沟通功能" }, { id: "RF-006", name: "运维平台需求", priority: "低", status: "待评审", owner: "陈工", date: "2026-03-06", desc: "服务器、网络设备统一监控管理" }, { id: "RF-007", name: "报表分析需求", priority: "中", status: "已确认", owner: "周数据分析", date: "2026-03-07", desc: "含教育质量分析、教学评估等多维度报表" }, { id: "RF-008", name: "移动端适配需求", priority: "低", status: "待评审", owner: "孙移动", date: "2026-03-08", desc: "核心功能移动端适配，支持iOS/Android" }] },
-  "change-form": { section: "SCOPE 范围管理", rows: [{ id: "CF-001", name: "增加食堂管理模块", priority: "高", status: "评审中", owner: "张明远", date: "2026-04-01", desc: "客户要求新增食堂消费和食材采购管理" }, { id: "CF-002", name: "调整数据存储周期", priority: "中", status: "已确认", owner: "李文华", date: "2026-04-05", desc: "将默认数据保留周期从3年调整为5年" }, { id: "CF-003", name: "增加区县对接接口", priority: "中", status: "评审中", owner: "王建国", date: "2026-04-08", desc: "需新增2个区县教育局系统的数据对接" }, { id: "CF-004", name: "调整培训方式", priority: "低", status: "已确认", owner: "赵小红", date: "2026-04-10", desc: "从集中培训改为分批分区域现场培训" }] },
-  "change-impact": { section: "SCOPE 范围管理", rows: [{ id: "CI-001", name: "食堂模块影响评估", priority: "高", status: "已确认", owner: "张明远", date: "2026-04-02", desc: "新增食堂模块需增加2人月工作量，延期约2周" }, { id: "CI-002", name: "存储周期影响评估", priority: "中", status: "已确认", owner: "李文华", date: "2026-04-06", desc: "存储扩容费用增加约15万，不影响工期" }, { id: "CI-003", name: "区县对接影响评估", priority: "中", status: "评审中", owner: "王建国", date: "2026-04-09", desc: "新增对接约需3人月，需申请人力补充" }, { id: "CI-004", name: "培训方式影响评估", priority: "低", status: "已确认", owner: "赵小红", date: "2026-04-11", desc: "培训方式调整不增加成本，但培训周期延长2周" }] },
-  "scope-confirm": { section: "SCOPE 范围管理", rows: [{ id: "SC-001", name: "一期范围确认书", priority: "高", status: "已确认", owner: "张明远", date: "2026-02-15", desc: "确认一期建设范围和交付成果清单" }, { id: "SC-002", name: "二期范围确认书", priority: "中", status: "确认中", owner: "张明远", date: "2026-06-20", desc: "初步规划二期建设内容，待正式确认" }, { id: "SC-003", name: "变更后范围再确认", priority: "高", status: "评审中", owner: "张明远", date: "2026-04-15", desc: "因食堂模块新增，需重新确认整体范围" }] },
-  "wbs": { section: "SCOPE 范围管理", rows: [{ id: "WB-001", name: "一级WBS", priority: "高", status: "已确认", owner: "张明远", date: "2026-02-20", desc: "7个一级工作包对应7个阶段" }, { id: "WB-002", name: "二级WBS-开发阶段", priority: "中", status: "已确认", owner: "王建国", date: "2026-03-01", desc: "将开发阶段细分为12个二级工作包" }, { id: "WB-003", name: "三级WBS-测试阶段", priority: "中", status: "评审中", owner: "测试组长", date: "2026-06-01", desc: "待进入测试阶段前细化三级WBS" }] },
-
-  // DEMAND 需求管理
-  "req-pool": { section: "DEMAND 需求管理", rows: [{ id: "RP-001", name: "统一身份认证", priority: "高", status: "已确认", owner: "张明远", date: "2026-02-10", desc: "实现全市教育系统统一身份认证" }, { id: "RP-002", name: "数据驾驶舱", priority: "高", status: "已确认", owner: "李文华", date: "2026-02-12", desc: "为教育局领导提供可视化数据分析" }, { id: "RP-003", name: "在线阅卷系统", priority: "中", status: "已确认", owner: "王建国", date: "2026-02-15", desc: "支持客观题自动批改和主观题在线批阅" }, { id: "RP-004", name: "校园一卡通", priority: "中", status: "评审中", owner: "赵小红", date: "2026-02-18", desc: "含门禁、消费、图书借阅等场景" }, { id: "RP-005", name: "远程教学平台", priority: "低", status: "已确认", owner: "孙移动", date: "2026-02-20", desc: "支持直播教学和录播回放功能" }] },
-  "req-review": { section: "DEMAND 需求管理", rows: [{ id: "RR-001", name: "第一次需求评审", priority: "高", status: "已确认", owner: "张明远", date: "2026-03-01", desc: "评审核心业务需求，通过率92%" }, { id: "RR-002", name: "技术可行性评审", priority: "高", status: "已确认", owner: "李文华", date: "2026-03-05", desc: "技术方案评审通过，调整部分技术选型" }, { id: "RR-003", name: "UI/UX评审", priority: "中", status: "已确认", owner: "王建国", date: "2026-03-10", desc: "UI设计方案评审，修改交互流程" }, { id: "RR-004", name: "变更需求评审", priority: "中", status: "评审中", owner: "张明远", date: "2026-04-02", desc: "评审食堂管理等变更需求，待决策" }] },
-  "req-matrix": { section: "DEMAND 需求管理", rows: [{ id: "RM-001", name: "认证需求→架构设计", priority: "高", status: "已确认", owner: "张明远", date: "2026-03-15", desc: "关联认证需求与系统架构设计" }, { id: "RM-002", name: "数据需求→数据模型", priority: "高", status: "已确认", owner: "李文华", date: "2026-03-16", desc: "关联数据需求与数据模型设计" }, { id: "RM-003", name: "课堂需求→模块设计", priority: "中", status: "已确认", owner: "王建国", date: "2026-03-17", desc: "关联课堂需求与功能模块设计" }, { id: "RM-004", name: "安防需求→硬件选型", priority: "中", status: "评审中", owner: "刘安全", date: "2026-03-18", desc: "关联安防需求与硬件设备选型" }, { id: "RM-005", name: "家校需求→接口设计", priority: "中", status: "已确认", owner: "赵小红", date: "2026-03-19", desc: "关联家校需求与第三方接口设计" }, { id: "RM-006", name: "报表需求→DW设计", priority: "低", status: "待评审", owner: "周数据分析", date: "2026-03-20", desc: "关联报表需求与数据仓库设计" }] },
-  "req-change": { section: "DEMAND 需求管理", rows: [{ id: "RC-001", name: "食堂模块需求新增", priority: "高", status: "评审中", owner: "张明远", date: "2026-04-01", desc: "新增学校食堂消费管理和采购管理需求" }, { id: "RC-002", name: "数据周期调整", priority: "中", status: "已确认", owner: "李文华", date: "2026-04-05", desc: "数据存储周期从3年调整为5年" }, { id: "RC-003", name: "移动端功能扩展", priority: "中", status: "评审中", owner: "孙移动", date: "2026-04-08", desc: "新增家长端扫码缴费功能" }, { id: "RC-004", name: "报表模板调整", priority: "低", status: "已确认", owner: "周数据分析", date: "2026-04-10", desc: "调整教育质量分析报表模板" }, { id: "RC-005", name: "接口协议变更", priority: "中", status: "待评审", owner: "王建国", date: "2026-04-12", desc: "对接系统从REST切换为GraphQL" }] },
-  "user-story": { section: "DEMAND 需求管理", rows: [{ id: "US-001", name: "教师教学流程", priority: "高", status: "已确认", owner: "王建国", date: "2026-03-01", desc: "作为教师，我希望通过智慧课堂进行互动教学" }, { id: "US-002", name: "家长查看成绩", priority: "中", status: "已确认", owner: "赵小红", date: "2026-03-03", desc: "作为家长，我希望通过手机查看孩子的成绩" }, { id: "US-003", name: "管理员运维监控", priority: "中", status: "已确认", owner: "陈工", date: "2026-03-05", desc: "作为管理员，我希望实时监控系统运行状态" }] },
-  "prototype": { section: "DEMAND 需求管理", rows: [{ id: "PT-001", name: "智慧课堂原型V1", priority: "高", status: "已确认", owner: "UI/UX设计", date: "2026-03-10", desc: "课堂互动教学主界面和交互流程原型" }, { id: "PT-002", name: "家长端原型V1", priority: "中", status: "评审中", owner: "UI/UX设计", date: "2026-03-15", desc: "家长端App主要页面和功能流程" }, { id: "PT-003", name: "数据驾驶舱原型", priority: "中", status: "已确认", owner: "UI/UX设计", date: "2026-03-18", desc: "教育局领导数据看板页面设计" }, { id: "PT-004", name: "运维后台原型", priority: "低", status: "待评审", owner: "UI/UX设计", date: "2026-03-20", desc: "运维管理后台界面和告警流程设计" }] },
-
-  // PROGRESS 进度管理
-  "milestone": { section: "PROGRESS 进度管理", rows: [{ id: "MS-001", name: "需求基线确认", priority: "高", status: "已确认", owner: "张明远", date: "2026-03-31", desc: "完成需求评审并冻结需求基线" }, { id: "MS-002", name: "系统设计完成", priority: "高", status: "已确认", owner: "李文华", date: "2026-04-30", desc: "完成架构设计和详细设计" }, { id: "MS-003", name: "核心功能上线", priority: "高", status: "评审中", owner: "王建国", date: "2026-07-31", desc: "核心业务功能完成开发并通过测试" }, { id: "MS-004", name: "系统全面上线", priority: "高", status: "待评审", owner: "张明远", date: "2026-10-31", desc: "全部功能部署上线运行" }] },
-  "daily": { section: "PROGRESS 进度管理", rows: [{ id: "DR-001", name: "日报-20260301", priority: "中", status: "已确认", owner: "张明远", date: "2026-03-01", desc: "需求调研第一天，走访市教育局信息中心" }, { id: "DR-002", name: "日报-20260302", priority: "中", status: "已确认", owner: "张明远", date: "2026-03-02", desc: "完成认证系统需求边界确认" }, { id: "DR-003", name: "日报-20260303", priority: "中", status: "已确认", owner: "李文华", date: "2026-03-03", desc: "数据中台需求研讨，输出初步数据架构" }, { id: "DR-004", name: "日报-20260304", priority: "中", status: "已确认", owner: "王建国", date: "2026-03-04", desc: "智慧课堂功能点梳理，整理需求清单" }, { id: "DR-005", name: "日报-20260305", priority: "中", status: "已确认", owner: "赵小红", date: "2026-03-05", desc: "家校互通平台需求调研，走访2所学校" }, { id: "DR-006", name: "日报-20260306", priority: "中", status: "已确认", owner: "陈工", date: "2026-03-06", desc: "运维管理平台需求收集，整理设备清单" }] },
-  "delay": { section: "PROGRESS 进度管理", rows: [{ id: "DL-001", name: "食堂模块增加延期预警", priority: "高", status: "评审中", owner: "张明远", date: "2026-04-05", desc: "新增食堂模块预计延期2周，需调整里程碑" }, { id: "DL-002", name: "移动端开发资源不足", priority: "中", status: "评审中", owner: "孙移动", date: "2026-04-08", desc: "移动端开发人员不足，部分功能可能延期" }, { id: "DL-003", name: "第三方接口对接延期", priority: "中", status: "待评审", owner: "王建国", date: "2026-04-10", desc: "区县教育局系统接口文档未按时提供" }] },
-
-  // QUALITY 质量管理
-  "test-plan": { section: "QUALITY 质量管理", rows: [{ id: "TP-001", name: "整体测试计划", priority: "高", status: "已确认", owner: "测试组长", date: "2026-05-01", desc: "覆盖全系统7大模块的测试策略和计划" }, { id: "TP-002", name: "性能测试方案", priority: "中", status: "已确认", owner: "性能工程师", date: "2026-06-01", desc: "并发用户5000+的性能测试方案" }, { id: "TP-003", name: "安全测试方案", priority: "中", status: "评审中", owner: "安全工程师", date: "2026-06-15", desc: "含渗透测试和代码安全扫描" }] },
-  "bug-track": { section: "QUALITY 质量管理", rows: [{ id: "BUG-001", name: "登录页面兼容性问题", priority: "高", status: "评审中", owner: "开发团队", date: "2026-07-01", desc: "IE11浏览器下登录页面样式错乱" }, { id: "BUG-002", name: "数据导出内存溢出", priority: "高", status: "评审中", owner: "李文华", date: "2026-07-02", desc: "导出10万条以上数据时浏览器崩溃" }, { id: "BUG-003", name: "图表显示异常", priority: "中", status: "已确认", owner: "王建国", date: "2026-07-03", desc: "Safari浏览器下饼图颜色渲染异常" }, { id: "BUG-004", name: "消息推送延迟", priority: "中", status: "评审中", owner: "陈工", date: "2026-07-04", desc: "部分通知消息推送延迟超过30秒" }, { id: "BUG-005", name: "权限校验绕过", priority: "高", status: "评审中", owner: "安全工程师", date: "2026-07-05", desc: "特定条件下可绕过权限校验访问敏感数据" }, { id: "BUG-006", name: "文件上传大小限制", priority: "低", status: "待评审", owner: "开发团队", date: "2026-07-06", desc: "视频文件超过500M上传失败无友好提示" }] },
-  "test-case": { section: "QUALITY 质量管理", rows: [{ id: "TC-001", name: "认证模块测试用例", priority: "高", status: "已确认", owner: "测试工程师", date: "2026-06-01", desc: "含登录、注销、权限验证等32个用例" }, { id: "TC-002", name: "数据中台测试用例", priority: "高", status: "评审中", owner: "测试工程师", date: "2026-06-05", desc: "数据采集、存储、计算各环节共45个用例" }, { id: "TC-003", name: "智慧课堂测试用例", priority: "中", status: "已确认", owner: "测试工程师", date: "2026-06-10", desc: "互动教学、作业批改等28个用例" }, { id: "TC-004", name: "家校互通测试用例", priority: "中", status: "待评审", owner: "测试工程师", date: "2026-06-15", desc: "消息推送、成绩查询等20个用例" }, { id: "TC-005", name: "性能测试用例", priority: "中", status: "已确认", owner: "性能工程师", date: "2026-06-20", desc: "并发、负载、稳定性等15个用例" }] },
-  "test-report": { section: "QUALITY 质量管理", rows: [{ id: "TR-001", name: "第一轮测试报告", priority: "高", status: "待评审", owner: "测试组长", date: "2026-07-15", desc: "第一轮整体测试通过率92%，严重Bug 2个" }, { id: "TR-002", name: "性能测试报告", priority: "中", status: "待评审", owner: "性能工程师", date: "2026-07-20", desc: "5000并发下响应时间<2秒，通过性能基准" }, { id: "TR-003", name: "安全测试报告", priority: "中", status: "待评审", owner: "安全工程师", date: "2026-07-25", desc: "发现3个中危漏洞已修复，1个低危待处理" }] },
-  "code-review": { section: "QUALITY 质量管理", rows: [{ id: "CR-001", name: "认证模块代码审查", priority: "高", status: "已确认", owner: "技术负责人", date: "2026-06-01", desc: "代码规范符合度95%，无严重问题" }, { id: "CR-002", name: "数据中台代码审查", priority: "高", status: "已确认", owner: "李文华", date: "2026-06-10", desc: "部分SQL语句需优化，查询效率可提升" }, { id: "CR-003", name: "智慧课堂代码审查", priority: "中", status: "已确认", owner: "王建国", date: "2026-06-15", desc: "组件复用度不足，建议抽取公共组件" }, { id: "CR-004", name: "前端通用组件审查", priority: "中", status: "评审中", owner: "前端架构师", date: "2026-06-20", desc: "统一UI组件库，减少各模块重复开发" }] },
-  "accept-criteria": { section: "QUALITY 质量管理", rows: [{ id: "AC-001", name: "认证系统验收标准", priority: "高", status: "已确认", owner: "张明远", date: "2026-08-01", desc: "支持5000用户并发登录，响应时间<1秒" }, { id: "AC-002", name: "数据中台验收标准", priority: "高", status: "已确认", owner: "李文华", date: "2026-08-05", desc: "数据采集延迟<5分钟，查询响应<3秒" }, { id: "AC-003", name: "智慧课堂验收标准", priority: "中", status: "评审中", owner: "王建国", date: "2026-08-10", desc: "支持50人同时在线互动教学无卡顿" }] },
-
-  // COST 成本管理
-  "budget": { section: "COST 成本管理", rows: [{ id: "BD-001", name: "总项目预算", priority: "高", status: "已确认", owner: "张明远", date: "2026-01-01", desc: "项目总预算1200万元,分三期拨付" }, { id: "BD-002", name: "一期预算明细", priority: "高", status: "已确认", owner: "张明远", date: "2026-01-15", desc: "一期预算600万元，含硬件采购200万" }, { id: "BD-003", name: "二期预算预估", priority: "中", status: "评审中", owner: "张明远", date: "2026-06-01", desc: "二期预算预估400万元，待正式审批" }] },
-  "expense": { section: "COST 成本管理", rows: [{ id: "EX-001", name: "服务器采购费用", priority: "高", status: "已确认", owner: "陈工", date: "2026-02-01", desc: "采购应用服务器和存储设备共180万元" }, { id: "EX-002", name: "开发团队差旅费", priority: "中", status: "已确认", owner: "王建国", date: "2026-03-15", desc: "3月份差旅费用共计3.2万元" }, { id: "EX-003", name: "软件License费用", priority: "中", status: "已确认", owner: "李文华", date: "2026-03-20", desc: "数据库和中间件License费用45万元" }, { id: "EX-004", name: "第三方测试费用", priority: "中", status: "评审中", owner: "测试组长", date: "2026-06-01", desc: "委托第三方进行安全测试费用15万元" }, { id: "EX-005", name: "培训材料印刷费", priority: "低", status: "已确认", owner: "赵小红", date: "2026-08-01", desc: "用户操作手册和培训材料印刷3.5万元" }] },
-  "purchase": { section: "COST 成本管理", rows: [{ id: "PR-001", name: "服务器集群", priority: "高", status: "已确认", owner: "陈工", date: "2026-02-01", desc: "戴尔R750服务器12台，含5年维保" }, { id: "PR-002", name: "网络设备", priority: "中", status: "已确认", owner: "陈工", date: "2026-02-15", desc: "华为交换机、防火墙和负载均衡器" }, { id: "PR-003", name: "校园终端设备", priority: "中", status: "评审中", owner: "王建国", date: "2026-04-01", desc: "智慧课堂用平板电脑500台" }, { id: "PR-004", name: "监控摄像头", priority: "低", status: "待评审", owner: "刘安全", date: "2026-05-01", desc: "校园安防用AI摄像头200台" }] },
-  "manhour": { section: "COST 成本管理", rows: [{ id: "MH-001", name: "3月工时统计", priority: "中", status: "已确认", owner: "张明远", date: "2026-04-01", desc: "团队总计投入280人天，加班32小时" }, { id: "MH-002", name: "4月工时预估", priority: "中", status: "已确认", owner: "张明远", date: "2026-04-01", desc: "预计投入300人天，开发任务集中" }, { id: "MH-003", name: "人力缺口分析", priority: "中", status: "评审中", owner: "张明远", date: "2026-04-05", desc: "移动端开发缺口2人，需5月前补充" }] },
-  "contract-pay": { section: "COST 成本管理", rows: [{ id: "CP-001", name: "首付款节点", priority: "高", status: "已确认", owner: "张明远", date: "2026-01-15", desc: "合同签署后支付30%，360万元已支付" }, { id: "CP-002", name: "中期验收付款", priority: "中", status: "待评审", owner: "张明远", date: "2026-06-30", desc: "核心功能上线后支付40%，480万元" }, { id: "CP-003", name: "最终验收付款", priority: "中", status: "待评审", owner: "张明远", date: "2026-12-31", desc: "项目验收通过后支付尾款30%，360万元" }] },
-
-  // COMMUNICATION 沟通管理
-  "meeting": { section: "COMMUNICATION 沟通管理", rows: [{ id: "MT-001", name: "项目启动会", priority: "高", status: "已确认", owner: "张明远", date: "2025-09-15", desc: "明确项目目标、范围、团队分工和沟通机制" }, { id: "MT-002", name: "需求评审会", priority: "高", status: "已确认", owner: "张明远", date: "2026-03-10", desc: "评审需求规格说明书，确认需求基线" }, { id: "MT-003", name: "技术方案评审会", priority: "中", status: "已确认", owner: "李文华", date: "2026-04-15", desc: "评审系统架构和技术方案" }, { id: "MT-004", name: "项目周例会-第12周", priority: "中", status: "已确认", owner: "张明远", date: "2026-05-20", desc: "本周完成核心模块开发60%，进度正常" }, { id: "MT-005", name: "客户沟通会-4月", priority: "中", status: "已确认", owner: "赵小红", date: "2026-04-28", desc: "汇报项目进展，讨论食堂模块新增需求" }] },
-  "contacts": { section: "COMMUNICATION 沟通管理", rows: [{ id: "CT-001", name: "教育局项目负责人", priority: "高", status: "已确认", owner: "张明远", date: "2025-09-01", desc: "王局长, 139xxxx8888, wang@edu.gov.cn" }, { id: "CT-002", name: "学校代表", priority: "中", status: "已确认", owner: "赵小红", date: "2025-10-15", desc: "李校长(南山实验), 138xxxx6666" }, { id: "CT-003", name: "监理方代表", priority: "中", status: "已确认", owner: "张明远", date: "2025-11-01", desc: "陈总监, 137xxxx5555, chen@supervisor.com" }, { id: "CT-004", name: "第三方接口方", priority: "中", status: "待评审", owner: "王建国", date: "2026-03-01", desc: "区县教育局IT负责人待确认" }] },
-  "notice": { section: "COMMUNICATION 沟通管理", rows: [{ id: "NT-001", name: "项目组织结构调整通知", priority: "中", status: "已确认", owner: "张明远", date: "2026-02-01", desc: "新增移动端开发小组，由孙移动负责" }, { id: "NT-002", name: "需求变更公告", priority: "高", status: "已确认", owner: "张明远", date: "2026-04-02", desc: "食堂管理模块已纳入项目范围" }, { id: "NT-003", name: "系统维护窗口通知", priority: "中", status: "待评审", owner: "陈工", date: "2026-07-01", desc: "计划7月15日晚间进行系统维护升级" }] },
-  "weekly": { section: "COMMUNICATION 沟通管理", rows: [{ id: "WR-001", name: "第8周例会纪要", priority: "中", status: "已确认", owner: "张明远", date: "2026-04-15", desc: "本周完成需求评审，下周开始架构设计" }, { id: "WR-002", name: "第10周例会纪要", priority: "中", status: "已确认", owner: "张明远", date: "2026-05-01", desc: "设计阶段进展正常，准备进入开发阶段" }, { id: "WR-003", name: "第12周例会纪要", priority: "中", status: "已确认", owner: "张明远", date: "2026-05-15", desc: "核心模块开发进度60%，移动端资源需补充" }] },
-  "client-comm": { section: "COMMUNICATION 沟通管理", rows: [{ id: "CC-001", name: "4月客户沟通记录", priority: "中", status: "已确认", owner: "赵小红", date: "2026-04-15", desc: "沟通食堂模块新增需求，客户理解需评估影响" }, { id: "CC-002", name: "3月客户沟通记录", priority: "中", status: "已确认", owner: "张明远", date: "2026-03-30", desc: "汇报需求调研进展，客户对进度满意" }, { id: "CC-003", name: "5月客户沟通记录", priority: "中", status: "评审中", owner: "张明远", date: "2026-05-20", desc: "演示核心功能原型，收集客户反馈意见" }, { id: "CC-004", name: "紧急沟通-安防方案调整", priority: "高", status: "评审中", owner: "刘安全", date: "2026-06-01", desc: "客户要求调整校园安防方案，增加AI识别功能" }] },
-  "internal-review": { section: "COMMUNICATION 沟通管理", rows: [{ id: "IR-001", name: "架构设计内部评审", priority: "高", status: "已确认", owner: "李文华", date: "2026-04-10", desc: "评审通过，建议增加缓存层提升性能" }, { id: "IR-002", name: "代码质量评审", priority: "中", status: "已确认", owner: "技术负责人", date: "2026-06-15", desc: "前端代码需增强组件复用，后端SQL需优化" }, { id: "IR-003", name: "测试用例评审", priority: "中", status: "评审中", owner: "测试组长", date: "2026-06-20", desc: "测试覆盖率需提升至85%以上" }] },
-
-  // RISK 风险管理
-  "risk-register": { section: "RISK 风险管理", rows: [{ id: "RSK-001", name: "需求频繁变更风险", priority: "高", status: "评审中", owner: "张明远", date: "2026-04-01", desc: "食堂模块新增已发生，后续变更需严格控制" }, { id: "RSK-002", name: "人力资源不足风险", priority: "中", status: "评审中", owner: "张明远", date: "2026-04-05", desc: "移动端开发人员缺口2人，影响进度" }, { id: "RSK-003", name: "第三方接口延期风险", priority: "中", status: "待评审", owner: "王建国", date: "2026-04-08", desc: "区县教育局接口文档提供延迟" }, { id: "RSK-004", name: "数据安全风险", priority: "高", status: "评审中", owner: "安全工程师", date: "2026-05-01", desc: "教育数据涉及隐私，需通过等保三级" }, { id: "RSK-005", name: "技术方案风险", priority: "低", status: "已确认", owner: "李文华", date: "2026-05-10", desc: "新技术选型经验不足，已安排专项培训" }] },
-  "issue-track": { section: "RISK 风险管理", rows: [{ id: "ISS-001", name: "移动端开发人员招聘", priority: "高", status: "评审中", owner: "张明远", date: "2026-04-05", desc: "需招聘2名React Native开发，HR已启动" }, { id: "ISS-002", name: "测试环境不稳定", priority: "中", status: "评审中", owner: "陈工", date: "2026-06-01", desc: "测试服务器频繁宕机，需排查硬件问题" }, { id: "ISS-003", name: "客户需求理解偏差", priority: "中", status: "已确认", owner: "赵小红", date: "2026-04-08", desc: "食堂模块需求细节与客户理解有偏差，已澄清" }, { id: "ISS-004", name: "代码质量不达标", priority: "低", status: "评审中", owner: "技术负责人", date: "2026-06-15", desc: "部分模块代码规范度不足，安排重构" }] },
-  "emergency": { section: "RISK 风险管理", rows: [{ id: "EM-001", name: "数据泄露应急预案", priority: "高", status: "已确认", owner: "安全工程师", date: "2026-03-01", desc: "发现数据泄露后30分钟内启动应急响应" }, { id: "EM-002", name: "系统宕机应急预案", priority: "高", status: "已确认", owner: "陈工", date: "2026-03-05", desc: "核心系统宕机后15分钟内启动备用节点" }, { id: "EM-003", name: "关键人员离职应急预案", priority: "中", status: "已确认", owner: "张明远", date: "2026-03-10", desc: "核心岗位设立AB角，确保知识传承" }] },
-  "risk-action": { section: "RISK 风险管理", rows: [{ id: "RA-001", name: "需求变更控制措施", priority: "高", status: "评审中", owner: "张明远", date: "2026-04-02", desc: "建立CCB变更控制委员会，严格评估每次变更" }, { id: "RA-002", name: "人力补充措施", priority: "中", status: "评审中", owner: "张明远", date: "2026-04-06", desc: "加速移动端招聘，考虑外包补充" }, { id: "RA-003", name: "第三方接口催办", priority: "中", status: "评审中", owner: "王建国", date: "2026-04-09", desc: "发送正式催办函，安排专人驻场跟进" }] },
-  "dep-matrix": { section: "RISK 风险管理", rows: [{ id: "DM-001", name: "认证→数据中台依赖", priority: "高", status: "已确认", owner: "张明远", date: "2026-03-15", desc: "数据中台依赖认证系统提供用户身份信息" }, { id: "DM-002", name: "数据中台→智慧课堂依赖", priority: "中", status: "已确认", owner: "李文华", date: "2026-03-16", desc: "智慧课堂依赖数据中台提供学生和课程数据" }, { id: "DM-003", name: "接口→外部系统依赖", priority: "中", status: "评审中", owner: "王建国", date: "2026-03-17", desc: "家校互通依赖区县教育局系统接口" }] },
-
-  // DOCS 文档管理
-  "tech-plan": { section: "DOCS 文档管理", rows: [{ id: "DT-001", name: "系统架构设计方案", priority: "高", status: "已确认", owner: "李文华", date: "2026-04-01", desc: "含总体架构、技术选型和部署方案" }, { id: "DT-002", name: "数据中台技术方案", priority: "高", status: "已确认", owner: "李文华", date: "2026-04-10", desc: "数据采集、存储、计算各层技术方案" }, { id: "DT-003", name: "接口规范文档", priority: "中", status: "评审中", owner: "王建国", date: "2026-04-20", desc: "含RESTful API规范和GraphQL接口定义" }] },
-  "deploy-manual": { section: "DOCS 文档管理", rows: [{ id: "DMN-001", name: "生产环境部署手册", priority: "高", status: "评审中", owner: "陈工", date: "2026-08-01", desc: "含服务器配置、网络拓扑和部署步骤" }, { id: "DMN-002", name: "数据库部署手册", priority: "中", status: "待评审", owner: "李文华", date: "2026-08-05", desc: "数据库集群搭建和备份策略" }, { id: "DMN-003", name: "容器化部署指南", priority: "中", status: "待评审", owner: "陈工", date: "2026-08-10", desc: "基于Kubernetes的容器化部署方案" }] },
-  "user-manual": { section: "DOCS 文档管理", rows: [{ id: "UM-001", name: "系统管理员手册", priority: "高", status: "评审中", owner: "陈工", date: "2026-08-15", desc: "系统管理功能操作说明" }, { id: "UM-002", name: "教师操作手册", priority: "中", status: "待评审", owner: "王建国", date: "2026-08-20", desc: "智慧课堂教师端操作指南" }, { id: "UM-003", name: "家长端操作手册", priority: "中", status: "待评审", owner: "赵小红", date: "2026-08-22", desc: "家长端App使用说明" }, { id: "UM-004", name: "运维操作手册", priority: "中", status: "待评审", owner: "陈工", date: "2026-08-25", desc: "日常运维和故障处理操作指南" }] },
-  "training": { section: "DOCS 文档管理", rows: [{ id: "TRN-001", name: "教师培训方案", priority: "中", status: "已确认", owner: "赵小红", date: "2026-08-01", desc: "分3批进行培训，每批2天" }, { id: "TRN-002", name: "管理员培训材料", priority: "中", status: "评审中", owner: "陈工", date: "2026-08-05", desc: "含PPT课件、操作视频和练习题" }, { id: "TRN-003", name: "培训考核方案", priority: "低", status: "待评审", owner: "赵小红", date: "2026-08-10", desc: "培训后考核标准和补考机制" }] },
-  "accept-doc": { section: "DOCS 文档管理", rows: [{ id: "AD-001", name: "验收测试报告模板", priority: "中", status: "已确认", owner: "测试组长", date: "2026-09-01", desc: "含功能验收、性能验收和安全验收模板" }, { id: "AD-002", name: "交付物清单", priority: "高", status: "已确认", owner: "张明远", date: "2026-10-01", desc: "含软件、文档、培训等全部交付物" }, { id: "AD-003", name: "竣工报告模板", priority: "中", status: "已确认", owner: "张明远", date: "2026-11-01", desc: "项目竣工总结报告模板" }, { id: "AD-004", name: "售后服务承诺书", priority: "中", status: "评审中", owner: "张明远", date: "2026-12-01", desc: "含质保期、响应时间和维护承诺" }] },
-  "ops-doc": { section: "DOCS 文档管理", rows: [{ id: "OD-001", name: "运维交接清单", priority: "高", status: "待评审", owner: "陈工", date: "2026-11-01", desc: "含运维账号、环境信息和监控配置" }, { id: "OD-002", name: "应急预案文档", priority: "中", status: "待评审", owner: "陈工", date: "2026-11-05", desc: "含各类故障场景的应急处理流程" }, { id: "OD-003", name: "运维值班手册", priority: "中", status: "待评审", owner: "陈工", date: "2026-11-10", desc: "日常巡检、监控和问题升级流程" }] },
-  "release-note": { section: "DOCS 文档管理", rows: [{ id: "RN-001", name: "V1.0版本发布说明", priority: "高", status: "待评审", owner: "王建国", date: "2026-08-01", desc: "首个正式发布版本，含所有核心功能" }, { id: "RN-002", name: "V1.1版本发布说明", priority: "中", status: "待评审", owner: "王建国", date: "2026-09-01", desc: "修复V1.0已知问题，优化性能和体验" }, { id: "RN-003", name: "V1.2版本发布说明", priority: "中", status: "待评审", owner: "王建国", date: "2026-10-01", desc: "新增食堂管理模块和移动端功能" }] },
-};
-
-/* Product Data */
+/* ── Products ── */
 const products = [
-  { name: "在线辅导系统", count: 2, status: "used" },
-  { name: "在线考试系统", count: 1, status: "used" },
-  { name: "师资培训系统", count: 1, status: "used" },
-  { name: "电子书包平台", count: 1, status: "used" },
-  { name: "虚拟仿真实验", count: 1, status: "partial" },
-  { name: "教学质量评估", count: 1, status: "used" },
-  { name: "校园OA系统", count: 1, status: "used" },
-  { name: "档案管理系统", count: 1, status: "used" },
-  { name: "资产管理系统", count: 1, status: "used" },
-  { name: "预算管理系统", count: 1, status: "partial" },
-  { name: "视频会议系统", count: 1, status: "used" },
-  { name: "远程教研平台", count: 1, status: "used" },
-  { name: "数字图书馆", count: 1, status: "used" },
-  { name: "校园门户网站", count: 1, status: "used" },
-  { name: "消息推送平台", count: 1, status: "used" },
-  { name: "数据可视化平台", count: 1, status: "used" },
-  { name: "安全审计系统", count: 1, status: "partial" },
-  { name: "日志分析平台", count: 1, status: "used" },
-  { name: "代码托管平台", count: 1, status: "used" },
-  { name: "持续集成平台", count: 1, status: "used" },
-  { name: "自动化测试平台", count: 1, status: "partial" },
-  { name: "项目管理平台", count: 1, status: "used" },
-  { name: "文档协作平台", count: 1, status: "used" },
-  { name: "知识管理平台", count: 1, status: "used" },
-  { name: "即时通讯平台", count: 1, status: "used" },
-  { name: "邮件系统", count: 1, status: "used" },
-  { name: "短信平台", count: 1, status: "used" },
-  { name: "微信公众号", count: 1, status: "used" },
+  { name: "在线辅导系统", count: 2, status: "used" }, { name: "在线考试系统", count: 2, status: "used" }, { name: "赛事管理系统", count: 2 }, { name: "培训管理系统", count: 2, status: "used" },
+  { name: "基础教务系统", count: 2, status: "used" }, { name: "成绩管理系统", count: 2, status: "used" }, { name: "同步课堂系统", count: 2, status: "partial" }, { name: "网络教研系统", count: 2 },
+  { name: "名师工作室", count: 2 }, { name: "科研项目管理系统", count: 2 }, { name: "教材管理系统", count: 1, status: "used" }, { name: "考务管理系统", count: 2, status: "used" },
+  { name: "在线学习系统", count: 2, status: "used" }, { name: "智慧教育课堂教学分析系统", count: 1, status: "partial" }, { name: "集体备课系统", count: 1 }, { name: "知识库系统", count: 1 },
+  { name: "课表管理中心系统", count: 2, status: "used" }, { name: "在线巡课系统", count: 1, status: "partial" }, { name: "家校互通平台", count: 1, status: "used" }, { name: "智慧班牌系统", count: 2, status: "used" },
+  { name: "校园一卡通系统", count: 1, status: "used" }, { name: "资产管理系统", count: 1 }, { name: "图书馆管理系统", count: 1 }, { name: "宿舍管理系统", count: 1, status: "partial" },
+  { name: "选课走班系统", count: 1 }, { name: "综合素质评价系统", count: 1, status: "used" }, { name: "教师发展档案系统", count: 1 }, { name: "校园安全防控平台", count: 1, status: "used" },
 ];
 
-/* ============================================================
+/* ── Task Data (p0t0..p6t2) ── */
+interface TaskRow { desc: string; input: string; output: string; role: string; status: string; label: string; }
+const taskData: Record<string, { name: string; rows: TaskRow[] }> = {
+  p0t0: { name: "项目立项", rows: [
+    { desc: "编制项目立项申请报告", input: "项目意向书", output: "立项申请报告", role: "项目经理 / 张明远", status: "done", label: "DONE" },
+    { desc: "提交公司内部审批流程", input: "立项申请报告", output: "立项批文", role: "项目经理 / 张明远", status: "done", label: "DONE" },
+    { desc: "项目编号注册与备案", input: "立项批文", output: "项目编号 SCP-2026-0012", role: "PMO / 王丽", status: "done", label: "DONE" },
+  ]},
+  p0t1: { name: "组建项目团队", rows: [
+    { desc: "确定项目经理与核心成员人选", input: "项目需求分析", output: "团队成员名单", role: "部门总监 / 周总", status: "done", label: "DONE" },
+    { desc: "召开项目团队成立会议", input: "团队成员名单", output: "团队分工表", role: "项目经理 / 张明远", status: "done", label: "DONE" },
+  ]},
+  p0t2: { name: "项目管理制度建设", rows: [
+    { desc: "制定项目沟通管理计划", input: "项目章程", output: "沟通计划", role: "项目经理 / 张明远", status: "done", label: "DONE" },
+    { desc: "建立项目文档管理规范", input: "公司文档模板", output: "文档管理规范", role: "产品经理 / 李雨桐", status: "done", label: "DONE" },
+    { desc: "制定项目风险管理预案", input: "项目计划", output: "风险管理预案", role: "项目经理 / 张明远", status: "done", label: "DONE" },
+  ]},
+  p1t0: { name: "现场调研", rows: [
+    { desc: "走访教务处、学生处等科室", input: "访谈提纲", output: "科室访谈记录", role: "产品经理 / 陈思涵", status: "done", label: "DONE" },
+    { desc: "实地查看机房、网络环境", input: "机房勘察表", output: "机房现状报告", role: "运维工程师 / 赵子涵", status: "done", label: "DONE" },
+    { desc: "收集信息化现状数据", input: "数据采集模板", output: "信息化现状数据表", role: "产品经理 / 陈思涵", status: "done", label: "DONE" },
+  ]},
+  p1t1: { name: "需求分析", rows: [
+    { desc: "整理调研数据，梳理业务痛点", input: "调研报告", output: "需求清单 v1.0", role: "产品经理 / 李雨桐", status: "done", label: "DONE" },
+    { desc: "编写需求规格说明书初稿", input: "需求清单、校方确认函", output: "需求规格说明书 v1.0", role: "产品经理 / 李雨桐", status: "done", label: "DONE" },
+  ]},
+  p1t2: { name: "方案评审", rows: [
+    { desc: "编制技术选型方案", input: "需求说明书", output: "技术选型方案", role: "架构师 / 张明远", status: "done", label: "DONE" },
+    { desc: "组织技术方案评审会", input: "技术选型方案", output: "评审会议纪要", role: "架构师 / 张明远", status: "done", label: "DONE" },
+    { desc: "输出技术方案终稿", input: "评审意见", output: "技术方案终稿", role: "架构师 / 张明远", status: "done", label: "DONE" },
+  ]},
+  p1t3: { name: "合同签订", rows: [
+    { desc: "编制项目报价单", input: "技术方案终稿", output: "项目报价单", role: "项目经理 / 张明远", status: "done", label: "DONE" },
+    { desc: "与校方商务谈判", input: "报价单", output: "商务条款确认书", role: "项目经理 / 张明远", status: "done", label: "DONE" },
+    { desc: "签署正式合同", input: "商务条款确认书", output: "正式合同", role: "项目经理 / 张明远", status: "done", label: "DONE" },
+  ]},
+  p2t0: { name: "硬件上架", rows: [
+    { desc: "确认服务器采购清单", input: "技术方案", output: "采购清单", role: "运维工程师 / 赵子涵", status: "done", label: "DONE" },
+    { desc: "服务器到货验收与上架", input: "采购清单", output: "上架确认单", role: "运维工程师 / 赵子涵", status: "done", label: "DONE" },
+    { desc: "机房布线及电源接入", input: "机房平面图", output: "布线竣工图", role: "运维工程师 / 赵子涵", status: "done", label: "DONE" },
+  ]},
+  p2t1: { name: "网络部署", rows: [
+    { desc: "规划校园网VLAN划分", input: "网络拓扑图", output: "VLAN规划表", role: "网络工程师 / 赵子涵", status: "done", label: "DONE" },
+    { desc: "配置核心交换机与防火墙", input: "VLAN规划表", output: "网络配置文档", role: "网络工程师 / 赵子涵", status: "done", label: "DONE" },
+  ]},
+  p2t2: { name: "平台安装", rows: [
+    { desc: "部署统一认证平台", input: "部署手册", output: "认证平台部署确认", role: "开发工程师 / 王梓轩", status: "done", label: "DONE" },
+    { desc: "部署数据中台基础服务", input: "部署手册", output: "数据中台部署确认", role: "开发工程师 / 王梓轩", status: "done", label: "DONE" },
+    { desc: "基础平台集成联调", input: "部署确认报告", output: "联调测试报告", role: "开发工程师 / 王梓轩", status: "done", label: "DONE" },
+  ]},
+  p2t3: { name: "接口联调", rows: [
+    { desc: "与教育局学籍系统接口对接", input: "接口文档", output: "学籍接口联调报告", role: "开发工程师 / 张明远", status: "done", label: "DONE" },
+    { desc: "与人事系统接口对接", input: "接口文档", output: "人事接口联调报告", role: "开发工程师 / 张明远", status: "done", label: "DONE" },
+  ]},
+  p3t0: { name: "学籍管理", rows: [
+    { desc: "学生入学、转班功能开发", input: "需求说明书、UI设计稿", output: "学籍管理模块 v1.0", role: "开发工程师 / 王梓轩", status: "done", label: "DONE" },
+    { desc: "毕业管理功能开发", input: "需求说明书", output: "毕业管理子模块", role: "开发工程师 / 王梓轩", status: "done", label: "DONE" },
+    { desc: "学籍管理模块单元测试", input: "测试用例", output: "测试报告", role: "测试工程师 / 刘思远", status: "done", label: "DONE" },
+  ]},
+  p3t1: { name: "教务排课", rows: [
+    { desc: "排课算法设计与编码", input: "排课算法文档", output: "排课引擎 v1.0", role: "开发工程师 / 陈思涵", status: "done", label: "DONE" },
+    { desc: "约束条件配置界面开发", input: "教师课表需求", output: "配置管理界面", role: "开发工程师 / 陈思涵", status: "done", label: "DONE" },
+  ]},
+  p3t2: { name: "成绩管理", rows: [
+    { desc: "成绩录入功能开发", input: "成绩管理需求、数据模型", output: "成绩录入模块", role: "开发工程师 / 王梓轩", status: "done", label: "DONE" },
+    { desc: "统计分析功能开发", input: "数据模型", output: "统计分析模块", role: "开发工程师 / 王梓轩", status: "done", label: "DONE" },
+    { desc: "成绩报告生成功能", input: "报告模板", output: "报告生成模块", role: "开发工程师 / 王梓轩", status: "done", label: "DONE" },
+  ]},
+  p3t3: { name: "选课系统", rows: [
+    { desc: "选课核心流程开发", input: "选课规则文档", output: "选课系统 v1.0", role: "开发工程师 / 赵子涵", status: "done", label: "DONE" },
+    { desc: "高并发压力测试", input: "测试脚本", output: "压测报告", role: "测试工程师 / 刘思远", status: "done", label: "DONE" },
+  ]},
+  p4t0: { name: "管理员培训", rows: [
+    { desc: "培训信息中心管理员系统后台操作", input: "管理员手册、培训PPT", output: "培训签到表", role: "培训讲师 / 陈思涵", status: "done", label: "DONE" },
+    { desc: "管理员实操考核", input: "考核题库", output: "考核成绩单", role: "培训讲师 / 陈思涵", status: "done", label: "DONE" },
+  ]},
+  p4t1: { name: "教师培训", rows: [
+    { desc: "语数外学科教师操作培训", input: "教师操作手册", output: "培训反馈表", role: "培训讲师 / 陈思涵", status: "done", label: "DONE" },
+    { desc: "理综文综学科教师操作培训", input: "教师操作手册", output: "培训反馈表", role: "培训讲师 / 陈思涵", status: "done", label: "DONE" },
+  ]},
+  p4t2: { name: "学生家长培训", rows: [
+    { desc: "录制使用指南视频", input: "使用指南脚本", output: "培训视频", role: "产品经理 / 李雨桐", status: "active", label: "ACTIVE" },
+    { desc: "发布FAQ文档并组织在线答疑", input: "FAQ文档", output: "答疑记录", role: "产品经理 / 李雨桐", status: "active", label: "ACTIVE" },
+  ]},
+  p4t3: { name: "试运行优化", rows: [
+    { desc: "收集试运行期间反馈意见", input: "反馈收集表", output: "反馈分类清单", role: "产品经理 / 李雨桐", status: "active", label: "ACTIVE" },
+    { desc: "修复系统缺陷与性能优化", input: "Bug清单", output: "优化迭代版本", role: "开发团队", status: "active", label: "ACTIVE" },
+    { desc: "用户体验优化调整", input: "用户反馈", output: "UX优化方案", role: "开发团队", status: "active", label: "ACTIVE" },
+  ]},
+  p6t0: { name: "文档整理", rows: [
+    { desc: "汇总各阶段输出文档", input: "各阶段文档", output: "文档清单", role: "产品经理 / 李雨桐", status: "pending", label: "待开始" },
+    { desc: "编制验收文档包(15份)", input: "文档清单", output: "验收文档包", role: "产品经理 / 李雨桐", status: "pending", label: "待开始" },
+  ]},
+  p6t1: { name: "验收评审", rows: [
+    { desc: "准备演示环境", input: "验收文档包", output: "演示环境", role: "开发工程师 / 王梓轩", status: "pending", label: "待开始" },
+    { desc: "组织验收评审会", input: "演示环境、验收文档", output: "评审意见", role: "项目经理 / 张明远", status: "pending", label: "待开始" },
+    { desc: "签署验收报告", input: "评审意见", output: "验收报告", role: "项目经理 / 张明远", status: "pending", label: "待开始" },
+  ]},
+  p6t2: { name: "正式交付", rows: [
+    { desc: "移交系统权限与运维手册", input: "验收报告、运维手册", output: "权限移交确认书", role: "项目经理 / 张明远", status: "pending", label: "待开始" },
+    { desc: "签署交付确认书", input: "权限移交确认书", output: "交付确认书", role: "项目经理 / 张明远", status: "pending", label: "待开始" },
+  ]},
+};
+
+/* ── Phase Task List Mapping ── */
+const phaseTasks: Record<number, string[]> = {
+  0: ["p0t0", "p0t1", "p0t2"],
+  1: ["p1t0", "p1t1", "p1t2", "p1t3"],
+  2: ["p2t0", "p2t1", "p2t2", "p2t3"],
+  3: ["p3t0", "p3t1", "p3t2", "p3t3"],
+  4: ["p4t0", "p4t1", "p4t2", "p4t3"],
+  5: [], // phase 5 not defined in taskData
+  6: ["p6t0", "p6t1", "p6t2"],
+};
+
+/* ── Sub-Content Data (44 keys, truncated representative sample — full set in template) ── */
+const subContentData: Record<string, { section: string; rows: Array<{ id: string; name: string; priority: string; status: string; owner: string; date: string; desc: string }> }> = {
+  // scope
+  "req-boundary": { section: "SCOPE 范围管理", rows: [
+    { id: "RB-001", name: "统一认证对接范围", priority: "高", status: "已确认", owner: "张明远", date: "2026-03-02", desc: "确认仅对接市教育局LDAP，不含区县级独立认证系统" },
+    { id: "RB-002", name: "教务模块边界", priority: "高", status: "已确认", owner: "李雨桐", date: "2026-03-03", desc: "含班级/学期/课程基础管理，不含智能排课算法" },
+    { id: "RB-003", name: "数据迁移范围", priority: "中", status: "评审中", owner: "王梓轩", date: "2026-03-05", desc: "仅迁移近3年历史数据，不含10年以上归档数据" },
+    { id: "RB-004", name: "第三方集成边界", priority: "中", status: "已确认", owner: "张明远", date: "2026-03-06", desc: "对接省考试院、市教育局平台，不含其他区县独立系统" },
+    { id: "RB-005", name: "移动端覆盖范围", priority: "低", status: "确认中", owner: "李雨桐", date: "2026-03-08", desc: "教师端+家长端先行，学生端二期上线" },
+  ]},
+  "req-form": { section: "SCOPE 范围管理", rows: [
+    { id: "REQ-001", name: "统一身份认证", priority: "高", status: "已确认", owner: "张明远", date: "2026-03-05", desc: "支持LDAP/OAuth2.0，对接市教育局统一认证平台" },
+    { id: "REQ-002", name: "基础教务管理", priority: "高", status: "已确认", owner: "李雨桐", date: "2026-03-06", desc: "包含班级管理、学期设置、基础数据维护等功能模块" },
+    { id: "REQ-003", name: "成绩管理系统", priority: "高", status: "已确认", owner: "王梓轩", date: "2026-03-08", desc: "支持多维度成绩录入、统计分析、成绩单导出，对接省考试院标准" },
+    { id: "REQ-004", name: "在线考试系统", priority: "中", status: "评审中", owner: "张明远", date: "2026-03-10", desc: "支持题库管理、自动组卷、在线监考、成绩分析，需评估并发性能" },
+    { id: "REQ-005", name: "校园一卡通", priority: "中", status: "确认中", owner: "李雨桐", date: "2026-03-12", desc: "消费、门禁、考勤一体化，需与现有硬件设备兼容" },
+    { id: "REQ-006", name: "家校互通平台", priority: "低", status: "待评审", owner: "王梓轩", date: "2026-03-15", desc: "消息推送、作业通知、成绩查询、在线缴费等家长端功能" },
+    { id: "REQ-007", name: "数据中台对接", priority: "高", status: "已确认", owner: "张明远", date: "2026-03-18", desc: "统一数据标准，打通各业务系统数据孤岛，建立校级数据仓库" },
+    { id: "REQ-008", name: "移动端适配", priority: "中", status: "已确认", owner: "李雨桐", date: "2026-03-20", desc: "教师端/家长端/学生端三端适配，支持iOS和Android" },
+  ]},
+  // demand
+  "req-pool": { section: "DEMAND 需求管理", rows: [
+    { id: "RP-001", name: "AI智能排课", priority: "高", status: "已确认", owner: "张明远", date: "2026-03-10", desc: "基于约束求解算法自动生成课表，支持多维度优化" },
+    { id: "RP-002", name: "VR虚拟实验室", priority: "中", status: "评审中", owner: "李雨桐", date: "2026-03-15", desc: "化学/物理虚拟实验环境，支持沉浸式教学体验" },
+    { id: "RP-003", name: "智慧食堂系统", priority: "中", status: "确认中", owner: "王梓轩", date: "2026-03-20", desc: "人脸识别取餐、营养分析、在线充值、食堂评价" },
+    { id: "RP-004", name: "物联网设备管理", priority: "低", status: "待评审", owner: "张明远", date: "2026-04-01", desc: "统一管理校园IoT设备，含智能灯控、环境监测等" },
+    { id: "RP-005", name: "心理辅导平台", priority: "中", status: "已确认", owner: "李雨桐", date: "2026-04-05", desc: "在线心理咨询预约、测评量表、危机预警" },
+    { id: "RP-006", name: "校友管理系统", priority: "低", status: "待评审", owner: "王梓轩", date: "2026-04-12", desc: "校友信息库、活动管理、捐赠平台" },
+  ]},
+  "req-review": { section: "DEMAND 需求管理", rows: [
+    { id: "RR-001", name: "智能排课需求评审", priority: "高", status: "已确认", owner: "张明远", date: "2026-03-12", desc: "评审通过，确认纳入二期范围，需评估算法性能和约束条件" },
+    { id: "RR-002", name: "VR实验室需求评审", priority: "中", status: "评审中", owner: "李雨桐", date: "2026-03-18", desc: "需补充硬件选型方案和预算评估，暂定三期考虑" },
+    { id: "RR-003", name: "物联网设备管理评审", priority: "低", status: "已确认", owner: "王梓轩", date: "2026-04-08", desc: "评审通过，建议先做试点再推广，优先部署智慧灯控" },
+    { id: "RR-004", name: "心理辅导平台评审", priority: "中", status: "已确认", owner: "张明远", date: "2026-04-10", desc: "评审通过，确认对接市级心理健康平台标准" },
+  ]},
+};
+
+const AI_REPLIES = [
+  "根据当前项目数据，总体进度 71%，已完成 4 个阶段。建议重点关注「质量管理」和「风险管理」领域，其中缺陷跟踪仍有 47 项待处理。",
+  "项目剩余 120 天，按当前节奏预计可如期交付。深圳市教育局和南山区教育局两客户实施进度略有差异，建议每周对齐一次。",
+  "已部署 15 项产品中，核心教务系统运行稳定。智慧教育课堂教学分析系统尚在部分部署阶段，预计下月完成全量上线。",
+  "最近一周新增 3 项变更申请，均在范围管理流程中。建议尽快完成变更影响评估。",
+  "好的，我帮你梳理一下：目前 32 项任务中已完成 17 项，进行中 9 项，待开始 6 项。本周重点推进测试用例执行和用户培训材料准备。",
+];
+
+/* ==========================================================================
    PhaseLayout Component
-   ============================================================ */
+   ========================================================================== */
 
 interface PhaseLayoutProps {
-  project: {
-    id: string;
-    project_name: string;
-    project_code: string;
-    project_type: string;
-    project_stage: string;
-    project_schema: string;
-    status: string;
-    created_at: string;
-    customer_info?: {
-      company_name?: string;
-      contact_person?: string;
-      contact_phone?: string;
-      contact_email?: string;
-    };
-    channel_info?: Array<{
-      company_name: string;
-      contact_person?: string;
-      contact_phone?: string;
-    }>;
-    procurement_modules?: string[];
-    description?: string;
-  };
+  project: { id: string; project_name: string; project_code: string; project_type: string; project_stage: string; project_schema: string; status: string; created_at: string; customer_info?: { company_name?: string }; channel_info?: Array<{ company_name: string }>; procurement_modules?: string[]; description?: string };
   onBack: () => void;
 }
 
-const phaseStatuses = ["done", "done", "done", "active", "pending", "pending", "pending"];
-const phaseProgress = [100, 100, 100, 60, 0, 0, 0];
-
-const AI_REPLIES = [
-  "根据当前项目数据分析，整体进度符合预期。开发阶段任务完成60%，略低于计划70%，建议关注移动端资源补充和第三方接口对接进度。",
-  "需求变更管理需要加强。食堂模块新增已影响项目范围，建议CCB严格评估后续变更请求，避免范围蔓延。",
-  "风险管理方面，人力资源不足和第三方接口延期是需要重点关注的风险项。建议加速招聘并安排专人跟进第三方对接。",
-  "从预算执行情况看，一期预算使用率约65%，与进度匹配。服务器采购已完成，软件License费用在预算范围内。",
-  "质量方面，已完成的模块代码审查通过率较高。建议在测试阶段加强边界条件和异常场景的覆盖。",
-];
-
 export function PhaseLayout({ project, onBack }: PhaseLayoutProps) {
-  /* Theme */
+  /* ── Theme ── */
   const [dark, setDark] = useState(false);
   useEffect(() => {
-    const stored = localStorage.getItem("phase-theme");
-    if (stored === "dark") setDark(true);
+    const stored = localStorage.getItem("theme");
+    if (stored === "dark") { document.documentElement.classList.add("dark"); setDark(true); }
   }, []);
   const toggleTheme = () => {
-    setDark(prev => {
-      const next = !prev;
-      localStorage.setItem("phase-theme", next ? "dark" : "light");
-      return next;
-    });
+    const root = document.documentElement;
+    const next = !root.classList.toggle("dark");
+    setDark(!next);
+    localStorage.setItem("theme", next ? "dark" : "light");
   };
 
-  /* Phase State */
-  const [activePhase, setActivePhase] = useState(3);
-  const [selectedTask, setSelectedTask] = useState<string | null>(null);
-  const [taskViewMode, setTaskViewMode] = useState<Record<string, boolean>>({});
-  const [showSteps, setShowSteps] = useState(true);
-  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  /* ── Dock ── */
+  const [dockHidden, setDockHidden] = useState(false);
 
-  /* Nav Drawer */
+  /* ── Strip / Nav ── */
+  const [activePanel, setActivePanel] = useState("scope");
+  const [l2Items, setL2Items] = useState(panelData.scope.items);
   const [navOpen, setNavOpen] = useState(false);
   const [navActivePanel, setNavActivePanel] = useState("scope");
 
-  /* AI Dialog */
+  /* ── AI Dialog ── */
   const [aiOpen, setAiOpen] = useState(false);
   const [aiInput, setAiInput] = useState("");
-  const [aiMessages, setAiMessages] = useState<Array<{ role: "user" | "ai"; text: string }>>([]);
+  const [aiMessages, setAiMessages] = useState<Array<{ role: string; text: string }>>([{ role: "ai", text: "你好！我是项目 AI 助手。我可以帮你分析进度数据、生成报告、解答项目相关问题。" }]);
 
-  /* Sub Content */
+  /* ── Sub Content ── */
   const [subContent, setSubContent] = useState<{ key: string; label: string } | null>(null);
 
-  /* Strip L2 */
-  const [activePanel, setActivePanel] = useState("scope");
-  const [l2Items, setL2Items] = useState(panelData.scope.items);
+  /* ── Phase ── */
+  const [activePhase, setActivePhase] = useState(4);
 
-  /* Phase data helpers */
-  const phaseKey = `p${activePhase}`;
-  const currentPhase = taskData[phaseKey];
-  const phaseStatus = phaseStatuses[activePhase] || "pending";
+  /* ── Task Detail ── */
+  const [selectedTask, setSelectedTask] = useState<string | null>(null);
+  const [taskViewMode, setTaskViewMode] = useState<"v27" | "v28">("v27");
+  const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>({ desc: true, input: true, output: true, role: true, stepCount: true });
+  const [stepsCollapsed, setStepsCollapsed] = useState<Record<string, boolean>>({});
+  const [configOpen, setConfigOpen] = useState<string | null>(null);
+  const [selectedRowIdx, setSelectedRowIdx] = useState<Record<string, number>>({});
 
-  const handlePanelEnter = (panelKey: string) => {
-    setActivePanel(panelKey);
-    if (panelData[panelKey]) {
-      setL2Items(panelData[panelKey].items);
-    }
+  /* ── Helpers ── */
+  const handlePanelEnter = (pk: string) => {
+    setActivePanel(pk);
+    if (panelData[pk]) setL2Items(panelData[pk].items);
   };
 
-  const handleSubClick = (key: string, label: string) => {
-    setNavOpen(false);
-    showSubContent(key, label);
-  };
+  const handleNavPanelEnter = (pk: string) => setNavActivePanel(pk);
 
-  const handleNavPanelEnter = (panelKey: string) => {
-    setNavActivePanel(panelKey);
-  };
+  const handleSubClick = (key: string, label: string) => { setNavOpen(false); setSubContent({ key, label }); };
 
-  const handleNavSubClick = (key: string, label: string) => {
-    setNavOpen(false);
-    showSubContent(key, label);
-  };
-
-  const showSubContent = (key: string, label: string) => {
-    setSubContent({ key, label });
-  };
-
-  const closeSubContent = () => {
-    setSubContent(null);
-  };
-
-  const switchPhase = (idx: number) => {
-    setActivePhase(idx);
-    setSelectedTask(null);
-    setExpandedRow(null);
-  };
+  const switchPhase = (idx: number) => { setActivePhase(idx); setSelectedTask(null); };
 
   const showTaskDetail = (taskId: string) => {
-    if (selectedTask === taskId && !expandedRow) {
-      setSelectedTask(null);
-      return;
-    }
+    if (selectedTask === taskId) { setSelectedTask(null); return; }
     setSelectedTask(taskId);
-    setExpandedRow(null);
+    setSelectedRowIdx(prev => { const n = { ...prev }; delete n[taskId]; return n; });
   };
 
-  const toggleTaskView = (taskId: string) => {
-    setTaskViewMode(prev => {
-      const next = { ...prev };
-      next[taskId] = !next[taskId];
-      return next;
-    });
+  const toggleTaskView = () => setTaskViewMode(v => v === "v27" ? "v28" : "v27");
+
+  const selectRow = (taskId: string, idx: number) => {
+    setSelectedRowIdx(prev => ({ ...prev, [taskId]: idx }));
   };
 
-  const toggleRowDetail = (rowKey: string) => {
-    setExpandedRow(prev => prev === rowKey ? null : rowKey);
+  const toggleSteps = (taskId: string) => {
+    setStepsCollapsed(prev => ({ ...prev, [taskId]: !prev[taskId] }));
   };
 
-  const exportTaskCSV = (taskId: string) => {
-    const task = taskData[taskId];
-    if (!task) return;
-    const header = "任务名称,步骤说明,步骤输入,步骤输出,执行角色,状态\n";
-    const rows = task.rows.map(r => `"${r.name}","${r.desc}","${r.input}","${r.output}","${r.role}","${r.status}"`).join("\n");
-    const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" });
+  const toggleConfig = (taskId: string) => {
+    setConfigOpen(prev => prev === taskId ? null : taskId);
+  };
+
+  const toggleField = (field: string, taskId: string) => {
+    setVisibleFields(prev => ({ ...prev, [field]: !prev[field] }));
+  };
+
+  const exportTask = (taskId: string) => {
+    const d = taskData[taskId]; if (!d) return;
+    const BOM = "﻿";
+    let csv = BOM + "任务名称,步骤说明,步骤输入,步骤输出,执行角色,状态\n";
+    d.rows.forEach((r, i) => { csv += `"${i === 0 ? d.name : ""}","${r.desc}","${r.input}","${r.output}","${r.role}","${r.label}"\n`; });
+    const blob = new Blob([csv], { type: "application/vnd.ms-excel;charset=utf-8" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${task.name}_任务明细.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const a = document.createElement("a"); a.href = url; a.download = `${d.name}_任务明细.xls`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   };
+
+  const showSubContent = (key: string, label: string) => setSubContent({ key, label });
+  const closeSubContent = () => setSubContent(null);
 
   const sendAI = () => {
     if (!aiInput.trim()) return;
-    const userMsg = aiInput.trim();
-    const reply = AI_REPLIES[Math.floor(Math.random() * AI_REPLIES.length)];
-    setAiMessages(prev => [...prev, { role: "user", text: userMsg }, { role: "ai", text: reply }]);
+    const q = aiInput.trim();
+    setAiMessages(prev => [...prev, { role: "user", text: q }]);
     setAiInput("");
+    const r = AI_REPLIES[Math.floor(Math.random() * AI_REPLIES.length)];
+    setTimeout(() => setAiMessages(prev => [...prev, { role: "ai", text: r }]), 300);
   };
 
-  /* ================================================================
-     Render: Sub-Content Area
-     ================================================================ */
-  const renderSubContent = () => {
+  /* ── Close config on outside click ── */
+  useEffect(() => {
+    if (!configOpen) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(`#cfg-${configOpen}`) && !target.closest(".td-card-btn")) setConfigOpen(null);
+    };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [configOpen]);
+
+  /* ── Render helpers ── */
+  const renderDockIcon = (d: string) => {
+    const icons: Record<string, string> = {
+      kanban: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+      projects: '<path d="M2 7h20M2 12h20M2 17h20"/>',
+      tasks: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>',
+      issues: '<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+      cases: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>',
+      standards: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>',
+    };
+    return icons[d] || icons.standards;
+  };
+
+  const renderSubContentArea = () => {
     if (!subContent) return null;
     const d = subContentData[subContent.key];
     if (!d) {
@@ -511,28 +395,9 @@ export function PhaseLayout({ project, onBack }: PhaseLayoutProps) {
         </div>
       );
     }
-
     const total = d.rows.length;
     const confirmed = d.rows.filter(r => r.status === "已确认").length;
     const highCount = d.rows.filter(r => r.priority === "高").length;
-
-    const rowsHtml = d.rows.map(r => {
-      const pc = r.priority === "高" ? "high" : (r.priority === "中" ? "medium" : "low");
-      const sc = r.status === "已确认" ? "done" : (r.status === "评审中" ? "active" : "pending");
-      const sl = r.status === "已确认" ? "已完成" : (r.status === "评审中" ? "进行中" : "待开始");
-      return (
-        <tr key={r.id}>
-          <td style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)" }}>{r.id}</td>
-          <td style={{ fontWeight: 600 }}>{r.name}</td>
-          <td><span className={`sc-priority ${pc}`}>{r.priority}</span></td>
-          <td><span className={`te-status ${sc}`}>{sl}</span></td>
-          <td>{r.owner}</td>
-          <td style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{r.date}</td>
-          <td>{r.desc}</td>
-        </tr>
-      );
-    });
-
     return (
       <div className="sub-content-area">
         <div className="sc-hero">
@@ -552,513 +417,509 @@ export function PhaseLayout({ project, onBack }: PhaseLayoutProps) {
         <div className="sc-table-wrap">
           <div className="sc-table-title">需求明细列表</div>
           <table className="sub-content-table">
-            <thead>
-              <tr><th>编号</th><th>需求名称</th><th>优先级</th><th>状态</th><th>负责人</th><th>日期</th><th>需求描述</th></tr>
-            </thead>
-            <tbody>{rowsHtml}</tbody>
+            <thead><tr><th>编号</th><th>需求名称</th><th>优先级</th><th>状态</th><th>负责人</th><th>日期</th><th>需求描述</th></tr></thead>
+            <tbody>
+              {d.rows.map(r => {
+                const pc = r.priority === "高" ? "high" : (r.priority === "中" ? "medium" : "low");
+                const sc = r.status === "已确认" ? "done" : (r.status === "评审中" ? "active" : "pending");
+                const sl = r.status === "已确认" ? "已完成" : (r.status === "评审中" ? "进行中" : "待开始");
+                return (<tr key={r.id}>
+                  <td style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)" }}>{r.id}</td>
+                  <td style={{ fontWeight: 600 }}>{r.name}</td>
+                  <td><span className={`sc-priority ${pc}`}>{r.priority}</span></td>
+                  <td><span className={`te-status ${sc}`}>{sl}</span></td>
+                  <td>{r.owner}</td>
+                  <td style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{r.date}</td>
+                  <td>{r.desc}</td>
+                </tr>);
+              })}
+            </tbody>
           </table>
         </div>
       </div>
     );
   };
 
-  /* ================================================================
-     Render: Task Detail V27 (Card View)
-     ================================================================ */
-  const renderTaskCardV27 = (taskId: string) => {
-    const task = taskData[taskId];
-    if (!task) return null;
+  const renderTaskDetail = (taskId: string) => {
+    const d = taskData[taskId]; if (!d) return null;
+    const totalSteps = d.rows.length;
+    const doneSteps = d.rows.filter(r => r.status === "done").length;
+    const progress = totalSteps > 0 ? Math.round(doneSteps / totalSteps * 100) : 0;
+    const statusClass = d.rows.some(r => r.status === "active") ? "active" : (doneSteps === totalSteps ? "done" : "pending");
+    const statusLabel = statusClass === "done" ? "已完成" : (statusClass === "active" ? "进行中" : "待开始");
+    const isCollapsed = stepsCollapsed[taskId] || false;
+    const selIdx = selectedRowIdx[taskId];
 
-    const isV28 = taskViewMode[taskId];
+    const buildFields = () => {
+      const h: React.ReactNode[] = [];
+      if (visibleFields.stepCount) {
+        h.push(<div key="steps" className="td-field-card"><span className="td-fc-label">步骤总数</span><span className="td-fc-value big">{totalSteps}</span></div>);
+        h.push(<div key="prog" className="td-field-card"><span className="td-fc-label">进度</span><span className="td-fc-value big accent">{progress}%</span></div>);
+      }
+      if (visibleFields.role) h.push(<div key="role" className="td-field-card"><span className="td-fc-label">执行角色</span><span className="td-fc-value">{[...new Set(d.rows.map(r => r.role))].filter(Boolean).join(" · ")}</span></div>);
+      return h;
+    };
 
-    if (isV28) {
-      /* V28 Table View */
-      return (
-        <div className="td-section">
-          <div className="task-expand-actions">
-            <button className="export-btn" onClick={() => exportTaskCSV(taskId)}>导出 CSV</button>
-            <button className="view-toggle-btn" onClick={() => toggleTaskView(taskId)}>切换视图 (卡片)</button>
+    const rowsHtml = d.rows.map((r, i) => (
+      <tr key={i}><td>{i + 1}</td><td className="td-desc-cell" title={r.desc}>{r.desc || "—"}</td><td>{r.input || "—"}</td><td>{r.output || "—"}</td><td>{r.role || "—"}</td><td><span className={`te-status ${r.status}`}>{r.label}</span></td></tr>
+    ));
+
+    const truncate = (s: string, max = 28) => s.length > max ? s.slice(0, max) + "…" : s;
+
+    const rowsV28 = d.rows.map((r, i) => (
+      <tr key={i} className={selIdx === i ? "row-selected" : ""} onClick={() => selectRow(taskId, i)}>
+        <td>{i === 0 ? <strong>{d.name}</strong> : ""}</td>
+        <td className="td-desc" title={r.desc}>{truncate(r.desc)}</td>
+        <td>{truncate(r.input, 20)}</td>
+        <td>{truncate(r.output, 20)}</td>
+        <td>{r.role}</td>
+        <td><span className={`te-status ${r.status}`}>{r.label}</span></td>
+        <td className="td-action">▶</td>
+      </tr>
+    ));
+
+    const selRow = selIdx !== undefined && selIdx !== null ? d.rows[selIdx] : null;
+    const sc = (r: TaskRow) => { if (r.status === "done") return "green"; if (r.status === "active") return "accent"; return "muted"; };
+
+    const v27Content = (
+      <>
+        <div className="td-field-grid" id={`fieldGrid-${taskId}`}>{buildFields()}</div>
+        {visibleFields.desc && (
+          <div className="td-desc-block">
+            <span className="td-fc-label">任务概述</span>
+            <span className="td-fc-value">{d.rows.map(r => r.desc).filter(Boolean).join("；")}</span>
           </div>
-          <div className="td-table-view">
-            <table>
-              <thead>
-                <tr><th>任务名称</th><th>步骤说明</th><th>步骤输入</th><th>步骤输出</th><th>执行角色</th><th>状态</th><th></th></tr>
-              </thead>
-              <tbody>
-                {task.rows.map((r, ri) => {
-                  const rk = `${taskId}-${ri}`;
-                  const sc = r.status === "已完成" ? "done" : (r.status === "进行中" ? "active" : "pending");
-                  return (
-                    <React.Fragment key={rk}>
-                      <tr className={expandedRow === rk ? "row-selected" : ""} onClick={() => toggleRowDetail(rk)}>
-                        <td style={{ fontWeight: 600 }}>{r.name}</td>
-                        <td className="td-desc">{r.desc}</td>
-                        <td>{r.input}</td>
-                        <td>{r.output}</td>
-                        <td>{r.role}</td>
-                        <td><span className={`te-status ${sc}`}>{r.status}</span></td>
-                        <td className="td-action">{expandedRow === rk ? "▲" : "▼"}</td>
-                      </tr>
-                      {expandedRow === rk && (
-                        <tr>
-                          <td colSpan={7} style={{ padding: 0 }}>
-                            <div className="row-detail-panel">
-                              <div className="row-detail-field"><span className="row-detail-lbl">步骤说明</span><span className="row-detail-val">{r.desc}</span></div>
-                              <div className="row-detail-field"><span className="row-detail-lbl">步骤输入</span><span className="row-detail-val">{r.input}</span></div>
-                              <div className="row-detail-field"><span className="row-detail-lbl">步骤输出</span><span className="row-detail-val">{r.output}</span></div>
-                              <div className="row-detail-field"><span className="row-detail-lbl">执行角色</span><span className="row-detail-val">{r.role}</span></div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
+        )}
+        <div className="td-steps-section">
+          <div className="td-steps-header" onClick={() => toggleSteps(taskId)}>
+            <span className="td-steps-title">步骤明细 · {totalSteps} 步</span>
+            <span className="td-steps-toggle" id={`stepsToggle-${taskId}`}>{isCollapsed ? "▼ 展开" : "▲ 收起"}</span>
+          </div>
+          <div className="td-steps-table-wrap" style={{ display: isCollapsed ? "none" : "block" }} id={`stepsTable-${taskId}`}>
+            <table cellSpacing="0"><thead><tr><th>#</th><th>步骤说明</th><th>步骤输入</th><th>步骤输出</th><th>执行角色</th><th>状态</th></tr></thead><tbody>{rowsHtml}</tbody></table>
           </div>
         </div>
-      );
-    }
+      </>
+    );
 
-    /* V27 Card View */
-    const statusClass = task.status === "done" ? "done" : (task.status === "active" ? "active" : "pending");
-    const statusLabel = task.status === "done" ? "已完成" : (task.status === "active" ? "进行中" : "待开始");
-    const sc = (r: { status: string }) => r.status === "已完成" ? "done" : (r.status === "进行中" ? "active" : "pending");
+    const v28Content = (
+      <>
+        <table cellSpacing="0"><thead><tr><th>任务名称</th><th>步骤说明</th><th>步骤输入</th><th>步骤输出</th><th>执行角色</th><th>状态</th><th></th></tr></thead><tbody>{rowsV28}</tbody></table>
+        <div className={`row-detail-panel${selRow ? " show" : ""}`} id={`rdp-${taskId}`}>
+          <div className="rdp-inner" id={`rdp-inner-${taskId}`}>
+            {selRow ? (
+              <>
+                <div className="rdp-field full"><span className="rdp-label">步骤说明</span><span className="rdp-value">{selRow.desc}</span></div>
+                <div className="rdp-field"><span className="rdp-label">输入</span><span className="rdp-value">{selRow.input || "—"}</span></div>
+                <div className="rdp-field"><span className="rdp-label">输出</span><span className="rdp-value">{selRow.output || "—"}</span></div>
+                <div className="rdp-field"><span className="rdp-label">执行角色</span><span className="rdp-value">{selRow.role}</span></div>
+                <div className="rdp-field"><span className={`rdp-value ${sc(selRow)}`}>{selRow.label}</span></div>
+                <div className="rdp-field full" style={{ padding: "12px 24px" }}><span className="rdp-label" style={{ color: "var(--text-muted)" }}>第 {selIdx + 1} 步 · {d.name}</span></div>
+              </>
+            ) : (
+              <div className="rdp-field full"><span className="rdp-label">点击表格行查看详情</span><span className="rdp-value muted">选择左侧表格中的任意一行，此处将显示完整的步骤说明和关联信息</span></div>
+            )}
+          </div>
+        </div>
+      </>
+    );
 
     return (
-      <div className="td-section">
-        <div className="task-expand-actions">
-          <button className="export-btn" onClick={() => exportTaskCSV(taskId)}>导出 CSV</button>
-          <button className="view-toggle-btn" onClick={() => toggleTaskView(taskId)}>切换视图 (表格)</button>
-        </div>
-        <div className="td-card-header">
-          <div className="td-card-header-left">
-            <span className="td-card-name">{task.name}</span>
-            <span className={`td-card-badge ${statusClass}`}>{statusLabel}</span>
-          </div>
-        </div>
-        <div className="td-field-grid">
-          <div className="td-field-card"><span className="td-fc-label">步骤数量</span><span className="td-fc-value big">{task.totalSteps}</span></div>
-          <div className="td-field-card"><span className="td-fc-label">已完成步骤</span><span className="td-fc-value big">{task.doneSteps}</span></div>
-          <div className="td-field-card"><span className="td-fc-label">开始日期</span><span className="td-fc-value">{task.startDate}</span></div>
-          <div className="td-field-card"><span className="td-fc-label">结束日期</span><span className="td-fc-value">{task.endDate}</span></div>
-        </div>
-        <div className="td-desc-block">
-          <span className="td-fc-label">任务说明</span>
-          <span className="td-fc-value">{task.desc}</span>
-        </div>
-        <div className="td-steps-section">
-          <div className="td-steps-header" onClick={() => setShowSteps(!showSteps)}>
-            <span className="td-steps-title">步骤明细</span>
-            <span className={`td-steps-toggle ${showSteps ? "open" : ""}`}>▼</span>
-          </div>
-          {showSteps && (
-            <div className="td-steps-table-wrap">
-              <table>
-                <thead>
-                  <tr><th>描述</th><th>输入</th><th>输出</th><th>角色</th><th>状态</th></tr>
-                </thead>
-                <tbody>
-                  {task.rows.map((r, ri) => (
-                    <tr key={ri}>
-                      <td>{r.desc}</td>
-                      <td>{r.input}</td>
-                      <td>{r.output}</td>
-                      <td>{r.role}</td>
-                      <td><span className={`te-status ${sc(r)}`}>{r.status}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      <div className="task-expand show" id={`task-p${taskId.charAt(1)}`}>
+        <div className="task-expand-inner">
+          <div className="td-card-header">
+            <div className="td-card-header-left">
+              <span className="td-card-name">{d.name}</span>
+              <span className={`td-card-badge ${statusClass}`}>{statusLabel}</span>
+              <span className="td-card-badge" style={{ border: "1px solid var(--border-light)", color: "var(--text-muted)" }}>{doneSteps}/{totalSteps} 步</span>
             </div>
-          )}
+            <div className="td-card-actions">
+              <button className="view-toggle-btn" onClick={toggleTaskView}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                {taskViewMode === "v27" ? "切换表格视图" : "切换卡片视图"}
+              </button>
+              <div className="td-config-wrap">
+                <button className={`td-card-btn${configOpen === taskId ? " active-conf" : ""}`} onClick={() => toggleConfig(taskId)}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg> 设置
+                </button>
+                <div className={`td-config-dropdown${configOpen === taskId ? " show" : ""}`} id={`cfg-${taskId}`}>
+                  <div className={`td-config-item${visibleFields.stepCount ? " on" : ""}`} onClick={() => toggleField("stepCount", taskId)}><span className="cfg-check">{visibleFields.stepCount ? "✓" : ""}</span>步骤统计</div>
+                  <div className={`td-config-item${visibleFields.role ? " on" : ""}`} onClick={() => toggleField("role", taskId)}><span className="cfg-check">{visibleFields.role ? "✓" : ""}</span>执行角色</div>
+                  <div className={`td-config-item${visibleFields.desc ? " on" : ""}`} onClick={() => toggleField("desc", taskId)}><span className="cfg-check">{visibleFields.desc ? "✓" : ""}</span>任务概述</div>
+                </div>
+              </div>
+              <button className="td-card-btn" onClick={() => exportTask(taskId)}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 导出 Excel
+              </button>
+            </div>
+          </div>
+          {taskViewMode === "v27" ? v27Content : v28Content}
         </div>
       </div>
     );
   };
 
-  /* ================================================================
-     Main Render
-     ================================================================ */
-  const displayPhaseDates = phaseDates[activePhase];
-  const displayPhaseDesc = phaseDescriptions[activePhase];
+  /* ── Overview Data ── */
+  const ovData = phaseLabels.map((label, i) => ({
+    name: label,
+    num: `${phaseStepsDone[i]}/${phaseStepsTotal[i]}`,
+    pct: phaseProgressPct[i],
+    status: phaseStatuses[i],
+    statusLabel: phaseStatuses[i] === "done" ? "已完成" : (phaseStatuses[i] === "active" ? "进行中" : "待开始"),
+  }));
 
-  const donePhases = phaseStatuses.filter(s => s === "done").length;
-  const totalTasks = Object.values(taskData).reduce((sum, t) => sum + t.totalSteps, 0);
-  const doneTasks = Object.values(taskData).reduce((sum, t) => sum + t.doneSteps, 0);
-  const overallProgress = Math.round((doneTasks / totalTasks) * 100);
+  /* ── Chart Data ── */
+  const allTaskRows = Object.values(taskData).flatMap(t => t.rows);
+  const chartDone = allTaskRows.filter(r => r.status === "done").length;
+  const chartActive = allTaskRows.filter(r => r.status === "active").length;
+  const chartPending = allTaskRows.filter(r => r.status === "pending").length;
+  const chartTotal = chartDone + chartActive + chartPending;
+  const donutDoneAngle = chartTotal > 0 ? (chartDone / chartTotal) * 360 : 0;
 
-  /* Chart Data */
-  const statusCounts = { done: 0, active: 0, pending: 0 };
-  Object.values(taskData).forEach(t => {
-    t.rows.forEach(r => {
-      if (r.status === "已完成") statusCounts.done++;
-      else if (r.status === "进行中") statusCounts.active++;
-      else statusCounts.pending++;
-    });
+  const phaseTaskCounts = [0, 1, 2, 3, 4, 5, 6].map(i => {
+    const tasks = phaseTasks[i] || [];
+    return tasks.reduce((s, tid) => s + (taskData[tid]?.rows.length || 0), 0);
   });
-  const totalStepsAll = statusCounts.done + statusCounts.active + statusCounts.pending;
+  const maxTasks = Math.max(...phaseTaskCounts, 1);
 
+  /* ================================================================
+     MAIN RENDER
+     ================================================================ */
   return (
     <div className={`phase-layout${dark ? " dark" : ""}`}>
-      {/* Left Hover Strip */}
+      {/* ═══ Dock ═══ */}
+      <header className={`top-docker${dockHidden ? " hidden" : ""}`}>
+        <div className="dock-glass">
+          <div className="dock-logo">光</div>
+          <div className="dock-divider" />
+          <nav className="dock-nav">
+            {[
+              { id: "kanban", label: "看板" },
+              { id: "projects", label: "项目", active: true },
+              { id: "tasks", label: "任务" },
+              { id: "issues", label: "工单" },
+              { id: "cases", label: "案例" },
+              { id: "standards", label: "规范" },
+              { id: "settings", label: "设置" },
+            ].map(item => (
+              <div key={item.id} className={`dock-item${item.active ? " active" : ""}`}>
+                <div className="dock-icon-wrap">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" dangerouslySetInnerHTML={{ __html: renderDockIcon(item.id) }} />
+                </div>
+                <span className="dock-label">{item.label}</span>
+                <div className="dock-indicator" />
+              </div>
+            ))}
+          </nav>
+          <div className="dock-divider" />
+          <div className="dock-right-group">
+            <button className="dock-btn" onClick={() => setDockHidden(!dockHidden)}>HIDE</button>
+            <div className="dock-user">S</div>
+          </div>
+        </div>
+      </header>
+
+      {/* ═══ Body Layout ═══ */}
+      {/* Left Strip (fixed) */}
       <div className="left-strip-wrap">
-        <div className="left-strip">
+        <div className="left-strip" id="leftStrip">
           <div className="strip-inner">
             <div className="strip-l1">
-              {Object.entries(panelData).map(([key, val]) => (
-                <div
-                  key={key}
-                  className={`strip-item${activePanel === key ? " active" : ""}`}
-                  onMouseEnter={() => handlePanelEnter(key)}
-                >
-                  <span className="si-line" />
-                  {val.title.replace(/^(SCOPE|DEMAND|PROGRESS|QUALITY|COST|COMMUNICATION|RISK|DOCS)\s/, "")}
+              {Object.entries(panelData).map(([pk, val]) => (
+                <div key={pk} className={`strip-item${activePanel === pk ? " active" : ""}`} data-panel={pk} onMouseEnter={() => handlePanelEnter(pk)}>
+                  <span className="si-line" />{val.title.replace(/^(SCOPE|DEMAND|PROGRESS|QUALITY|COST|COMMUNICATION|RISK|DOCS)\s/, "")}
                 </div>
               ))}
             </div>
             <div className="strip-divider" />
-            <div className="strip-l2">
+            <div className="strip-l2" id="stripL2">
               <div className="strip-l2-header">{panelData[activePanel]?.title || ""}</div>
-              {l2Items.map(item => (
-                item.link ? (
-                  <a key={item.key} className="strip-sub-item" href={item.link} target="_blank" rel="noopener noreferrer">
-                    <span className="sub-dot" />
-                    {item.label}
-                    {item.count !== undefined && <span className="sub-badge">{item.count}</span>}
-                  </a>
-                ) : (
-                  <div
-                    key={item.key}
-                    className={`strip-sub-item${subContent?.key === item.key ? " active" : ""}`}
-                    onClick={() => handleSubClick(item.key, item.label)}
-                  >
-                    <span className="sub-dot" />
-                    {item.label}
-                    {item.count !== undefined && <span className="sub-badge">{item.count}</span>}
-                  </div>
-                )
-              ))}
+              {l2Items.map(it => {
+                const isActive = it.active || subContent?.key === it.key;
+                const Tag = it.link ? "a" : "div";
+                const extra = it.link ? { href: it.link, target: "_blank", rel: "noopener noreferrer" } : {};
+                const dataAttrs = it.key ? { "data-key": it.key, "data-label": it.label } : {};
+                return (
+                  <Tag key={it.key || it.label} className={`strip-sub-item${isActive ? " active" : ""}`} style={{ cursor: "pointer" }} {...extra} {...dataAttrs as any} onClick={() => it.key && handleSubClick(it.key, it.label)}>
+                    <span className="sub-dot" />{it.label}<span className="sub-badge">{it.count}</span>
+                  </Tag>
+                );
+              })}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Top Toolbar */}
-      <div className="tl-toolbar">
-        <button className={`tl-tool-btn${navOpen ? " active" : ""}`} onClick={() => setNavOpen(!navOpen)} title="导航菜单">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" /><line x1="15" y1="8" x2="15" y2="10" /><line x1="15" y1="14" x2="15" y2="16" /></svg>
-        </button>
-        <button className="tl-tool-btn" onClick={() => { /* search placeholder */ }} title="搜索">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-        </button>
-        <button className={`tl-tool-btn${aiOpen ? " active" : ""}`} onClick={() => { setAiOpen(!aiOpen); if (!aiOpen) setAiMessages([]); }} title="AI 助手">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
-        </button>
-        <button className="tl-tool-btn" onClick={toggleTheme} title="切换主题">
-          {dark ? "☾" : "☀"}
-        </button>
-      </div>
-
-      {/* Nav Drawer Overlay */}
-      {navOpen && <div className="nav-overlay" onClick={() => setNavOpen(false)} />}
-
-      {/* Nav Drawer */}
-      <div className={`nav-drawer${navOpen ? " show" : ""}`}>
-        <div className="nav-drawer-l1">
-          {Object.entries(panelData).map(([key, val]) => (
-            <div
-              key={key}
-              className={`strip-item${navActivePanel === key ? " active" : ""}`}
-              onMouseEnter={() => handleNavPanelEnter(key)}
-            >
-              <span className="si-line" />
-              {val.title.replace(/^(SCOPE|DEMAND|PROGRESS|QUALITY|COST|COMMUNICATION|RISK|DOCS)\s/, "")}
-            </div>
-          ))}
-        </div>
-        <div className="nav-drawer-divider" />
-        <div className="nav-drawer-l2">
-          <div className="nav-drawer-l2-header">{panelData[navActivePanel]?.title || ""}</div>
-          {panelData[navActivePanel]?.items.map(item => (
-            item.link ? (
-              <a key={item.key} className="nav-drawer-sub" href={item.link} target="_blank" rel="noopener noreferrer">
-                <span className="ns-dot" />{item.label}
-                {item.count !== undefined && <span className="ns-badge">{item.count}</span>}
-              </a>
-            ) : (
-              <div
-                key={item.key}
-                className={`nav-drawer-sub${subContent?.key === item.key ? " active" : ""}`}
-                onClick={() => handleNavSubClick(item.key, item.label)}
-              >
-                <span className="ns-dot" />{item.label}
-                {item.count !== undefined && <span className="ns-badge">{item.count}</span>}
-              </div>
-            )
-          ))}
-        </div>
-      </div>
-
-      {/* AI Dialog Overlay */}
-      {aiOpen && <div className="ai-overlay show" onClick={() => setAiOpen(false)} />}
-
-      {/* AI Dialog */}
-      <div className={`ai-dialog${aiOpen ? " show" : ""}`}>
-        <div className="ai-dialog-header">
-          <div className="ai-dialog-title">
-            <span className="ai-dot" />
-            AI 项目助手
-          </div>
-          <button className="ai-dialog-close" onClick={() => setAiOpen(false)}>✕</button>
-        </div>
-        <div className="ai-dialog-body">
-          {aiMessages.length === 0 && (
-            <div className="ai-msg">你好！我是项目AI助手，可以帮你分析项目进度、识别风险、回答项目相关问题。请输入你的问题。</div>
-          )}
-          {aiMessages.map((m, i) => (
-            <div key={i} className={`ai-msg${m.role === "user" ? " user" : ""}`}>{m.text}</div>
-          ))}
-        </div>
-        <div className="ai-dialog-input-row">
-          <input
-            className="ai-dialog-input"
-            value={aiInput}
-            onChange={e => setAiInput(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") sendAI(); }}
-            placeholder="输入问题，例如：当前项目有哪些延期风险？"
-          />
-          <button className="ai-dialog-send" onClick={sendAI}>发送</button>
-        </div>
-      </div>
-
-      {/* Main Area */}
-      <div className="phase-main-area">
-        {subContent ? (
-          renderSubContent()
-        ) : (
-          <>
-            {/* Back Button */}
-            <div style={{ padding: "16px 64px 0" }}>
-              <Button variant="ghost" size="sm" onClick={onBack} style={{ color: "var(--text-secondary)" }}>
-                <ArrowLeft className="w-4 h-4 mr-1" />
-                返回项目列表
-              </Button>
-            </div>
-
-            {/* Hero */}
-            <div className="hero">
-              <div className="hero-grid">
-                <div className="hero-left">
-                  <div className="hero-label">项 目 详 情  /  PROJECT DETAILS</div>
-                  <h1>{project.project_name}</h1>
-                  <div className="hero-tags">
-                    <span className="hero-tag status">{project.status || "实施中"}</span>
-                    <span className="hero-tag type">{project.project_type || "A类重点项目"}</span>
-                  </div>
-                </div>
-                <div className="hero-meta">
-                  <div><span className="meta-stat accent">{overallProgress}%</span><span className="meta-label">总进度</span></div>
-                  <div><span className="meta-stat green">{donePhases}/7</span><span className="meta-label">已完成阶段</span></div>
-                  <div><span className="meta-stat">{totalTasks}</span><span className="meta-label">任务总数</span></div>
-                  <div><span className="meta-stat">120</span><span className="meta-label">剩余天数</span></div>
-                </div>
-              </div>
-              <div className="proj-info-bar">
-                <div className="proj-info-card">
-                  <span className="proj-info-label">客户名称</span>
-                  <span className="proj-info-value">{project.customer_info?.company_name || "深圳市教育局"}</span>
-                </div>
-                <div className="proj-info-card">
-                  <span className="proj-info-label">渠道方</span>
-                  <span className="proj-info-value">{project.channel_info?.[0]?.company_name || "南山区教育局"}</span>
-                </div>
-                <div className="proj-info-card">
-                  <span className="proj-info-label">业务部署模式</span>
-                  <span className="proj-info-value">
-                    <span className="pi-tag">本地部署</span>
-                    <span className="pi-tag">私有云</span>
-                  </span>
-                </div>
-                <div className="proj-info-card">
-                  <span className="proj-info-label">编号 / 负责人</span>
-                  <span className="proj-info-value">{project.project_code} · 张明远（研发二部）</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Product Section */}
-            <div className="product-section">
-              <div className="product-section-label">已采购产品清单 · {products.length} 项</div>
-              <div className="product-grid">
-                {products.map((p, i) => (
-                  <div className="product-item" key={i}>
-                    <span className="pi-dot" />
-                    {p.name}
-                    {p.count > 1 && <span className="pi-count">×{p.count}</span>}
-                    {p.status === "used" && <span className="pi-used" style={{ marginLeft: "auto" }}>已部署</span>}
-                    {p.status === "partial" && <span className="pi-partial" style={{ marginLeft: "auto" }}>部分部署</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Section Divider */}
-            <div className="section-head">
-              <span className="section-head-label">当前阶段 · ACTIVE PHASE</span>
-              <div className="section-head-line" />
-            </div>
-
-            {/* Phase Stepper */}
-            <div className="timeline-section">
-              <div className="stepper-track">
-                {phaseLabels.map((label, i) => {
-                  const s = phaseStatuses[i];
-                  return (
-                    <div key={i} className={`stepper-node ${s}`} onClick={() => switchPhase(i)}>
-                      <div className="stepper-dot">{s === "done" ? "✓" : i + 1}</div>
-                      <div className="stepper-label">{label}</div>
-                      <div className="stepper-date">{phaseDates[i]}</div>
+      <div className="body-layout">
+        {/* ═══ Main Area ═══ */}
+        <div className="main-area">
+          {subContent ? renderSubContentArea() : (
+            <>
+              {/* Hero */}
+              <div className="hero">
+                <div className="hero-grid">
+                  <div className="hero-left">
+                    <div className="hero-label">项 目 详 情  /  PROJECT DETAILS</div>
+                    <h1>{project.project_name || "智慧校园基础平台<br>建设项目"}</h1>
+                    <div className="hero-tags">
+                      <span className="hero-tag status">{project.status || "实施中"}</span>
+                      <span className="hero-tag type">{project.project_type || "A类重点项目"}</span>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Phase Detail */}
-            <div className="phase-section">
-              <div className="pd-detail">
-                <div className="pd-left">
-                  <div className="pd-status">
-                    <span className="pd-status-dot" style={{ background: phaseStatus === "done" ? "var(--green)" : phaseStatus === "active" ? "var(--orange)" : "var(--text-muted)" }} />
-                    {phaseStatus === "done" ? "进度正常" : phaseStatus === "active" ? "进行中" : "待开始"}
                   </div>
-                  <h3>{currentPhase?.name || phaseLabels[activePhase]}</h3>
-                  <p className="pd-desc">{displayPhaseDesc}</p>
-                  <p className="pd-date">{displayPhaseDates}</p>
-                  {currentPhase && (
-                    <div className="pd-meta-grid">
-                      <div className="pd-meta-item"><span className="pd-meta-val">{currentPhase.totalSteps}</span><span className="pd-meta-lbl">步骤数</span></div>
-                      <div className="pd-meta-item"><span className="pd-meta-val">{currentPhase.doneSteps}</span><span className="pd-meta-lbl">已完成</span></div>
-                      <div className="pd-meta-item"><span className="pd-meta-val">{currentPhase.startDate}</span><span className="pd-meta-lbl">开始日期</span></div>
-                      <div className="pd-meta-item" style={{ gridColumn: "span 2" }}><span className="pd-meta-val">{currentPhase.endDate}</span><span className="pd-meta-lbl">结束日期</span></div>
+                  <div className="hero-meta">
+                    <div><span className="meta-stat accent">71%</span><span className="meta-label">总进度</span></div>
+                    <div><span className="meta-stat green">4/7</span><span className="meta-label">已完成阶段</span></div>
+                    <div><span className="meta-stat">32</span><span className="meta-label">任务总数</span></div>
+                    <div><span className="meta-stat">120</span><span className="meta-label">剩余天数</span></div>
+                  </div>
+                </div>
+                <div className="proj-info-bar">
+                  <div className="proj-info-card"><span className="proj-info-label">客户名称</span><span className="proj-info-value">{project.customer_info?.company_name || "深圳市教育局"}</span></div>
+                  <div className="proj-info-card"><span className="proj-info-label">客户名称</span><span className="proj-info-value">{project.channel_info?.[0]?.company_name || "南山区教育局"}</span></div>
+                  <div className="proj-info-card"><span className="proj-info-label">业务部署模式</span><span className="proj-info-value"><span className="pi-tag">本地部署</span><span className="pi-tag">私有云</span></span></div>
+                  <div className="proj-info-card"><span className="proj-info-label">编号 / 负责人</span><span className="proj-info-value">SCP-2026-0012 · 张明远（研发二部）</span></div>
+                </div>
+              </div>
+
+              {/* Product List */}
+              <div className="product-section">
+                <div className="product-section-label">已采购产品清单 · 28 项</div>
+                <div className="product-grid">
+                  {products.map((p, i) => (
+                    <div className="product-item" key={i}>
+                      <span className="pi-dot" />{p.name}
+                      {p.count > 1 && <span className="pi-count">×{p.count}</span>}
+                      {p.status === "used" && <span className="pi-used">已部署</span>}
+                      {p.status === "partial" && <span className="pi-partial">部分部署</span>}
                     </div>
-                  )}
-                </div>
-                {currentPhase && (
-                  <div className="pd-right">
-                    <div className="pd-right-label">任务清单</div>
-                    {currentPhase.rows.map((r, ri) => (
-                      <div
-                        key={ri}
-                        className="pd-task-item"
-                        onClick={() => showTaskDetail(phaseKey)}
-                        style={{ fontWeight: selectedTask === phaseKey ? 600 : 400 }}
-                      >
-                        <span>{r.name}</span>
-                        <span className="task-arrow">›</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {currentPhase && (
-                <div className="pd-progress">
-                  <div className="pd-progress-bar">
-                    <div
-                      className="pd-progress-fill"
-                      style={{ width: `${Math.round((currentPhase.doneSteps / currentPhase.totalSteps) * 100)}%` }}
-                    />
-                  </div>
-                  <span className="pd-progress-text">{Math.round((currentPhase.doneSteps / currentPhase.totalSteps) * 100)}%</span>
-                </div>
-              )}
-            </div>
-
-            {/* Task Detail */}
-            {selectedTask && renderTaskCardV27(selectedTask)}
-
-            {/* Progress Overview */}
-            <div className="progress-section">
-              <div className="section-head" style={{ padding: "0 0 16px 0", borderBottom: "none" }}>
-                <span className="section-head-label">各阶段进度总览</span>
-                <div className="section-head-line" />
-              </div>
-              <div className="progress-bars">
-                {phaseLabels.map((label, i) => {
-                  const pct = phaseProgress[i];
-                  const color = pct === 100 ? "var(--green)" : pct > 0 ? "var(--orange)" : "var(--border-light)";
-                  return (
-                    <div className="progress-row" key={i}>
-                      <span className="progress-row-label">{label}</span>
-                      <div className="progress-row-bar">
-                        <div className="progress-row-fill" style={{ width: `${pct}%`, background: color }} />
-                      </div>
-                      <span className="progress-row-pct">{pct}%</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Charts */}
-            <div className="charts-section" style={{ display: "flex" }}>
-              <div className="chart-card">
-                <div className="chart-title">任务状态分布</div>
-                <svg width="180" height="180" viewBox="0 0 180 180">
-                  {/* Pie chart */}
-                  {(() => {
-                    if (totalStepsAll === 0) return null;
-                    const colors = ["var(--green)", "var(--orange)", "var(--border-light)"];
-                    const values = [statusCounts.done, statusCounts.active, statusCounts.pending];
-                    const total = values.reduce((a, b) => a + b, 0);
-                    let cumulativeAngle = -Math.PI / 2;
-                    const arcs: Array<{ d: string; color: string }> = [];
-                    values.forEach((v, idx) => {
-                      if (v === 0) return;
-                      const sliceAngle = (v / total) * 2 * Math.PI;
-                      const x1 = 90 + 70 * Math.cos(cumulativeAngle);
-                      const y1 = 90 + 70 * Math.sin(cumulativeAngle);
-                      cumulativeAngle += sliceAngle;
-                      const x2 = 90 + 70 * Math.cos(cumulativeAngle);
-                      const y2 = 90 + 70 * Math.sin(cumulativeAngle);
-                      const largeArc = sliceAngle > Math.PI ? 1 : 0;
-                      arcs.push({
-                        d: `M 90 90 L ${x1} ${y1} A 70 70 0 ${largeArc} 1 ${x2} ${y2} Z`,
-                        color: colors[idx],
-                      });
-                    });
-                    return arcs.map((arc, i) => <path key={i} d={arc.d} fill={arc.color} />);
-                  })()}
-                </svg>
-                <div className="chart-legend">
-                  <div className="chart-legend-item"><span className="chart-legend-dot" style={{ background: "var(--green)" }} />已完成 {statusCounts.done}</div>
-                  <div className="chart-legend-item"><span className="chart-legend-dot" style={{ background: "var(--orange)" }} />进行中 {statusCounts.active}</div>
-                  <div className="chart-legend-item"><span className="chart-legend-dot" style={{ background: "var(--border-light)" }} />待开始 {statusCounts.pending}</div>
+                  ))}
                 </div>
               </div>
-              <div className="chart-card">
-                <div className="chart-title">各阶段进度</div>
-                <div className="progress-bars" style={{ width: "100%" }}>
+
+              {/* Sub-content Area placeholder */}
+              <div className="sub-content-area" id="subContentArea" style={{ display: "none" }} />
+
+              {/* Section Head: Phases */}
+              <div className="section-head">
+                Phases 项目阶段
+                <span className="section-head-line" />
+              </div>
+
+              {/* Timeline / Stepper */}
+              <div className="timeline-section">
+                <div className="stepper-track">
                   {phaseLabels.map((label, i) => {
-                    const pct = phaseProgress[i];
-                    const color = pct === 100 ? "var(--green)" : pct > 0 ? "var(--orange)" : "var(--border-light)";
+                    const s = phaseStatuses[i];
                     return (
-                      <div className="progress-row" key={i}>
-                        <span className="progress-row-label" style={{ width: 100, fontSize: 10 }}>{label.slice(0, 6)}</span>
-                        <div className="progress-row-bar">
-                          <div className="progress-row-fill" style={{ width: `${pct}%`, background: color }} />
-                        </div>
-                        <span className="progress-row-pct">{pct}%</span>
+                      <div key={i} className={`stepper-node ${i < activePhase ? "done" : i === activePhase ? "active" : ""}`} onClick={() => switchPhase(i)}>
+                        <span className="stepper-dot">{String(i + 1).padStart(2, "0")}</span>
+                        <span className="stepper-label">{label}</span>
+                        <span className="stepper-date">{phaseDates[i]}</span>
                       </div>
                     );
                   })}
                 </div>
               </div>
+
+              {/* Section Head: Phase Details */}
+              <div className="section-head">
+                <span className="section-head-label">Phase Details 阶段详情</span>
+                <span className="section-head-line" />
+              </div>
+
+              {/* Phase Detail Cards */}
+              <div className="phase-section" id="phaseCard">
+                {phaseLabels.map((label, idx) => {
+                  const visible = idx === activePhase;
+                  const s = phaseStatuses[idx];
+                  const meta = phaseMeta[idx] || { items: [] };
+                  const pdStatusClass = s === "done" ? "done" : s === "pending" ? "pending" : "";
+                  const pdStatusLabel = s === "done" ? "已完成" : s === "active" ? "进行中" : "待开始";
+                  const tasks = phaseTasks[idx] || [];
+                  const cur = taskData[`p${idx}t0`];
+                  const totalSteps = cur ? cur.rows.length + (taskData[`p${idx}t1`]?.rows.length || 0) : 0;
+                  const bpct = phaseProgressPct[idx];
+                  return (
+                    <div key={idx} className={`phase-detail${visible ? " active" : ""}`} id={`phase${idx}`} style={{ display: visible ? "block" : "none" }}>
+                      <div className="pd-grid">
+                        <div className="pd-left">
+                          <span className={`pd-status ${pdStatusClass}`}>{pdStatusLabel}</span>
+                          <span className="pd-name">{label}</span>
+                          <span className="pd-desc">{phaseDescriptions[idx]}</span>
+                          <span className="pd-date">2026.{phaseDates[idx]}</span>
+                          <div className="pd-meta">
+                            {meta.items.map((mi, miIdx) => (
+                              <div key={miIdx} className="pd-meta-item">
+                                <span className={`mv${(mi as any).accent ? " accent" : ""}`} style={(mi as any).color ? { color: (mi as any).color } : (mi as any).muted ? { color: "var(--text-muted)" } : {}}>{mi.v}</span>{mi.l || ""}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="pd-right">
+                          <span className="pd-right-label">任务清单</span>
+                          <div className="pd-tasks">
+                            {tasks.map(tid => {
+                              const td = taskData[tid];
+                              if (!td) return null;
+                              const dotStatus = td.rows.some(r => r.status === "active") ? "active" : td.rows.every(r => r.status === "done") ? "" : "pending";
+                              return (
+                                <div key={tid} className="pd-task" onClick={() => showTaskDetail(tid)}>
+                                  <span className="pd-task-left"><span className={`pd-task-dot${dotStatus ? ` ${dotStatus}` : ""}`} />{td.name}</span>
+                                  <span className="pd-task-arrow">→</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="task-expand" id={`task-p${idx}`} style={{ display: selectedTask && selectedTask.startsWith(`p${idx}`) ? "block" : "none" }}>
+                        {selectedTask && selectedTask.startsWith(`p${idx}`) && renderTaskDetail(selectedTask)}
+                      </div>
+                      <div className="pd-progress">
+                        <span className="pd-prog-label">Progress 进度</span>
+                        <div className="pd-prog-bar-wrap"><div className="pd-prog-fill" style={{ width: `${bpct}%`, background: bpct === 100 ? "var(--green)" : bpct > 0 ? "var(--orange)" : "" }} /></div>
+                        <span className="pd-prog-val" style={{ color: bpct === 100 ? "var(--green)" : bpct > 0 ? "var(--orange)" : "var(--text-muted)" }}>{bpct}%</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Section Head: Overview */}
+              <div className="section-head">
+                <span className="section-head-label">Overview 总览</span>
+                <span className="section-head-line" />
+              </div>
+
+              {/* Progress Overview */}
+              <div className="overview-section">
+                <div className="ov-grid">
+                  {ovData.map((ov, i) => (
+                    <div key={i} className="ov-item">
+                      <div className="ov-top">
+                        <span className="ov-name">{ov.name}</span>
+                        <span className="ov-num" style={ov.status === "active" ? { color: "var(--orange)" } : {}}>{ov.num}</span>
+                      </div>
+                      <div className="ov-bar-wrap">
+                        <div className="ov-bar"><div className={`ov-fill ${ov.status}`} style={{ width: `${ov.pct}%` }} /></div>
+                        <span className={`ov-status ${ov.status}`}>{ov.statusLabel}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Section Head: Charts */}
+              <div className="section-head">
+                <span className="section-head-label">Charts 数据图表</span>
+                <span className="section-head-line" />
+              </div>
+
+              {/* Charts */}
+              <div className="charts-section">
+                {/* Donut Chart */}
+                <div className="chart-card">
+                  <div className="chart-title">任务完成分布</div>
+                  <div className="chart-donut-wrap">
+                    <svg viewBox="0 0 200 200" className="donut-chart">
+                      <circle cx="100" cy="100" r="80" fill="none" stroke="var(--border)" strokeWidth="20" />
+                      <circle cx="100" cy="100" r="80" fill="none" stroke="var(--green)" strokeWidth="20"
+                        strokeDasharray="502.65" strokeDashoffset={502.65 - (502.65 * donutDoneAngle / 360)} transform="rotate(-90 100 100)" />
+                      <text x="100" y="90" textAnchor="middle" fontSize="32" fontWeight="800" fill="var(--text)" fontFamily="var(--font-mono)">{chartDone}</text>
+                      <text x="100" y="112" textAnchor="middle" fontSize="11" fill="var(--text-muted)" fontFamily="var(--font-mono)">已完成</text>
+                    </svg>
+                  </div>
+                  <div className="donut-legend">
+                    <div className="dl-item"><span className="dl-dot" style={{ background: "var(--green)" }} />已完成 {chartDone}<span className="dl-pct">{Math.round(chartDone / chartTotal * 100)}%</span></div>
+                    <div className="dl-item"><span className="dl-dot" style={{ background: "var(--orange)" }} />进行中 {chartActive}<span className="dl-pct">{Math.round(chartActive / chartTotal * 100)}%</span></div>
+                    <div className="dl-item"><span className="dl-dot" style={{ background: "var(--text-muted)" }} />待开始 {chartPending}<span className="dl-pct">{Math.round(chartPending / chartTotal * 100)}%</span></div>
+                  </div>
+                </div>
+                {/* Bar Chart */}
+                <div className="chart-card" style={{ flex: 2 }}>
+                  <div className="chart-title">各阶段任务量</div>
+                  <div className="bar-chart-wrap">
+                    {phaseLabels.map((label, i) => {
+                      const cnt = phaseTaskCounts[i];
+                      const pct = Math.round(cnt / maxTasks * 100);
+                      const color = phaseStatuses[i] === "done" ? "var(--green)" : phaseStatuses[i] === "active" ? "var(--orange)" : "";
+                      return (
+                        <div className="bar-row" key={i}>
+                          <span className="bar-label">{label.slice(0, 6)}</span>
+                          <div className="bar-track">
+                            <div className="bar-fill" style={{ width: `${pct}%`, background: color }} />
+                            <div className="bar-track-bg" />
+                          </div>
+                          <span className="bar-val" style={phaseStatuses[i] === "active" ? { color: "var(--orange)" } : {}}>{cnt}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>{/* /main-area */}
+      </div>{/* /body-layout */}
+
+      {/* ═══ Top-Right Toolbar ═══ */}
+      <div className="tl-toolbar">
+        <button className={`tl-tool-btn${navOpen ? " active" : ""}`} onClick={() => setNavOpen(!navOpen)} title="导航">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+        </button>
+        <button className="tl-tool-btn" onClick={() => alert("搜索功能 — 待实现")} title="搜索">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+        </button>
+        <button className={`tl-tool-btn${aiOpen ? " active" : ""}`} onClick={() => setAiOpen(!aiOpen)} title="AI 助手">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+        </button>
+        <button className="tl-tool-btn" onClick={toggleTheme} title="切换深色/浅色">{dark ? "☾" : "☀"}</button>
+      </div>
+
+      {/* ═══ Navigation Drawer ═══ */}
+      {navOpen && <div className="nav-overlay show" onClick={() => setNavOpen(false)} />}
+      <div className={`nav-drawer${navOpen ? " show" : ""}`}>
+        <div className="nav-drawer-l1">
+          {Object.entries(panelData).map(([pk, val]) => (
+            <div key={pk} className={`nav-drawer-item${navActivePanel === pk ? " active" : ""}`} data-panel={pk} onMouseEnter={() => handleNavPanelEnter(pk)}>
+              <span className="nd-line" />{val.title.replace(/^(SCOPE|DEMAND|PROGRESS|QUALITY|COST|COMMUNICATION|RISK|DOCS)\s/, "")}
             </div>
-          </>
-        )}
+          ))}
+        </div>
+        <div className="nav-drawer-divider" />
+        <div className="nav-drawer-l2" id="navDrawerL2">
+          <div className="nav-drawer-l2-header">{panelData[navActivePanel]?.title || ""}</div>
+          {panelData[navActivePanel]?.items.map(it => {
+            const Tag = it.link ? "a" : "div";
+            const extra = it.link ? { href: it.link, target: "_blank", rel: "noopener noreferrer" } : {};
+            const dataAttrs = it.key ? { "data-key": it.key, "data-label": it.label } : {};
+            return (
+              <Tag key={it.key || it.label} className={`nav-drawer-sub${it.active ? " active" : ""}`} style={{ cursor: "pointer" }} {...extra} {...dataAttrs as any} onClick={() => it.key && handleSubClick(it.key, it.label)}>
+                <span className="ns-dot" />{it.label}<span className="ns-badge">{it.count}</span>
+              </Tag>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ═══ AI Dialog ═══ */}
+      {aiOpen && <div className="ai-overlay show" onClick={() => setAiOpen(false)} />}
+      <div className={`ai-dialog${aiOpen ? " show" : ""}`}>
+        <div className="ai-dialog-header">
+          <span className="ai-dialog-title"><span className="ai-dot" /> AI 项目助手</span>
+          <button className="ai-dialog-close" onClick={() => setAiOpen(false)}>✕</button>
+        </div>
+        <div className="ai-dialog-body" id="aiBody">
+          {aiMessages.map((m, i) => (
+            <div key={i} className="ai-msg" style={m.role === "user" ? { background: "var(--surface2)", borderLeftColor: "var(--blue)" } : {}}>
+              {m.role === "user" ? `👤 ${m.text}` : `🤖 ${m.text}`}
+            </div>
+          ))}
+        </div>
+        <div className="ai-dialog-input-row">
+          <input className="ai-dialog-input" value={aiInput} onChange={e => setAiInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") sendAI(); }} placeholder="输入问题..." />
+          <button className="ai-dialog-send" onClick={sendAI}>发送</button>
+        </div>
       </div>
     </div>
   );
