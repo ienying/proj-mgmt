@@ -26,6 +26,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Markdown } from "@/components/markdown";
 import { AIPromptDialog } from "@/components/ai-prompt-dialog";
+import { LayoutSelectionDialog } from "@/components/layout-selection-dialog";
+import { PhaseLayout } from "@/components/phase-layout";
 import {
   Select,
   SelectContent,
@@ -338,7 +340,11 @@ export function ProjectDetail({
   onBack,
 }: ProjectDetailProps) {
   const [activeModule, setActiveModule] = useState("scope");
-  
+
+  // 布局选择状态
+  const [showLayoutDialog, setShowLayoutDialog] = useState(true);
+  const [activeLayout, setActiveLayout] = useState<"phase" | "manage" | null>(null);
+
   // 动态模块列表（根据项目类型+阶段从API获取）
   const [enabledModules, setEnabledModules] = useState<{code: string; name: string; icon: React.ComponentType<{className?: string}>}[]>(PROJECT_MODULES as {code: string; name: string; icon: React.ComponentType<{className?: string}>}[]);
   
@@ -3908,6 +3914,33 @@ export function ProjectDetail({
 
   const mc = getModuleColor(activeModule);
 
+  // 布局选择对话框（首次进入项目详情时显示）
+  if (showLayoutDialog) {
+    return (
+      <>
+        <LayoutSelectionDialog
+          onConfirm={(layout) => {
+            setActiveLayout(layout);
+            setShowLayoutDialog(false);
+          }}
+        />
+        {/* 底层渲染管理式布局作为默认背景 */}
+        <div className="h-full flex flex-col bg-slate-50/80" style={{ display: "none" }} />
+      </>
+    );
+  }
+
+  // 阶段式布局（新版）
+  if (activeLayout === "phase") {
+    return (
+      <PhaseLayout
+        project={project}
+        onBack={onBack}
+      />
+    );
+  }
+
+  // 管理式布局（旧版，保持原有全部逻辑不变）
   return (
     <div className="h-full flex flex-col bg-slate-50/80">
       {/* 顶部导航栏 */}
