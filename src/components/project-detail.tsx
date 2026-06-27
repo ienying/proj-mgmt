@@ -3867,7 +3867,7 @@ export function ProjectDetail({
     const mc = getModuleColor(activeModule);
 
     return (
-      <div className="rounded-xl border border-slate-200/80 overflow-hidden shadow-sm">
+      <div className="flex flex-col h-full">
         {/* 表头 */}
         <div className={cn("px-4 py-3", mc.header)}>
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -3892,13 +3892,15 @@ export function ProjectDetail({
           </div>
         </div>
         {/* 数据区域 */}
-        {viewMode === "card" && renderCardView(table)}
-        {viewMode === "compact" && renderCompactView(table)}
-        {viewMode === "kanban" && renderKanbanView(table)}
-        {viewMode === "tree" && renderTreeView(table)}
-        {viewMode === "form" && renderFormView(table)}
-        {viewMode === "gantt" && renderGanttView(table)}
-        {viewMode === "group" && renderGroupView(table)}
+        <div className="flex-1">
+          {viewMode === "card" && renderCardView(table)}
+          {viewMode === "compact" && renderCompactView(table)}
+          {viewMode === "kanban" && renderKanbanView(table)}
+          {viewMode === "tree" && renderTreeView(table)}
+          {viewMode === "form" && renderFormView(table)}
+          {viewMode === "gantt" && renderGanttView(table)}
+          {viewMode === "group" && renderGroupView(table)}
+        </div>
       </div>
     );
   };
@@ -4060,7 +4062,7 @@ export function ProjectDetail({
           </div>
 
           {/* 中间数据区 */}
-          <div className="flex-1 p-3 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="text-slate-500">加载中...</div>
