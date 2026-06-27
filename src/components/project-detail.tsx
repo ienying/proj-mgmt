@@ -347,6 +347,10 @@ export function ProjectDetail({
   const [tableDataMap, setTableDataMap] = useState<Record<string, TableData[]>>({});
   const [loading, setLoading] = useState(true);
 
+  // 当前选中的表（侧边栏导航用）
+  const [selectedTableCode, setSelectedTableCode] = useState<string | null>(null);
+  const prevModuleRef = useRef<string | null>(null);
+
   // 关联的流程任务
   const [linkedTasksMap, setLinkedTasksMap] = useState<Record<string, any[]>>({});
   const [linkedTasksOpen, setLinkedTasksOpen] = useState<string | null>(null);
@@ -569,6 +573,27 @@ export function ProjectDetail({
   const moduleTables = useMemo(() => {
     return tableDefinitions.filter(t => t.module_codes.includes(activeModule));
   }, [tableDefinitions, activeModule]);
+
+  // 模块切换或数据加载后自动选中第一个表
+  useEffect(() => {
+    const tables = tableDefinitions.filter(t => t.module_codes.includes(activeModule));
+    if (tables.length === 0) {
+      setSelectedTableCode(null);
+      return;
+    }
+    // 模块切换 或 当前选中不在模块内 → 选第一个
+    if (
+      prevModuleRef.current !== activeModule ||
+      (selectedTableCode && !tables.some(t => t.table_code === selectedTableCode))
+    ) {
+      setSelectedTableCode(tables[0].table_code);
+    }
+    // 初次加载且尚未选中 → 选第一个
+    if (prevModuleRef.current === null && !selectedTableCode) {
+      setSelectedTableCode(tables[0].table_code);
+    }
+    prevModuleRef.current = activeModule;
+  }, [activeModule, tableDefinitions, selectedTableCode]);
 
   // 加载表定义和数据
   useEffect(() => {
@@ -3878,43 +3903,6 @@ export function ProjectDetail({
     );
   };
 
-  // 渲染模块内容
-  const renderModuleContent = () => {
-    const currentModule = PROJECT_MODULES.find(m => m.code === activeModule);
-    const tables = moduleTables;
-
-    if (loading) {
-      return (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-slate-500">加载中...</div>
-        </div>
-      );
-    }
-
-    if (tables.length === 0) {
-      const currentModuleDef = PROJECT_MODULES.find(m => m.code === activeModule);
-      const mc = getModuleColor(activeModule);
-      const IconComponent = currentModuleDef?.icon || FolderKanban;
-      return (
-        <div className={cn("rounded-xl border-2 border-dashed p-12 text-center", mc.border, mc.light)}>
-          <IconComponent className={cn("w-12 h-12 mx-auto mb-4", mc.text, "opacity-40")} />
-          <p className={cn("font-medium mb-1", mc.text)}>该模块暂无数据表</p>
-          <p className="text-sm text-slate-400">请在规范管理中配置对应的数据表</p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-4">
-        {tables.map((table) => (
-          <div key={table.id}>
-            {renderDataTable(table)}
-          </div>
-        ))}
-      </div>
-    );
-  };
-
   const mc = getModuleColor(activeModule);
 
   return (
@@ -4034,11 +4022,32 @@ export function ProjectDetail({
                       <div className="space-y-1.5 mt-2">
                         {tables.map((t) => {
                           const count = (tableDataMap[t.table_code] || []).length;
+                          const isSelected = selectedTableCode === t.table_code;
                           return (
-                            <div key={t.table_code} className={cn("flex items-center justify-between text-xs rounded-lg px-3 py-2 border-l-3", mc.border, mc.light)} style={{ borderLeftWidth: 3 }}>
-                              <span className="text-slate-700 truncate mr-2 font-medium">{t.table_name}</span>
-                              <span className={cn("font-mono font-semibold", mc.text)}>{count}</span>
-                            </div>
+                            <button
+                              key={t.table_code}
+                              onClick={() => setSelectedTableCode(t.table_code)}
+                              className={cn(
+                                "flex items-center justify-between text-xs rounded-lg px-3 py-2 w-full text-left transition-all cursor-pointer",
+                                isSelected
+                                  ? cn(mc.bg, "text-white shadow-sm")
+                                  : cn("border-l-3", mc.border, mc.light, "hover:bg-slate-100"),
+                              )}
+                              style={isSelected ? {} : { borderLeftWidth: 3 }}
+                            >
+                              <span className={cn(
+                                "truncate mr-2 font-medium",
+                                isSelected ? "text-white" : "text-slate-700",
+                              )}>
+                                {t.table_name}
+                              </span>
+                              <span className={cn(
+                                "font-mono font-semibold shrink-0",
+                                isSelected ? "text-white/80" : mc.text,
+                              )}>
+                                {count}
+                              </span>
+                            </button>
                           );
                         })}
                       </div>
@@ -4052,7 +4061,37 @@ export function ProjectDetail({
 
           {/* 中间数据区 */}
           <div className="flex-1 p-3 overflow-y-auto">
-            {renderModuleContent()}
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-slate-500">加载中...</div>
+              </div>
+            ) : moduleTables.length === 0 ? (
+              (() => {
+                const currentModuleDef = PROJECT_MODULES.find(m => m.code === activeModule);
+                const IconComponent = currentModuleDef?.icon || FolderKanban;
+                return (
+                  <div className={cn("rounded-xl border-2 border-dashed p-12 text-center", mc.border, mc.light)}>
+                    <IconComponent className={cn("w-12 h-12 mx-auto mb-4", mc.text, "opacity-40")} />
+                    <p className={cn("font-medium mb-1", mc.text)}>该模块暂无数据表</p>
+                    <p className="text-sm text-slate-400">请在规范管理中配置对应的数据表</p>
+                  </div>
+                );
+              })()
+            ) : !selectedTableCode ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-slate-400">请从左侧选择一个数据表</div>
+              </div>
+            ) : (() => {
+              const selectedTable = tableDefinitions.find(t => t.table_code === selectedTableCode);
+              if (!selectedTable) {
+                return (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-slate-400">数据表未找到</div>
+                  </div>
+                );
+              }
+              return renderDataTable(selectedTable);
+            })()}
           </div>
         </div>
       </div>
