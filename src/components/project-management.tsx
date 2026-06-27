@@ -394,13 +394,13 @@ export function ProjectManagement({
   }, [projects, projectTypes]);
 
   // 筛选项目 - 计算可选值
-  const departments = useMemo(() => [...new Set(projects.map(p => p.department).filter(Boolean))].sort(), [projects]);
-  const deployModes = useMemo(() => [...new Set(projects.map(p => p.deployment_mode).filter(Boolean))].sort(), [projects]);
-  const managers = useMemo(() => [...new Set(projects.map(p => p.role_project_manager).filter(Boolean))].sort(), [projects]);
-  const implementationUnits = useMemo(() => [...new Set(projects.map(p => (p as unknown as Record<string,string>).implementation_unit).filter(Boolean) as string[])].sort(), [projects]);
-  const salesList = useMemo(() => [...new Set(projects.map(p => p.role_sales).filter(Boolean))].sort(), [projects]);
-  const presalesList = useMemo(() => [...new Set(projects.map(p => p.role_presales).filter(Boolean))].sort(), [projects]);
-  const marketProductList = useMemo(() => [...new Set(projects.map(p => p.role_market_product).filter(Boolean))].sort(), [projects]);
+  const departments = useMemo(() => [...new Set(projects.map(p => p.department).filter((d): d is string => !!d))].sort(), [projects]);
+  const deployModes = useMemo(() => [...new Set(projects.map(p => p.deployment_mode).filter((d): d is string => !!d))].sort(), [projects]);
+  const managers = useMemo(() => [...new Set(projects.map(p => p.role_project_manager).filter((d): d is string => !!d))].sort(), [projects]);
+  const implementationUnits = useMemo(() => [...new Set(projects.map(p => (p as unknown as Record<string,string>).implementation_unit).filter((d): d is string => !!d))].sort(), [projects]);
+  const salesList = useMemo(() => [...new Set(projects.map(p => p.role_sales).filter((d): d is string => !!d))].sort(), [projects]);
+  const presalesList = useMemo(() => [...new Set(projects.map(p => p.role_presales).filter((d): d is string => !!d))].sort(), [projects]);
+  const marketProductList = useMemo(() => [...new Set(projects.map(p => p.role_market_product).filter((d): d is string => !!d))].sort(), [projects]);
   const allCustomerTypes = useMemo(() => [...new Set(projects.flatMap(p => {
     const ct = (p as unknown as Record<string,unknown>).customer_type;
     if (Array.isArray(ct)) return ct as string[];
@@ -527,7 +527,8 @@ export function ProjectManagement({
       ];
     });
     const ExcelJS = await import("exceljs");
-    const Excel = (ExcelJS as { default?: unknown }).default || ExcelJS;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Excel: any = (ExcelJS as { default?: unknown }).default || ExcelJS;
     const wb = new Excel.Workbook();
     const ws = wb.addWorksheet("项目列表");
     ws.columns = headers.map(h => ({ header: h, key: h, width: 20 }));

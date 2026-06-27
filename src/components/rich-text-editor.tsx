@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback } from "react";
 import { Editor, Toolbar } from "@wangeditor/editor-for-react";
-import type { IDomEditor, IEditorConfig, IToolbarConfig } from "@wangeditor/editor";
+import type { IDomEditor, IEditorConfig } from "@wangeditor/editor";
 import "@wangeditor/editor/dist/css/style.css";
 
 interface RichTextEditorProps {
@@ -13,7 +13,8 @@ interface RichTextEditorProps {
   onFileUploaded?: (filePath: string) => void;
 }
 
-var TOOLBAR_CONFIG: Partial<IToolbarConfig> = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+var TOOLBAR_CONFIG: any = {
   // Explicit toolbar keys to guarantee both inline code and code block buttons
   keys: [
     "headerSelect",
