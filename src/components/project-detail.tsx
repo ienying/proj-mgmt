@@ -721,6 +721,7 @@ export function ProjectDetail({
             allow_add: d.allow_add as boolean | undefined,
             readonly_mode: d.readonly_mode as ("and" | "or") | undefined,
             columns_config: dedupeColumnsByName(d.columns_config as ColumnConfig[]).map(col => ({ ...col, key: col.key || col.name })),
+            references_config: d.references_config as TableDefinition['references_config'],
           }));
 
         // 检测含有采购模块记录类型列的表，自动设置 allow_add = false
