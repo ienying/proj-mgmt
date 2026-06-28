@@ -13,6 +13,7 @@ export function AIDialog({ open, onClose, replies }: AIDialogProps) {
   const [input, setInput] = useState("");
   const bodyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -28,6 +29,34 @@ export function AIDialog({ open, onClose, replies }: AIDialogProps) {
     }
   }, [messages]);
 
+  // 点击外部关闭 + Escape 键关闭
+  useEffect(() => {
+    if (!open) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dialogRef.current && !dialogRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+
+    const timer = setTimeout(() => {
+      document.addEventListener("click", handleClickOutside);
+      document.addEventListener("keydown", handleEscape);
+    }, 50);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("click", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [open, onClose]);
+
   const handleSend = () => {
     const text = input.trim();
     if (!text) return;
@@ -40,21 +69,20 @@ export function AIDialog({ open, onClose, replies }: AIDialogProps) {
     setInput("");
   };
 
+  if (!open) return null;
+
   return (
     <>
       {/* 遮罩 */}
       <div
-        className={`fixed inset-0 z-38 pointer-events-none transition-all ${
-          open ? "pointer-events-auto bg-black/15 backdrop-blur-[2px]" : ""
-        }`}
+        className="fixed inset-0 z-38 bg-black/15 backdrop-blur-[2px]"
         onClick={onClose}
       />
 
       {/* 对话框 */}
       <div
-        className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-39 w-[520px] max-h-[70vh] bg-[var(--s-surface)] border border-[var(--s-border)] transition-all duration-[250ms] ease-[cubic-bezier(0.4,0,0.2,1)] flex flex-col ${
-          open ? "flex opacity-100 scale-100" : "hidden opacity-0 scale-95"
-        }`}
+        ref={dialogRef}
+        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-39 w-[520px] max-h-[70vh] bg-[var(--s-surface)] border border-[var(--s-border)] flex flex-col"
       >
         {/* 头部 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--s-border)]">

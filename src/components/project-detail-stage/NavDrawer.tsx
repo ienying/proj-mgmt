@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { PanelData, PanelKey } from "./types";
 
 interface NavDrawerProps {
@@ -14,27 +14,58 @@ interface NavDrawerProps {
 
 export function NavDrawer({ open, panelData, activePanel, onPanelChange, onSubClick, onClose }: NavDrawerProps) {
   const [hoveredPanel, setHoveredPanel] = useState<PanelKey>("scope");
+  const drawerRef = useRef<HTMLDivElement>(null);
   const currentData = panelData[hoveredPanel] || panelData.scope;
 
   useEffect(() => {
-    if (open) setHoveredPanel(activePanel);
+    if (open) {
+      setHoveredPanel(activePanel);
+    }
   }, [open, activePanel]);
+
+  // 点击外部关闭 + Escape 键关闭
+  useEffect(() => {
+    if (!open) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+
+    // 延迟绑定，避免打开抽屉的同一个点击事件触发关闭
+    const timer = setTimeout(() => {
+      document.addEventListener("click", handleClickOutside);
+      document.addEventListener("keydown", handleEscape);
+    }, 50);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("click", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
 
   return (
     <>
       {/* 遮罩层 */}
       <div
-        className={`fixed inset-0 z-34 pointer-events-none transition-all ${
-          open ? "pointer-events-auto bg-black/15 backdrop-blur-[2px]" : ""
-        }`}
+        className="fixed inset-0 z-34 bg-black/15 backdrop-blur-[2px]"
         onClick={onClose}
       />
 
       {/* 抽屉 */}
       <div
-        className={`fixed z-36 bg-[var(--s-surface)] border border-[var(--s-border)] min-w-[440px] max-h-[calc(100vh-100px)] overflow-y-auto flex transition-all duration-[250ms] ease-[cubic-bezier(0.4,0,0.2,1)] ${
-          open ? "flex opacity-100 translate-x-0" : "hidden opacity-0 translate-x-2"
-        }`}
+        ref={drawerRef}
+        className="fixed z-36 bg-[var(--s-surface)] border border-[var(--s-border)] min-w-[440px] max-h-[calc(100vh-100px)] overflow-y-auto flex"
         style={{ top: "76px", right: "80px" }}
       >
         {/* L1 列 */}
@@ -44,7 +75,6 @@ export function NavDrawer({ open, panelData, activePanel, onPanelChange, onSubCl
             return (
               <button
                 key={pk}
-                data-panel={pk}
                 onMouseEnter={() => {
                   setHoveredPanel(pk);
                   onPanelChange(pk);
@@ -80,8 +110,6 @@ export function NavDrawer({ open, panelData, activePanel, onPanelChange, onSubCl
           {currentData.items.map((it, i) => (
             <div
               key={i}
-              data-key={it.key}
-              data-label={it.label}
               onClick={() => it.key && onSubClick(it.key, it.label)}
               className={`flex items-center gap-1.5 px-3 py-2 cursor-pointer text-xs transition-all whitespace-nowrap flex-shrink-0 ${
                 it.active
