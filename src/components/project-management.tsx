@@ -285,7 +285,6 @@ export function ProjectManagement({
   // 移除成员
   const handleRemoveMember = async (memberId: string) => {
     if (!selectedProject) return;
-    if (!confirm("确定要移除此成员吗？")) return;
     try {
       const res = await fetch(`/api/projects/${selectedProject.id}/members/${memberId}`, { method: "DELETE" });
       if (res.ok) {
@@ -573,6 +572,12 @@ export function ProjectManagement({
       .then(res => res.json())
       .then(data => {
         if (data.data) setDepartmentDict(data.data.filter((item: { is_enabled: boolean }) => item.is_enabled !== false).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
+      })
+      .catch(() => {});
+    fetch("/api/dicts?type=member_role_types")
+      .then(res => res.json())
+      .then(data => {
+        if (data.data) setMemberRoles(data.data.filter((item: { is_enabled: boolean }) => item.is_enabled !== false).map((item: { code: string; name: string }) => ({ code: item.code, name: item.name })));
       })
       .catch(() => {});
   }, [initialProjectTypes, initialProjectStages, initialProcurementModules]);
