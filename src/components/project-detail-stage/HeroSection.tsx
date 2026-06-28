@@ -8,18 +8,80 @@ interface HeroSectionProps {
   project: StageLayoutProps["project"];
   projectTypes: StageLayoutProps["projectTypes"];
   projectStages: StageLayoutProps["projectStages"];
+  customerTypeDict?: StageLayoutProps["customerTypeDict"];
   onBack: () => void;
   onSwitchLayout: (mode: LayoutMode) => void;
 }
 
-export function HeroSection({ project, projectTypes, projectStages, onBack, onSwitchLayout }: HeroSectionProps) {
+// 辅助：安全提取字符串
+function s(v: unknown): string {
+  if (typeof v === "string") return v;
+  return "";
+}
+
+export function HeroSection({ project, projectTypes, projectStages, customerTypeDict, onBack, onSwitchLayout }: HeroSectionProps) {
+  // 类型名称
   const typeName =
     projectTypes.find((t) => t.code === project.project_type)?.name || project.project_type || "—";
-  const stageName =
-    projectStages.find((s) => s.code === project.project_stage)?.name || project.project_stage || "—";
 
-  const customerName = project.customer_info?.company_name || "—";
-  const deployMode = project.channel_info?.[0]?.company_name || "本地部署";
+  // 状态显示
+  const statusLabel = project.project_status || project.status || "实施中";
+
+  // 客户名称：公司名·市
+  const ci = project.customer_info || {};
+  const loc = project.customer_location || {};
+  const companyName = s(ci?.company_name) || "—";
+  const cityName = s(loc?.city);
+  const customerDisplay = cityName ? `${companyName}·${cityName}` : companyName;
+
+  // 客户类型（code → 字典查找中文名）
+  // 可能格式：数组、逗号分隔字符串、JSON字符串
+  const rawCustomerType: unknown = project.customer_type;
+  let customerTypeCodes: string[] = [];
+  if (Array.isArray(rawCustomerType)) {
+    customerTypeCodes = rawCustomerType.filter((t) => typeof t === "string") as string[];
+  } else if (typeof rawCustomerType === "string") {
+    // 可能是 JSON 字符串如 '["junior_high"]' 或逗号分隔字符串
+    const trimmed = rawCustomerType.trim();
+    if (trimmed.startsWith("[")) {
+      try { const parsed = JSON.parse(trimmed); if (Array.isArray(parsed)) customerTypeCodes = parsed; } catch {}
+    }
+    if (customerTypeCodes.length === 0) {
+      customerTypeCodes = trimmed.split(",").map((t) => t.trim()).filter(Boolean);
+    }
+  }
+  const customerTypeDisplay = customerTypeCodes.length > 0
+    ? customerTypeCodes
+        .map((code) => (customerTypeDict || []).find((d) => d.code === code)?.name || code)
+        .join(" · ")
+    : "—";
+
+  // 业务部署模式
+  const deployMode = project.deployment_mode || "—";
+
+  // 编号 / 负责人（销售）
+  const salesPerson = s(project.role_sales) || "—";
+
+  // 团队成员：核心角色 + 项目成员
+  // 核心角色：销售、售前、市场产品、项目经理
+  const coreRoles: { role: string; name: string }[] = [];
+  const presalesPerson = s(project.role_presales);
+  const marketPerson = s(project.role_market_product);
+  const pmPerson = s(project.role_project_manager);
+  if (salesPerson !== "—") coreRoles.push({ role: "销售", name: salesPerson });
+  if (presalesPerson) coreRoles.push({ role: "售前", name: presalesPerson });
+  if (marketPerson) coreRoles.push({ role: "市场产品", name: marketPerson });
+  if (pmPerson) coreRoles.push({ role: "项目经理", name: pmPerson });
+
+  const rawMembers = project.members;
+  const members = Array.isArray(rawMembers) ? rawMembers : [];
+  // 合并核心角色和项目成员（去重用角色）
+  const coreRoleNames = new Set(coreRoles.map((r) => r.role));
+  const filteredMembers = members.filter((m) => !coreRoleNames.has(m.role));
+  const allTeam = [...coreRoles, ...filteredMembers];
+  const teamDisplay = allTeam.length > 0
+    ? allTeam.map((m) => `${m.role}·${m.name}`).join("  ")
+    : "—";
 
   const overallProgress = 71;
   const completedPhases = phases.filter((p) => p.status === "done").length;
@@ -69,7 +131,7 @@ export function HeroSection({ project, projectTypes, projectStages, onBack, onSw
             style={{ color: "var(--s-text-secondary)", fontFamily: "var(--font-mono, monospace)" }}
           >
             <span className="w-6 h-px" style={{ backgroundColor: "var(--s-orange)" }} />
-            PROJECT STATUS
+            项目详情 / PROJECT DETAILS
           </div>
           <h1
             className="text-[64px] font-bold leading-[1.05] tracking-[-1.5px] m-0"
@@ -85,7 +147,7 @@ export function HeroSection({ project, projectTypes, projectStages, onBack, onSw
               className="text-[11px] px-4 py-1.5 font-semibold uppercase tracking-[1px] border border-[var(--s-green)] text-[var(--s-green)]"
               style={{ fontFamily: "var(--font-mono, monospace)" }}
             >
-              {project.status || "实施中"}
+              {statusLabel}
             </span>
             <span
               className="text-[11px] px-4 py-1.5 font-semibold uppercase tracking-[1px] border border-[var(--s-blue)] text-[var(--s-blue)]"
@@ -134,15 +196,7 @@ export function HeroSection({ project, projectTypes, projectStages, onBack, onSw
 
       {/* 项目信息栏 */}
       <div className="flex gap-px" style={{ backgroundColor: "var(--s-border)" }}>
-        <div className="flex-[0_0_160px] p-5 flex flex-col gap-2.5" style={{ backgroundColor: "var(--s-bg)" }}>
-          <span
-            className="text-[9px] uppercase tracking-[1.5px]"
-            style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}
-          >
-            项目阶段
-          </span>
-          <span className="text-sm font-semibold" style={{ color: "var(--s-text)" }}>{stageName}</span>
-        </div>
+        {/* 客户名称 */}
         <div className="flex-1 p-5 flex flex-col gap-2.5" style={{ backgroundColor: "var(--s-bg)" }}>
           <span
             className="text-[9px] uppercase tracking-[1.5px]"
@@ -150,35 +204,61 @@ export function HeroSection({ project, projectTypes, projectStages, onBack, onSw
           >
             客户名称
           </span>
-          <span className="text-sm font-semibold" style={{ color: "var(--s-text)" }}>{customerName}</span>
+          <span className="text-sm font-semibold" style={{ color: "var(--s-text)" }}>{customerDisplay}</span>
         </div>
+        {/* 客户类型 */}
         <div className="flex-1 p-5 flex flex-col gap-2.5" style={{ backgroundColor: "var(--s-bg)" }}>
           <span
             className="text-[9px] uppercase tracking-[1.5px]"
             style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}
           >
-            部署模式
+            客户类型
           </span>
-          <span className="text-sm font-semibold" style={{ color: "var(--s-text)" }}>{deployMode}</span>
+          <span className="text-sm font-semibold" style={{ color: "var(--s-text)" }}>{customerTypeDisplay}</span>
         </div>
+        {/* 业务部署模式 */}
         <div className="flex-1 p-5 flex flex-col gap-2.5" style={{ backgroundColor: "var(--s-bg)" }}>
           <span
             className="text-[9px] uppercase tracking-[1.5px]"
             style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}
           >
-            项目编号
-          </span>
-          <span className="text-sm font-semibold" style={{ color: "var(--s-text)" }}>{project.project_code}</span>
-        </div>
-        <div className="flex-1 p-5 flex flex-col gap-2.5" style={{ backgroundColor: "var(--s-bg)" }}>
-          <span
-            className="text-[9px] uppercase tracking-[1.5px]"
-            style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}
-          >
-            项目经理
+            业务部署模式
           </span>
           <span className="text-sm font-semibold" style={{ color: "var(--s-text)" }}>
-            {project.customer_info?.contact_person || "张明远"}
+            {deployMode !== "—" ? (
+              <span
+                className="inline-block px-2.5 py-1 border border-[var(--s-border)] text-sm font-medium"
+                style={{ color: "var(--s-text-secondary)", fontFamily: "var(--font-mono, monospace)" }}
+              >
+                {deployMode}
+              </span>
+            ) : (
+              "—"
+            )}
+          </span>
+        </div>
+        {/* 编号 / 负责人 */}
+        <div className="flex-1 p-5 flex flex-col gap-2.5" style={{ backgroundColor: "var(--s-bg)" }}>
+          <span
+            className="text-[9px] uppercase tracking-[1.5px]"
+            style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}
+          >
+            编号 / 负责人
+          </span>
+          <span className="text-sm font-semibold" style={{ color: "var(--s-text)" }}>
+            {project.project_code}{salesPerson !== "—" ? ` · ${salesPerson}` : ""}
+          </span>
+        </div>
+        {/* 团队 */}
+        <div className="flex-[1.5] p-5 flex flex-col gap-2.5" style={{ backgroundColor: "var(--s-bg)" }}>
+          <span
+            className="text-[9px] uppercase tracking-[1.5px]"
+            style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}
+          >
+            团队
+          </span>
+          <span className="text-sm font-medium leading-relaxed" style={{ color: "var(--s-text)" }}>
+            {teamDisplay}
           </span>
         </div>
       </div>

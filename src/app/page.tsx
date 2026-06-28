@@ -112,6 +112,7 @@ export default function HomePage() {
   const [projectTypes, setProjectTypes] = useState<{ code: string; name: string }[]>([]);
   const [projectStages, setProjectStages] = useState<{ code: string; name: string }[]>([]);
   const [procurementModules, setProcurementModules] = useState<{ code: string; name: string }[]>([]);
+  const [customerTypes, setCustomerTypes] = useState<{ code: string; name: string }[]>([]);
   const [activeItem, setActiveItem] = useState("project-board");
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [layoutMode, setLayoutMode] = useState<"management" | "stage" | null>(() => {
@@ -137,18 +138,18 @@ export default function HomePage() {
     project_schema: string;
     status: string;
     created_at: string;
-    customer_info?: {
-      company_name?: string;
-      contact_person?: string;
-      contact_phone?: string;
-      contact_email?: string;
-    };
-    channel_info?: Array<{
-      company_name: string;
-      contact_person?: string;
-      contact_phone?: string;
-    }>;
-    procurement_modules?: string[];
+    project_status?: string | null;
+    customer_info?: { company_name?: string; contact_person?: string; contact_phone?: string; contact_email?: string; contact_persons?: Array<{ name?: string; phone?: string }> } | null;
+    customer_location?: { province?: string; city?: string; district?: string; town?: string; village?: string } | null;
+    customer_type?: string[] | null;
+    deployment_mode?: string | null;
+    channel_info?: Array<{ company_name?: string; contact_person?: string; contact_phone?: string }> | null;
+    role_sales?: string | null;
+    role_presales?: string | null;
+    role_market_product?: string | null;
+    role_project_manager?: string | null;
+    members?: Array<{ name: string; role: string; phone?: string; email?: string }> | null;
+    procurement_modules?: Array<string | { code?: string; module_code?: string; module_name?: string; name?: string; quantity?: number }>;
     description?: string;
   } | null>(null);
 
@@ -232,6 +233,15 @@ export default function HomePage() {
           setProcurementModules(modules);
         }
 
+        // 获取客户类型
+        const ctRes = await fetch("/api/dicts?type=customer_types");
+        if (ctRes.ok) {
+          const ctData = await ctRes.json();
+          setCustomerTypes(
+            (ctData.data || []).map((item: any) => ({ code: item.code, name: item.name || item.code }))
+          );
+        }
+
         // 获取用户列表
         const usersRes = await fetch("/api/users");
         if (usersRes.ok) {
@@ -265,10 +275,11 @@ export default function HomePage() {
   // 刷新基础数据的方法
   const refreshBaseData = async () => {
     try {
-      const [typesRes, stagesRes, modulesRes, projectsRes] = await Promise.all([
+      const [typesRes, stagesRes, modulesRes, ctRes, projectsRes] = await Promise.all([
         fetch("/api/dicts?type=project_types"),
         fetch("/api/dicts?type=project_stages"),
         fetch("/api/dicts?type=product_module_types"),
+        fetch("/api/dicts?type=customer_types"),
         fetch("/api/projects"),
       ]);
 
@@ -288,6 +299,10 @@ export default function HomePage() {
           name: item.module_name || item.product_name || item.code
         }));
         setProcurementModules(modules);
+      }
+      if (ctRes.ok) {
+        const ctData = await ctRes.json();
+        setCustomerTypes((ctData.data || []).map((item: any) => ({ code: item.code, name: item.name || item.code })));
       }
       if (projectsRes.ok) {
         const projectsData = await projectsRes.json();
@@ -622,6 +637,8 @@ export default function HomePage() {
                   project={viewingProject}
                   projectTypes={projectTypes}
                   projectStages={projectStages}
+                  procurementModuleDict={procurementModules}
+                  customerTypeDict={customerTypes}
                   onBack={() => { setViewingProject(null); }}
                   onSwitchLayout={handleSetLayoutMode}
                 />
@@ -632,7 +649,7 @@ export default function HomePage() {
           return (
             <ContentErrorBoundary>
               <ProjectDetail
-                project={viewingProject}
+                project={viewingProject as any}
                 projectTypes={projectTypes}
                 projectStages={projectStages}
                 onBack={() => { setViewingProject(null); setLayoutSelectorOpen(false); }}

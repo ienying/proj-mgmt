@@ -136,22 +136,45 @@ export interface StageLayoutProps {
     project_schema: string;
     status: string;
     created_at: string;
+    project_status?: string | null;
     customer_info?: {
       company_name?: string;
       contact_person?: string;
       contact_phone?: string;
       contact_email?: string;
-    };
+      contact_persons?: Array<{ name?: string; phone?: string }>;
+    } | null;
+    customer_location?: {
+      province?: string;
+      city?: string;
+      district?: string;
+      town?: string;
+      village?: string;
+    } | null;
+    customer_type?: string[] | null;
+    deployment_mode?: string | null;
     channel_info?: Array<{
-      company_name: string;
+      company_name?: string;
       contact_person?: string;
       contact_phone?: string;
-    }>;
-    procurement_modules?: string[];
+    }> | null;
+    role_sales?: string | null;
+    role_presales?: string | null;
+    role_market_product?: string | null;
+    role_project_manager?: string | null;
+    members?: Array<{
+      name: string;
+      role: string;
+      phone?: string;
+      email?: string;
+    }> | null;
+    procurement_modules?: Array<string | { code?: string; module_code?: string; module_name?: string; name?: string; quantity?: number }>;
     description?: string;
   };
   projectTypes: { code: string; name: string }[];
   projectStages: { code: string; name: string }[];
+  procurementModuleDict?: { code: string; name: string }[];
+  customerTypeDict?: { code: string; name: string }[];
   onBack: () => void;
   onSwitchLayout: (mode: LayoutMode) => void;
 }

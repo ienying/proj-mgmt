@@ -20,6 +20,8 @@ export function StageLayout({
   project,
   projectTypes,
   projectStages,
+  procurementModuleDict,
+  customerTypeDict,
   onBack,
   onSwitchLayout,
 }: StageLayoutProps) {
@@ -42,6 +44,9 @@ export function StageLayout({
     } else {
       document.documentElement.classList.remove("dark");
     }
+    return () => {
+      document.documentElement.classList.remove("dark");
+    };
   }, [isDark]);
 
   const toggleTheme = useCallback(() => {
@@ -72,8 +77,70 @@ export function StageLayout({
     alert("搜索功能 — 待实现");
   }, []);
 
+  // 浅色 / 深色 配色方案
+  const lightVars = {
+    ["--s-bg" as string]: "#f8f9fa",
+    ["--s-surface" as string]: "#fff",
+    ["--s-surface2" as string]: "#f1f3f5",
+    ["--s-border" as string]: "#dee2e6",
+    ["--s-border-light" as string]: "#e9ecef",
+    ["--s-text" as string]: "#212529",
+    ["--s-text-secondary" as string]: "#495057",
+    ["--s-text-muted" as string]: "#868e96",
+    ["--s-orange" as string]: "#e8590c",
+    ["--s-orange-dim" as string]: "#d9480f",
+    ["--s-green" as string]: "#2b8a3e",
+    ["--s-green-dim" as string]: "#2f9e44",
+    ["--s-blue" as string]: "#1c7ed6",
+    ["--s-blue-dim" as string]: "#1971c2",
+    ["--s-red" as string]: "#e03131",
+    ["--s-chart-blue" as string]: "#3b82f6",
+    ["--s-chart-indigo" as string]: "#6366f1",
+    ["--s-chart-sky" as string]: "#0ea5e9",
+    ["--s-chart-purple" as string]: "#8b5cf6",
+    ["--s-chart-amber" as string]: "#f59e0b",
+    ["--s-chart-rose" as string]: "#e11d48",
+    ["--s-chart-gray" as string]: "#94a3b8",
+    ["--s-font-mono" as string]: "\"SF Mono\",\"Fira Code\",\"Cascadia Code\",monospace",
+    backgroundColor: "#f8f9fa",
+    color: "#212529",
+    minHeight: "100vh",
+  };
+
+  const darkVars = {
+    ["--s-bg" as string]: "#1b1b1f",
+    ["--s-surface" as string]: "#252529",
+    ["--s-surface2" as string]: "#2e2e33",
+    ["--s-border" as string]: "#38383e",
+    ["--s-border-light" as string]: "#45454b",
+    ["--s-text" as string]: "#f0f0f3",
+    ["--s-text-secondary" as string]: "#a8a8b3",
+    ["--s-text-muted" as string]: "#6b6b75",
+    ["--s-orange" as string]: "#fa8c16",
+    ["--s-orange-dim" as string]: "#d46b08",
+    ["--s-green" as string]: "#4ade80",
+    ["--s-green-dim" as string]: "#22c55e",
+    ["--s-blue" as string]: "#60a5fa",
+    ["--s-blue-dim" as string]: "#3b82f6",
+    ["--s-red" as string]: "#f87171",
+    ["--s-chart-blue" as string]: "#60a5fa",
+    ["--s-chart-indigo" as string]: "#818cf8",
+    ["--s-chart-sky" as string]: "#38bdf8",
+    ["--s-chart-purple" as string]: "#a78bfa",
+    ["--s-chart-amber" as string]: "#fbbf24",
+    ["--s-chart-rose" as string]: "#fb7185",
+    ["--s-chart-gray" as string]: "#6b7280",
+    ["--s-font-mono" as string]: "\"SF Mono\",\"Fira Code\",\"Cascadia Code\",monospace",
+    backgroundColor: "#1b1b1f",
+    color: "#f0f0f3",
+    minHeight: "100vh",
+  };
+
   return (
-    <div className="stage-layout">
+    <div
+      className={`stage-layout${isDark ? " dark" : ""}`}
+      style={isDark ? darkVars : lightVars}
+    >
       {/* ═══ 固定定位元素 ═══ */}
 
       {/* 左侧悬停导航条 */}
@@ -128,9 +195,6 @@ export function StageLayout({
           className="relative"
           style={{
             paddingLeft: "12px",
-            backgroundColor: "var(--s-bg, #f8f9fa)",
-            color: "var(--s-text, #212529)",
-            minHeight: "100vh",
           }}
         >
           <div className="flex-1 min-w-0">
@@ -140,12 +204,16 @@ export function StageLayout({
               project={project}
               projectTypes={projectTypes}
               projectStages={projectStages}
+              customerTypeDict={customerTypeDict}
               onBack={onBack}
               onSwitchLayout={onSwitchLayout}
             />
 
             {/* 产品网格 */}
-            <ProductGrid modules={project.procurement_modules} />
+            <ProductGrid
+              modules={project.procurement_modules}
+              moduleDict={procurementModuleDict}
+            />
 
             {/* 阶段步骤条（内含 Phases 项目阶段 标签） */}
             <PhaseStepper activePhase={activePhase} onPhaseChange={setActivePhase} />
