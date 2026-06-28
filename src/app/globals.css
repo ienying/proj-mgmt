@@ -1008,3 +1008,67 @@ body {
   border-radius: 0;
   border: none;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   阶段式布局 (Stage Layout) — CSS 变量 & 主题
+   参考 index-v54.html 的 :root 和 :root.dark 配色系统
+   ═══════════════════════════════════════════════════════════ */
+
+.stage-layout {
+  --s-bg: #f8f9fa;
+  --s-surface: #fff;
+  --s-surface2: #f1f3f5;
+  --s-border: #dee2e6;
+  --s-border-light: #e9ecef;
+  --s-text: #212529;
+  --s-text-secondary: #495057;
+  --s-text-muted: #868e96;
+  --s-orange: #e8590c;
+  --s-orange-dim: #d9480f;
+  --s-orange-light: rgba(232, 89, 12, 0.06);
+  --s-green: #2b8a3e;
+  --s-green-dim: #2f9e44;
+  --s-blue: #1c7ed6;
+  --s-blue-dim: #1971c2;
+  --s-blue-light: rgba(28, 126, 214, 0.06);
+  --s-red: #e03131;
+  --s-chart-blue: #3b82f6;
+  --s-chart-indigo: #6366f1;
+  --s-chart-sky: #0ea5e9;
+  --s-chart-purple: #8b5cf6;
+  --s-chart-amber: #f59e0b;
+  --s-chart-rose: #e11d48;
+  --s-chart-gray: #94a3b8;
+  --s-hero-completed: #3b82f6;
+  --s-stepper-dot-text: #fff;
+  --s-font-mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+}
+
+.dark .stage-layout {
+  --s-bg: #1b1b1f;
+  --s-surface: #252529;
+  --s-surface2: #2e2e33;
+  --s-border: #38383e;
+  --s-border-light: #45454b;
+  --s-text: #f0f0f3;
+  --s-text-secondary: #a8a8b3;
+  --s-text-muted: #6b6b75;
+  --s-orange: #fa8c16;
+  --s-orange-dim: #d46b08;
+  --s-orange-light: rgba(250, 140, 22, 0.06);
+  --s-green: #4ade80;
+  --s-green-dim: #22c55e;
+  --s-blue: #60a5fa;
+  --s-blue-dim: #3b82f6;
+  --s-blue-light: rgba(96, 165, 250, 0.06);
+  --s-red: #f87171;
+  --s-chart-blue: #60a5fa;
+  --s-chart-indigo: #818cf8;
+  --s-chart-sky: #38bdf8;
+  --s-chart-purple: #a78bfa;
+  --s-chart-amber: #fbbf24;
+  --s-chart-rose: #fb7185;
+  --s-chart-gray: #6b7280;
+  --s-hero-completed: #4ade80;
+  --s-stepper-dot-text: #111;
+}
