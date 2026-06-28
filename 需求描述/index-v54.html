@@ -1,0 +1,2088 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>项目详情 - 智慧校园 V47</title>
+    <style>
+    :root{
+        --bg:#f8f9fa;--surface:#fff;--surface2:#f1f3f5;
+        --border:#dee2e6;--border-light:#e9ecef;
+        --text:#212529;--text-secondary:#495057;--text-muted:#868e96;
+        --orange:#e8590c;--orange-dim:#d9480f;--orange-light:rgba(232,89,12,.06);
+        --green:#2b8a3e;--green-dim:#2f9e44;
+        --blue:#1c7ed6;--blue-dim:#1971c2;--blue-light:rgba(28,126,214,.06);
+        --red:#e03131;
+        --chart-blue:#3b82f6;--chart-indigo:#6366f1;--chart-sky:#0ea5e9;
+        --chart-purple:#8b5cf6;--chart-amber:#f59e0b;--chart-rose:#e11d48;--chart-gray:#94a3b8;
+        --hero-completed:#3b82f6;
+        --stepper-dot-text:#fff;
+        --strip-w:44px;
+        --font-mono:'SF Mono','Fira Code','Cascadia Code',monospace;
+        --radius:0px;
+    }
+    :root.dark{
+        --bg:#1b1b1f;--surface:#252529;--surface2:#2e2e33;
+        --border:#38383e;--border-light:#45454b;
+        --text:#f0f0f3;--text-secondary:#a8a8b3;--text-muted:#6b6b75;
+        --orange:#fa8c16;--orange-dim:#d46b08;--orange-light:rgba(250,140,22,.06);
+        --green:#4ade80;--green-dim:#22c55e;
+        --blue:#60a5fa;--blue-dim:#3b82f6;--blue-light:rgba(96,165,250,.06);
+        --red:#f87171;
+        --chart-blue:#60a5fa;--chart-indigo:#818cf8;--chart-sky:#38bdf8;
+        --chart-purple:#a78bfa;--chart-amber:#fbbf24;--chart-rose:#fb7185;--chart-gray:#6b7280;
+        --hero-completed:#4ade80;
+        --stepper-dot-text:#111;
+    }
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{
+            font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;
+            background:var(--bg);min-height:100vh;color:var(--text);
+            -webkit-font-smoothing:antialiased;
+        }
+
+
+        /* ── Body Layout ── */
+        .body-layout{display:flex;position:relative;padding-left:12px}
+
+        /* ── Left Hover Strip ── */
+        .left-strip-wrap{
+            width:12px;flex-shrink:0;display:flex;align-items:stretch;
+            transition:width .3s;z-index:30;cursor:default;
+            position:fixed;top:0;left:0;height:100vh;
+        }
+        .left-strip-wrap::after{content:'';position:absolute;right:0;top:0;bottom:0;width:1px;background:var(--border);pointer-events:none}
+        .left-strip-wrap:hover{width:440px}
+        .left-strip{
+            width:2px;background:var(--border-light);overflow:hidden;
+            transition:width .3s,background .2s;
+        }
+        .left-strip-wrap:hover .left-strip{width:100%;background:var(--surface)}
+        .strip-inner{display:flex;flex-direction:row;padding:12px 0;gap:0;min-width:440px;height:100%;overflow-y:auto}
+        /* L1 column */
+        .strip-l1{display:flex;flex-direction:column;width:140px;flex-shrink:0;padding:0 0}
+        .strip-item{
+            display:flex;align-items:center;gap:0;padding:11px 12px;cursor:pointer;
+            white-space:nowrap;transition:all .15s;font-size:12px;color:var(--text-muted);
+            font-weight:500;border-left:2px solid transparent;flex-shrink:0;letter-spacing:.3px;
+        }
+        .strip-item:hover{background:var(--surface2);color:var(--text)}
+        .strip-item.active{color:var(--orange);border-left-color:var(--orange);background:rgba(250,140,22,.06)}
+        .strip-item .si-line{width:2px;height:14px;background:transparent;margin-right:8px;flex-shrink:0;transition:background .2s}
+        .strip-item.active .si-line{background:var(--orange)}
+        /* divider */
+        .strip-divider{width:1px;flex-shrink:0;background:var(--border);align-self:stretch;margin:8px 0}
+        /* L2 column */
+        .strip-l2{flex:1;display:flex;flex-direction:column;padding:0 0;overflow-y:auto}
+        .strip-l2-header{font-size:10px;font-weight:700;color:var(--text-muted);padding:12px 12px 8px;text-transform:uppercase;letter-spacing:1px;font-family:var(--font-mono);flex-shrink:0}
+        .strip-sub-item{
+            display:flex;align-items:center;gap:6px;padding:8px 12px;cursor:pointer;
+            font-size:12px;color:var(--text-secondary);transition:all .15s;white-space:nowrap;flex-shrink:0;
+        }
+        .strip-sub-item:hover{background:var(--surface2);color:var(--text)}
+        .strip-sub-item.active{background:rgba(250,140,22,.06);color:var(--orange);font-weight:600}
+        .strip-sub-item .sub-dot{width:4px;height:4px;flex-shrink:0;background:var(--border-light)}
+        .strip-sub-item.active .sub-dot{background:var(--orange)}
+        .strip-sub-item .sub-badge{margin-left:auto;font-size:10px;background:var(--surface2);padding:2px 6px;color:var(--text-muted);font-weight:500;font-family:var(--font-mono)}
+
+        /* ═══════════════════════════════════════════ */
+        /* ── TOP-RIGHT TOOLBAR ── */
+        /* ═══════════════════════════════════════════ */
+        .tl-toolbar{
+            position:fixed;top:76px;right:24px;z-index:35;
+            display:flex;flex-direction:row;gap:4px;
+        }
+        .tl-tool-btn{
+            width:40px;height:40px;display:flex;align-items:center;justify-content:center;
+            background:var(--surface);border:1px solid var(--border);cursor:pointer;
+            transition:all .2s;color:var(--text-muted);
+        }
+        .tl-tool-btn:hover{background:var(--surface2);color:var(--text);border-color:var(--border-light)}
+        .tl-tool-btn.active{background:var(--surface2);color:var(--orange);border-color:var(--orange)}
+        .tl-tool-btn svg{width:18px;height:18px}
+
+        /* ── Navigation Overlay ── */
+        .nav-overlay{
+            position:fixed;inset:0;z-index:34;pointer-events:none;
+            transition:background .3s;
+        }
+        .nav-overlay.show{
+            pointer-events:auto;background:rgba(0,0,0,.15);
+            backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+        }
+        .nav-drawer{
+            position:fixed;top:76px;right:80px;z-index:36;
+            background:var(--surface);border:1px solid var(--border);
+            min-width:440px;max-height:calc(100vh - 100px);
+            display:none;opacity:0;flex-direction:row;overflow-y:auto;
+            transform:translateX(8px);transition:all .25s cubic-bezier(.4,0,.2,1);
+        }
+        .nav-drawer.show{display:flex;opacity:1;transform:translateX(0)}
+        .nav-drawer-l1{
+            width:140px;flex-shrink:0;display:flex;flex-direction:column;padding:8px 0;
+        }
+        .nav-drawer-divider{width:1px;flex-shrink:0;background:var(--border);align-self:stretch;margin:8px 0}
+        .nav-drawer-l2{flex:1;display:flex;flex-direction:column;overflow-y:auto}
+        .nav-drawer-item{
+            display:flex;align-items:center;gap:0;padding:11px 12px;cursor:pointer;
+            white-space:nowrap;transition:all .15s;font-size:12px;color:var(--text-muted);
+            font-weight:500;border-left:2px solid transparent;flex-shrink:0;letter-spacing:.3px;
+        }
+        .nav-drawer-item:hover{background:var(--surface2);color:var(--text)}
+        .nav-drawer-item.active{color:var(--orange);border-left-color:var(--orange);background:rgba(250,140,22,.06)}
+        .nav-drawer-item .nd-line{width:2px;height:14px;background:transparent;margin-right:8px;flex-shrink:0;transition:background .2s}
+        .nav-drawer-item.active .nd-line{background:var(--orange)}
+        .nav-drawer-l2-header{
+            font-size:10px;font-weight:700;color:var(--text-muted);padding:12px 12px 8px;
+            text-transform:uppercase;letter-spacing:1px;font-family:var(--font-mono);flex-shrink:0;
+        }
+        .nav-drawer-sub{
+            display:flex;align-items:center;gap:6px;padding:8px 12px;cursor:pointer;
+            font-size:12px;color:var(--text-secondary);transition:all .15s;white-space:nowrap;flex-shrink:0;
+        }
+        .nav-drawer-sub:hover{background:var(--surface2);color:var(--text)}
+        .nav-drawer-sub.active{background:rgba(250,140,22,.06);color:var(--orange);font-weight:600}
+        .nav-drawer-sub .ns-dot{width:4px;height:4px;flex-shrink:0;background:var(--border-light)}
+        .nav-drawer-sub.active .ns-dot{background:var(--orange)}
+        .nav-drawer-sub .ns-badge{
+            margin-left:auto;font-size:10px;background:var(--surface2);padding:2px 6px;
+            color:var(--text-muted);font-weight:500;font-family:var(--font-mono);
+        }
+
+        /* ── AI Dialog ── */
+        .ai-overlay{
+            position:fixed;inset:0;z-index:38;pointer-events:none;
+            transition:background .3s;
+        }
+        .ai-overlay.show{pointer-events:auto;background:rgba(0,0,0,.15);backdrop-filter:blur(2px)}
+        .ai-dialog{
+            position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.95);z-index:39;
+            width:520px;max-height:70vh;background:var(--surface);border:1px solid var(--border);
+            display:none;opacity:0;flex-direction:column;transition:all .25s cubic-bezier(.4,0,.2,1);
+        }
+        .ai-dialog.show{display:flex;opacity:1;transform:translate(-50%,-50%) scale(1)}
+        .ai-dialog-header{
+            display:flex;align-items:center;justify-content:space-between;padding:16px 20px;
+            border-bottom:1px solid var(--border);
+        }
+        .ai-dialog-title{font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px}
+        .ai-dialog-title .ai-dot{width:8px;height:8px;border-radius:50%;background:var(--orange);animation:pulse 2s infinite}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+        .ai-dialog-close{
+            width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+            border:1px solid var(--border);background:var(--surface);color:var(--text-muted);
+            font-size:14px;cursor:pointer;transition:all .15s;
+        }
+        .ai-dialog-close:hover{background:var(--surface2);color:var(--red);border-color:var(--red)}
+        .ai-dialog-body{flex:1;padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
+        .ai-msg{font-size:12px;color:var(--text-secondary);line-height:1.7;padding:12px 16px;background:var(--surface2);border-left:2px solid var(--orange)}
+        .ai-dialog-input-row{display:flex;gap:8px;padding:12px 20px;border-top:1px solid var(--border)}
+        .ai-dialog-input{
+            flex:1;padding:10px 14px;font-size:12px;background:var(--surface2);border:1px solid var(--border);
+            color:var(--text);outline:none;font-family:inherit;
+        }
+        .ai-dialog-input:focus{border-color:var(--orange)}
+        .ai-dialog-send{
+            padding:10px 18px;font-size:12px;font-weight:600;background:var(--orange);color:#fff;
+            border:none;cursor:pointer;transition:all .15s;
+        }
+        .ai-dialog-send:hover{background:var(--orange-dim)}
+
+        /* ═══════════════════════════════════════════ */
+        /* ── MAIN AREA ── */
+        /* ═══════════════════════════════════════════ */
+        .main-area{flex:1;min-width:0}
+
+        .hero{
+            padding:80px 64px 48px;position:relative;
+            border-bottom:1px solid var(--border);
+            background:var(--bg);
+        }
+        .hero-grid{
+            display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;
+            gap:1px;background:var(--border);margin-bottom:48px;
+        }
+        .hero-grid>*{background:var(--bg);padding:0}
+        .hero-left{grid-column:1/4;padding:0 48px 0 0 !important;display:flex;flex-direction:column;justify-content:flex-end;gap:24px}
+        .hero-label{
+            font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);
+            text-transform:uppercase;letter-spacing:2px;display:flex;align-items:center;gap:12px;
+        }
+        .hero-label::before{content:'';width:24px;height:1px;background:var(--orange)}
+        .hero h1{
+            font-size:64px;font-weight:700;line-height:1.05;letter-spacing:-1.5px;
+            color:var(--text);margin:0;
+            font-family:"PingFang SC","Noto Sans SC","Microsoft YaHei","微软雅黑",sans-serif;
+        }
+        .hero-tags{display:flex;gap:12px}
+        .hero-tag{
+            font-size:11px;padding:6px 16px;font-weight:600;
+            text-transform:uppercase;letter-spacing:1px;font-family:var(--font-mono);
+        }
+        .hero-tag.status{border:1px solid var(--green);color:var(--green)}
+        .hero-tag.type{border:1px solid var(--blue);color:var(--blue)}
+
+        .hero-meta{
+            grid-column:4/6;display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);
+        }
+        .hero-meta>*{background:var(--bg);padding:28px 24px;display:flex;flex-direction:column;gap:8px}
+        .meta-stat{
+            font-size:42px;font-weight:700;letter-spacing:-1px;line-height:1;color:var(--text);
+            font-family:var(--font-mono);
+        }
+        .meta-stat.accent{color:var(--orange)}
+        .meta-stat.green{color:var(--hero-completed)}
+        .meta-label{
+            font-size:11px;color:var(--text-muted);text-transform:uppercase;
+            letter-spacing:1.5px;font-family:var(--font-mono);
+        }
+        .hero-meta>*{position:relative;overflow:hidden}
+        .hero-meta>*::after{
+            content:'';position:absolute;right:16px;top:50%;transform:translateY(-50%);
+            width:1px;height:32px;background:var(--border);
+        }
+        .hero-meta>*:nth-child(2n)::after{display:none}
+
+        /* ── Project info bar ── */
+        .proj-info-bar{display:flex;gap:1px;background:var(--border);margin-bottom:0}
+        .proj-info-card{flex:1;background:var(--bg);padding:20px 24px;display:flex;flex-direction:column;gap:10px;min-width:0}
+        .proj-info-card:first-child{flex:0 0 160px}
+        .proj-info-label{
+            font-family:var(--font-mono);font-size:9px;color:var(--text-muted);
+            text-transform:uppercase;letter-spacing:1.5px;
+        }
+        .proj-info-value{
+            font-size:14px;font-weight:600;color:var(--text);line-height:1.4;
+        }
+        .proj-info-value .pi-tag{
+            display:inline-block;padding:3px 10px;border:1px solid var(--border);border-radius:3px;
+            font-size:11px;font-weight:500;color:var(--text-secondary);margin:2px 2px;
+            font-family:var(--font-mono);
+        }
+
+        /* ── Product grid ── */
+        .product-section{padding:24px 64px 32px;border-bottom:1px solid var(--border)}
+        .product-section-label{
+            font-family:var(--font-mono);font-size:9px;color:var(--orange);
+            text-transform:uppercase;letter-spacing:2px;margin-bottom:16px;
+            display:flex;align-items:center;gap:8px;
+        }
+        .product-section-label::after{content:'';flex:1;height:1px;background:var(--border)}
+        .product-grid{
+            display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
+            gap:8px;
+        }
+        .product-item{
+            display:flex;align-items:center;gap:8px;padding:10px 14px;
+            border:1px solid var(--border);border-radius:4px;
+            font-size:12px;color:var(--text-secondary);transition:all .15s;
+        }
+        .product-item:hover{background:var(--surface);border-color:var(--orange);color:var(--text)}
+        .product-item .pi-dot{width:5px;height:5px;border-radius:50%;background:var(--orange);flex-shrink:0;opacity:.5}
+        .product-item .pi-count{font-family:var(--font-mono);font-size:9px;color:var(--text-muted);margin-left:auto}
+        .product-item .pi-used{
+            font-size:9px;padding:1px 6px;font-weight:600;margin-left:4px;
+            border:1px solid var(--green);color:var(--green);
+        }
+        .product-item .pi-partial{
+            font-size:9px;padding:1px 6px;font-weight:600;margin-left:4px;
+            border:1px solid var(--blue);color:var(--blue);
+        }
+
+        /* Sub-content panel — full page style */
+        .sub-content-area{padding:0;border-bottom:1px solid var(--border)}
+        .sc-hero{padding:48px 64px 32px;border-bottom:1px solid var(--border)}
+        .sc-hero-top{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+        .sc-back-btn{
+            display:inline-flex;align-items:center;gap:6px;padding:6px 14px;
+            font-size:11px;font-weight:600;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1px;
+            border:1px solid var(--border);color:var(--text-secondary);background:transparent;
+            cursor:pointer;transition:all .15s;
+        }
+        .sc-back-btn:hover{background:var(--surface);color:var(--orange);border-color:var(--orange)}
+        .sc-hero-label{font-family:var(--font-mono);font-size:9px;color:var(--orange);text-transform:uppercase;letter-spacing:2px}
+        .sc-hero h2{font-size:36px;font-weight:700;color:var(--text);letter-spacing:-.5px;margin:0 0 8px}
+        .sc-hero-sub{font-size:13px;color:var(--text-secondary);margin-bottom:24px}
+        .sc-stats{display:flex;gap:1px;background:var(--border);margin-bottom:0}
+        .sc-stat-card{flex:1;background:var(--bg);padding:20px 24px;display:flex;flex-direction:column;gap:6px}
+        .sc-stat-val{font-size:32px;font-weight:700;color:var(--text);font-family:var(--font-mono);line-height:1}
+        .sc-stat-val.accent{color:var(--orange)}
+        .sc-stat-val.green{color:var(--green)}
+        .sc-stat-lbl{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;font-family:var(--font-mono)}
+        .sc-table-wrap{padding:24px 64px 40px}
+        .sc-table-title{font-family:var(--font-mono);font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+        .sc-table-title::before{content:'';width:16px;height:1px;background:var(--orange)}
+        .sub-content-table{width:100%;border-collapse:collapse}
+        .sub-content-table thead{position:sticky;top:0;z-index:1}
+        .sub-content-table th{
+            text-align:left;padding:11px 16px;font-size:10px;color:var(--text-muted);
+            font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1px;
+            background:var(--surface);border-bottom:2px solid var(--border);font-weight:500;
+        }
+        .sub-content-table td{
+            padding:13px 16px;font-size:12px;color:var(--text);
+            border-bottom:1px solid var(--border);line-height:1.5;vertical-align:top;
+        }
+        .sub-content-table tbody tr:hover{background:var(--surface)}
+        .sc-priority{font-size:10px;padding:3px 8px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.5px}
+        .sc-priority.high{border:1px solid var(--red);color:var(--red)}
+        .sc-priority.medium{border:1px solid var(--orange);color:var(--orange)}
+        .sc-priority.low{border:1px solid var(--text-muted);color:var(--text-muted)}
+
+        /* Hero info bar */
+        .hero-info{
+            display:flex;gap:32px;align-items:center;
+            font-size:13px;color:var(--text-muted);font-family:var(--font-mono);
+        }
+        .hero-info .sep{color:var(--border-light)}
+        .hero-info .hi-label{color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;font-size:10px}
+        .hero-info .hi-val{color:var(--text-secondary)}
+
+        /* ── SECTION DIVIDER ── */
+        .section-head{
+            padding:32px 64px;border-bottom:1px solid var(--border);
+            display:flex;align-items:center;gap:16px;
+        }
+        .section-head-label{
+            font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);
+            text-transform:uppercase;letter-spacing:2px;
+        }
+        .section-head-line{flex:1;height:1px;background:var(--border)}
+
+        /* ── Phases Stepper ── */
+        .timeline-section{
+            padding:28px 48px 32px;border-bottom:1px solid var(--border);position:relative;
+        }
+        .stepper-track{
+            display:flex;align-items:flex-start;position:relative;
+            padding:28px 0 12px;
+        }
+        .stepper-track::before{
+            content:'';position:absolute;left:20px;right:20px;top:39px;
+            height:2px;background:var(--border);z-index:0;
+        }
+        .stepper-node{
+            display:flex;flex-direction:column;align-items:center;gap:10px;flex:1;
+            cursor:pointer;position:relative;z-index:1;min-width:0;
+        }
+        .stepper-dot{
+            width:32px;height:32px;border-radius:50%;display:flex;align-items:center;
+            justify-content:center;font-family:var(--font-mono);font-size:11px;
+            font-weight:700;background:var(--bg);border:2px solid var(--border);
+            color:var(--text-muted);transition:all .3s;flex-shrink:0;
+        }
+        .stepper-node.done .stepper-dot{background:var(--green);border-color:var(--green);color:var(--stepper-dot-text)}
+        .stepper-node.active .stepper-dot{background:var(--orange);border-color:var(--orange);color:var(--stepper-dot-text);box-shadow:0 0 12px rgba(250,140,22,.3)}
+        .stepper-label{
+            font-size:12px;font-weight:600;color:var(--text-muted);text-align:center;
+            line-height:1.3;transition:color .3s;word-break:keep-all;
+        }
+        .stepper-node.done .stepper-label{color:var(--text-secondary)}
+        .stepper-node.active .stepper-label{color:var(--orange)}
+        .stepper-date{
+            font-size:10px;color:var(--text-muted);font-family:var(--font-mono);
+            transition:color .3s;
+        }
+        .stepper-node.active .stepper-date{color:var(--text-secondary)}
+
+        /* ── Phase Detail ── */
+        .phase-section{padding: 0;border-bottom:1px solid var(--border)}
+        .phase-detail{display:none}
+        .phase-detail.active{display:block}
+        .pd-grid{
+            display:grid;grid-template-columns:1fr 1fr;
+            min-height:320px;
+        }
+        .pd-left{
+            padding:48px 48px 48px 64px;display:flex;flex-direction:column;gap:24px;
+            border-right:1px solid var(--border);
+        }
+        .pd-right{
+            padding:48px 64px 48px 48px;display:flex;flex-direction:column;gap:20px;
+        }
+        .pd-status{
+            font-family:var(--font-mono);font-size:10px;text-transform:uppercase;
+            letter-spacing:2px;color:var(--text-muted);display:flex;align-items:center;gap:10px;
+        }
+        .pd-status::before{content:'';width:8px;height:8px;background:var(--orange)}
+        .pd-status.done::before{background:var(--green)}.pd-status.done{color:var(--green)}
+        .pd-status.pending::before{background:var(--text-muted)}.pd-status.pending{color:var(--text-muted)}
+        .pd-name{font-size:32px;font-weight:700;letter-spacing:-.5px;line-height:1.2;color:var(--text)}
+        .pd-desc{font-size:15px;color:var(--text-secondary);line-height:1.75;max-width:580px}
+        .pd-date{font-size:11px;color:var(--text-muted);font-family:var(--font-mono)}
+
+        /* Meta items */
+        .pd-meta{display:flex;gap:1px;background:var(--border)}
+        .pd-meta-item{
+            background:var(--bg);padding:16px 20px;display:flex;align-items:center;gap:8px;
+            font-size:11px;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.5px;
+        }
+        .pd-meta-item .mv{font-size:20px;font-weight:700;color:var(--text);letter-spacing:-.5px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif}
+        .pd-meta-item .mv.accent{color:var(--orange)}
+
+        /* Task tags right side */
+        .pd-right-label{
+            font-family:var(--font-mono);font-size:10px;color:var(--text-muted);
+            text-transform:uppercase;letter-spacing:2px;margin-bottom:4px;
+        }
+        .pd-tasks{display:flex;flex-direction:column;gap:1px;background:var(--border)}
+        .pd-task{
+            background:var(--bg);padding:14px 20px;display:flex;align-items:center;
+            justify-content:space-between;cursor:pointer;transition:all .2s;
+            border-left:3px solid transparent;
+        }
+        .pd-task:hover{background:var(--blue-light);border-left-color:var(--blue);padding-left:24px;color:var(--blue)}
+        .pd-task:hover .pd-task-arrow{color:var(--blue)}
+        .pd-task-left{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text-secondary)}
+        .pd-task-dot{width:6px;height:6px;background:var(--green);flex-shrink:0}
+        .pd-task-dot.active{background:var(--orange)}
+        .pd-task-dot.pending{background:var(--text-muted)}
+        .pd-task-arrow{font-size:10px;color:var(--text-muted);font-family:var(--font-mono)}
+
+        /* Task detail expand — Card-style V7 */
+        .task-expand{
+            display:none;border-bottom:1px solid var(--border);
+        }
+        .task-expand.show{display:block}
+        .task-expand-inner{padding:32px 64px}
+
+        /* Header */
+        .td-card-header{
+            display:flex;align-items:center;justify-content:space-between;
+            margin-bottom:24px;flex-wrap:wrap;gap:12px;
+        }
+        .td-card-header-left{display:flex;align-items:center;gap:14px}
+        .td-card-name{font-size:22px;font-weight:700;color:var(--text);letter-spacing:-.3px}
+        .td-card-badge{
+            font-size:10px;padding:5px 14px;font-family:var(--font-mono);
+            text-transform:uppercase;letter-spacing:.5px;
+        }
+        .td-card-badge.done{border:1px solid var(--green);color:var(--green)}
+        .td-card-badge.active{border:1px solid var(--orange);color:var(--orange)}
+        .td-card-badge.pending{border:1px solid var(--border-light);color:var(--text-muted)}
+        .td-card-actions{display:flex;align-items:center;gap:6px}
+        .td-card-btn{
+            display:inline-flex;align-items:center;gap:5px;
+            padding:7px 14px;font-size:10px;font-weight:600;
+            font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.5px;
+            background:transparent;border:1px solid var(--border);
+            color:var(--text-secondary);cursor:pointer;transition:all .2s;
+        }
+        .td-card-btn:hover{background:var(--surface2);color:var(--text);border-color:var(--text-muted)}
+        .td-card-btn.active-conf{background:var(--orange-light);border-color:var(--orange);color:var(--orange)}
+        .td-card-btn svg{width:13px;height:13px}
+
+        /* Config dropdown */
+        .td-config-dropdown{
+            display:none;position:absolute;top:100%;right:0;margin-top:4px;
+            background:var(--surface);border:1px solid var(--border);
+            min-width:180px;z-index:5;padding:4px 0;
+        }
+        .td-config-wrap{position:relative}
+        .td-config-dropdown.show{display:block}
+        .td-config-item{
+            display:flex;align-items:center;gap:8px;padding:8px 14px;
+            font-size:11px;color:var(--text-secondary);cursor:pointer;transition:all .1s;
+            font-family:var(--font-mono);
+        }
+        .td-config-item:hover{background:var(--surface2);color:var(--text)}
+        .td-config-item .cfg-check{width:14px;height:14px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:9px;color:transparent;transition:all .15s}
+        .td-config-item.on .cfg-check{background:var(--orange);border-color:var(--orange);color:#fff}
+
+        /* Field cards grid */
+        .td-field-grid{
+            display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));
+            gap:1px;background:var(--border);margin-bottom:20px;
+        }
+        .td-field-card{
+            background:var(--bg);padding:20px 22px;
+            display:flex;flex-direction:column;gap:6px;transition:all .2s;
+        }
+        .td-field-card:hover{background:var(--surface)}
+        .td-fc-label{
+            font-size:9px;color:var(--text-muted);text-transform:uppercase;
+            letter-spacing:1.5px;font-family:var(--font-mono);
+        }
+        .td-fc-value{
+            font-size:14px;color:var(--text);line-height:1.6;word-break:break-word;
+        }
+        .td-fc-value.big{font-size:26px;font-weight:700;font-family:var(--font-mono);letter-spacing:-.5px;line-height:1}
+        .td-fc-value.accent{color:var(--orange)}
+        .td-fc-value.green{color:var(--green)}
+
+        /* Description block (full width) */
+        .td-desc-block{
+            background:var(--bg);padding:24px;margin-bottom:20px;border-left:3px solid var(--orange);
+        }
+        .td-desc-block .td-fc-label{margin-bottom:10px}
+        .td-desc-block .td-fc-value{font-size:14px;line-height:1.75}
+
+        /* Steps bar */
+        .td-steps-section{
+            border-top:1px solid var(--border);padding-top:20px;
+        }
+        .td-steps-header{
+            display:flex;align-items:center;justify-content:space-between;
+            margin-bottom:12px;cursor:pointer;
+        }
+        .td-steps-title{
+            font-family:var(--font-mono);font-size:10px;color:var(--text-muted);
+            text-transform:uppercase;letter-spacing:1.5px;display:flex;align-items:center;gap:8px;
+        }
+        .td-steps-toggle{font-family:var(--font-mono);font-size:10px;color:var(--text-muted);transition:all .2s}
+        .td-steps-table-wrap{
+            max-height:280px;overflow-y:auto;overflow-x:auto;
+        }
+        .td-steps-table-wrap.show{display:block}
+        .td-steps-table-wrap table{
+            width:max-content;min-width:100%;border-collapse:collapse;
+        }
+        .td-steps-table-wrap thead{position:sticky;top:0;z-index:2}
+        .td-steps-table-wrap thead th{
+            text-align:left;padding:9px 12px;font-size:10px;color:var(--text-muted);
+            font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1px;
+            background:var(--surface);border-bottom:1px solid var(--border);
+            font-weight:500;white-space:nowrap;
+        }
+        .td-steps-table-wrap tbody td{
+            padding:10px 12px;font-size:11px;color:var(--text-secondary);
+            border-bottom:1px solid var(--border);line-height:1.5;white-space:nowrap;
+        }
+        .td-steps-table-wrap tbody td.td-desc-cell{max-width:260px;overflow:hidden;text-overflow:ellipsis}
+        .td-steps-table-wrap tbody tr:hover{background:var(--surface2)}
+        .te-status{
+            font-size:9px;padding:3px 8px;font-family:var(--font-mono);
+            text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;
+        }
+        .te-status.done{border:1px solid var(--green);color:var(--green)}
+        .te-status.active{border:1px solid var(--orange);color:var(--orange)}
+        .te-status.pending{border:1px solid var(--border-light);color:var(--text-muted)}
+
+        /* ── V28 table mode styles ── */
+        .task-expand-actions{
+            display:flex;align-items:center;justify-content:flex-end;gap:6px;padding:0 0 12px;
+        }
+        .task-expand-actions .export-btn{
+            display:inline-flex;align-items:center;gap:6px;
+            padding:8px 18px;font-size:11px;font-weight:600;
+            font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.5px;
+            background:transparent;border:1px solid var(--border);
+            color:var(--text-secondary);cursor:pointer;transition:all .2s;
+        }
+        .task-expand-actions .export-btn:hover{
+            background:var(--surface2);color:var(--text);border-color:var(--text-muted);
+        }
+        .task-expand-actions .export-btn svg{width:14px;height:14px}
+        .view-toggle-btn{
+            display:inline-flex;align-items:center;gap:5px;
+            padding:7px 12px;font-size:10px;font-weight:600;
+            font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.5px;
+            background:transparent;border:1px solid var(--orange);color:var(--orange);
+            cursor:pointer;transition:all .2s;
+        }
+        .view-toggle-btn:hover{background:rgba(250,140,22,.08)}
+        .view-toggle-btn svg{width:12px;height:12px}
+        .task-expand table{width:100%;border-collapse:collapse;}
+        .task-expand thead th{
+            text-align:left;padding:12px 16px;font-size:10px;color:var(--text-muted);
+            font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1px;
+            border-bottom:1px solid var(--border);font-weight:500;
+        }
+        .task-expand tbody td{
+            padding:14px 16px;font-size:12px;color:var(--text-secondary);
+            border-bottom:1px solid var(--border);line-height:1.6;
+            max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+        }
+        .task-expand tbody td.td-desc{max-width:220px;}
+        .task-expand tbody tr{
+            cursor:pointer;transition:all .15s;border-left:3px solid transparent;
+        }
+        .task-expand tbody tr:hover{background:var(--surface2);}
+        .task-expand tbody tr.row-selected{background:var(--orange-light);border-left-color:var(--orange)}
+        .task-expand tbody tr td:first-child{
+            font-weight:600;color:var(--text);font-size:13px;
+        }
+        .task-expand tbody td.td-action{
+            width:40px;text-align:center;color:var(--text-muted);font-size:10px;
+            font-family:var(--font-mono);
+        }
+        .row-detail-panel{
+            display:none;padding:0 16px 16px;border-top:2px solid var(--orange);
+        }
+        .row-detail-panel.show{display:block}
+        .rdp-inner{
+            display:grid;grid-template-columns:1fr 1fr;gap:1px;
+            background:var(--border);
+        }
+        .rdp-field{
+            background:var(--bg);padding:20px 24px;
+            display:flex;flex-direction:column;gap:6px;
+        }
+        .rdp-field.full{grid-column:1/-1}
+        .rdp-label{
+            font-size:9px;color:var(--text-muted);text-transform:uppercase;
+            letter-spacing:1.5px;font-family:var(--font-mono);
+        }
+        .rdp-value{
+            font-size:14px;color:var(--text);line-height:1.7;word-break:break-word;
+        }
+        .rdp-value.accent{color:var(--orange)}
+        .rdp-value.green{color:var(--green)}
+        .rdp-value.muted{color:var(--text-muted)}
+
+        /* Phase progress bar */
+        .pd-progress{
+            padding:20px 64px;border-top:1px solid var(--border);
+            display:flex;align-items:center;gap:20px;
+        }
+        .pd-prog-label{
+            font-family:var(--font-mono);font-size:10px;color:var(--text-muted);
+            text-transform:uppercase;letter-spacing:1px;white-space:nowrap;
+        }
+        .pd-prog-bar-wrap{flex:1;height:2px;background:var(--border);position:relative}
+        .pd-prog-fill{height:100%;background:var(--orange);transition:width.6s ease}
+        .pd-prog-val{
+            font-family:var(--font-mono);font-size:20px;font-weight:700;color:var(--orange);white-space:nowrap;
+        }
+
+        /* ── Progress 进度 Overview 总览 ── */
+        .overview-section{padding: 0;border-bottom:1px solid var(--border)}
+        .ov-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border)}
+        .ov-item{
+            background:var(--bg);padding:32px 24px 28px;display:flex;flex-direction:column;
+            gap:20px;transition:all .2s;
+        }
+        .ov-item:hover{background:var(--surface)}
+        .ov-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+        .ov-name{font-size:14px;font-weight:600;color:var(--text);line-height:1.3;letter-spacing:-.2px}
+        .ov-num{font-family:var(--font-mono);font-size:11px;color:var(--text-muted)}
+        .ov-bar-wrap{display:flex;flex-direction:column;gap:8px}
+        .ov-bar{height:2px;background:var(--border);position:relative}
+        .ov-fill{height:100%;position:absolute;left:0;top:0;transition:width.8s ease}
+        .ov-fill.done{background:var(--green)}
+        .ov-fill.active{background:var(--orange)}
+        .ov-fill.pending{background:var(--border-light)}
+        .ov-status{
+            font-family:var(--font-mono);font-size:9px;text-transform:uppercase;
+            letter-spacing:1px;color:var(--text-muted);
+        }
+        .ov-status.done{color:var(--green)}
+        .ov-status.active{color:var(--orange)}
+
+
+        /* ── Charts 数据图表 ── */
+        .charts-section{
+            padding:0;border-bottom:1px solid var(--border);
+            display:flex;gap:1px;background:var(--border);
+        }
+        .chart-card{
+            flex:1;background:var(--bg);padding:40px 36px;
+            display:flex;flex-direction:column;gap:20px;
+        }
+        .chart-title{
+            font-family:var(--font-mono);font-size:11px;color:var(--text-muted);
+            text-transform:uppercase;letter-spacing:1.5px;
+        }
+        .chart-donut-wrap{display:flex;align-items:center;justify-content:center;width:180px;height:180px;margin:0 auto}
+        .donut-chart{width:100%;height:100%}
+        .donut-legend{display:flex;flex-direction:column;gap:8px;padding:0 12px}
+        .dl-item{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary);font-family:var(--font-mono)}
+        .dl-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+        .dl-pct{margin-left:auto;color:var(--text-muted);font-weight:600}
+        .bar-chart-wrap{display:flex;flex-direction:column;gap:14px;padding:8px 0}
+        .bar-row{display:flex;align-items:center;gap:12px}
+        .bar-label{width:70px;flex-shrink:0;font-size:12px;color:var(--text-secondary);text-align:right}
+        .bar-track{flex:1;height:8px;background:var(--border);position:relative;overflow:hidden}
+        .bar-track-bg{position:absolute;top:0;left:0;width:100%;height:100%;background:var(--border)}
+        .bar-fill{height:100%;position:absolute;left:0;top:0;z-index:1;transition:width .8s ease}
+        .bar-val{width:24px;flex-shrink:0;font-size:13px;font-weight:700;color:var(--text);font-family:var(--font-mono);text-align:left}
+
+        /* ── Responsive ── */
+        @media(max-width:1200px){
+            .nav-drawer{min-width:380px;right:20px}
+            .nav-drawer-l1{width:130px}
+            .ai-dialog{width:440px}
+            .hero{padding:80px 40px 64px}
+            .section-head{padding:32px 40px}
+            .timeline-section{padding:40px}
+            .pd-progress{padding:20px 40px}
+            .task-expand-inner{padding:24px 24px}
+            .td-field-grid{grid-template-columns:repeat(auto-fill, minmax(160px,1fr))}
+            .pd-progress{padding:20px 40px}
+            .pd-left{padding:48px 40px 48px 40px}
+            .hero-grid{grid-template-columns:1fr 1fr 1fr}
+            .hero-left{grid-column:1/4;padding:0 0 32px !important}
+            .hero-meta{grid-column:1/4}
+            .hero h1{font-size:40px}
+            .pd-grid{grid-template-columns:1fr}
+            .pd-left{border-right:0;border-bottom:1px solid var(--border)}
+            .ov-grid{grid-template-columns:repeat(4,1fr)}
+            .charts-section{flex-direction:column}
+        }
+        @media(max-width:768px){
+            .tl-toolbar{right:12px;top:72px;gap:4px}.tl-tool-btn{width:36px;height:36px}
+            .nav-drawer{right:12px;min-width:300px}
+            .hero{padding:40px 24px}.section-head{padding:24px}
+            .timeline-section{padding:24px}.pd-left{padding:32px 24px}.pd-right{padding:32px 24px}
+            .pd-progress{padding:20px 24px}.task-expand-inner{padding:20px 14px}
+            .td-field-grid{grid-template-columns:repeat(auto-fill, minmax(130px,1fr))}
+            .td-card-name{font-size:18px}
+            .product-section{padding:20px 24px}
+            .product-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+            .proj-info-bar{flex-wrap:wrap}
+            .sc-hero{padding:32px 24px}.sc-hero h2{font-size:26px}
+            .sc-table-wrap{padding:20px 24px}
+            .ai-dialog{width:90vw;max-height:80vh}
+            .sc-stats{flex-wrap:wrap}
+            .rdp-inner{grid-template-columns:1fr}
+            .hero h1{font-size:32px}.pd-name{font-size:22px}
+            .hero-grid{grid-template-columns:1fr 1fr}
+            .hero-left{grid-column:1/3}.hero-meta{grid-column:1/3}
+            .stepper-label{font-size:10px}
+            .stepper-date{display:none}
+            .ov-grid{grid-template-columns:repeat(2,1fr)}
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══ Body ═══ -->
+
+    <!-- Left Strip (fixed) -->
+    <div class="left-strip-wrap">
+        <div class="left-strip" id="leftStrip">
+            <div class="strip-inner">
+                <div class="strip-l1">
+                    <div class="strip-item active" data-panel="scope"><span class="si-line"></span>范围管理</div>
+                    <div class="strip-item" data-panel="demand"><span class="si-line"></span>需求管理</div>
+                    <div class="strip-item" data-panel="progress"><span class="si-line"></span>进度管理</div>
+                    <div class="strip-item" data-panel="quality"><span class="si-line"></span>质量管理</div>
+                    <div class="strip-item" data-panel="cost"><span class="si-line"></span>成本管理</div>
+                    <div class="strip-item" data-panel="communication"><span class="si-line"></span>沟通管理</div>
+                    <div class="strip-item" data-panel="risk"><span class="si-line"></span>风险管理</div>
+                    <div class="strip-item" data-panel="docs"><span class="si-line"></span>文档管理</div>
+                </div>
+                <div class="strip-divider"></div>
+                <div class="strip-l2" id="stripL2"></div>
+            </div>
+        </div>
+    </div>
+
+<div class="body-layout">
+
+    <!-- ═══ Main Area ═══ -->
+    <div class="main-area">
+
+        <!-- Hero -->
+        <div class="hero">
+            <div class="hero-grid">
+                <div class="hero-left">
+                    <div class="hero-label">项 目 详 情  /  PROJECT DETAILS</div>
+                    <h1>智慧校园基础平台<br>建设项目</h1>
+                    <div class="hero-tags">
+                        <span class="hero-tag status">实施中</span>
+                        <span class="hero-tag type">A类重点项目</span>
+                    </div>
+                </div>
+                <div class="hero-meta">
+                    <div><span class="meta-stat accent">71%</span><span class="meta-label">总进度</span></div>
+                    <div><span class="meta-stat green">4/7</span><span class="meta-label">已完成阶段</span></div>
+                    <div><span class="meta-stat">32</span><span class="meta-label">任务总数</span></div>
+                    <div><span class="meta-stat">120</span><span class="meta-label">剩余天数</span></div>
+                </div>
+            </div>
+            <div class="proj-info-bar">
+                <div class="proj-info-card">
+                    <span class="proj-info-label">客户名称</span>
+                    <span class="proj-info-value">深圳市教育局</span>
+                </div>
+                <div class="proj-info-card">
+                    <span class="proj-info-label">客户名称</span>
+                    <span class="proj-info-value">南山区教育局</span>
+                </div>
+                <div class="proj-info-card">
+                    <span class="proj-info-label">业务部署模式</span>
+                    <span class="proj-info-value"><span class="pi-tag">本地部署</span><span class="pi-tag">私有云</span></span>
+                </div>
+                <div class="proj-info-card">
+                    <span class="proj-info-label">编号 / 负责人</span>
+                    <span class="proj-info-value">SCP-2026-0012 · 张明远（研发二部）</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Product List -->
+        <div class="product-section">
+            <div class="product-section-label">已采购产品清单 · 28 项</div>
+            <div class="product-grid">
+                <div class="product-item"><span class="pi-dot"></span>在线辅导系统<span class="pi-count">×2</span><span class="pi-used">已部署</span></div>
+                <div class="product-item"><span class="pi-dot"></span>在线考试系统<span class="pi-count">×2</span><span class="pi-used">已部署</span></div>
+                <div class="product-item"><span class="pi-dot"></span>赛事管理系统<span class="pi-count">×2</span></div>
+                <div class="product-item"><span class="pi-dot"></span>培训管理系统<span class="pi-count">×2</span><span class="pi-used">已部署</span></div>
+                <div class="product-item"><span class="pi-dot"></span>基础教务系统<span class="pi-count">×2</span><span class="pi-used">已部署</span></div>
+                <div class="product-item"><span class="pi-dot"></span>成绩管理系统<span class="pi-count">×2</span><span class="pi-used">已部署</span></div>
+                <div class="product-item"><span class="pi-dot"></span>同步课堂系统<span class="pi-count">×2</span><span class="pi-partial">部分部署</span></div>
+                <div class="product-item"><span class="pi-dot"></span>网络教研系统<span class="pi-count">×2</span></div>
+                <div class="product-item"><span class="pi-dot"></span>名师工作室<span class="pi-count">×2</span></div>
+                <div class="product-item"><span class="pi-dot"></span>科研项目管理系统<span class="pi-count">×2</span></div>
+                <div class="product-item"><span class="pi-dot"></span>教材管理系统<span class="pi-count">×1</span><span class="pi-used">已部署</span></div>
+                <div class="product-item"><span class="pi-dot"></span>考务管理系统<span class="pi-count">×2</span><span class="pi-used">已部署</span></div>
+                <div class="product-item"><span class="pi-dot"></span>在线学习系统<span class="pi-count">×2</span><span class="pi-used">已部署</span></div>
+                <div class="product-item"><span class="pi-dot"></span>智慧教育课堂教学分析系统<span class="pi-count">×1</span><span class="pi-partial">部分部署</span></div>
+                <div class="product-item"><span class="pi-dot"></span>集体备课系统<span class="pi-count">×1</span></div>
+                <div class="product-item"><span class="pi-dot"></span>知识库系统<span class="pi-count">×1</span></div>
+                <div class="product-item"><span class="pi-dot"></span>课表管理中心系统<span class="pi-count">×2</span><span class="pi-used">已部署</span></div>
+                <div class="product-item"><span class="pi-dot"></span>在线巡课系统<span class="pi-count">×1</span><span class="pi-partial">部分部署</span></div>
+                <div class="product-item"><span class="pi-dot"></span>家校互通平台<span class="pi-count">×1</span><span class="pi-used">已部署</span></div>
+                <div class="product-item"><span class="pi-dot"></span>智慧班牌系统<span class="pi-count">×2</span><span class="pi-used">已部署</span></div>
+                <div class="product-item"><span class="pi-dot"></span>校园一卡通系统<span class="pi-count">×1</span><span class="pi-used">已部署</span></div>
+                <div class="product-item"><span class="pi-dot"></span>资产管理系统<span class="pi-count">×1</span></div>
+                <div class="product-item"><span class="pi-dot"></span>图书馆管理系统<span class="pi-count">×1</span></div>
+                <div class="product-item"><span class="pi-dot"></span>宿舍管理系统<span class="pi-count">×1</span><span class="pi-partial">部分部署</span></div>
+                <div class="product-item"><span class="pi-dot"></span>选课走班系统<span class="pi-count">×1</span></div>
+                <div class="product-item"><span class="pi-dot"></span>综合素质评价系统<span class="pi-count">×1</span><span class="pi-used">已部署</span></div>
+                <div class="product-item"><span class="pi-dot"></span>教师发展档案系统<span class="pi-count">×1</span></div>
+                <div class="product-item"><span class="pi-dot"></span>校园安全防控平台<span class="pi-count">×1</span><span class="pi-used">已部署</span></div>
+            </div>
+        </div>
+
+        <!-- Sub-content area (for panel sub-items) -->
+        <div class="sub-content-area" id="subContentArea" style="display:none"></div>
+
+        <!-- Timeline -->
+        <div class="section-head">
+            Phases 项目阶段
+            <span class="section-head-line"></span>
+        </div>
+        <div class="timeline-section">
+            <div class="stepper-track">
+                <div class="stepper-node done" data-phase="0" onclick="switchPhase(0)">
+                    <span class="stepper-dot">01</span>
+                    <span class="stepper-label">内部启动会</span>
+                    <span class="stepper-date">02.20–02.28</span>
+                </div>
+                <div class="stepper-node done" data-phase="1" onclick="switchPhase(1)">
+                    <span class="stepper-dot">02</span>
+                    <span class="stepper-label">需求调研与方案确认</span>
+                    <span class="stepper-date">03.01–03.20</span>
+                </div>
+                <div class="stepper-node done" data-phase="2" onclick="switchPhase(2)">
+                    <span class="stepper-dot">03</span>
+                    <span class="stepper-label">环境部署与平台搭建</span>
+                    <span class="stepper-date">03.21–04.15</span>
+                </div>
+                <div class="stepper-node done" data-phase="3" onclick="switchPhase(3)">
+                    <span class="stepper-dot">04</span>
+                    <span class="stepper-label">核心系统开发与集成</span>
+                    <span class="stepper-date">04.16–05.31</span>
+                </div>
+                <div class="stepper-node active" data-phase="4" onclick="switchPhase(4)">
+                    <span class="stepper-dot">05</span>
+                    <span class="stepper-label">用户培训与试运行</span>
+                    <span class="stepper-date">06.01–07.15</span>
+                </div>
+                <div class="stepper-node" data-phase="5" onclick="switchPhase(5)">
+                    <span class="stepper-dot">06</span>
+                    <span class="stepper-label">正式上线与全面切换</span>
+                    <span class="stepper-date">07.16–08.15</span>
+                </div>
+                <div class="stepper-node" data-phase="6" onclick="switchPhase(6)">
+                    <span class="stepper-dot">07</span>
+                    <span class="stepper-label">项目验收与交付</span>
+                    <span class="stepper-date">08.16–09.30</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Phase Detail -->
+        <div class="section-head">
+            <span class="section-head-label">Phase Details 阶段详情</span>
+            <span class="section-head-line"></span>
+        </div>
+        <div class="phase-section" id="phaseCard">
+
+            <!-- Phase 0 -->
+            <div class="phase-detail active" id="phase0">
+                <div class="pd-grid">
+                    <div class="pd-left">
+                        <span class="pd-status done">已完成</span>
+                        <span class="pd-name">项目内部启动会</span>
+                        <span class="pd-desc">召开公司内部项目启动会，明确项目目标与范围，组建项目团队，制定项目管理制度与沟通机制，完成项目立项审批。</span>
+                        <span class="pd-date">2026.02.20 — 02.28</span>
+                        <div class="pd-meta">
+                            <div class="pd-meta-item"><span class="mv">3</span>交付物</div>
+                            <div class="pd-meta-item"><span class="mv">9</span>天</div>
+                            <div class="pd-meta-item"><span class="mv">8</span>人参与</div>
+                            <div class="pd-meta-item"><span class="mv accent" style="color:var(--green)">按时</span></div>
+                        </div>
+                    </div>
+                    <div class="pd-right">
+                        <span class="pd-right-label">Tasks</span>
+                        <div class="pd-tasks">
+                            <div class="pd-task" onclick="showTaskDetail('p0t0',event)"><span class="pd-task-left"><span class="pd-task-dot"></span>项目立项</span><span class="pd-task-arrow">→</span></div>
+                            <div class="pd-task" onclick="showTaskDetail('p0t1',event)"><span class="pd-task-left"><span class="pd-task-dot"></span>组建项目团队</span><span class="pd-task-arrow">→</span></div>
+                            <div class="pd-task" onclick="showTaskDetail('p0t2',event)"><span class="pd-task-left"><span class="pd-task-dot"></span>项目管理制度建设</span><span class="pd-task-arrow">→</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="task-expand" id="task-p0"></div>
+                <div class="pd-progress">
+                    <span class="pd-prog-label">Progress 进度</span>
+                    <div class="pd-prog-bar-wrap"><div class="pd-prog-fill" style="width:100%;background:var(--green)"></div></div>
+                    <span class="pd-prog-val" style="color:var(--green)">100%</span>
+                </div>
+            </div>
+
+            <!-- Phase 1 -->
+            <div class="phase-detail" id="phase1">
+                <div class="pd-grid">
+                    <div class="pd-left">
+                        <span class="pd-status done">已完成</span>
+                        <span class="pd-name">需求调研与方案确认</span>
+                        <span class="pd-desc">完成学校现状调研、需求分析、技术方案编制与评审，输出需求规格说明书与项目实施方案，与校方确认建设范围与技术路线。共投入产品经理2人、架构师1人，现场驻场调研12天。</span>
+                        <span class="pd-date">2026.03.01 — 03.20</span>
+                        <div class="pd-meta">
+                            <div class="pd-meta-item"><span class="mv">3</span>交付物</div>
+                            <div class="pd-meta-item"><span class="mv">20</span>天</div>
+                            <div class="pd-meta-item"><span class="mv">5</span>人参与</div>
+                            <div class="pd-meta-item"><span class="mv" style="color:var(--green)">按时</span></div>
+                        </div>
+                    </div>
+                    <div class="pd-right">
+                        <span class="pd-right-label">Tasks</span>
+                        <div class="pd-tasks">
+                            <div class="pd-task" onclick="showTaskDetail('p1t0',event)"><span class="pd-task-left"><span class="pd-task-dot"></span>现场调研</span><span class="pd-task-arrow">→</span></div>
+                            <div class="pd-task" onclick="showTaskDetail('p1t1',event)"><span class="pd-task-left"><span class="pd-task-dot"></span>需求分析</span><span class="pd-task-arrow">→</span></div>
+                            <div class="pd-task" onclick="showTaskDetail('p1t2',event)"><span class="pd-task-left"><span class="pd-task-dot"></span>方案评审</span><span class="pd-task-arrow">→</span></div>
+                            <div class="pd-task" onclick="showTaskDetail('p1t3',event)"><span class="pd-task-left"><span class="pd-task-dot"></span>合同签订</span><span class="pd-task-arrow">→</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="task-expand" id="task-p1"></div>
+                <div class="pd-progress">
+                    <span class="pd-prog-label">Progress 进度</span>
+                    <div class="pd-prog-bar-wrap"><div class="pd-prog-fill" style="width:100%;background:var(--green)"></div></div>
+                    <span class="pd-prog-val" style="color:var(--green)">100%</span>
+                </div>
+            </div>
+
+            <!-- Phase 2 -->
+            <div class="phase-detail" id="phase2">
+                <div class="pd-grid">
+                    <div class="pd-left">
+                        <span class="pd-status done">已完成</span>
+                        <span class="pd-name">环境部署与基础平台搭建</span>
+                        <span class="pd-desc">完成服务器采购上架、网络环境配置、基础平台（统一认证、数据中台）部署，打通与教育局现有系统的接口。共部署12台服务器，完成8个接口对接。</span>
+                        <span class="pd-date">2026.03.21 — 04.15</span>
+                        <div class="pd-meta">
+                            <div class="pd-meta-item"><span class="mv">12</span>服务器</div>
+                            <div class="pd-meta-item"><span class="mv">8</span>接口对接</div>
+                            <div class="pd-meta-item"><span class="mv">26</span>天</div>
+                            <div class="pd-meta-item"><span class="mv" style="color:var(--green)">按时</span></div>
+                        </div>
+                    </div>
+                    <div class="pd-right">
+                        <span class="pd-right-label">Tasks</span>
+                        <div class="pd-tasks">
+                            <div class="pd-task" onclick="showTaskDetail('p2t0',event)"><span class="pd-task-left"><span class="pd-task-dot"></span>硬件上架</span><span class="pd-task-arrow">→</span></div>
+                            <div class="pd-task" onclick="showTaskDetail('p2t1',event)"><span class="pd-task-left"><span class="pd-task-dot"></span>网络部署</span><span class="pd-task-arrow">→</span></div>
+                            <div class="pd-task" onclick="showTaskDetail('p2t2',event)"><span class="pd-task-left"><span class="pd-task-dot"></span>平台安装</span><span class="pd-task-arrow">→</span></div>
+                            <div class="pd-task" onclick="showTaskDetail('p2t3',event)"><span class="pd-task-left"><span class="pd-task-dot"></span>接口联调</span><span class="pd-task-arrow">→</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="task-expand" id="task-p2"></div>
+                <div class="pd-progress">
+                    <span class="pd-prog-label">Progress 进度</span>
+                    <div class="pd-prog-bar-wrap"><div class="pd-prog-fill" style="width:100%;background:var(--green)"></div></div>
+                    <span class="pd-prog-val" style="color:var(--green)">100%</span>
+                </div>
+            </div>
+
+            <!-- Phase 3 -->
+            <div class="phase-detail" id="phase3">
+                <div class="pd-grid">
+                    <div class="pd-left">
+                        <span class="pd-status done">已完成</span>
+                        <span class="pd-name">核心业务系统开发与集成</span>
+                        <span class="pd-desc">开发学籍管理、教务排课、成绩管理、选课系统四大核心模块，完成与统一认证和数据中台的集成联调，首轮内部测试通过。修复缺陷47个，交付可部署模块4个。</span>
+                        <span class="pd-date">2026.04.16 — 05.31</span>
+                        <div class="pd-meta">
+                            <div class="pd-meta-item"><span class="mv">4</span>交付模块</div>
+                            <div class="pd-meta-item"><span class="mv">47</span>缺陷修复</div>
+                            <div class="pd-meta-item"><span class="mv">46</span>天</div>
+                            <div class="pd-meta-item"><span class="mv" style="color:var(--green)">按时</span></div>
+                        </div>
+                    </div>
+                    <div class="pd-right">
+                        <span class="pd-right-label">Tasks</span>
+                        <div class="pd-tasks">
+                            <div class="pd-task" onclick="showTaskDetail('p3t0',event)"><span class="pd-task-left"><span class="pd-task-dot"></span>学籍管理</span><span class="pd-task-arrow">→</span></div>
+                            <div class="pd-task" onclick="showTaskDetail('p3t1',event)"><span class="pd-task-left"><span class="pd-task-dot"></span>教务排课</span><span class="pd-task-arrow">→</span></div>
+                            <div class="pd-task" onclick="showTaskDetail('p3t2',event)"><span class="pd-task-left"><span class="pd-task-dot"></span>成绩管理</span><span class="pd-task-arrow">→</span></div>
+                            <div class="pd-task" onclick="showTaskDetail('p3t3',event)"><span class="pd-task-left"><span class="pd-task-dot"></span>选课系统</span><span class="pd-task-arrow">→</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="task-expand" id="task-p3"></div>
+                <div class="pd-progress">
+                    <span class="pd-prog-label">Progress 进度</span>
+                    <div class="pd-prog-bar-wrap"><div class="pd-prog-fill" style="width:100%;background:var(--green)"></div></div>
+                    <span class="pd-prog-val" style="color:var(--green)">100%</span>
+                </div>
+            </div>
+
+            <!-- Phase 4 (active) -->
+            <div class="phase-detail" id="phase4">
+                <div class="pd-grid">
+                    <div class="pd-left">
+                        <span class="pd-status">进行中</span>
+                        <span class="pd-name">用户培训与试运行</span>
+                        <span class="pd-desc">组织学校管理员、教师、学生及家长的分批培训，系统进入试运行阶段，收集反馈意见，持续优化功能和用户体验。当前已完成4/6场培训，收集反馈32条，推进优化项18个。</span>
+                        <span class="pd-date">2026.06.01 — 07.15</span>
+                        <div class="pd-meta">
+                            <div class="pd-meta-item"><span class="mv accent">4/6</span>培训场次</div>
+                            <div class="pd-meta-item"><span class="mv">32</span>反馈</div>
+                            <div class="pd-meta-item"><span class="mv">18</span>优化项</div>
+                            <div class="pd-meta-item"><span class="mv accent">进行中</span></div>
+                        </div>
+                    </div>
+                    <div class="pd-right">
+                        <span class="pd-right-label">Tasks</span>
+                        <div class="pd-tasks">
+                            <div class="pd-task" onclick="showTaskDetail('p4t0',event)"><span class="pd-task-left"><span class="pd-task-dot"></span>管理员培训</span><span class="pd-task-arrow">→</span></div>
+                            <div class="pd-task" onclick="showTaskDetail('p4t1',event)"><span class="pd-task-left"><span class="pd-task-dot"></span>教师培训</span><span class="pd-task-arrow">→</span></div>
+                            <div class="pd-task" onclick="showTaskDetail('p4t2',event)"><span class="pd-task-left"><span class="pd-task-dot active"></span>学生家长培训</span><span class="pd-task-arrow">→</span></div>
+                            <div class="pd-task" onclick="showTaskDetail('p4t3',event)"><span class="pd-task-left"><span class="pd-task-dot active"></span>试运行优化</span><span class="pd-task-arrow">→</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="task-expand" id="task-p4"></div>
+                <div class="pd-progress">
+                    <span class="pd-prog-label">Progress 进度</span>
+                    <div class="pd-prog-bar-wrap"><div class="pd-prog-fill" style="width:71%"></div></div>
+                    <span class="pd-prog-val">71%</span>
+                </div>
+            </div>
+
+            <!-- Phase 6 -->
+            <div class="phase-detail" id="phase6">
+                <div class="pd-grid">
+                    <div class="pd-left">
+                        <span class="pd-status pending">待开始</span>
+                        <span class="pd-name">项目验收与交付</span>
+                        <span class="pd-desc">整理交付文档，组织项目验收评审，完成系统最终交付，签署验收报告，进入运维保障期。预计需整理验收文档15份，组织评审会2场。</span>
+                        <span class="pd-date">2026.08.16 — 09.30</span>
+                        <div class="pd-meta">
+                            <div class="pd-meta-item"><span class="mv">15</span>验收文档</div>
+                            <div class="pd-meta-item"><span class="mv">08.16</span>预计启动</div>
+                            <div class="pd-meta-item"><span class="mv" style="color:var(--text-muted)">待开始</span></div>
+                        </div>
+                    </div>
+                    <div class="pd-right">
+                        <span class="pd-right-label">Tasks</span>
+                        <div class="pd-tasks">
+                            <div class="pd-task" onclick="showTaskDetail('p6t0',event)"><span class="pd-task-left"><span class="pd-task-dot pending"></span>文档整理</span><span class="pd-task-arrow">→</span></div>
+                            <div class="pd-task" onclick="showTaskDetail('p6t1',event)"><span class="pd-task-left"><span class="pd-task-dot pending"></span>验收评审</span><span class="pd-task-arrow">→</span></div>
+                            <div class="pd-task" onclick="showTaskDetail('p6t2',event)"><span class="pd-task-left"><span class="pd-task-dot pending"></span>正式交付</span><span class="pd-task-arrow">→</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="task-expand" id="task-p6"></div>
+                <div class="pd-progress">
+                    <span class="pd-prog-label">Progress 进度</span>
+                    <div class="pd-prog-bar-wrap"><div class="pd-prog-fill" style="width:0%"></div></div>
+                    <span class="pd-prog-val" style="color:var(--text-muted)">0%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress 进度 Overview 总览 -->
+        <div class="section-head">
+            <span class="section-head-label">Overview 总览</span>
+            <span class="section-head-line"></span>
+        </div>
+        <div class="overview-section">
+            <div class="ov-grid">
+                <div class="ov-item">
+                    <div class="ov-top"><span class="ov-name">内部启动会</span><span class="ov-num">8/8</span></div>
+                    <div class="ov-bar-wrap"><div class="ov-bar"><div class="ov-fill done" style="width:100%"></div></div><span class="ov-status done">已完成</span></div>
+                </div>
+                <div class="ov-item">
+                    <div class="ov-top"><span class="ov-name">需求调研</span><span class="ov-num">8/8</span></div>
+                    <div class="ov-bar-wrap"><div class="ov-bar"><div class="ov-fill done" style="width:100%"></div></div><span class="ov-status done">已完成</span></div>
+                </div>
+                <div class="ov-item">
+                    <div class="ov-top"><span class="ov-name">环境部署</span><span class="ov-num">5/5</span></div>
+                    <div class="ov-bar-wrap"><div class="ov-bar"><div class="ov-fill done" style="width:100%"></div></div><span class="ov-status done">已完成</span></div>
+                </div>
+                <div class="ov-item">
+                    <div class="ov-top"><span class="ov-name">核心开发</span><span class="ov-num">5/5</span></div>
+                    <div class="ov-bar-wrap"><div class="ov-bar"><div class="ov-fill done" style="width:100%"></div></div><span class="ov-status done">已完成</span></div>
+                </div>
+                <div class="ov-item">
+                    <div class="ov-top"><span class="ov-name">用户培训</span><span class="ov-num" style="color:var(--orange)">5/7</span></div>
+                    <div class="ov-bar-wrap"><div class="ov-bar"><div class="ov-fill active" style="width:71%"></div></div><span class="ov-status active">进行中</span></div>
+                </div>
+                <div class="ov-item">
+                    <div class="ov-top"><span class="ov-name">正式上线</span><span class="ov-num">0/3</span></div>
+                    <div class="ov-bar-wrap"><div class="ov-bar"><div class="ov-fill pending" style="width:0%"></div></div><span class="ov-status">待开始</span></div>
+                </div>
+                <div class="ov-item">
+                    <div class="ov-top"><span class="ov-name">项目验收</span><span class="ov-num">0/5</span></div>
+                    <div class="ov-bar-wrap"><div class="ov-bar"><div class="ov-fill pending" style="width:0%"></div></div><span class="ov-status">待开始</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts 数据图表 -->
+        <div class="section-head">
+            <span class="section-head-label">Charts 数据图表</span>
+            <span class="section-head-line"></span>
+        </div>
+        <div class="charts-section">
+            <!-- Donut Chart -->
+            <div class="chart-card">
+                <div class="chart-title">任务完成分布</div>
+                <div class="chart-donut-wrap">
+                    <svg viewBox="0 0 200 200" class="donut-chart">
+                        <circle cx="100" cy="100" r="80" fill="none" stroke="var(--border)" stroke-width="20"/>
+                        <circle cx="100" cy="100" r="80" fill="none" stroke="var(--chart-blue)" stroke-width="20"
+                            stroke-dasharray="502.65" stroke-dashoffset="0" transform="rotate(-90 100 100)"
+                            style="transition:stroke-dashoffset 1s ease"/>
+                        <text x="100" y="90" text-anchor="middle" font-size="32" font-weight="800" fill="var(--text)" font-family="var(--font-mono)">26</text>
+                        <text x="100" y="112" text-anchor="middle" font-size="11" fill="var(--text-muted)" font-family="var(--font-mono)">已完成</text>
+                    </svg>
+                </div>
+                <div class="donut-legend">
+                    <div class="dl-item"><span class="dl-dot" style="background:var(--chart-blue)"></span>已完成 26<span class="dl-pct">81%</span></div>
+                    <div class="dl-item"><span class="dl-dot" style="background:var(--chart-amber)"></span>进行中 4<span class="dl-pct">13%</span></div>
+                    <div class="dl-item"><span class="dl-dot" style="background:var(--chart-gray)"></span>待开始 2<span class="dl-pct">6%</span></div>
+                </div>
+            </div>
+            <!-- Bar Chart -->
+            <div class="chart-card" style="flex:2">
+                <div class="chart-title">各阶段任务量</div>
+                <div class="bar-chart-wrap">
+                    <div class="bar-row">
+                        <span class="bar-label">启动会</span>
+                        <div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--chart-blue)"></div></div>
+                        <span class="bar-val">3</span>
+                    </div>
+                    <div class="bar-row">
+                        <span class="bar-label">需求调研</span>
+                        <div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--chart-indigo)"></div></div>
+                        <span class="bar-val">4</span>
+                    </div>
+                    <div class="bar-row">
+                        <span class="bar-label">环境部署</span>
+                        <div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--chart-sky)"></div></div>
+                        <span class="bar-val">4</span>
+                    </div>
+                    <div class="bar-row">
+                        <span class="bar-label">核心开发</span>
+                        <div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--chart-purple)"></div></div>
+                        <span class="bar-val">4</span>
+                    </div>
+                    <div class="bar-row">
+                        <span class="bar-label">用户培训</span>
+                        <div class="bar-track"><div class="bar-fill" style="width:71%;background:var(--chart-amber)"></div><div class="bar-track-bg"></div></div>
+                        <span class="bar-val" style="color:var(--chart-amber)">4</span>
+                    </div>
+                    <div class="bar-row">
+                        <span class="bar-label">正式上线</span>
+                        <div class="bar-track"><div class="bar-fill" style="width:0%"></div><div class="bar-track-bg"></div></div>
+                        <span class="bar-val">3</span>
+                    </div>
+                    <div class="bar-row">
+                        <span class="bar-label">项目验收</span>
+                        <div class="bar-track"><div class="bar-fill" style="width:0%"></div><div class="bar-track-bg"></div></div>
+                        <span class="bar-val">3</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /main-area -->
+</div><!-- /body-layout -->
+
+<!-- ═══ TOP-RIGHT TOOLBAR ═══ -->
+<div class="tl-toolbar">
+    <button class="tl-tool-btn" id="btnNav" onclick="toggleNavDrawer()" title="导航">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+    </button>
+    <button class="tl-tool-btn" id="btnSearch" onclick="toggleSearch()" title="搜索">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+    </button>
+    <button class="tl-tool-btn" id="btnAI" onclick="toggleAIDialog()" title="AI 助手">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+        </svg>
+    </button>
+    <button class="tl-tool-btn" id="themeBtn" onclick="toggleTheme()" title="切换深色/浅色">☀</button>
+</div>
+
+<!-- ═══ Navigation Overlay ═══ -->
+<div class="nav-overlay" id="navOverlay" onclick="toggleNavDrawer()"></div>
+<div class="nav-drawer" id="navDrawer">
+    <div class="nav-drawer-l1" id="navDrawerL1">
+        <div class="nav-drawer-item active" data-panel="scope"><span class="nd-line"></span>范围管理</div>
+        <div class="nav-drawer-item" data-panel="demand"><span class="nd-line"></span>需求管理</div>
+        <div class="nav-drawer-item" data-panel="progress"><span class="nd-line"></span>进度管理</div>
+        <div class="nav-drawer-item" data-panel="quality"><span class="nd-line"></span>质量管理</div>
+        <div class="nav-drawer-item" data-panel="cost"><span class="nd-line"></span>成本管理</div>
+        <div class="nav-drawer-item" data-panel="communication"><span class="nd-line"></span>沟通管理</div>
+        <div class="nav-drawer-item" data-panel="risk"><span class="nd-line"></span>风险管理</div>
+        <div class="nav-drawer-item" data-panel="docs"><span class="nd-line"></span>文档管理</div>
+    </div>
+    <div class="nav-drawer-divider"></div>
+    <div class="nav-drawer-l2" id="navDrawerL2"></div>
+</div>
+
+<!-- ═══ AI Dialog ═══ -->
+<div class="ai-overlay" id="aiOverlay" onclick="toggleAIDialog()"></div>
+<div class="ai-dialog" id="aiDialog">
+    <div class="ai-dialog-header">
+        <span class="ai-dialog-title"><span class="ai-dot"></span> AI 项目助手</span>
+        <button class="ai-dialog-close" onclick="toggleAIDialog()">✕</button>
+    </div>
+    <div class="ai-dialog-body" id="aiBody">
+        <div class="ai-msg">你好！我是项目 AI 助手。我可以帮你分析进度数据、生成报告、解答项目相关问题。</div>
+    </div>
+    <div class="ai-dialog-input-row">
+        <input class="ai-dialog-input" id="aiInput" placeholder="输入问题..." onkeydown="if(event.key==='Enter')sendAI()">
+        <button class="ai-dialog-send" onclick="sendAI()">发送</button>
+    </div>
+</div>
+
+<script>
+// ── Panel Data ──
+const panelData = {
+    scope:{title:'SCOPE 范围管理',items:[
+        {label:'需求边界确认',count:12,active:true},{label:'需求登记表',count:8,key:'req-form'},
+        {label:'变更申请表',count:5,key:'change-form'},{label:'变更影响评估',count:3,key:'change-impact'},
+        {label:'范围确认书',count:3,key:'scope-confirm'},{label:'WBS工作分解',count:1,key:'wbs'},
+    ]},
+    demand:{title:'DEMAND 需求管理',items:[
+        {label:'需求池',count:24,key:'req-pool'},{label:'需求评审记录',count:6,active:true,key:'req-review'},
+        {label:'需求跟踪矩阵',count:18,key:'req-matrix'},{label:'需求变更记录',count:7,key:'req-change'},
+        {label:'用户故事地图',count:3,key:'user-story'},{label:'原型设计稿',count:12,key:'prototype'},
+    ]},
+    progress:{title:'PROGRESS 进度管理',items:[
+        {label:'项目主计划',count:1,link:'进度-主计划.html'},{label:'里程碑管理',count:7,active:true,key:'milestone'},
+        {label:'甘特图',count:1,link:'进度-甘特图.html'},{label:'周报汇总',count:16,link:'进度-周报.html'},
+        {label:'日报汇总',count:89,key:'daily'},{label:'延期预警',count:2,key:'delay'},
+    ]},
+    quality:{title:'QUALITY 质量管理',items:[
+        {label:'测试计划',count:3,key:'test-plan'},{label:'缺陷跟踪',count:47,active:true,key:'bug-track'},
+        {label:'测试用例',count:156,key:'test-case'},{label:'测试报告',count:5,key:'test-report'},
+        {label:'代码审查记录',count:23,key:'code-review'},{label:'验收标准',count:2,key:'accept-criteria'},
+    ]},
+    cost:{title:'COST 成本管理',items:[
+        {label:'项目预算表',count:1,key:'budget'},{label:'费用报销记录',count:28,active:true,key:'expense'},
+        {label:'采购清单',count:12,key:'purchase'},{label:'工时统计',count:4,key:'manhour'},{label:'合同付款节点',count:5,key:'contract-pay'},
+    ]},
+    communication:{title:'COMMUNICATION 沟通管理',items:[
+        {label:'会议纪要',count:22,active:true,key:'meeting'},{label:'干系人通讯录',count:8,key:'contacts'},
+        {label:'通知公告',count:5,key:'notice'},{label:'周例会记录',count:16,key:'weekly'},
+        {label:'客户沟通记录',count:14,key:'client-comm'},{label:'内部评审记录',count:9,key:'internal-review'},
+    ]},
+    risk:{title:'RISK 风险管理',items:[
+        {label:'风险登记册',count:9,active:true,key:'risk-register'},{label:'问题跟踪表',count:14,key:'issue-track'},
+        {label:'应急预案',count:3,key:'emergency'},{label:'风险应对措施',count:6,key:'risk-action'},{label:'依赖关系矩阵',count:2,key:'dep-matrix'},
+    ]},
+    docs:{title:'DOCS 文档管理',items:[
+        {label:'技术方案',count:6,key:'tech-plan'},{label:'部署手册',count:3,active:true,key:'deploy-manual'},
+        {label:'用户操作手册',count:4,key:'user-manual'},{label:'培训材料',count:12,key:'training'},
+        {label:'验收交付文档',count:15,key:'accept-doc'},{label:'运维交接文档',count:8,key:'ops-doc'},{label:'版本发布说明',count:6,key:'release-note'},
+    ]},
+};
+
+// ── Left Strip (unified: L1 + L2 in same strip) ──
+document.querySelectorAll('.strip-item').forEach(item=>{
+    item.addEventListener('mouseenter',e=>{
+        const pk=item.dataset.panel;
+        const l2=document.getElementById('stripL2');
+        document.querySelectorAll('.strip-item').forEach(el=>el.classList.remove('active'));
+        item.classList.add('active');
+        const d=panelData[pk];
+        l2.innerHTML=`<div class="strip-l2-header">${d.title}</div>${d.items.map(it=>{const tag=it.link?'a':'div';const href=it.link?`href="${it.link}"`:'';const dk=it.key?`data-key="${it.key}" data-label="${it.label}"`:'';return`<${tag} class="strip-sub-item ${it.active?'active':''}" ${href} ${dk} style="cursor:pointer"><span class="sub-dot"></span>${it.label}<span class="sub-badge">${it.count}</span></${tag}>`}).join('')}`;
+    });
+});
+
+// Event delegation for L2 sub-item clicks
+document.getElementById('stripL2').addEventListener('click',function(e){
+    const sub=e.target.closest('[data-key]');
+    if(sub){
+        const key=sub.dataset.key;
+        const label=sub.dataset.label;
+        showSubContent(key,label);
+    }
+});
+
+// ── Sub-content data & display ──
+const subContentData={
+    // SCOPE 范围管理
+    'req-boundary':{title:'需求边界确认',section:'SCOPE 范围管理',
+        rows:[
+            {id:'RB-001',name:'统一认证对接范围',priority:'高',status:'已确认',owner:'张明远',date:'2026-03-02',desc:'确认仅对接市教育局LDAP，不含区县级独立认证系统'},
+            {id:'RB-002',name:'教务模块边界',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-03-03',desc:'含班级/学期/课程基础管理，不含智能排课算法'},
+            {id:'RB-003',name:'数据迁移范围',priority:'中',status:'评审中',owner:'王梓轩',date:'2026-03-05',desc:'仅迁移近3年历史数据，不含10年以上归档数据'},
+            {id:'RB-004',name:'第三方集成边界',priority:'中',status:'已确认',owner:'张明远',date:'2026-03-06',desc:'对接省考试院、市教育局平台，不含其他区县独立系统'},
+            {id:'RB-005',name:'移动端覆盖范围',priority:'低',status:'确认中',owner:'李雨桐',date:'2026-03-08',desc:'教师端+家长端先行，学生端二期上线'},
+        ]
+    },
+    'req-form':{title:'需求登记表',section:'SCOPE 范围管理',
+        rows:[
+            {id:'REQ-001',name:'统一身份认证',priority:'高',status:'已确认',owner:'张明远',date:'2026-03-05',desc:'支持LDAP/OAuth2.0，对接市教育局统一认证平台'},
+            {id:'REQ-002',name:'基础教务管理',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-03-06',desc:'包含班级管理、学期设置、基础数据维护等功能模块'},
+            {id:'REQ-003',name:'成绩管理系统',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-03-08',desc:'支持多维度成绩录入、统计分析、成绩单导出，对接省考试院标准'},
+            {id:'REQ-004',name:'在线考试系统',priority:'中',status:'评审中',owner:'张明远',date:'2026-03-10',desc:'支持题库管理、自动组卷、在线监考、成绩分析，需评估并发性能'},
+            {id:'REQ-005',name:'校园一卡通',priority:'中',status:'确认中',owner:'李雨桐',date:'2026-03-12',desc:'消费、门禁、考勤一体化，需与现有硬件设备兼容'},
+            {id:'REQ-006',name:'家校互通平台',priority:'低',status:'待评审',owner:'王梓轩',date:'2026-03-15',desc:'消息推送、作业通知、成绩查询、在线缴费等家长端功能'},
+            {id:'REQ-007',name:'数据中台对接',priority:'高',status:'已确认',owner:'张明远',date:'2026-03-18',desc:'统一数据标准，打通各业务系统数据孤岛，建立校级数据仓库'},
+            {id:'REQ-008',name:'移动端适配',priority:'中',status:'已确认',owner:'李雨桐',date:'2026-03-20',desc:'教师端/家长端/学生端三端适配，支持iOS和Android'},
+        ]
+    },
+    'change-form':{title:'变更申请表',section:'SCOPE 范围管理',
+        rows:[
+            {id:'CR-001',name:'新增智能排课模块',priority:'高',status:'已确认',owner:'张明远',date:'2026-04-02',desc:'校方提出新增AI排课功能，已纳入二期范围，增补预算45万'},
+            {id:'CR-002',name:'接口对接范围扩展',priority:'中',status:'评审中',owner:'李雨桐',date:'2026-04-08',desc:'新增区级教育平台数据同步接口，涉及3个区县'},
+            {id:'CR-003',name:'硬件清单调整',priority:'中',status:'已确认',owner:'王梓轩',date:'2026-04-12',desc:'服务器配置由16核升至32核，存储扩容至50TB'},
+            {id:'CR-004',name:'培训范围扩大',priority:'低',status:'确认中',owner:'张明远',date:'2026-04-15',desc:'新增家长端操作培训300人次，增补预算8万'},
+        ]
+    },
+    'change-impact':{title:'变更影响评估',section:'SCOPE 范围管理',
+        rows:[
+            {id:'CI-001',name:'智能排课对进度影响',priority:'高',status:'已确认',owner:'张明远',date:'2026-04-05',desc:'新增排课模块预计延期12天，影响里程碑M4-M6'},
+            {id:'CI-002',name:'接口扩展对集成影响',priority:'中',status:'评审中',owner:'李雨桐',date:'2026-04-10',desc:'3个区县接口需额外联调8天，需协调区级IT部门'},
+            {id:'CI-003',name:'硬件升级对部署影响',priority:'中',status:'已确认',owner:'王梓轩',date:'2026-04-14',desc:'服务器采购周期约15天，不影响当前部署计划'},
+            {id:'CI-004',name:'培训扩大对资源影响',priority:'低',status:'确认中',owner:'张明远',date:'2026-04-18',desc:'需协调培训讲师2人，场地和教材需提前2周准备'},
+        ]
+    },
+    'scope-confirm':{title:'范围确认书',section:'SCOPE 范围管理',
+        rows:[
+            {id:'SC-001',name:'一期范围确认',priority:'高',status:'已确认',owner:'张明远',date:'2026-03-01',desc:'基础平台+教务+成绩+考试+一卡通，共5大模块，预算2180万'},
+            {id:'SC-002',name:'二期范围确认',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-05-15',desc:'排课+家校互通+数据中台，共3大模块，预算500万'},
+            {id:'SC-003',name:'三期范围预留',priority:'中',status:'确认中',owner:'王梓轩',date:'2026-08-01',desc:'AI分析+物联网+VR教学，待一期验收后启动评估'},
+        ]
+    },
+    'wbs':{title:'WBS工作分解',section:'SCOPE 范围管理',
+        rows:[
+            {id:'WBS-01',name:'1.1 需求调研与分析',priority:'高',status:'已确认',owner:'张明远',date:'2026-03-01',desc:'包含5所学校实地调研、需求文档编制、评审确认'},
+            {id:'WBS-02',name:'1.2 系统架构设计',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-03-15',desc:'微服务架构设计、数据库设计、接口规范制定'},
+            {id:'WBS-03',name:'2.1 统一认证模块开发',priority:'高',status:'已确认',owner:'张明远',date:'2026-04-01',desc:'LDAP/OAuth2.0对接、单点登录、权限管理'},
+            {id:'WBS-04',name:'2.2 教务管理模块开发',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-04-15',desc:'班级管理、学期设置、课程管理、成绩录入'},
+            {id:'WBS-05',name:'3.1 系统集成测试',priority:'中',status:'评审中',owner:'王梓轩',date:'2026-06-01',desc:'各模块联调测试、接口压力测试、安全测试'},
+        ]
+    },
+
+    // DEMAND 需求管理
+    'req-pool':{title:'需求池',section:'DEMAND 需求管理',
+        rows:[
+            {id:'RP-001',name:'AI智能排课',priority:'高',status:'已确认',owner:'张明远',date:'2026-03-10',desc:'基于约束求解算法自动生成课表，支持多维度优化'},
+            {id:'RP-002',name:'VR虚拟实验室',priority:'中',status:'评审中',owner:'李雨桐',date:'2026-03-15',desc:'化学/物理虚拟实验环境，支持沉浸式教学体验'},
+            {id:'RP-003',name:'智慧食堂系统',priority:'中',status:'确认中',owner:'王梓轩',date:'2026-03-20',desc:'人脸识别取餐、营养分析、在线充值、食堂评价'},
+            {id:'RP-004',name:'物联网设备管理',priority:'低',status:'待评审',owner:'张明远',date:'2026-04-01',desc:'统一管理校园IoT设备，含智能灯控、环境监测等'},
+            {id:'RP-005',name:'心理辅导平台',priority:'中',status:'已确认',owner:'李雨桐',date:'2026-04-05',desc:'在线心理咨询预约、测评量表、危机预警'},
+            {id:'RP-006',name:'校友管理系统',priority:'低',status:'待评审',owner:'王梓轩',date:'2026-04-12',desc:'校友信息库、活动管理、捐赠平台'},
+        ]
+    },
+    'req-review':{title:'需求评审记录',section:'DEMAND 需求管理',
+        rows:[
+            {id:'RR-001',name:'智能排课需求评审',priority:'高',status:'已确认',owner:'张明远',date:'2026-03-12',desc:'评审通过，确认纳入二期范围，需评估算法性能和约束条件'},
+            {id:'RR-002',name:'VR实验室需求评审',priority:'中',status:'评审中',owner:'李雨桐',date:'2026-03-18',desc:'需补充硬件选型方案和预算评估，暂定三期考虑'},
+            {id:'RR-003',name:'物联网设备管理评审',priority:'低',status:'已确认',owner:'王梓轩',date:'2026-04-08',desc:'评审通过，建议先做试点再推广，优先部署智慧灯控'},
+            {id:'RR-004',name:'心理辅导平台评审',priority:'中',status:'已确认',owner:'张明远',date:'2026-04-10',desc:'评审通过，确认对接市级心理健康平台标准'},
+        ]
+    },
+    'req-matrix':{title:'需求跟踪矩阵',section:'DEMAND 需求管理',
+        rows:[
+            {id:'RM-001',name:'REQ-001 统一身份认证',priority:'高',status:'已确认',owner:'张明远',date:'2026-03-05',desc:'来源:教育局文件 → 设计:已完成 → 开发:进行中 → 测试:待开始'},
+            {id:'RM-002',name:'REQ-002 基础教务管理',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-03-06',desc:'来源:校方调研 → 设计:已完成 → 开发:已完成 → 测试:进行中'},
+            {id:'RM-003',name:'REQ-003 成绩管理系统',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-03-08',desc:'来源:省考试院标准 → 设计:进行中 → 开发:待开始 → 测试:待开始'},
+            {id:'RM-004',name:'REQ-004 在线考试系统',priority:'中',status:'评审中',owner:'张明远',date:'2026-03-10',desc:'来源:校方调研 → 设计:待开始 → 开发:待开始 → 测试:待开始'},
+            {id:'RM-005',name:'REQ-005 校园一卡通',priority:'中',status:'确认中',owner:'李雨桐',date:'2026-03-12',desc:'来源:校方调研 → 设计:待确认 → 开发:待开始 → 测试:待开始'},
+        ]
+    },
+    'req-change':{title:'需求变更记录',section:'DEMAND 需求管理',
+        rows:[
+            {id:'RC-001',name:'认证方式变更',priority:'高',status:'已确认',owner:'张明远',date:'2026-03-20',desc:'从单一LDAP扩展为LDAP+微信扫码双因子认证'},
+            {id:'RC-002',name:'成绩报表格式变更',priority:'中',status:'已确认',owner:'李雨桐',date:'2026-04-02',desc:'新增省考试院标准成绩单模板，替换原有自定义格式'},
+            {id:'RC-003',name:'移动端UI调整',priority:'中',status:'确认中',owner:'王梓轩',date:'2026-04-15',desc:'家长端首页布局调整，新增快捷入口和消息中心'},
+        ]
+    },
+    'user-story':{title:'用户故事地图',section:'DEMAND 需求管理',
+        rows:[
+            {id:'US-001',name:'教师-快速录入成绩',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-03-08',desc:'作为任课教师，我希望通过Excel模板批量导入成绩，节省逐个录入时间'},
+            {id:'US-002',name:'家长-实时查看成绩',priority:'高',status:'已确认',owner:'张明远',date:'2026-03-10',desc:'作为家长，我希望在手机上查看孩子各科成绩和班级排名'},
+            {id:'US-003',name:'学生-在线参加考试',priority:'中',status:'评审中',owner:'王梓轩',date:'2026-03-15',desc:'作为学生，我希望通过浏览器完成在线考试，系统自动计时和提交'},
+            {id:'US-004',name:'管理员-批量导入数据',priority:'中',status:'已确认',owner:'李雨桐',date:'2026-03-20',desc:'作为系统管理员，我希望通过CSV批量导入师生基础数据'},
+        ]
+    },
+    'prototype':{title:'原型设计稿',section:'DEMAND 需求管理',
+        rows:[
+            {id:'PT-001',name:'教师端首页原型',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-03-05',desc:'Figma设计稿v2.3，包含快捷操作面板和待办事项列表'},
+            {id:'PT-002',name:'家长端成绩查看原型',priority:'高',status:'已确认',owner:'张明远',date:'2026-03-08',desc:'移动端原型，支持成绩趋势图和单科详细分析'},
+            {id:'PT-003',name:'管理后台原型',priority:'中',status:'评审中',owner:'王梓轩',date:'2026-03-12',desc:'Web端后台管理原型，包含数据仪表盘和系统配置'},
+        ]
+    },
+
+    // PROGRESS 进度管理
+    'milestone':{title:'里程碑管理',section:'PROGRESS 进度管理',
+        rows:[
+            {id:'MS-01',name:'M1 需求确认完成',priority:'高',status:'已确认',owner:'张明远',date:'2026-03-31',desc:'里程碑达成，所有需求文档已签确，范围确认书已归档'},
+            {id:'MS-02',name:'M2 架构设计评审通过',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-04-15',desc:'微服务架构方案通过专家组评审，技术选型确认'},
+            {id:'MS-03',name:'M3 核心模块开发完成',priority:'高',status:'评审中',owner:'李雨桐',date:'2026-05-31',desc:'教务+成绩+考试模块开发完成，进入联调阶段'},
+            {id:'MS-04',name:'M4 系统集成测试',priority:'高',status:'评审中',owner:'王梓轩',date:'2026-06-30',desc:'所有模块集成测试，性能测试，安全测试'},
+            {id:'MS-05',name:'M5 用户验收测试',priority:'中',status:'待评审',owner:'张明远',date:'2026-07-31',desc:'校方UAT验收，培训完成，试运行启动'},
+            {id:'MS-06',name:'M6 正式上线',priority:'高',status:'待评审',owner:'李雨桐',date:'2026-09-30',desc:'系统正式切换上线，旧系统并行运行1个月后下线'},
+        ]
+    },
+    'daily':{title:'日报汇总',section:'PROGRESS 进度管理',
+        rows:[
+            {id:'DR-089',name:'2026-06-20 日报',priority:'中',status:'已确认',owner:'张明远',date:'2026-06-20',desc:'完成教务模块联调，修复3个Bug，成绩模块接口对接完成80%'},
+            {id:'DR-088',name:'2026-06-19 日报',priority:'中',status:'已确认',owner:'李雨桐',date:'2026-06-19',desc:'考试模块题库导入完成，一卡通硬件到货验收，部署环境准备'},
+            {id:'DR-087',name:'2026-06-18 日报',priority:'中',status:'已确认',owner:'王梓轩',date:'2026-06-18',desc:'安全测试进行中，发现2个中危漏洞已修复，压力测试TPS达标'},
+            {id:'DR-086',name:'2026-06-17 日报',priority:'高',status:'已确认',owner:'张明远',date:'2026-06-17',desc:'紧急修复认证模块性能问题，优化数据库查询，TPS提升40%'},
+        ]
+    },
+    'delay':{title:'延期预警',section:'PROGRESS 进度管理',
+        rows:[
+            {id:'DL-001',name:'一卡通硬件采购延迟',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-06-15',desc:'供应商产能不足，预计延期7天到货，影响M3里程碑，已启动备选方案'},
+            {id:'DL-002',name:'第三方接口对接延迟',priority:'中',status:'评审中',owner:'李雨桐',date:'2026-06-18',desc:'省考试院接口文档版本更新，需重新适配，预计延期5天'},
+            {id:'DL-003',name:'培训场地协调延迟',priority:'低',status:'确认中',owner:'张明远',date:'2026-06-22',desc:'暑期学校场地紧张，培训计划可能推迟至8月中旬'},
+        ]
+    },
+
+    // QUALITY 质量管理
+    'test-plan':{title:'测试计划',section:'QUALITY 质量管理',
+        rows:[
+            {id:'TP-001',name:'单元测试计划',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-04-01',desc:'覆盖率目标≥80%，使用Jest框架，每个模块独立测试套件'},
+            {id:'TP-002',name:'集成测试计划',priority:'高',status:'已确认',owner:'张明远',date:'2026-05-01',desc:'模块间接口联调测试，覆盖所有API端点，使用Postman+Newman'},
+            {id:'TP-003',name:'性能测试计划',priority:'中',status:'评审中',owner:'王梓轩',date:'2026-06-01',desc:'并发5000用户，TPS≥1000，响应时间<2s，使用JMeter'},
+        ]
+    },
+    'bug-track':{title:'缺陷跟踪',section:'QUALITY 质量管理',
+        rows:[
+            {id:'BUG-047',name:'成绩导入Excel格式兼容',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-06-10',desc:'部分学校使用的WPS格式导入后乱码，需增加格式兼容处理'},
+            {id:'BUG-046',name:'移动端iOS闪退',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-06-12',desc:'iOS 17.5版本下家长端查看成绩详情时随机闪退，已定位内存泄漏'},
+            {id:'BUG-045',name:'并发考试提交超时',priority:'中',status:'评审中',owner:'张明远',date:'2026-06-15',desc:'500人同时提交试卷时出现超时，需优化提交队列和数据库锁'},
+            {id:'BUG-044',name:'权限缓存未及时刷新',priority:'中',status:'已确认',owner:'李雨桐',date:'2026-06-18',desc:'修改用户权限后需等待5分钟才生效，改为实时刷新'},
+        ]
+    },
+    'test-case':{title:'测试用例',section:'QUALITY 质量管理',
+        rows:[
+            {id:'TC-001',name:'登录认证-正常流程',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-04-05',desc:'验证LDAP账号密码登录、SSO单点登录、Token有效期'},
+            {id:'TC-002',name:'成绩录入-批量导入',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-04-08',desc:'验证Excel模板导入500条成绩数据，校验格式和异常处理'},
+            {id:'TC-003',name:'在线考试-并发提交',priority:'高',status:'评审中',owner:'张明远',date:'2026-05-15',desc:'模拟1000人同时在线考试并提交，验证系统稳定性'},
+        ]
+    },
+    'test-report':{title:'测试报告',section:'QUALITY 质量管理',
+        rows:[
+            {id:'TR-001',name:'第一轮集成测试报告',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-05-20',desc:'通过率92%，发现缺陷47个，其中高优3个已修复，中优18个修复中'},
+            {id:'TR-002',name:'性能测试报告',priority:'高',status:'已确认',owner:'张明远',date:'2026-06-10',desc:'5000并发测试通过，TPS达1200，平均响应时间1.8s，P99响应2.5s'},
+        ]
+    },
+    'code-review':{title:'代码审查记录',section:'QUALITY 质量管理',
+        rows:[
+            {id:'CRV-023',name:'认证模块代码审查',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-04-10',desc:'审查通过，代码规范符合要求，安全性检查无重大问题'},
+            {id:'CRV-022',name:'教务模块代码审查',priority:'中',status:'已确认',owner:'张明远',date:'2026-04-18',desc:'发现3处性能优化建议，已记录并安排优化'},
+            {id:'CRV-021',name:'成绩模块代码审查',priority:'中',status:'评审中',owner:'李雨桐',date:'2026-05-05',desc:'审查进行中，已标记2处SQL注入风险需修复'},
+        ]
+    },
+    'accept-criteria':{title:'验收标准',section:'QUALITY 质量管理',
+        rows:[
+            {id:'AC-001',name:'功能验收标准',priority:'高',status:'已确认',owner:'张明远',date:'2026-03-01',desc:'所有需求文档中的功能点100%实现并通过UAT测试'},
+            {id:'AC-002',name:'性能验收标准',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-03-01',desc:'并发5000用户，TPS≥1000，页面响应<2s，可用性≥99.9%'},
+        ]
+    },
+
+    // COST 成本管理
+    'budget':{title:'项目预算表',section:'COST 成本管理',
+        rows:[
+            {id:'BD-001',name:'软件开发费用',priority:'高',status:'已确认',owner:'张明远',date:'2026-03-01',desc:'¥1,580万，含需求分析、设计、开发、测试全周期'},
+            {id:'BD-002',name:'硬件采购费用',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-03-05',desc:'¥620万，含服务器、网络设备、一卡通硬件、终端设备'},
+            {id:'BD-003',name:'实施服务费用',priority:'中',status:'已确认',owner:'李雨桐',date:'2026-03-10',desc:'¥320万，含部署实施、数据迁移、培训服务'},
+            {id:'BD-004',name:'运维服务费用',priority:'中',status:'确认中',owner:'张明远',date:'2026-03-15',desc:'¥160万/年，含系统运维、技术支持、版本升级'},
+        ]
+    },
+    'expense':{title:'费用报销记录',section:'COST 成本管理',
+        rows:[
+            {id:'EX-028',name:'差旅费-深圳中学调研',priority:'中',status:'已确认',owner:'张明远',date:'2026-03-08',desc:'¥3,200，3人2天深圳中学实地调研，含交通住宿'},
+            {id:'EX-027',name:'服务器采购首付款',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-03-15',desc:'¥186万，DELL PowerEdge服务器×12台，含3年维保'},
+            {id:'EX-026',name:'培训场地租赁',priority:'中',status:'已确认',owner:'李雨桐',date:'2026-04-02',desc:'¥1.5万，市教育局培训中心3天场地租赁'},
+            {id:'EX-025',name:'软件授权采购',priority:'高',status:'已确认',owner:'张明远',date:'2026-04-10',desc:'¥28万，Oracle数据库企业版授权×4套'},
+        ]
+    },
+    'purchase':{title:'采购清单',section:'COST 成本管理',
+        rows:[
+            {id:'PO-012',name:'应用服务器',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-03-10',desc:'DELL R750xs 32核/128G/1.92T SSD×8台，单价¥12万'},
+            {id:'PO-011',name:'数据库服务器',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-03-10',desc:'DELL R750 32核/256G/3.84T SSD×4台，单价¥22.5万'},
+            {id:'PO-010',name:'一卡通终端设备',priority:'中',status:'评审中',owner:'李雨桐',date:'2026-03-20',desc:'食堂消费机×30、门禁控制器×50、考勤机×20，¥68万'},
+            {id:'PO-009',name:'网络交换机',priority:'中',status:'已确认',owner:'王梓轩',date:'2026-03-22',desc:'华为S6730-H48X6C×6台，单价¥3.5万'},
+        ]
+    },
+    'manhour':{title:'工时统计',section:'COST 成本管理',
+        rows:[
+            {id:'MH-004',name:'2026年4月工时',priority:'中',status:'已确认',owner:'张明远',date:'2026-05-01',desc:'开发组620h 测试组180h 产品组120h 管理组80h，合计1000h'},
+            {id:'MH-003',name:'2026年5月工时',priority:'中',status:'已确认',owner:'李雨桐',date:'2026-06-01',desc:'开发组580h 测试组220h 产品组100h 管理组80h，合计980h'},
+            {id:'MH-002',name:'2026年6月工时',priority:'中',status:'评审中',owner:'王梓轩',date:'2026-07-01',desc:'开发组480h 测试组260h 产品组90h 管理组80h，合计910h'},
+        ]
+    },
+    'contract-pay':{title:'合同付款节点',section:'COST 成本管理',
+        rows:[
+            {id:'CP-001',name:'合同签订首付款',priority:'高',status:'已确认',owner:'张明远',date:'2026-03-01',desc:'30% ¥804万，合同签订后10个工作日内支付'},
+            {id:'CP-002',name:'需求确认里程碑款',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-04-01',desc:'20% ¥536万，需求文档签确后支付'},
+            {id:'CP-003',name:'系统上线验收款',priority:'高',status:'评审中',owner:'张明远',date:'2026-09-30',desc:'40% ¥1072万，系统正式上线并通过验收后支付'},
+            {id:'CP-004',name:'质保期满尾款',priority:'中',status:'待评审',owner:'王梓轩',date:'2027-09-30',desc:'10% ¥268万，1年质保期满后支付'},
+        ]
+    },
+
+    // COMMUNICATION 沟通管理
+    'meeting':{title:'会议纪要',section:'COMMUNICATION 沟通管理',
+        rows:[
+            {id:'MT-022',name:'第22次周例会',priority:'中',status:'已确认',owner:'张明远',date:'2026-06-19',desc:'讨论了教务模块联调进展、一卡通硬件到货情况、下周工作计划'},
+            {id:'MT-021',name:'需求变更评审会',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-06-15',desc:'评审智能排课模块新增需求，确认纳入二期，调整里程碑'},
+            {id:'MT-020',name:'技术方案评审会',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-06-10',desc:'评审微服务拆分方案和数据迁移策略，通过技术方案'},
+        ]
+    },
+    'contacts':{title:'干系人通讯录',section:'COMMUNICATION 沟通管理',
+        rows:[
+            {id:'CT-008',name:'张局长-甲方负责人',priority:'高',status:'已确认',owner:'张明远',date:'2026-03-01',desc:'深圳市教育局副局长，项目发起人，138xxxx8888'},
+            {id:'CT-007',name:'王主任-信息中心',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-03-01',desc:'市教育局信息中心主任，技术对接人，139xxxx7777'},
+            {id:'CT-006',name:'刘老师-教师代表',priority:'中',status:'已确认',owner:'王梓轩',date:'2026-03-05',desc:'深圳中学信息教师，需求调研对接人，136xxxx6666'},
+        ]
+    },
+    'notice':{title:'通知公告',section:'COMMUNICATION 沟通管理',
+        rows:[
+            {id:'NT-005',name:'系统维护通知',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-06-20',desc:'6月25日22:00-次日2:00进行数据库升级维护，期间系统暂停服务'},
+            {id:'NT-004',name:'培训安排通知',priority:'中',status:'已确认',owner:'李雨桐',date:'2026-06-15',desc:'7月1日-3日于市教育局培训中心举行管理员培训，请相关人员准时参加'},
+        ]
+    },
+    'weekly':{title:'周例会记录',section:'COMMUNICATION 沟通管理',
+        rows:[
+            {id:'WK-016',name:'第16周例会',priority:'中',status:'已确认',owner:'张明远',date:'2026-06-12',desc:'本周完成教务模块90%，下周进入联调；一卡通硬件预计6/18到货'},
+            {id:'WK-015',name:'第15周例会',priority:'中',status:'已确认',owner:'李雨桐',date:'2026-06-05',desc:'考试模块开发完成，进入测试阶段；发现3个中危Bug已修复'},
+        ]
+    },
+    'client-comm':{title:'客户沟通记录',section:'COMMUNICATION 沟通管理',
+        rows:[
+            {id:'CC-014',name:'校方需求反馈-6月',priority:'高',status:'已确认',owner:'张明远',date:'2026-06-08',desc:'校方反馈：希望增加成绩分析报表的导出格式，支持PDF和Excel'},
+            {id:'CC-013',name:'教育局接口规范确认',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-06-01',desc:'确认对接教育局数据上报接口规范v2.3，需更新适配代码'},
+        ]
+    },
+    'internal-review':{title:'内部评审记录',section:'COMMUNICATION 沟通管理',
+        rows:[
+            {id:'IR-009',name:'架构设计内部评审',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-04-10',desc:'微服务架构方案内部评审通过，确认技术选型和部署方案'},
+            {id:'IR-008',name:'安全方案内部评审',priority:'高',status:'已确认',owner:'张明远',date:'2026-04-20',desc:'安全架构评审通过，确认等保三级标准，补充数据加密方案'},
+        ]
+    },
+
+    // RISK 风险管理
+    'risk-register':{title:'风险登记册',section:'RISK 风险管理',
+        rows:[
+            {id:'RK-009',name:'硬件供应链风险',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-03-10',desc:'服务器采购受国际芯片供应影响，预计到货周期延长，已预留15天缓冲'},
+            {id:'RK-008',name:'人员流失风险',priority:'中',status:'评审中',owner:'张明远',date:'2026-04-01',desc:'核心开发人员有被竞品挖角风险，已启动人才储备计划'},
+            {id:'RK-007',name:'需求蔓延风险',priority:'中',status:'已确认',owner:'李雨桐',date:'2026-04-15',desc:'校方持续提出新增需求，需严格控制变更流程，避免范围蔓延'},
+            {id:'RK-006',name:'数据安全风险',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-05-01',desc:'涉及学生隐私数据，需确保等保三级合规，已安排第三方安全审计'},
+        ]
+    },
+    'issue-track':{title:'问题跟踪表',section:'RISK 风险管理',
+        rows:[
+            {id:'IS-014',name:'数据库性能瓶颈',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-06-05',desc:'高峰期数据库CPU使用率超90%，已扩容至32核并优化慢查询'},
+            {id:'IS-013',name:'接口对接文档不一致',priority:'中',status:'已确认',owner:'李雨桐',date:'2026-06-10',desc:'省考试院接口文档与实际返回格式不一致，需协调对方更新'},
+            {id:'IS-012',name:'培训讲师资源不足',priority:'中',status:'评审中',owner:'张明远',date:'2026-06-15',desc:'原定3名培训讲师中1名离职，需紧急招聘或外部聘请'},
+        ]
+    },
+    'emergency':{title:'应急预案',section:'RISK 风险管理',
+        rows:[
+            {id:'EP-003',name:'数据库故障应急预案',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-04-01',desc:'主备切换自动故障转移，RPO<5分钟，RTO<15分钟，每季度演练一次'},
+            {id:'EP-002',name:'网络攻击应急预案',priority:'高',status:'已确认',owner:'张明远',date:'2026-04-10',desc:'DDoS防护+WAF，攻击时自动切换高防IP，通知安全团队15分钟内响应'},
+            {id:'EP-001',name:'数据泄露应急预案',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-04-15',desc:'发现泄露2小时内启动应急响应，通知甲方和监管机构，启动溯源'},
+        ]
+    },
+    'risk-action':{title:'风险应对措施',section:'RISK 风险管理',
+        rows:[
+            {id:'RA-006',name:'硬件风险应对',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-03-15',desc:'与供应商签订SLA协议，逾期罚款；已联系2家备选供应商'},
+            {id:'RA-005',name:'人员风险应对',priority:'中',status:'已确认',owner:'张明远',date:'2026-04-05',desc:'关键岗位AB角制度，每模块至少2人掌握；提供竞争力薪酬和成长空间'},
+            {id:'RA-004',name:'需求蔓延应对',priority:'中',status:'已确认',owner:'李雨桐',date:'2026-04-20',desc:'严格执行变更管理流程，新增需求需走CCB评审，评估影响后方可纳入'},
+        ]
+    },
+    'dep-matrix':{title:'依赖关系矩阵',section:'RISK 风险管理',
+        rows:[
+            {id:'DM-002',name:'模块间依赖关系',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-04-01',desc:'认证→教务→成绩→考试，顺序依赖；一卡通独立，可并行开发'},
+            {id:'DM-001',name:'外部系统依赖',priority:'高',status:'已确认',owner:'张明远',date:'2026-04-01',desc:'依赖市教育局统一认证平台和省考试院数据接口，需对方配合联调'},
+        ]
+    },
+
+    // DOCS 文档管理
+    'tech-plan':{title:'技术方案',section:'DOCS 文档管理',
+        rows:[
+            {id:'TP-006',name:'微服务架构设计文档',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-03-20',desc:'v2.1版本，含服务拆分、通信协议、部署拓扑，共86页'},
+            {id:'TP-005',name:'数据库设计文档',priority:'高',status:'已确认',owner:'张明远',date:'2026-03-25',desc:'ER图+表结构设计，含索引策略和分区方案，共52页'},
+            {id:'TP-004',name:'接口规范文档',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-04-01',desc:'RESTful API规范，含认证、教务、成绩等模块共120+接口定义'},
+            {id:'TP-003',name:'安全架构方案',priority:'中',status:'已确认',owner:'王梓轩',date:'2026-04-10',desc:'等保三级方案，含网络安全、数据加密、审计日志设计'},
+        ]
+    },
+    'deploy-manual':{title:'部署手册',section:'DOCS 文档管理',
+        rows:[
+            {id:'DP-003',name:'生产环境部署手册',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-05-10',desc:'含K8s集群部署、数据库主备配置、负载均衡、监控告警配置'},
+            {id:'DP-002',name:'灾备环境部署手册',priority:'高',status:'评审中',owner:'张明远',date:'2026-05-20',desc:'同城灾备方案，RPO<5分钟，含切换演练流程'},
+            {id:'DP-001',name:'开发测试环境部署手册',priority:'中',status:'已确认',owner:'李雨桐',date:'2026-04-01',desc:'Docker Compose一键部署方案，含Mock数据和测试用例'},
+        ]
+    },
+    'user-manual':{title:'用户操作手册',section:'DOCS 文档管理',
+        rows:[
+            {id:'UM-004',name:'教师端操作手册',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-06-01',desc:'含成绩录入、考试管理、班级管理等模块操作指南，共45页'},
+            {id:'UM-003',name:'家长端操作手册',priority:'高',status:'评审中',owner:'张明远',date:'2026-06-10',desc:'含成绩查看、消息通知、在线缴费等移动端操作指南，共28页'},
+            {id:'UM-002',name:'管理员操作手册',priority:'中',status:'已确认',owner:'王梓轩',date:'2026-05-20',desc:'含系统配置、用户管理、数据维护等后台操作指南，共62页'},
+        ]
+    },
+    'training':{title:'培训材料',section:'DOCS 文档管理',
+        rows:[
+            {id:'TR-012',name:'教师培训PPT',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-06-15',desc:'含系统概述、成绩管理、考试管理3大模块培训课件，共120页'},
+            {id:'TR-011',name:'管理员培训视频',priority:'中',status:'已确认',owner:'张明远',date:'2026-06-20',desc:'系统后台管理操作录屏教程，共12集，每集15-20分钟'},
+            {id:'TR-010',name:'快速入门指南',priority:'中',status:'已确认',owner:'王梓轩',date:'2026-06-22',desc:'一页纸快速入门卡片，含常用功能入口和快捷键'},
+        ]
+    },
+    'accept-doc':{title:'验收交付文档',section:'DOCS 文档管理',
+        rows:[
+            {id:'AD-015',name:'系统验收报告',priority:'高',status:'评审中',owner:'张明远',date:'2026-08-15',desc:'含功能验收清单、性能测试报告、安全审计报告'},
+            {id:'AD-014',name:'源代码交付包',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-08-20',desc:'含全部源代码、构建脚本、环境配置、第三方依赖清单'},
+            {id:'AD-013',name:'运维交接清单',priority:'中',status:'已确认',owner:'李雨桐',date:'2026-08-25',desc:'含服务器清单、网络拓扑、账号密码、监控配置、应急预案'},
+        ]
+    },
+    'ops-doc':{title:'运维交接文档',section:'DOCS 文档管理',
+        rows:[
+            {id:'OD-008',name:'日常运维SOP',priority:'高',status:'已确认',owner:'王梓轩',date:'2026-08-01',desc:'含日常巡检、备份恢复、日志清理、监控告警处理标准流程'},
+            {id:'OD-007',name:'故障处理手册',priority:'高',status:'已确认',owner:'张明远',date:'2026-08-10',desc:'常见故障分类及处理方案，含数据库、网络、应用3大类共20+场景'},
+            {id:'OD-006',name:'系统架构文档',priority:'中',status:'已确认',owner:'李雨桐',date:'2026-08-15',desc:'含部署架构图、网络拓扑、服务依赖关系，便于运维团队快速上手'},
+        ]
+    },
+    'release-note':{title:'版本发布说明',section:'DOCS 文档管理',
+        rows:[
+            {id:'RN-006',name:'v1.2.0 版本发布',priority:'中',status:'已确认',owner:'王梓轩',date:'2026-06-15',desc:'新增成绩报表导出、修复Excel导入兼容问题、性能优化'},
+            {id:'RN-005',name:'v1.1.0 版本发布',priority:'中',status:'已确认',owner:'张明远',date:'2026-05-20',desc:'新增在线考试模块、优化移动端加载速度、修复SSO登录问题'},
+            {id:'RN-004',name:'v1.0.0 版本发布',priority:'高',status:'已确认',owner:'李雨桐',date:'2026-04-30',desc:'首个正式版本，含认证、教务、成绩三大核心模块'},
+        ]
+    },
+};
+function showSubContent(key,label){
+    const area=document.getElementById('subContentArea');
+    const d=subContentData[key];
+    if(!d){alert('内容建设中: '+label);return}
+    const total=d.rows.length;
+    const confirmed=d.rows.filter(r=>r.status==='已确认').length;
+    const highCount=d.rows.filter(r=>r.priority==='高').length;
+    const rowsHtml=d.rows.map(r=>{
+        const pc=r.priority==='高'?'high':(r.priority==='中'?'medium':'low');
+        const sc=r.status==='已确认'?'done':(r.status==='评审中'?'active':'pending');
+        const sl=r.status==='已确认'?'已完成':(r.status==='评审中'?'进行中':'待开始');
+        return`<tr><td style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">${r.id}</td><td style="font-weight:600">${r.name}</td><td><span class="sc-priority ${pc}">${r.priority}</span></td><td><span class="te-status ${sc}">${sl}</span></td><td>${r.owner}</td><td style="font-family:var(--font-mono);font-size:11px">${r.date}</td><td>${r.desc}</td></tr>`;
+    }).join('');
+    area.innerHTML=`
+        <div class="sc-hero">
+            <div class="sc-hero-top">
+                <button class="sc-back-btn" onclick="closeSubContent()">← 返回项目主页</button>
+                <span class="sc-hero-label">${d.section}</span>
+            </div>
+            <h2>${label}</h2>
+            <div class="sc-hero-sub">项目需求登记与跟踪管理</div>
+            <div class="sc-stats">
+                <div class="sc-stat-card"><span class="sc-stat-val">${total}</span><span class="sc-stat-lbl">需求总数</span></div>
+                <div class="sc-stat-card"><span class="sc-stat-val green">${confirmed}</span><span class="sc-stat-lbl">已确认</span></div>
+                <div class="sc-stat-card"><span class="sc-stat-val accent">${highCount}</span><span class="sc-stat-lbl">高优先级</span></div>
+                <div class="sc-stat-card"><span class="sc-stat-val">${total-confirmed}</span><span class="sc-stat-lbl">待处理</span></div>
+            </div>
+        </div>
+        <div class="sc-table-wrap">
+            <div class="sc-table-title">需求明细列表</div>
+            <table class="sub-content-table"><thead><tr><th>编号</th><th>需求名称</th><th>优先级</th><th>状态</th><th>负责人</th><th>日期</th><th>需求描述</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+        </div>`;
+    area.style.display='block';
+    document.querySelectorAll('.hero,.product-section,.timeline-section,.section-head,.phase-section,.pd-section').forEach(el=>el.style.display='none');
+    area.scrollIntoView({behavior:'smooth'});
+}
+function closeSubContent(){
+    const area=document.getElementById('subContentArea');
+    area.style.display='none';
+    area.innerHTML='';
+    document.querySelectorAll('.hero,.product-section,.timeline-section,.section-head,.phase-section,.pd-section').forEach(el=>el.style.display='');
+}
+
+// ── Nav Drawer ──
+const navDrawer=document.getElementById('navDrawer');
+const navOverlay=document.getElementById('navOverlay');
+const btnNav=document.getElementById('btnNav');
+const navL2=document.getElementById('navDrawerL2');
+
+function toggleNavDrawer(){
+    const show=!navDrawer.classList.contains('show');
+    navDrawer.classList.toggle('show');
+    navOverlay.classList.toggle('show');
+    btnNav.classList.toggle('active');
+    // Populate default L2 on open
+    if(show&&!navL2.children.length){
+        const d=panelData.scope;
+        navL2.innerHTML=`<div class="nav-drawer-l2-header">${d.title}</div>${d.items.map(it=>{const tag=it.link?'a':'div';const href=it.link?`href="${it.link}"`:'';const dk=it.key?`data-key="${it.key}" data-label="${it.label}"`:'';return`<${tag} class="nav-drawer-sub ${it.active?'active':''}" ${href} ${dk} style="cursor:pointer"><span class="ns-dot"></span>${it.label}<span class="ns-badge">${it.count}</span></${tag}>`}).join('')}`;
+    }
+}
+
+// Nav drawer L1 item hover — same feel as left strip
+document.querySelectorAll('.nav-drawer-item').forEach(item=>{
+    item.addEventListener('mouseenter',e=>{
+        const pk=item.dataset.panel;
+        document.querySelectorAll('.nav-drawer-item').forEach(el=>el.classList.remove('active'));
+        item.classList.add('active');
+        const d=panelData[pk];
+        navL2.innerHTML=`<div class="nav-drawer-l2-header">${d.title}</div>${d.items.map(it=>{const tag=it.link?'a':'div';const href=it.link?`href="${it.link}"`:'';const dk=it.key?`data-key="${it.key}" data-label="${it.label}"`:'';return`<${tag} class="nav-drawer-sub ${it.active?'active':''}" ${href} ${dk} style="cursor:pointer"><span class="ns-dot"></span>${it.label}<span class="ns-badge">${it.count}</span></${tag}>`}).join('')}`;
+        // Also trigger left strip
+        document.querySelectorAll('.strip-item').forEach(el=>el.classList.remove('active'));
+        const stripItem=document.querySelector(`.strip-item[data-panel="${pk}"]`);
+        if(stripItem){stripItem.classList.add('active');stripItem.dispatchEvent(new Event('mouseenter'));}
+    });
+});
+
+// Nav drawer L2 sub-item clicks (event delegation)
+navL2.addEventListener('click',function(e){
+    const sub=e.target.closest('[data-key]');
+    if(sub){
+        const key=sub.dataset.key;
+        const label=sub.dataset.label;
+        showSubContent(key,label);
+        navDrawer.classList.remove('show');
+        navOverlay.classList.remove('show');
+        btnNav.classList.remove('active');
+    }
+});
+
+// ── Search (placeholder) ──
+function toggleSearch(){
+    alert('搜索功能 — 待实现');
+}
+
+// ── AI Dialog ──
+function toggleAIDialog(){
+    const d=document.getElementById('aiDialog');
+    const o=document.getElementById('aiOverlay');
+    const btn=document.getElementById('btnAI');
+    const show=!d.classList.contains('show');
+    d.classList.toggle('show');
+    o.classList.toggle('show');
+    btn.classList.toggle('active');
+    if(show)document.getElementById('aiInput').focus();
+}
+function sendAI(){
+    const input=document.getElementById('aiInput');
+    const body=document.getElementById('aiBody');
+    const q=input.value.trim();
+    if(!q)return;
+    body.innerHTML+=`<div class="ai-msg" style="background:var(--surface);border-left-color:var(--blue)">👤 ${q}</div>`;
+    input.value='';
+    const replies=[
+        '根据当前项目数据，总体进度 71%，已完成 4 个阶段。建议重点关注「质量管理」和「风险管理」领域，其中缺陷跟踪仍有 47 项待处理。',
+        '项目剩余 120 天，按当前节奏预计可如期交付。深圳市教育局和南山区教育局两客户实施进度略有差异，建议每周对齐一次。',
+        '已部署 15 项产品中，核心教务系统运行稳定。智慧教育课堂教学分析系统尚在部分部署阶段，预计下月完成全量上线。',
+        '最近一周新增 3 项变更申请，均在范围管理流程中。建议尽快完成变更影响评估。',
+        '好的，我帮你梳理一下：目前 32 项任务中已完成 17 项，进行中 9 项，待开始 6 项。本周重点推进测试用例执行和用户培训材料准备。',
+    ];
+    const r=replies[Math.floor(Math.random()*replies.length)];
+    body.innerHTML+=`<div class="ai-msg">🤖 ${r}</div>`;
+    body.scrollTop=body.scrollHeight;
+}
+
+// ── Phase Stepper ──
+function switchPhase(idx){
+    const nodes=document.querySelectorAll('.stepper-node');
+    nodes.forEach((n,i)=>{
+        n.classList.remove('done','active');
+        if(i<idx)n.classList.add('done');
+        if(i===idx)n.classList.add('active');
+    });
+    const details=document.querySelectorAll('.phase-detail');
+    details.forEach(d=>d.classList.remove('active'));
+    const target=document.getElementById('phase'+idx);
+    if(target)target.classList.add('active');
+}
+function toggleTheme(){
+    const root=document.documentElement;
+    const isDark=root.classList.toggle('dark');
+    document.getElementById('themeBtn').textContent=isDark?'☾':'☀';
+    localStorage.setItem('theme',isDark?'dark':'light');
+}
+(function(){
+    if(localStorage.getItem('theme')==='dark'){document.documentElement.classList.add('dark');document.getElementById('themeBtn').textContent='☾';}
+})();
+
+// ── Task Detail Data ──
+const taskData={
+    p0t0:{name:'项目立项',rows:[
+        {desc:'编制项目立项申请报告',input:'项目意向书',output:'立项申请报告',role:'项目经理 / 张明远',status:'done',label:'DONE'},
+        {desc:'提交公司内部审批流程',input:'立项申请报告',output:'立项批文',role:'项目经理 / 张明远',status:'done',label:'DONE'},
+        {desc:'项目编号注册与备案',input:'立项批文',output:'项目编号 SCP-2026-0012',role:'PMO / 王丽',status:'done',label:'DONE'},
+    ]},p0t1:{name:'组建项目团队',rows:[
+        {desc:'确定项目经理与核心成员人选',input:'项目需求分析',output:'团队成员名单',role:'部门总监 / 周总',status:'done',label:'DONE'},
+        {desc:'召开项目团队成立会议',input:'团队成员名单',output:'团队分工表',role:'项目经理 / 张明远',status:'done',label:'DONE'},
+    ]},p0t2:{name:'项目管理制度建设',rows:[
+        {desc:'制定项目沟通管理计划',input:'项目章程',output:'沟通计划',role:'项目经理 / 张明远',status:'done',label:'DONE'},
+        {desc:'建立项目文档管理规范',input:'公司文档模板',output:'文档管理规范',role:'产品经理 / 李雨桐',status:'done',label:'DONE'},
+        {desc:'制定项目风险管理预案',input:'项目计划',output:'风险管理预案',role:'项目经理 / 张明远',status:'done',label:'DONE'},
+    ]},p1t0:{name:'现场调研',rows:[
+        {desc:'走访教务处、学生处等科室',input:'访谈提纲',output:'科室访谈记录',role:'产品经理 / 陈思涵',status:'done',label:'DONE'},
+        {desc:'实地查看机房、网络环境',input:'机房勘察表',output:'机房现状报告',role:'运维工程师 / 赵子涵',status:'done',label:'DONE'},
+        {desc:'收集信息化现状数据',input:'数据采集模板',output:'信息化现状数据表',role:'产品经理 / 陈思涵',status:'done',label:'DONE'},
+    ]},p1t1:{name:'需求分析',rows:[
+        {desc:'整理调研数据，梳理业务痛点',input:'调研报告',output:'需求清单 v1.0',role:'产品经理 / 李雨桐',status:'done',label:'DONE'},
+        {desc:'编写需求规格说明书初稿',input:'需求清单、校方确认函',output:'需求规格说明书 v1.0',role:'产品经理 / 李雨桐',status:'done',label:'DONE'},
+    ]},p1t2:{name:'方案评审',rows:[
+        {desc:'编制技术选型方案',input:'需求说明书',output:'技术选型方案',role:'架构师 / 张明远',status:'done',label:'DONE'},
+        {desc:'组织技术方案评审会',input:'技术选型方案',output:'评审会议纪要',role:'架构师 / 张明远',status:'done',label:'DONE'},
+        {desc:'输出技术方案终稿',input:'评审意见',output:'技术方案终稿',role:'架构师 / 张明远',status:'done',label:'DONE'},
+    ]},p1t3:{name:'合同签订',rows:[
+        {desc:'编制项目报价单',input:'技术方案终稿',output:'项目报价单',role:'项目经理 / 张明远',status:'done',label:'DONE'},
+        {desc:'与校方商务谈判',input:'报价单',output:'商务条款确认书',role:'项目经理 / 张明远',status:'done',label:'DONE'},
+        {desc:'签署正式合同',input:'商务条款确认书',output:'正式合同',role:'项目经理 / 张明远',status:'done',label:'DONE'},
+    ]},p2t0:{name:'硬件上架',rows:[
+        {desc:'确认服务器采购清单',input:'技术方案',output:'采购清单',role:'运维工程师 / 赵子涵',status:'done',label:'DONE'},
+        {desc:'服务器到货验收与上架',input:'采购清单',output:'上架确认单',role:'运维工程师 / 赵子涵',status:'done',label:'DONE'},
+        {desc:'机房布线及电源接入',input:'机房平面图',output:'布线竣工图',role:'运维工程师 / 赵子涵',status:'done',label:'DONE'},
+    ]},p2t1:{name:'网络部署',rows:[
+        {desc:'规划校园网VLAN划分',input:'网络拓扑图',output:'VLAN规划表',role:'网络工程师 / 赵子涵',status:'done',label:'DONE'},
+        {desc:'配置核心交换机与防火墙',input:'VLAN规划表',output:'网络配置文档',role:'网络工程师 / 赵子涵',status:'done',label:'DONE'},
+    ]},p2t2:{name:'平台安装',rows:[
+        {desc:'部署统一认证平台',input:'部署手册',output:'认证平台部署确认',role:'开发工程师 / 王梓轩',status:'done',label:'DONE'},
+        {desc:'部署数据中台基础服务',input:'部署手册',output:'数据中台部署确认',role:'开发工程师 / 王梓轩',status:'done',label:'DONE'},
+        {desc:'基础平台集成联调',input:'部署确认报告',output:'联调测试报告',role:'开发工程师 / 王梓轩',status:'done',label:'DONE'},
+    ]},p2t3:{name:'接口联调',rows:[
+        {desc:'与教育局学籍系统接口对接',input:'接口文档',output:'学籍接口联调报告',role:'开发工程师 / 张明远',status:'done',label:'DONE'},
+        {desc:'与人事系统接口对接',input:'接口文档',output:'人事接口联调报告',role:'开发工程师 / 张明远',status:'done',label:'DONE'},
+    ]},p3t0:{name:'学籍管理',rows:[
+        {desc:'学生入学、转班功能开发',input:'需求说明书、UI设计稿',output:'学籍管理模块 v1.0',role:'开发工程师 / 王梓轩',status:'done',label:'DONE'},
+        {desc:'毕业管理功能开发',input:'需求说明书',output:'毕业管理子模块',role:'开发工程师 / 王梓轩',status:'done',label:'DONE'},
+        {desc:'学籍管理模块单元测试',input:'测试用例',output:'测试报告',role:'测试工程师 / 刘思远',status:'done',label:'DONE'},
+    ]},p3t1:{name:'教务排课',rows:[
+        {desc:'排课算法设计与编码',input:'排课算法文档',output:'排课引擎 v1.0',role:'开发工程师 / 陈思涵',status:'done',label:'DONE'},
+        {desc:'约束条件配置界面开发',input:'教师课表需求',output:'配置管理界面',role:'开发工程师 / 陈思涵',status:'done',label:'DONE'},
+    ]},p3t2:{name:'成绩管理',rows:[
+        {desc:'成绩录入功能开发',input:'成绩管理需求、数据模型',output:'成绩录入模块',role:'开发工程师 / 王梓轩',status:'done',label:'DONE'},
+        {desc:'统计分析功能开发',input:'数据模型',output:'统计分析模块',role:'开发工程师 / 王梓轩',status:'done',label:'DONE'},
+        {desc:'成绩报告生成功能',input:'报告模板',output:'报告生成模块',role:'开发工程师 / 王梓轩',status:'done',label:'DONE'},
+    ]},p3t3:{name:'选课系统',rows:[
+        {desc:'选课核心流程开发',input:'选课规则文档',output:'选课系统 v1.0',role:'开发工程师 / 赵子涵',status:'done',label:'DONE'},
+        {desc:'高并发压力测试',input:'测试脚本',output:'压测报告',role:'测试工程师 / 刘思远',status:'done',label:'DONE'},
+    ]},p4t0:{name:'管理员培训',rows:[
+        {desc:'培训信息中心管理员系统后台操作',input:'管理员手册、培训PPT',output:'培训签到表',role:'培训讲师 / 陈思涵',status:'done',label:'DONE'},
+        {desc:'管理员实操考核',input:'考核题库',output:'考核成绩单',role:'培训讲师 / 陈思涵',status:'done',label:'DONE'},
+    ]},p4t1:{name:'教师培训',rows:[
+        {desc:'语数外学科教师操作培训',input:'教师操作手册',output:'培训反馈表',role:'培训讲师 / 陈思涵',status:'done',label:'DONE'},
+        {desc:'理综文综学科教师操作培训',input:'教师操作手册',output:'培训反馈表',role:'培训讲师 / 陈思涵',status:'done',label:'DONE'},
+    ]},p4t2:{name:'学生家长培训',rows:[
+        {desc:'录制使用指南视频',input:'使用指南脚本',output:'培训视频',role:'产品经理 / 李雨桐',status:'active',label:'ACTIVE'},
+        {desc:'发布FAQ文档并组织在线答疑',input:'FAQ文档',output:'答疑记录',role:'产品经理 / 李雨桐',status:'active',label:'ACTIVE'},
+    ]},p4t3:{name:'试运行优化',rows:[
+        {desc:'收集试运行期间反馈意见',input:'反馈收集表',output:'反馈分类清单',role:'产品经理 / 李雨桐',status:'active',label:'ACTIVE'},
+        {desc:'修复系统缺陷与性能优化',input:'Bug清单',output:'优化迭代版本',role:'开发团队',status:'active',label:'ACTIVE'},
+        {desc:'用户体验优化调整',input:'用户反馈',output:'UX优化方案',role:'开发团队',status:'active',label:'ACTIVE'},
+    ]},p6t0:{name:'文档整理',rows:[
+        {desc:'汇总各阶段输出文档',input:'各阶段文档',output:'文档清单',role:'产品经理 / 李雨桐',status:'pending',label:'待开始'},
+        {desc:'编制验收文档包(15份)',input:'文档清单',output:'验收文档包',role:'产品经理 / 李雨桐',status:'pending',label:'待开始'},
+    ]},p6t1:{name:'验收评审',rows:[
+        {desc:'准备演示环境',input:'验收文档包',output:'演示环境',role:'开发工程师 / 王梓轩',status:'pending',label:'待开始'},
+        {desc:'组织验收评审会',input:'演示环境、验收文档',output:'评审意见',role:'项目经理 / 张明远',status:'pending',label:'待开始'},
+        {desc:'签署验收报告',input:'评审意见',output:'验收报告',role:'项目经理 / 张明远',status:'pending',label:'待开始'},
+    ]},p6t2:{name:'正式交付',rows:[
+        {desc:'移交系统权限与运维手册',input:'验收报告、运维手册',output:'权限移交确认书',role:'项目经理 / 张明远',status:'pending',label:'待开始'},
+        {desc:'签署交付确认书',input:'权限移交确认书',output:'交付确认书',role:'项目经理 / 张明远',status:'pending',label:'待开始'},
+    ]},
+};
+
+// ── Default visible fields config per task ──
+const visibleFields={desc:true,input:true,output:true,role:true,stepCount:true};
+var taskViewMode='v27'; // 'v27' card view | 'v28' table view
+
+function showTaskDetail(taskId,event){
+    event.stopPropagation();
+    const d=taskData[taskId];if(!d)return;
+    const phaseId='task-p'+taskId.charAt(1);
+    const panel=document.getElementById(phaseId);if(!panel)return;
+    if(!event._force&&panel.classList.contains('show')&&panel.dataset.current===taskId){panel.classList.remove('show');panel.dataset.current='';return}
+
+    const totalSteps=d.rows.length;
+    const doneSteps=d.rows.filter(r=>r.status==='done').length;
+    const activeSteps=d.rows.filter(r=>r.status==='active').length;
+    const progress=totalSteps>0?Math.round(doneSteps/totalSteps*100):0;
+    const statusClass=d.rows.some(r=>r.status==='active')?'active':(doneSteps===totalSteps?'done':'pending');
+    const statusLabel=statusClass==='done'?'已完成':(statusClass==='active'?'进行中':'待开始');
+
+    const buildFields=()=>{
+        let html='';
+        if(visibleFields.stepCount)html+=`<div class="td-field-card"><span class="td-fc-label">步骤总数</span><span class="td-fc-value big">${totalSteps}</span></div>`;
+        if(visibleFields.stepCount)html+=`<div class="td-field-card"><span class="td-fc-label">进度</span><span class="td-fc-value big accent">${progress}%</span></div>`;
+        if(visibleFields.role)html+=`<div class="td-field-card"><span class="td-fc-label">执行角色</span><span class="td-fc-value">${[...new Set(d.rows.map(r=>r.role))].filter(Boolean).join(' · ')}</span></div>`;
+        return html;
+    };
+
+    const rowsHtml=d.rows.map((r,i)=>`<tr><td>${i+1}</td><td class="td-desc-cell" title="${(r.desc||'').replace(/"/g,'&quot;')}">${r.desc||'—'}</td><td>${r.input||'—'}</td><td>${r.output||'—'}</td><td>${r.role||'—'}</td><td><span class="te-status ${r.status}">${r.label}</span></td></tr>`).join('');
+
+    const descBlock=`<div class="td-desc-block"><span class="td-fc-label">任务概述</span><span class="td-fc-value">${d.rows.map(r=>r.desc).filter(Boolean).join('；')}</span></div>`;
+
+    const rowsV28=d.rows.map((r,i)=>{
+        const truncate=(s,max=28)=>s.length>max?s.slice(0,max)+'…':s;
+        return`<tr data-idx="${i}" data-task="${taskId}" onclick="selectRow(this,'${taskId}',${i})">
+            <td>${i===0?'<strong>'+d.name+'</strong>':''}</td>
+            <td class="td-desc" title="${r.desc.replace(/"/g,'&quot;')}">${truncate(r.desc)}</td>
+            <td>${truncate(r.input,20)}</td>
+            <td>${truncate(r.output,20)}</td>
+            <td>${r.role}</td>
+            <td><span class="te-status ${r.status}">${r.label}</span></td>
+            <td class="td-action">▶</td>
+        </tr>`;
+    }).join('');
+    const detailPanel=`<div class="row-detail-panel" id="rdp-${taskId}"><div class="rdp-inner" id="rdp-inner-${taskId}"><div class="rdp-field full"><span class="rdp-label">点击表格行查看详情</span><span class="rdp-value muted">选择左侧表格中的任意一行，此处将显示完整的步骤说明和关联信息</span></div></div></div>`;
+
+    const toggleLabel=taskViewMode==='v27'?'切换表格视图':'切换卡片视图';
+    const v27Content=`
+        <div class="td-field-grid" id="fieldGrid-${taskId}">${buildFields()}</div>
+        ${visibleFields.desc?descBlock:''}
+        <div class="td-steps-section">
+            <div class="td-steps-header" onclick="toggleSteps('${taskId}')">
+                <span class="td-steps-title">步骤明细 · ${totalSteps} 步</span>
+                <span class="td-steps-toggle" id="stepsToggle-${taskId}">▲ 收起</span>
+            </div>
+            <div class="td-steps-table-wrap" id="stepsTable-${taskId}">
+                <table cellspacing="0"><thead><tr><th>#</th><th>步骤说明</th><th>步骤输入</th><th>步骤输出</th><th>执行角色</th><th>状态</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+            </div>
+        </div>`;
+    const v28Content=`<table cellspacing="0"><thead><tr><th>任务名称</th><th>步骤说明</th><th>步骤输入</th><th>步骤输出</th><th>执行角色</th><th>状态</th><th></th></tr></thead><tbody>${rowsV28}</tbody></table>${detailPanel}`;
+    const content=taskViewMode==='v27'?v27Content:v28Content;
+
+    panel.innerHTML=`<div class="task-expand-inner">
+        <div class="td-card-header">
+            <div class="td-card-header-left">
+                <span class="td-card-name">${d.name}</span>
+                <span class="td-card-badge ${statusClass}">${statusLabel}</span>
+                <span class="td-card-badge" style="border:1px solid var(--border-light);color:var(--text-muted)">${doneSteps}/${totalSteps} 步</span>
+            </div>
+            <div class="td-card-actions">
+                <button class="view-toggle-btn" onclick="toggleTaskView('${taskId}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>${toggleLabel}</button>
+                <div class="td-config-wrap">
+                    <button class="td-card-btn" onclick="toggleConfig(event,'${taskId}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg> 设置</button>
+                    <div class="td-config-dropdown" id="cfg-${taskId}">
+                        <div class="td-config-item on" onclick="toggleField('stepCount','cfg-${taskId}',this)"><span class="cfg-check">✓</span>步骤统计</div>
+                        <div class="td-config-item on" onclick="toggleField('role','cfg-${taskId}',this)"><span class="cfg-check">✓</span>执行角色</div>
+                        <div class="td-config-item on" onclick="toggleField('desc','cfg-${taskId}',this)"><span class="cfg-check">✓</span>任务概述</div>
+                    </div>
+                </div>
+                <button class="td-card-btn" onclick="exportTask('${taskId}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>导出 Excel</button>
+            </div>
+        </div>
+        ${content}
+    </div>`;
+
+    panel.classList.add('show');panel.dataset.current=taskId;
+
+    // Auto-select V28 first row
+    if(taskViewMode==='v28'){
+        setTimeout(()=>{const r=panel.querySelector('tr[data-idx="0"]');if(r)selectRow(r,taskId,0);},100);
+    }
+}
+
+function toggleTaskView(taskId){
+    taskViewMode=taskViewMode==='v27'?'v28':'v27';
+    var e=new Event('click');e._force=true;
+    showTaskDetail(taskId,e);
+}
+
+function selectRow(row,taskId,idx){
+    const d=taskData[taskId];if(!d)return;
+    const r=d.rows[idx];if(!r)return;
+    const tbody=row.parentElement;
+    tbody.querySelectorAll('tr').forEach(tr=>tr.classList.remove('row-selected'));
+    row.classList.add('row-selected');
+    const inner=document.getElementById('rdp-inner-'+taskId);
+    if(!inner)return;
+    const sc=v=>{if(r.status==='done')return'green';if(r.status==='active')return'accent';return'muted'};
+    inner.innerHTML=`
+        <div class="rdp-field full"><span class="rdp-label">步骤说明</span><span class="rdp-value">${r.desc}</span></div>
+        <div class="rdp-field"><span class="rdp-label">输入</span><span class="rdp-value">${r.input||'—'}</span></div>
+        <div class="rdp-field"><span class="rdp-label">输出</span><span class="rdp-value">${r.output||'—'}</span></div>
+        <div class="rdp-field"><span class="rdp-label">执行角色</span><span class="rdp-value">${r.role}</span></div>
+        <div class="rdp-field"><span class="rdp-label">状态</span><span class="rdp-value ${sc()}">${r.label}</span></div>
+        <div class="rdp-field full" style="padding:12px 24px"><span class="rdp-label" style="color:var(--text-muted)">第 ${idx+1} 步 · ${d.name}</span></div>
+    `;
+    const pnl=document.getElementById('rdp-'+taskId);
+    if(pnl)pnl.classList.add('show');
+}
+
+function toggleSteps(taskId){
+    const wrap=document.getElementById('stepsTable-'+taskId);
+    const toggle=document.getElementById('stepsToggle-'+taskId);
+    wrap.classList.toggle('show');
+    toggle.textContent=wrap.classList.contains('show')?'▲ 收起':'▼ 展开';
+}
+
+function toggleConfig(event,taskId){
+    event.stopPropagation();
+    const dd=document.getElementById('cfg-'+taskId);
+    const btn=event.currentTarget;
+    dd.classList.toggle('show');
+    btn.classList.toggle('active-conf');
+    // Close on outside click
+    if(dd.classList.contains('show')){
+        const closeFn=e=>{if(!dd.contains(e.target)&&e.target!==btn){dd.classList.remove('show');btn.classList.remove('active-conf');document.removeEventListener('click',closeFn)}};
+        setTimeout(()=>document.addEventListener('click',closeFn),50);
+    }
+}
+
+function toggleField(field,cfgId,el){
+    visibleFields[field]=!visibleFields[field];
+    el.classList.toggle('on');
+    const check=el.querySelector('.cfg-check');
+    check.textContent=visibleFields[field]?'✓':'';
+    // Refresh the field grid for the current task
+    const taskId=cfgId.replace('cfg-','');
+    const d=taskData[taskId];if(!d)return;
+    const grid=document.getElementById('fieldGrid-'+taskId);
+    if(!grid)return;
+    const totalSteps=d.rows.length;
+    const doneSteps=d.rows.filter(r=>r.status==='done').length;
+    const progress=totalSteps>0?Math.round(doneSteps/totalSteps*100):0;
+    let html='';
+    if(visibleFields.stepCount)html+=`<div class="td-field-card"><span class="td-fc-label">步骤总数</span><span class="td-fc-value big">${totalSteps}</span></div>`;
+    if(visibleFields.stepCount)html+=`<div class="td-field-card"><span class="td-fc-label">进度</span><span class="td-fc-value big accent">${progress}%</span></div>`;
+    if(visibleFields.role)html+=`<div class="td-field-card"><span class="td-fc-label">执行角色</span><span class="td-fc-value">${[...new Set(d.rows.map(r=>r.role))].filter(Boolean).join(' · ')}</span></div>`;
+    grid.innerHTML=html;
+
+    // Toggle desc block
+    const descBlock=grid.nextElementSibling;
+    if(descBlock&&descBlock.classList.contains('td-desc-block')){
+        descBlock.style.display=visibleFields.desc?'':'none';
+    }
+    // Also toggle desc block visibility via innerHTML check
+    const panel=document.getElementById('task-p'+taskId.charAt(1));
+    if(panel){
+        const allDesc=panel.querySelector('.td-desc-block');
+        if(allDesc)allDesc.style.display=visibleFields.desc?'':'none';
+    }
+}
+
+function exportTask(taskId){
+    const d=taskData[taskId];if(!d)return;
+    const BOM='\uFEFF';
+    let csv=BOM+'任务名称,步骤说明,步骤输入,步骤输出,执行角色,状态\n';
+    d.rows.forEach((r,i)=>{
+        csv+=`"${i===0?d.name:''}","${r.desc}","${r.input}","${r.output}","${r.role}","${r.label}"\n`;
+    });
+    const blob=new Blob([csv],{type:'application/vnd.ms-excel;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=`${d.name}_任务明细.xls`;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>

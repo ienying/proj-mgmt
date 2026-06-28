@@ -10,6 +10,17 @@ interface PhaseStepperProps {
 export function PhaseStepper({ activePhase, onPhaseChange }: PhaseStepperProps) {
   return (
     <div className="px-12 py-7 relative" style={{ borderBottom: "1px solid var(--s-border)" }}>
+      {/* 标签 */}
+      <div className="flex items-center gap-4 mb-2 px-4">
+        <span
+          className="text-[11px] uppercase tracking-[2px]"
+          style={{ color: "var(--s-text-secondary)", fontFamily: "var(--font-mono, monospace)" }}
+        >
+          Phases 项目阶段
+        </span>
+        <div className="flex-1 h-px" style={{ backgroundColor: "var(--s-border)" }} />
+      </div>
+
       <div className="flex items-start relative py-7 px-0">
         {/* 连接线 */}
         <div

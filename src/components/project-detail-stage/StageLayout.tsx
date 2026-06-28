@@ -147,21 +147,7 @@ export function StageLayout({
             {/* 产品网格 */}
             <ProductGrid modules={project.procurement_modules} />
 
-            {/* Phases 项目阶段 — 分隔标题 */}
-            <div
-              className="flex items-center gap-4 px-16 py-8"
-              style={{ borderBottom: "1px solid var(--s-border)" }}
-            >
-              <span
-                className="text-[11px] uppercase tracking-[2px]"
-                style={{ color: "var(--s-text-secondary)", fontFamily: "var(--font-mono, monospace)" }}
-              >
-                Phases 项目阶段
-              </span>
-              <div className="flex-1 h-px" style={{ backgroundColor: "var(--s-border)" }} />
-            </div>
-
-            {/* 阶段步骤条 */}
+            {/* 阶段步骤条（内含 Phases 项目阶段 标签） */}
             <PhaseStepper activePhase={activePhase} onPhaseChange={setActivePhase} />
 
             {/* Phase Details 阶段详情 — 分隔标题 */}
