@@ -29,6 +29,8 @@ const AboutPage = dynamic(() => import("@/components/about-page"), { ssr: false,
 const TaskCenter = dynamic(() => import("@/components/task-center"), { ssr: false, loading: () => <LoadingFallback /> });
 const CaseCenter = dynamic(() => import("@/components/case-center"), { ssr: false, loading: () => <LoadingFallback /> });
 const ProjectDashboard = dynamic(() => import("@/components/project-dashboard").then(m => ({ default: m.ProjectDashboard })), { ssr: false, loading: () => <LoadingFallback /> });
+const StageLayout = dynamic(() => import("@/components/project-detail-stage/StageLayout").then(m => ({ default: m.StageLayout })), { ssr: false, loading: () => <LoadingFallback /> });
+const LayoutSelector = dynamic(() => import("@/components/project-detail-stage/LayoutSelector").then(m => ({ default: m.LayoutSelector })), { ssr: false });
 
 import {
   FolderKanban,
@@ -112,6 +114,14 @@ export default function HomePage() {
   const [procurementModules, setProcurementModules] = useState<{ code: string; name: string }[]>([]);
   const [activeItem, setActiveItem] = useState("project-board");
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<"management" | "stage" | null>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("project_detail_layout_mode");
+      if (saved === "management" || saved === "stage") return saved;
+    }
+    return null;
+  });
+  const [layoutSelectorOpen, setLayoutSelectorOpen] = useState(false);
   const [projects, setProjects] = useState(mockProjects);
   const [users, setUsers] = useState<{ id: string; username: string; name: string; phone?: string; email?: string; department?: string; position?: string; avatar?: string; role?: "super_admin" | "sub_admin" | "user"; is_active: boolean; created_at: string }[]>([]);
   const [standards, setStandards] = useState<TableDefinition[]>([]);
@@ -372,7 +382,20 @@ export default function HomePage() {
     procurement_modules?: string[];
     description?: string;
   }) => {
-    setViewingProject(project as typeof viewingProject);
+    const typedProject = project as typeof viewingProject;
+    setViewingProject(typedProject);
+    // 如果用户从未选择过布局，弹出选择器
+    if (layoutMode === null) {
+      setLayoutSelectorOpen(true);
+    }
+  };
+
+  const handleSetLayoutMode = (mode: "management" | "stage") => {
+    setLayoutMode(mode);
+    setLayoutSelectorOpen(false);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("project_detail_layout_mode", mode);
+    }
   };
 
   const handleUserCreate = async (data: any) => {
@@ -581,6 +604,9 @@ export default function HomePage() {
                     procurement_modules: project.procurement_modules as string[] | undefined,
                     description: project.description,
                   });
+                  if (layoutMode === null) {
+                    setLayoutSelectorOpen(true);
+                  }
                   setActiveItem("projects");
                 }
               }}
@@ -589,13 +615,28 @@ export default function HomePage() {
         );
       case "projects":
         if (viewingProject) {
+          if (layoutMode === "stage") {
+            return (
+              <ContentErrorBoundary>
+                <StageLayout
+                  project={viewingProject}
+                  projectTypes={projectTypes}
+                  projectStages={projectStages}
+                  onBack={() => { setViewingProject(null); }}
+                  onSwitchLayout={handleSetLayoutMode}
+                />
+              </ContentErrorBoundary>
+            );
+          }
+          // layoutMode === "management" or null (shows management behind selector)
           return (
             <ContentErrorBoundary>
               <ProjectDetail
                 project={viewingProject}
                 projectTypes={projectTypes}
                 projectStages={projectStages}
-                onBack={() => setViewingProject(null)}
+                onBack={() => { setViewingProject(null); setLayoutSelectorOpen(false); }}
+                onSwitchLayout={handleSetLayoutMode}
               />
             </ContentErrorBoundary>
           );
@@ -723,6 +764,11 @@ case "messages":
       <ChangePasswordDialog
         open={showChangePassword}
         onOpenChange={setShowChangePassword}
+      />
+
+      <LayoutSelector
+        open={layoutSelectorOpen}
+        onSelect={handleSetLayoutMode}
       />
     </div>
   );

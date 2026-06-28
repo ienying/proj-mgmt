@@ -120,6 +120,7 @@ interface ProjectDetailProps {
   projectTypes: { code: string; name: string }[];
   projectStages: { code: string; name: string }[];
   onBack: () => void;
+  onSwitchLayout?: (mode: "management" | "stage") => void;
 }
 
 interface ColumnConfig {
@@ -336,6 +337,7 @@ export function ProjectDetail({
   projectTypes,
   projectStages,
   onBack,
+  onSwitchLayout,
 }: ProjectDetailProps) {
   const [activeModule, setActiveModule] = useState("scope");
   
@@ -3931,6 +3933,17 @@ export function ProjectDetail({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {onSwitchLayout && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onSwitchLayout("stage")}
+                className="text-xs h-7 gap-1 border-[#e8590c] text-[#e8590c] hover:bg-orange-50 hover:text-[#d9480f]"
+              >
+                <GitBranch className="w-3.5 h-3.5" />
+                切换到阶段式布局
+              </Button>
+            )}
             {getStatusBadge(project.status)}
           </div>
         </div>
