@@ -45,8 +45,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy package files
 COPY package.json pnpm-lock.yaml .npmrc ./
 
-# Install production dependencies only
-RUN pnpm install --prod --frozen-lockfile --prefer-offline
+# Install production dependencies only (include typescript for next.config.ts)
+RUN pnpm install --prod --frozen-lockfile --prefer-offline && pnpm add -D typescript
 
 # Copy build artifacts from builder
 COPY --from=builder /app/.next ./.next
