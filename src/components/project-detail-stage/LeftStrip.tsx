@@ -16,7 +16,7 @@ export function LeftStrip({ panelData, activePanel, onPanelChange, onSubClick }:
 
   return (
     <div
-      className="fixed left-0 top-0 h-screen z-30 flex items-stretch cursor-default"
+      className="fixed left-0 top-0 h-screen z-30 flex items-stretch cursor-default overflow-hidden"
       style={{ width: "12px", transition: "width 0.3s" }}
       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.width = "440px"; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.width = "12px"; }}
