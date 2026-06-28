@@ -163,8 +163,9 @@ export interface StageLayoutProps {
     role_market_product?: string | null;
     role_project_manager?: string | null;
     members?: Array<{
-      name: string;
-      role: string;
+      name?: string;
+      role?: string;
+      role_type?: string;
       phone?: string;
       email?: string;
     }> | null;
@@ -172,7 +173,7 @@ export interface StageLayoutProps {
     description?: string;
   };
   projectTypes: { code: string; name: string }[];
-  projectStages: { code: string; name: string }[];
+  projectStages: { code: string; name: string; sort_order?: number }[];
   procurementModuleDict?: { code: string; name: string }[];
   customerTypeDict?: { code: string; name: string }[];
   onBack: () => void;

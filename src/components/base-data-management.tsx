@@ -239,46 +239,50 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
     try {
       const res = await apiFetch(`/api/dicts?type=${currentType}`);
       const data = Array.isArray(res) ? res : (res.data || []);
+      const sorted = sortByOrder(data);
       switch (currentType) {
-        case "project_types": setProjectTypes(data); break;
-        case "project_stages": setProjectStages(data); break;
-        case "product_module_types": setProductModules(data); break;
-        case "member_role_types": setMemberRoles(data); break;
-        case "product_categories": setProductCategories(data); break;
-        case "product_vendors": setProductVendors(data); break;
-        case "product_scopes": setProductScopes(data); break;
-        case "customer_types": setCustomerTypes(data); break;
-        case "deployment_modes": setDeploymentModes(data); break;
-        case "project_statuses": setProjectStatuses(data); break;
-        case "todo_statuses": setTodoStatuses(data); break;
-        case "construction_units": setConstructionUnits(data); break;
-        case "custom_dev_types": setCustomDevTypes(data); break;
-        case "dev_integration_types": setDevIntegrationTypes(data); break;
+        case "project_types": setProjectTypes(sorted); break;
+        case "project_stages": setProjectStages(sorted); break;
+        case "product_module_types": setProductModules(sorted); break;
+        case "member_role_types": setMemberRoles(sorted); break;
+        case "product_categories": setProductCategories(sorted); break;
+        case "product_vendors": setProductVendors(sorted); break;
+        case "product_scopes": setProductScopes(sorted); break;
+        case "customer_types": setCustomerTypes(sorted); break;
+        case "deployment_modes": setDeploymentModes(sorted); break;
+        case "project_statuses": setProjectStatuses(sorted); break;
+        case "todo_statuses": setTodoStatuses(sorted); break;
+        case "construction_units": setConstructionUnits(sorted); break;
+        case "custom_dev_types": setCustomDevTypes(sorted); break;
+        case "dev_integration_types": setDevIntegrationTypes(sorted); break;
       }
     } catch (error) {
       console.error("加载数据失败:", error);
     }
   };
 
+  // 按 sort_order 排序
+  function sortByOrder(arr: any[]) { return [...arr].sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99)); }
+
   // 批量加载所有数据（单次请求）
   const loadData = async () => {
     try {
       const res = await apiFetch("/api/dicts/batch");
       const batch = res.data || {};
-      setProjectTypes(batch.project_types || []);
-      setProjectStages(batch.project_stages || []);
-      setProductModules(batch.product_module_types || []);
-      setMemberRoles(batch.member_role_types || []);
-      setProductCategories(batch.product_categories || []);
-      setProductVendors(batch.product_vendors || []);
-      setProductScopes(batch.product_scopes || []);
-      setCustomerTypes(batch.customer_types || []);
-      setDeploymentModes(batch.deployment_modes || []);
-      setProjectStatuses(batch.project_statuses || []);
-      setTodoStatuses(batch.todo_statuses || []);
-      setConstructionUnits(batch.construction_units || []);
-      setCustomDevTypes(batch.custom_dev_types || []);
-      setDevIntegrationTypes(batch.dev_integration_types || []);
+      setProjectTypes(sortByOrder(batch.project_types || []));
+      setProjectStages(sortByOrder(batch.project_stages || []));
+      setProductModules(sortByOrder(batch.product_module_types || []));
+      setMemberRoles(sortByOrder(batch.member_role_types || []));
+      setProductCategories(sortByOrder(batch.product_categories || []));
+      setProductVendors(sortByOrder(batch.product_vendors || []));
+      setProductScopes(sortByOrder(batch.product_scopes || []));
+      setCustomerTypes(sortByOrder(batch.customer_types || []));
+      setDeploymentModes(sortByOrder(batch.deployment_modes || []));
+      setProjectStatuses(sortByOrder(batch.project_statuses || []));
+      setTodoStatuses(sortByOrder(batch.todo_statuses || []));
+      setConstructionUnits(sortByOrder(batch.construction_units || []));
+      setCustomDevTypes(sortByOrder(batch.custom_dev_types || []));
+      setDevIntegrationTypes(sortByOrder(batch.dev_integration_types || []));
     } catch (error) {
       console.error("加载基础数据失败:", error);
     }
@@ -348,6 +352,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           id: editingId,
           name: editingData.name,
           code: editingData.code,
+          sort_order: editingData.sort_order,
           description: editingData.description,
           is_enabled: editingData.is_enabled,
         };
@@ -394,7 +399,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           name: editingData.name,
           code: editingData.code,
           description: editingData.description,
-          sort_order: maxSort + 1,
+          sort_order: editingData.sort_order ?? (maxSort + 1),
           is_enabled: editingData.is_enabled ?? true,
         };
         
@@ -2354,6 +2359,7 @@ function DataTable({
                   <>
                     <TableHead>名称</TableHead>
                     <TableHead>编码</TableHead>
+                    <TableHead className="w-16">排序</TableHead>
                     <TableHead>描述</TableHead>
                     {data[0] && "category" in data[0] && (
                       <TableHead>类别</TableHead>
@@ -2438,6 +2444,9 @@ function DataTable({
                       </TableCell>
                       <TableCell className="font-mono text-sm text-muted-foreground">
                         {item.code || "-"}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm text-muted-foreground text-center">
+                        {item.sort_order ?? "-"}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {item.description || "-"}
@@ -2710,6 +2719,17 @@ function DataTable({
                       setEditingData((prev) => ({ ...prev, code: e.target.value }))
                     }
                     placeholder="请输入编码（可选）"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>排序</Label>
+                  <Input
+                    type="number"
+                    value={editingData.sort_order ?? ""}
+                    onChange={(e) =>
+                      setEditingData((prev) => ({ ...prev, sort_order: parseInt(e.target.value) || 0 }))
+                    }
+                    placeholder="数字越大越靠后"
                   />
                 </div>
                 {(activeTab === "project-statuses" || activeTab === "todo-statuses") && (

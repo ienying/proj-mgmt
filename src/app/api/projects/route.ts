@@ -1,6 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
 
+// 兼容 procurement_modules 新旧格式，统一转为 code 字符串数组
+function normalizeModules(modules: unknown): string[] {
+  if (!Array.isArray(modules)) return [];
+  return modules
+    .map((m: unknown) => {
+      if (typeof m === "string") return m;
+      if (m && typeof m === "object") {
+        const obj = m as Record<string, unknown>;
+        return String(obj.code || obj.module_code || "");
+      }
+      return "";
+    })
+    .filter(Boolean);
+}
+
 export async function GET() {
   try {
     const client = await createServerClient();
@@ -13,7 +28,33 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ data: data || [] });
+    // 批量查询所有项目的成员
+    const projects = (data || []) as Array<Record<string, unknown>>;
+    if (projects.length > 0) {
+      // 标准化 procurement_modules
+      for (const p of projects) {
+        (p as Record<string, unknown>).procurement_modules = normalizeModules(p.procurement_modules);
+      }
+
+      const projectIds = projects.map((p) => `'${String(p.id).replace(/'/g, "''")}'`).join(",");
+      const { data: allMembers } = await client.rpc("execute_sql", {
+        p_sql: `SELECT project_id, role_type, name, phone, email FROM design_public.project_members WHERE project_id IN (${projectIds}) ORDER BY project_id`,
+      });
+      const membersByProject = new Map<string, Array<Record<string, unknown>>>();
+      if (Array.isArray(allMembers)) {
+        for (const m of allMembers as Array<Record<string, unknown>>) {
+          const pid = String(m.project_id || "");
+          if (!membersByProject.has(pid)) membersByProject.set(pid, []);
+          membersByProject.get(pid)!.push(m);
+        }
+      }
+      for (const p of projects) {
+        const pid = String(p.id || "");
+        (p as Record<string, unknown>).members = membersByProject.get(pid) || [];
+      }
+    }
+
+    return NextResponse.json({ data: projects });
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Unknown error";

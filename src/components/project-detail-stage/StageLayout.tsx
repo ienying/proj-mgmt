@@ -29,7 +29,19 @@ export function StageLayout({
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
   const [subContent, setSubContent] = useState<{ key: string; label: string } | null>(null);
-  const [activePhase, setActivePhase] = useState(4);
+  // 根据项目当前阶段确定激活的阶段索引
+  const [activePhase, setActivePhase] = useState(0);
+
+  // 当 projectStages 加载完成后，按 sort_order 排序后定位到当前阶段
+  useEffect(() => {
+    if (projectStages.length > 0) {
+      const sorted = [...projectStages].sort(
+        (a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99)
+      );
+      const idx = sorted.findIndex((s) => s.code === project.project_stage);
+      if (idx >= 0) setActivePhase(idx);
+    }
+  }, [projectStages, project.project_stage]);
 
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== "undefined") {
@@ -216,7 +228,7 @@ export function StageLayout({
             />
 
             {/* 阶段步骤条（内含 Phases 项目阶段 标签） */}
-            <PhaseStepper activePhase={activePhase} onPhaseChange={setActivePhase} />
+            <PhaseStepper activePhase={activePhase} onPhaseChange={setActivePhase} stages={projectStages} />
 
             {/* Phase Details 阶段详情 — 分隔标题 */}
             <div

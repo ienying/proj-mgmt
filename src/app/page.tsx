@@ -110,7 +110,7 @@ const mockStandards = [
 export default function HomePage() {
   const { user, isLoading, isAuthenticated, logout: authLogout } = useAuth();
   const [projectTypes, setProjectTypes] = useState<{ code: string; name: string }[]>([]);
-  const [projectStages, setProjectStages] = useState<{ code: string; name: string }[]>([]);
+  const [projectStages, setProjectStages] = useState<{ code: string; name: string; sort_order?: number }[]>([]);
   const [procurementModules, setProcurementModules] = useState<{ code: string; name: string }[]>([]);
   const [customerTypes, setCustomerTypes] = useState<{ code: string; name: string }[]>([]);
   const [activeItem, setActiveItem] = useState("project-board");
@@ -148,7 +148,7 @@ export default function HomePage() {
     role_presales?: string | null;
     role_market_product?: string | null;
     role_project_manager?: string | null;
-    members?: Array<{ name: string; role: string; phone?: string; email?: string }> | null;
+    members?: Array<{ name?: string; role?: string; role_type?: string; phone?: string; email?: string }> | null;
     procurement_modules?: Array<string | { code?: string; module_code?: string; module_name?: string; name?: string; quantity?: number }>;
     description?: string;
   } | null>(null);
@@ -218,7 +218,11 @@ export default function HomePage() {
         const stagesRes = await fetch("/api/dicts?type=project_stages");
         if (stagesRes.ok) {
           const stagesData = await stagesRes.json();
-          setProjectStages((stagesData.data || []).filter((item: any) => item.code));
+          setProjectStages(
+            (stagesData.data || [])
+              .filter((item: any) => item.code)
+              .sort((a: any, b: any) => (a.sort_order ?? 99) - (b.sort_order ?? 99))
+          );
         }
 
         // 获取采购模块（来源于产品模块数据）
@@ -289,7 +293,11 @@ export default function HomePage() {
       }
       if (stagesRes.ok) {
         const stagesData = await stagesRes.json();
-        setProjectStages((stagesData.data || []).filter((item: any) => item.code));
+        setProjectStages(
+          (stagesData.data || [])
+            .filter((item: any) => item.code)
+            .sort((a: any, b: any) => (a.sort_order ?? 99) - (b.sort_order ?? 99))
+        );
       }
       if (modulesRes.ok) {
         const modulesData = await modulesRes.json();

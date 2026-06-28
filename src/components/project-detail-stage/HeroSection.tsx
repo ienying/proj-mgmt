@@ -77,7 +77,12 @@ export function HeroSection({ project, projectTypes, projectStages, customerType
   const members = Array.isArray(rawMembers) ? rawMembers : [];
   // 合并核心角色和项目成员（去重用角色）
   const coreRoleNames = new Set(coreRoles.map((r) => r.role));
-  const filteredMembers = members.filter((m) => !coreRoleNames.has(m.role));
+  const filteredMembers = members
+    .filter((m) => !coreRoleNames.has(m.role || (m as Record<string, unknown>).role_type as string || ""))
+    .map((m) => ({
+      role: m.role || (m as Record<string, unknown>).role_type as string || "成员",
+      name: m.name || "—",
+    }));
   const allTeam = [...coreRoles, ...filteredMembers];
   const teamDisplay = allTeam.length > 0
     ? allTeam.map((m) => `${m.role}·${m.name}`).join("  ")

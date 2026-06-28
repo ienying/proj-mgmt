@@ -1,13 +1,34 @@
 "use client";
 
-import { phases } from "./mock-data";
-
 interface PhaseStepperProps {
   activePhase: number;
   onPhaseChange: (idx: number) => void;
+  /** 系统设置中的项目阶段列表（含sort_order用于排序） */
+  stages?: { code: string; name: string; sort_order?: number }[];
 }
 
-export function PhaseStepper({ activePhase, onPhaseChange }: PhaseStepperProps) {
+export function PhaseStepper({ activePhase, onPhaseChange, stages = [] }: PhaseStepperProps) {
+  // 使用系统阶段数据，按 sort_order 排序，如果没有则 fallback 到默认
+  const sortedStages = stages.length > 0
+    ? [...stages].sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99))
+    : [];
+  const phases = sortedStages.length > 0
+    ? sortedStages.map((s, i) => ({
+        key: s.code,
+        label: s.name,
+        index: i,
+        dateRange: "",
+      }))
+    : [
+        { key: "launch", label: "启动", index: 0, dateRange: "" },
+        { key: "research", label: "调研", index: 1, dateRange: "" },
+        { key: "deploy", label: "部署", index: 2, dateRange: "" },
+        { key: "develop", label: "开发", index: 3, dateRange: "" },
+        { key: "trial", label: "试运行", index: 4, dateRange: "" },
+        { key: "online", label: "上线", index: 5, dateRange: "" },
+        { key: "accept", label: "验收", index: 6, dateRange: "" },
+      ];
+
   return (
     <div className="px-12 py-7 relative" style={{ borderBottom: "1px solid var(--s-border)" }}>
       {/* 标签 */}
@@ -63,16 +84,6 @@ export function PhaseStepper({ activePhase, onPhaseChange }: PhaseStepperProps) 
                 }`}
               >
                 {phase.label}
-              </div>
-
-              {/* 日期 */}
-              <div
-                className={`text-[10px] transition-colors ${
-                  isActive ? "text-[var(--s-text-secondary)]" : "text-[var(--s-text-muted)]"
-                }`}
-                style={{ fontFamily: "var(--font-mono, monospace)" }}
-              >
-                {phase.dateRange}
               </div>
             </button>
           );
