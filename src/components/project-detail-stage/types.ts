@@ -147,7 +147,7 @@ export interface StageLayoutProps {
       contact_person?: string;
       contact_phone?: string;
     }>;
-    procurement_modules?: string[];
+    procurement_modules?: string[] | Array<{ code: string; quantity: number }>;
     description?: string;
   };
   projectTypes: { code: string; name: string }[];

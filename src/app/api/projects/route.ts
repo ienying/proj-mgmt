@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
 
+/** 兼容 procurement_modules 新旧格式，提取模块 code 列表 */
+function extractModuleCodes(modules: unknown): string[] {
+  if (!Array.isArray(modules)) return [];
+  return modules
+    .map((m) => {
+      if (typeof m === "string") return m;
+      if (typeof m === "object" && m !== null && "code" in m)
+        return String((m as Record<string, unknown>).code || "");
+      return "";
+    })
+    .filter(Boolean);
+}
+
 export async function GET() {
   try {
     const client = await createServerClient();
@@ -157,7 +170,7 @@ export async function POST(request: NextRequest) {
       project_type,
       project_stage,
       projectSchema,
-      procurement_modules as string[] || [],
+      extractModuleCodes(procurement_modules),
       project_status || null
     );
 

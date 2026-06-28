@@ -46,6 +46,7 @@ import {
   Hammer,
 } from "lucide-react";
 import { toast } from "sonner";
+import { SelectedModule, extractModuleCodes, normalizeProcurementModules } from "@/lib/procurement-utils";
 
 // 中国省级行政区（含港澳台）
 const PROVINCES = [
@@ -425,8 +426,8 @@ export function ProjectForm({
   // 项目成员
   const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
 
-  // 采购模块
-  const [selectedModules, setSelectedModules] = useState<string[]>([]);
+  // 采购模块（带数量）
+  const [selectedModules, setSelectedModules] = useState<SelectedModule[]>([]);
 
   // 采购金额
   const [procurementAmount, setProcurementAmount] = useState("");
@@ -548,6 +549,7 @@ export function ProjectForm({
       const ws3 = wb.addWorksheet("采购模块");
       ws3.columns = [
         { header: "模块名称", key: "module", width: 30 },
+        { header: "数量", key: "quantity", width: 10 },
       ];
       ws3.getRow(1).font = { bold: true };
       ws3.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE3F2FD" } };
@@ -702,20 +704,21 @@ export function ProjectForm({
       if (wb.SheetNames.length > 1) {
         const sheet2 = wb.Sheets["采购模块"] || wb.Sheets[wb.SheetNames[1]];
         const modRows = xlsxLib.utils.sheet_to_json(sheet2, { defval: "", raw: false }) as Record<string, string>[];
-        const matchedCodes: string[] = [];
+        const matchedModules: SelectedModule[] = [];
         const unmatchedList: string[] = [];
         for (const row of modRows) {
           const name = (row["模块名称"] || "").toString().trim();
           if (!name) continue;
+          const quantity = Math.max(1, parseInt(row["数量"] || "1", 10) || 1);
           const matched = productModules.find((m) => m.module_name === name);
           if (matched) {
-            matchedCodes.push(matched.module_code);
+            matchedModules.push({ code: matched.module_code, quantity });
           } else {
             unmatchedList.push(name);
           }
         }
-        if (matchedCodes.length > 0) {
-          setSelectedModules(matchedCodes);
+        if (matchedModules.length > 0) {
+          setSelectedModules(matchedModules);
         }
         if (unmatchedList.length > 0) {
           setUnmatchedNames(unmatchedList);
@@ -789,9 +792,10 @@ export function ProjectForm({
       setLatitude((d.latitude as string) || "");
 
       // 采购模块
+      // 采购模块（兼容新旧格式）
       const pm = d.procurement_modules;
       if (Array.isArray(pm)) {
-        setSelectedModules(pm as string[]);
+        setSelectedModules(normalizeProcurementModules(pm));
       }
 
       // 采购金额
@@ -1094,10 +1098,33 @@ export function ProjectForm({
     setProjectMembers(projectMembers.filter((pm) => pm.id !== id));
   };
 
-  // 切换采购模块选择
+  // 切换采购模块选择（默认数量为 1）
   const toggleModule = (moduleCode: string) => {
     setSelectedModules((prev) =>
-      prev.includes(moduleCode) ? prev.filter((m) => m !== moduleCode) : [...prev, moduleCode]
+      prev.some((m) => m.code === moduleCode)
+        ? prev.filter((m) => m.code !== moduleCode)
+        : [...prev, { code: moduleCode, quantity: 1 }]
+    );
+  };
+
+  // 判断模块是否已选
+  const isModuleSelected = (moduleCode: string) => {
+    return selectedModules.some((m) => m.code === moduleCode);
+  };
+
+  // 更新单个模块数量
+  const updateModuleQuantity = (moduleCode: string, quantity: number) => {
+    setSelectedModules((prev) =>
+      prev.map((m) =>
+        m.code === moduleCode ? { ...m, quantity: Math.max(1, quantity) } : m
+      )
+    );
+  };
+
+  // 批量更新模块数量
+  const batchUpdateQuantity = (quantity: number) => {
+    setSelectedModules((prev) =>
+      prev.map((m) => ({ ...m, quantity: Math.max(1, quantity) }))
     );
   };
 
@@ -2053,8 +2080,8 @@ export function ProjectForm({
                         try {
                           const XLSX = await import("xlsx");
                           const xlsxLib = (XLSX as any).default || XLSX;
-                          const ws = xlsxLib.utils.aoa_to_sheet([["模块名称"]]);
-                          ws["!cols"] = [{ wch: 30 }];
+                          const ws = xlsxLib.utils.aoa_to_sheet([["模块名称", "数量"]]);
+                          ws["!cols"] = [{ wch: 30 }, { wch: 10 }];
                           const wb = xlsxLib.utils.book_new();
                           xlsxLib.utils.book_append_sheet(wb, ws, "采购模块");
                           xlsxLib.writeFile(wb, "采购模块导入模板.xlsx");
@@ -2091,27 +2118,30 @@ export function ProjectForm({
                               return;
                             }
 
-                            const matchedCodes: string[] = [];
+                            const importedModules: SelectedModule[] = [];
                             const unmatchedList: string[] = [];
 
                             for (const row of rows) {
                               const name = (row["模块名称"] || "").toString().trim();
                               if (!name) continue;
+                              const quantity = Math.max(1, parseInt(row["数量"] || "1", 10) || 1);
                               const matched = productModules.find(
                                 (m) => m.module_name === name
                               );
                               if (matched) {
-                                matchedCodes.push(matched.module_code);
+                                importedModules.push({ code: matched.module_code, quantity });
                               } else {
                                 unmatchedList.push(name);
                               }
                             }
 
-                            if (matchedCodes.length > 0) {
+                            if (importedModules.length > 0) {
                               setSelectedModules((prev) => {
-                                const existing = new Set(prev);
-                                matchedCodes.forEach((c) => existing.add(c));
-                                return Array.from(existing);
+                                const codeMap = new Map(prev.map((m) => [m.code, m]));
+                                importedModules.forEach((m) => {
+                                  codeMap.set(m.code, m); // 导入的覆盖已有
+                                });
+                                return Array.from(codeMap.values());
                               });
                             }
 
@@ -2121,7 +2151,7 @@ export function ProjectForm({
                             }
 
                             toast.success(
-                              `导入完成：匹配 ${matchedCodes.length} 个模块${unmatchedList.length > 0 ? `，${unmatchedList.length} 个未匹配` : ""}`
+                              `导入完成：匹配 ${importedModules.length} 个模块${unmatchedList.length > 0 ? `，${unmatchedList.length} 个未匹配` : ""}`
                             );
                           } catch (err) {
                             toast.error("导入失败: " + String(err));
@@ -2142,6 +2172,48 @@ export function ProjectForm({
                     className="h-8 text-sm"
                   />
                 </div>
+                {/* 批量设置数量 */}
+                {selectedModules.length > 0 && (
+                  <div className="flex items-center gap-2 mb-3 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                    <span className="text-xs text-amber-700 font-medium whitespace-nowrap">批量设置数量：</span>
+                    <Input
+                      id="batch-qty-input"
+                      type="number"
+                      min={1}
+                      placeholder={
+                        new Set(selectedModules.map((m) => m.quantity)).size === 1
+                          ? String(selectedModules[0].quantity)
+                          : "输入数量..."
+                      }
+                      className="h-7 w-24 text-sm"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const val = parseInt((e.target as HTMLInputElement).value, 10);
+                          if (val && val >= 1) {
+                            batchUpdateQuantity(val);
+                            (e.target as HTMLInputElement).value = "";
+                          }
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        const input = document.getElementById("batch-qty-input") as HTMLInputElement;
+                        const val = parseInt(input?.value || "", 10);
+                        if (val && val >= 1) {
+                          batchUpdateQuantity(val);
+                          input.value = "";
+                        }
+                      }}
+                    >
+                      应用
+                    </Button>
+                  </div>
+                )}
                 {(() => {
                   const filtered = procurementSearch
                     ? productModules.filter(
@@ -2159,25 +2231,50 @@ export function ProjectForm({
                   }
                   return (
                     <div className="grid grid-cols-3 gap-3">
-                      {filtered.map((module) => (
-                        <label
-                          key={module.module_code}
-                          className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
-                            selectedModules.includes(module.module_code)
-                              ? "border-blue-500 bg-blue-50"
-                              : "hover:bg-slate-50"
-                          }`}
-                        >
-                          <Checkbox
-                            checked={selectedModules.includes(module.module_code)}
-                            onCheckedChange={() => toggleModule(module.module_code)}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm truncate">{module.module_name}</div>
-                            <div className="text-xs text-slate-400 truncate">{module.product_name}</div>
-                          </div>
-                        </label>
-                      ))}
+                      {filtered.map((module) => {
+                        const selected = isModuleSelected(module.module_code);
+                        const selectedModule = selectedModules.find((m) => m.code === module.module_code);
+                        return (
+                          <label
+                            key={module.module_code}
+                            className={`flex flex-col gap-2 p-3 border rounded-lg cursor-pointer transition-colors ${
+                              selected
+                                ? "border-blue-500 bg-blue-50"
+                                : "hover:bg-slate-50"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Checkbox
+                                checked={selected}
+                                onCheckedChange={() => toggleModule(module.module_code)}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-sm truncate">{module.module_name}</div>
+                                <div className="text-xs text-slate-400 truncate">{module.product_name}</div>
+                              </div>
+                            </div>
+                            {selected && (
+                              <div className="flex items-center gap-2 pl-8" onClick={(e) => e.stopPropagation()}>
+                                <span className="text-xs text-slate-500">数量：</span>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  value={selectedModule?.quantity ?? 1}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value, 10);
+                                    if (val && val >= 1) {
+                                      updateModuleQuantity(module.module_code, val);
+                                    } else if (e.target.value === "") {
+                                      updateModuleQuantity(module.module_code, 1);
+                                    }
+                                  }}
+                                  className="h-7 w-20 text-sm"
+                                />
+                              </div>
+                            )}
+                          </label>
+                        );
+                      })}
                     </div>
                   );
                 })()}
@@ -2882,11 +2979,14 @@ export function ProjectForm({
                   ) : null}
                   {selectedModules.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
-                      {selectedModules.map((code, i) => {
-                        const mod = productModules.find((m) => m.module_code === code);
+                      {selectedModules.map((sm, i) => {
+                        const mod = productModules.find((m) => m.module_code === sm.code);
                         return (
                           <Badge key={i} variant="secondary" className="text-xs">
-                            {mod?.module_name || code}
+                            {mod?.module_name || sm.code}
+                            {sm.quantity > 1 && (
+                              <span className="ml-1 text-blue-600 font-medium">×{sm.quantity}</span>
+                            )}
                           </Badge>
                         );
                       })}

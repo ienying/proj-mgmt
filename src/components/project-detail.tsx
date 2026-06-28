@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { extractModuleCodes } from "@/lib/procurement-utils";
 import { Markdown } from "@/components/markdown";
 import { AIPromptDialog } from "@/components/ai-prompt-dialog";
 import {
@@ -817,7 +818,7 @@ export function ProjectDetail({
     definitions: TableDefinition[],
     dataMap: Record<string, TableData[]>
   ) => {
-    const procurementModules = project.procurement_modules || [];
+    const procurementModules = extractModuleCodes(project.procurement_modules);
     if (procurementModules.length === 0) return;
 
     // 获取产品模块详情（含排序信息）
@@ -1223,7 +1224,7 @@ export function ProjectDetail({
             col={col}
             value={editValue}
             onChange={(val) => { setEditValue(val); saveEdit(val); }}
-            projectModules={project.procurement_modules || []}
+            projectModules={extractModuleCodes(project.procurement_modules)}
             systemModules={productModuleNames}
           />
         ) : ["office", "pdf", "md", "image", "archive"].includes(col.type) ? (
@@ -4227,7 +4228,7 @@ export function ProjectDetail({
                     col={col}
                     value={newRowData[col.name] || ""}
                     onChange={(val) => setNewRowData(prev => ({ ...prev, [col.name]: val }))}
-                    projectModules={project.procurement_modules || []}
+                    projectModules={extractModuleCodes(project.procurement_modules)}
                     systemModules={productModuleNames}
                   />
                 ) : ["office", "pdf", "md", "image", "archive"].includes(col.type) ? (

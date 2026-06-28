@@ -29,6 +29,7 @@ import {
   PieChart, Pie, Cell
 } from "recharts";
 import { cn } from "@/lib/utils";
+import { extractModuleCodes } from "@/lib/procurement-utils";
 
 interface Project {
   id: string;
@@ -419,8 +420,7 @@ export function ProjectManagement({
     return [];
   }))].sort(), [projects]);
   const allProcurementModules = useMemo(() => [...new Set(projects.flatMap(p => {
-    const pm = p.procurement_modules;
-    return Array.isArray(pm) ? pm as string[] : [];
+    return extractModuleCodes(p.procurement_modules);
   }))].sort(), [projects]);
   const allIntegrationModules = useMemo(() => [...new Set(projects.flatMap(p => {
     const il = (p as unknown as Record<string,unknown>).integration_list;
@@ -474,9 +474,8 @@ export function ProjectManagement({
         return false;
       })();
       const matchProcurement = filterProcurementModules.length === 0 || (() => {
-        const pm = p.procurement_modules;
-        if (Array.isArray(pm)) return filterProcurementModules.some(fm => (pm as string[]).includes(fm));
-        return false;
+        const codes = extractModuleCodes(p.procurement_modules);
+        return filterProcurementModules.some(fm => codes.includes(fm));
       })();
       const matchIntegration = filterIntegrationModule === "all" || (() => {
         const il = (p as unknown as Record<string,unknown>).integration_list;
@@ -507,7 +506,7 @@ export function ProjectManagement({
       if (Array.isArray(ct)) customerTypes = (ct as string[]).join("、");
       else if (typeof ct === "string") customerTypes = ct;
       const ci = Array.isArray(p.channel_info) ? (p.channel_info as Array<Record<string,string>>).map(c => c.company_name).join("、") : "";
-      const pm = Array.isArray(p.procurement_modules) ? (p.procurement_modules as string[]).join("、") : "";
+      const pm = extractModuleCodes(p.procurement_modules).join("、");
       const il = (p as unknown as Record<string,unknown>).integration_list;
       const integrationModules = Array.isArray(il) ? (il as Array<Record<string,string>>).map(i => i.product_module || i.integration_type).filter(Boolean).join("、") : "";
       const cd = (p as unknown as Record<string,unknown>).custom_dev_info;
@@ -761,8 +760,9 @@ export function ProjectManagement({
         </div>
 
         {/* 采购模块 */}
-        {selectedProject.procurement_modules && (selectedProject.procurement_modules as string[]).length > 0 && (() => {
-          const modules = selectedProject.procurement_modules as string[];
+        {selectedProject.procurement_modules && (() => {
+          const modules = extractModuleCodes(selectedProject.procurement_modules);
+          if (modules.length === 0) return null;
           const filtered = modSearch
             ? modules.filter((code) => {
                 const mod = procurementModules.find(m => m.code === code);

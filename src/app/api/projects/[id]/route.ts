@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
 
+/** 兼容 procurement_modules 新旧格式，提取模块 code 列表 */
+function extractModuleCodes(modules: unknown): string[] {
+  if (!Array.isArray(modules)) return [];
+  return modules
+    .map((m) => {
+      if (typeof m === "string") return m;
+      if (typeof m === "object" && m !== null && "code" in m)
+        return String((m as Record<string, unknown>).code || "");
+      return "";
+    })
+    .filter(Boolean);
+}
+
 function mapColumnTypeToSQL(type: string): string {
   const typeMap: Record<string, string> = {
     text: "VARCHAR(255)",
@@ -479,7 +492,7 @@ export async function PUT(request: NextRequest) {
       const projectType = updateData.project_type as string;
       const projectStage = updateData.project_stage as string;
       const projectStatus = updateData.project_status as string | null;
-      const procurementModules = (updateData.procurement_modules as string[]) || [];
+      const procurementModules = extractModuleCodes(updateData.procurement_modules);
 
       if (projectSchema && (projectType || projectStage)) {
         try {
@@ -505,7 +518,7 @@ export async function PUT(request: NextRequest) {
     if (updateData.procurement_modules && updateData.project_schema) {
       try {
         const projectSchema = updateData.project_schema as string;
-        const procurementModules = updateData.procurement_modules as string[];
+        const procurementModules = extractModuleCodes(updateData.procurement_modules);
         await syncProcurementModuleRecords(client, projectSchema, procurementModules);
       } catch (pmErr) {
         console.error("同步采购模块记录失败:", pmErr);

@@ -15,6 +15,7 @@ import { PhaseDetail } from "./PhaseDetail";
 import { OverviewGrid } from "./OverviewGrid";
 import { ChartsSection } from "./ChartsSection";
 import { panelData, subContentData } from "./mock-data";
+import { extractModuleCodes } from "@/lib/procurement-utils";
 
 export function StageLayout({
   project,
@@ -42,6 +43,9 @@ export function StageLayout({
     } else {
       document.documentElement.classList.remove("dark");
     }
+    return () => {
+      document.documentElement.classList.remove("dark");
+    };
   }, [isDark]);
 
   const toggleTheme = useCallback(() => {
@@ -204,7 +208,7 @@ export function StageLayout({
             />
 
             {/* 产品网格 */}
-            <ProductGrid modules={project.procurement_modules} />
+            <ProductGrid modules={extractModuleCodes(project.procurement_modules)} />
 
             {/* 阶段步骤条（内含 Phases 项目阶段 标签） */}
             <PhaseStepper activePhase={activePhase} onPhaseChange={setActivePhase} />
