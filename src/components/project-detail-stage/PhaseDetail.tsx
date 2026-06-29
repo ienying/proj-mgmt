@@ -654,7 +654,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                             <th key={col.name} className="text-left px-4 py-[11px] text-[10px] uppercase tracking-[1px] font-medium bg-[var(--s-surface)] border-b-2 border-[var(--s-border)] text-[var(--s-text-muted)]"
                               style={{ fontFamily: "var(--font-mono, monospace)" }}>{col.name}</th>
                           ))}
-                          {expandedDef.allow_add !== false && <th className="w-10"></th>}
+                          {expandedDef.allow_delete !== false && <th className="w-10"></th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -666,7 +666,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                             {visibleColumns.map((col) => (
                               <td key={col.name} className="px-4 py-3 text-xs">{renderCell(expandedTable, ri, col, row)}</td>
                             ))}
-                            {expandedDef.allow_delete !== false && expandedDef.allow_add !== false && (
+                            {expandedDef.allow_delete !== false && (
                               <td className="px-2 py-3">{!row._readonly && (
                                 <button onClick={(e) => { e.stopPropagation(); if (confirm("确定删除？")) deleteRow(expandedTable, ri); }}
                                   className="text-[10px] text-[var(--s-red)] hover:underline">删除</button>
