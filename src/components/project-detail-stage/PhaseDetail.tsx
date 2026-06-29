@@ -243,7 +243,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
               {expandedDef.stage_desc_column && (
                 <div className="px-5 py-4 mb-5 flex flex-col gap-1.5" style={{ backgroundColor: "var(--s-bg)", borderLeft: "2px solid var(--s-orange)" }}>
                   <span className="text-[10px] uppercase tracking-[1px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)", fontWeight: 700 }}>任务概述</span>
-                  <span className="text-sm leading-relaxed" style={{ color: "var(--s-text)", fontWeight: 500 }}>
+                  <span className="text-sm leading-relaxed" style={{ color: "#22c55e", fontWeight: 600 }}>
                     {tableRecords[expandedTable].map((r) => String(r[expandedDef.stage_desc_column!] || "")).filter(Boolean).join("；") || "—"}
                   </span>
                 </div>
