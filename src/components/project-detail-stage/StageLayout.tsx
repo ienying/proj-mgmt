@@ -37,7 +37,10 @@ export function StageLayout({
     id: string; table_code: string; table_name: string;
     module_type: string[]; apply_project_stages: string[];
     stage_desc_column?: string; stage_display_mode?: string;
-    allow_add?: boolean; readonly_mode?: string;
+    stage_progress_column?: string; stage_progress_target?: string;
+    stage_summary_fields?: string;
+    allow_add?: boolean; allow_delete?: boolean;
+    readonly_mode?: string;
     columns_config?: Array<{ name: string; type: string; readonly?: boolean }>;
   }>>([]);
   useEffect(() => {

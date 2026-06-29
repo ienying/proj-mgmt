@@ -87,6 +87,9 @@ export interface TableDefinition {
   apply_project_stages: string[];
   stage_desc_column?: string;
   stage_display_mode?: string;
+  stage_progress_column?: string;
+  stage_progress_target?: string;
+  stage_summary_fields?: string;
   sort_order: number;
   is_active: boolean;
   allow_add?: boolean;
@@ -1816,6 +1819,105 @@ export function StandardManagement({
                     </div>
                   </SectionPanel>
 
+                  {/* 阶段式布局-进度与汇总 */}
+                  <SectionPanel title="阶段式布局-进度与汇总" icon={Settings}>
+                    <div className="pt-2 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-[11px]">进度计算列</Label>
+                          <p className="text-[9px] text-muted-foreground mb-0.5">选择用于判断完成状态的列</p>
+                          <select value={formData.stage_progress_column || ""}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, stage_progress_column: e.target.value }))}
+                            className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                            <option value="">不计算进度</option>
+                            {(formData.columns_config || []).map((col) => (
+                              <option key={col.name} value={col.name}>{col.name || "(未命名)"}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <Label className="text-[11px]">完成目标值</Label>
+                          <p className="text-[9px] text-muted-foreground mb-0.5">所有记录此列等于该值即 100%</p>
+                          {(() => {
+                            const progressCol = (formData.columns_config || []).find((c) => c.name === formData.stage_progress_column);
+                            const options = progressCol?.options || [];
+                            return options.length > 0 ? (
+                              <select value={formData.stage_progress_target || ""}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, stage_progress_target: e.target.value }))}
+                                className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                <option value="">选择目标</option>
+                                {options.map((opt) => (
+                                  <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <Input value={formData.stage_progress_target || ""}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, stage_progress_target: e.target.value }))}
+                                placeholder="输入目标值" className="h-7 text-[11px]" />
+                            );
+                          })()}
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-[11px]">汇总显示列 <span className="text-muted-foreground font-normal">（最多6列，横向选择）</span></Label>
+                        <p className="text-[9px] text-muted-foreground mb-1">勾选 = 摘要区显示，红色 = 明细表中隐藏</p>
+                        {(() => {
+                          const currentFields = (formData.stage_summary_fields || "").split("\n").map((l) => l.trim()).filter(Boolean);
+                          return (
+                            <div className="flex flex-wrap gap-1 max-h-[120px] overflow-y-auto border rounded p-1.5">
+                              {(formData.columns_config || []).map((col) => {
+                                if (!col.name) return null;
+                                const existingLine = currentFields.find(
+                                  (l) => l === col.name || l === `-${col.name}`
+                                );
+                                const isSelected = !!existingLine;
+                                const isHidden = existingLine?.startsWith("-");
+                                const canAdd = !isSelected && currentFields.length < 6;
+                                return (
+                                  <label key={col.name}
+                                    className={`flex items-center gap-1.5 px-1.5 py-1 rounded text-[11px] cursor-pointer ${
+                                      isSelected ? "bg-primary/10" : "hover:bg-muted"
+                                    } ${!isSelected && !canAdd ? "opacity-40 pointer-events-none" : ""}`}>
+                                    <input type="checkbox" checked={isSelected}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          const next = [...currentFields, col.name];
+                                          setFormData((prev) => ({ ...prev, stage_summary_fields: next.join("\n") }));
+                                        } else {
+                                          const next = currentFields.filter((l) => l !== col.name && l !== `-${col.name}`);
+                                          setFormData((prev) => ({ ...prev, stage_summary_fields: next.join("\n") }));
+                                        }
+                                      }}
+                                      className="w-3 h-3" />
+                                    <span className="flex-1 truncate">{col.name}</span>
+                                    {isSelected && (
+                                      <button type="button"
+                                        onClick={() => {
+                                          const next = currentFields.map((l) =>
+                                            l === col.name ? `-${col.name}` : l === `-${col.name}` ? col.name : l
+                                          );
+                                          setFormData((prev) => ({ ...prev, stage_summary_fields: next.join("\n") }));
+                                        }}
+                                        className={`text-[9px] px-1 py-0.5 rounded border cursor-pointer ${
+                                          isHidden ? "text-red-500 border-red-300" : "text-green-600 border-green-300"
+                                        }`}
+                                        title={isHidden ? "隐藏中，点击显示" : "显示中，点击隐藏"}>
+                                        {isHidden ? "隐藏" : "显示"}
+                                      </button>
+                                    )}
+                                  </label>
+                                );
+                              })}
+                              {(formData.columns_config || []).filter((c) => c.name).length === 0 && (
+                                <span className="text-[10px] text-muted-foreground p-1">请先配置列</span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </SectionPanel>
+
                   {/* 列配置 */}
                   <SectionPanel
                     title="列配置"
@@ -2631,6 +2733,96 @@ export function StandardManagement({
                                   ))}
                                 </div>
                               </div>
+                            </div>
+                          </div>
+
+                          {/* Row 2.5: 进度与汇总 */}
+                          <div className="rounded-lg border bg-card p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Settings className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <span className="font-medium text-xs">阶段式布局-进度与汇总</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 mb-2">
+                              <div>
+                                <Label className="text-[10px]">进度计算列</Label>
+                                <select value={drawerFormData.stage_progress_column || ""}
+                                  onChange={(e) => drawerUpdateField("stage_progress_column", e.target.value)}
+                                  className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                  <option value="">不计算</option>
+                                  {(drawerFormData.columns_config || []).map((col) => (
+                                    <option key={col.name} value={col.name}>{col.name || "(未命名)"}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <Label className="text-[10px]">完成目标值</Label>
+                                {(() => {
+                                  const pcol = (drawerFormData.columns_config || []).find((c) => c.name === drawerFormData.stage_progress_column);
+                                  const opts = pcol?.options || [];
+                                  return opts.length > 0 ? (
+                                    <select value={drawerFormData.stage_progress_target || ""}
+                                      onChange={(e) => drawerUpdateField("stage_progress_target", e.target.value)}
+                                      className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                      <option value="">选择目标</option>
+                                      {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                  ) : (
+                                    <Input value={drawerFormData.stage_progress_target || ""}
+                                      onChange={(e) => drawerUpdateField("stage_progress_target", e.target.value)}
+                                      placeholder="输入目标值" className="h-7 text-[11px]" />
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                            <div>
+                              <Label className="text-[10px]">汇总显示列（点击勾选，最多6列）</Label>
+                              {(() => {
+                                const currentFields = (drawerFormData.stage_summary_fields || "").split("\n").map((l) => l.trim()).filter(Boolean);
+                                return (
+                                  <div className="flex flex-wrap gap-1 max-h-[120px] overflow-y-auto border rounded p-1.5 mt-0.5">
+                                    {(drawerFormData.columns_config || []).map((col) => {
+                                      if (!col.name) return null;
+                                      const existingLine = currentFields.find((l) => l === col.name || l === `-${col.name}`);
+                                      const isSelected = !!existingLine;
+                                      const isHidden = existingLine?.startsWith("-");
+                                      const canAdd = !isSelected && currentFields.length < 6;
+                                      return (
+                                        <label key={col.name}
+                                          className={`flex items-center gap-1.5 px-1.5 py-1 rounded text-[11px] cursor-pointer ${
+                                            isSelected ? "bg-primary/10" : "hover:bg-muted"
+                                          } ${!isSelected && !canAdd ? "opacity-40 pointer-events-none" : ""}`}>
+                                          <input type="checkbox" checked={isSelected}
+                                            onChange={(e) => {
+                                              if (e.target.checked) {
+                                                const next = [...currentFields, col.name];
+                                                drawerUpdateField("stage_summary_fields", next.join("\n"));
+                                              } else {
+                                                const next = currentFields.filter((l) => l !== col.name && l !== `-${col.name}`);
+                                                drawerUpdateField("stage_summary_fields", next.join("\n"));
+                                              }
+                                            }}
+                                            className="w-3 h-3" />
+                                          <span className="flex-1 truncate">{col.name}</span>
+                                          {isSelected && (
+                                            <button type="button"
+                                              onClick={() => {
+                                                const next = currentFields.map((l) =>
+                                                  l === col.name ? `-${col.name}` : l === `-${col.name}` ? col.name : l
+                                                );
+                                                drawerUpdateField("stage_summary_fields", next.join("\n"));
+                                              }}
+                                              className={`text-[9px] px-1 py-0.5 rounded border cursor-pointer ${
+                                                isHidden ? "text-red-500 border-red-300" : "text-green-600 border-green-300"
+                                              }`}>
+                                              {isHidden ? "隐藏" : "显示"}
+                                            </button>
+                                          )}
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
 

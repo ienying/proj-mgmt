@@ -11,7 +11,11 @@ interface TableDef {
   apply_project_stages: string[];
   stage_desc_column?: string;
   stage_display_mode?: string;
+  stage_progress_column?: string;
+  stage_progress_target?: string;
+  stage_summary_fields?: string;
   allow_add?: boolean;
+  allow_delete?: boolean;
   readonly_mode?: string;
   columns_config?: Array<{ name: string; type: string; readonly?: boolean; options?: string[]; display_mode?: string }>;
 }
@@ -224,16 +228,52 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
   };
 
   const expandedDef = expandedTable ? phaseTables.find((t) => t.table_code === expandedTable) : null;
-  // 表格显示列：排除 stage_desc_column
+  // 解析汇总字段：{column, label, hide}
+  const summaryFields = (() => {
+    const raw = expandedDef?.stage_summary_fields || "";
+    return raw.split("\n").map((line) => line.trim()).filter(Boolean).slice(0, 6).map((line) => {
+      const hide = line.startsWith("-");
+      const col = hide ? line.slice(1).trim() : line.trim();
+      return { column: col, hide };
+    });
+  })();
+
+  // 隐藏列名集合
+  const hiddenCols = new Set([
+    expandedDef?.stage_desc_column,
+    ...summaryFields.filter((s) => s.hide).map((s) => s.column),
+  ].filter(Boolean));
+
+  // 表格显示列：排除隐藏列
   const visibleColumns = (expandedDef?.columns_config || []).filter(
-    (col) => col.name !== expandedDef?.stage_desc_column
+    (col) => !hiddenCols.has(col.name)
   );
 
-  // 判断列是否可编辑
+  // 进度计算
+  const progressPercent = expandedTable && expandedDef?.stage_progress_column && expandedDef?.stage_progress_target
+    ? (() => {
+        const records = tableRecords[expandedTable] || [];
+        if (records.length === 0) return 0;
+        const col = expandedDef.stage_progress_column!;
+        const target = expandedDef.stage_progress_target!;
+        const matchCount = records.filter((r) => String(r[col] || "").trim() === target.trim()).length;
+        return Math.round((matchCount / records.length) * 100);
+      })()
+    : null;
+
+  // 判断列是否可编辑（与 API PUT 只读逻辑完全一致）
   const isColumnEditable = (col: { type: string; readonly?: boolean }, row?: Record<string, unknown>) => {
-    if (col.readonly) return false;
-    if (row?._readonly) return false;
-    return ["text", "number", "date", "textarea", "select", "multiple_select", "procurement_module", "user"].includes(col.type);
+    if (!["text", "number", "date", "textarea", "select", "multiple_select", "procurement_module", "user"].includes(col.type)) return false;
+    const isOrMode = expandedDef?.readonly_mode === "or";
+    if (isOrMode) {
+      // OR: 行列任一满足即锁定
+      if (row?._readonly) return false; // 行只读 → 所有列锁
+      if (col.readonly) return false;    // 列只读 → 该列锁
+    } else {
+      // AND: 行列同时满足才锁定
+      if (col.readonly && row?._readonly) return false;
+    }
+    return true;
   };
 
   // 渲染可编辑单元格
@@ -399,7 +439,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       return (
         <span
           className={editable ? "cursor-pointer hover:bg-[var(--s-surface2)] px-1 -mx-1 rounded" : ""}
-          style={{ color: col.readonly || row._readonly ? "var(--s-text-muted)" : "var(--s-text)" }}
+          style={{ color: "var(--s-text)" }}
           onClick={() => editable && startEdit(tableCode, rowIdx, col.name, value)}>
           {value || "—"}
         </span>
@@ -409,9 +449,9 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
     return (
       <span
         className={editable ? "cursor-pointer hover:bg-[var(--s-surface2)] px-1 -mx-1 rounded" : ""}
-        style={{ color: col.readonly || row._readonly ? "var(--s-text-muted)" : "var(--s-text)" }}
+        style={{ color: "var(--s-text)" }}
         onClick={() => editable && startEdit(tableCode, rowIdx, col.name, value)}
-        title={editable ? "点击编辑" : ""}>
+        title={editable ? "点击编辑" : "只读"}>
         {value || "—"}
       </span>
     );
@@ -484,7 +524,10 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                     <span className="w-1.5 h-1.5 flex-shrink-0 bg-[var(--s-green)]" />
                     {def.table_name}
                     {def.allow_add === false && (
-                      <span className="text-[9px] px-1 border border-[var(--s-red)] text-[var(--s-red)]">只读</span>
+                      <span className="text-[9px] px-1 border border-[var(--s-red)] text-[var(--s-red)]">不可添加</span>
+                    )}
+                    {def.allow_delete === false && (
+                      <span className="text-[9px] px-1 border border-[var(--s-orange)] text-[var(--s-orange)]">不可删除</span>
                     )}
                   </div>
                   <span className="text-[10px] text-[var(--s-text-muted)]" style={{ fontFamily: "var(--font-mono, monospace)" }}>›</span>
@@ -565,23 +608,19 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                 </div>
                 <div className="bg-[var(--s-bg)] px-5 py-5 flex flex-col gap-1.5">
                   <span className="text-[10px] uppercase tracking-[1px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)", fontWeight: 700 }}>进度</span>
-                  <span className="text-2xl font-black tracking-[-1px]" style={{ color: "#d9480f", fontFamily: "var(--font-mono, monospace)" }}>
-                    {expandedDef.stage_desc_column && tableRecords[expandedTable].length > 0
-                      ? `${Math.round((tableRecords[expandedTable].filter((r) => {
-                          const v = r[expandedDef.stage_desc_column!];
-                          return v && String(v).trim();
-                        }).length / tableRecords[expandedTable].length) * 100)}%`
-                      : "—"}
+                  <span className="text-2xl font-black tracking-[-1px]" style={{ color: progressPercent === 100 ? "#22c55e" : "#d9480f", fontFamily: "var(--font-mono, monospace)" }}>
+                    {progressPercent !== null ? `${progressPercent}%` : "—"}
                   </span>
                 </div>
-                {visibleColumns.length > 1 && (
-                  <div className="bg-[var(--s-bg)] px-5 py-5 flex flex-col gap-1.5">
-                    <span className="text-[10px] uppercase tracking-[1px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)", fontWeight: 700 }}>执行角色</span>
+                {/* 动态汇总卡：从 stage_summary_fields 读取 */}
+                {summaryFields.filter((s) => !s.hide || true).map((sf) => (
+                  <div key={sf.column} className="bg-[var(--s-bg)] px-5 py-5 flex flex-col gap-1.5">
+                    <span className="text-[10px] uppercase tracking-[1px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)", fontWeight: 700 }}>{sf.column}</span>
                     <span className="text-[13px] font-bold" style={{ color: "var(--s-text)" }}>
-                      {[...new Set(tableRecords[expandedTable].map((r) => String(r[visibleColumns[1].name] || "—")))].filter(Boolean).join(" · ")}
+                      {[...new Set(tableRecords[expandedTable].map((r) => String(r[sf.column] || "—")))].filter(Boolean).join(" · ")}
                     </span>
                   </div>
-                )}
+                ))}
               </div>
 
               {/* ── 任务概述（始终显示所有记录该列的拼接） ── */}
@@ -627,7 +666,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                             {visibleColumns.map((col) => (
                               <td key={col.name} className="px-4 py-3 text-xs">{renderCell(expandedTable, ri, col, row)}</td>
                             ))}
-                            {expandedDef.allow_add !== false && (
+                            {expandedDef.allow_delete !== false && expandedDef.allow_add !== false && (
                               <td className="px-2 py-3">{!row._readonly && (
                                 <button onClick={(e) => { e.stopPropagation(); if (confirm("确定删除？")) deleteRow(expandedTable, ri); }}
                                   className="text-[10px] text-[var(--s-red)] hover:underline">删除</button>
@@ -675,7 +714,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                                     className="w-full px-1 py-0.5 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] outline-none"
                                     autoFocus onClick={(e) => e.stopPropagation()} />
                                 : <span className={isColumnEditable(col, row) ? "cursor-pointer" : ""}
-                                    style={{ color: col.readonly || row._readonly ? "var(--s-text-muted)" : "var(--s-text)" }}>
+                                    style={{ color: "var(--s-text)", backgroundColor: isColumnEditable(col, row) ? "transparent" : "#fef9e7" }}>
                                     {String(row[col.name] ?? "—").slice(0, 28)}{String(row[col.name] ?? "").length > 28 ? "…" : ""}
                                   </span>
                               }
