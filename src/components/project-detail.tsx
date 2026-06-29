@@ -719,7 +719,7 @@ export function ProjectDetail({
             id: d.id as string,
             table_code: d.table_code as string,
             table_name: d.table_name as string,
-            module_codes: (d.module_type as string[]) || ["scope"],
+            module_codes: (d.module_type as string[]) || [],
             allow_add: d.allow_add as boolean | undefined,
             readonly_mode: d.readonly_mode as ("and" | "or") | undefined,
             columns_config: dedupeColumnsByName(d.columns_config as ColumnConfig[]).map(col => ({ ...col, key: col.key || col.name })),

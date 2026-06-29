@@ -32,6 +32,26 @@ export function StageLayout({
   // 根据项目当前阶段确定激活的阶段索引
   const [activePhase, setActivePhase] = useState(0);
 
+  // 获取规范管理的数据表定义
+  const [tableDefs, setTableDefs] = useState<Array<{
+    id: string; table_code: string; table_name: string;
+    module_type: string[]; apply_project_stages: string[];
+    stage_desc_column?: string; stage_display_mode?: string;
+    allow_add?: boolean; readonly_mode?: string;
+    columns_config?: Array<{ name: string; type: string; readonly?: boolean }>;
+  }>>([]);
+  useEffect(() => {
+    fetch("/api/standards")
+      .then((r) => r.json())
+      .then((d) => {
+        const defs = (d.data || []).filter(
+          (def: Record<string, unknown>) => !String(def.table_code || "").startsWith("task_")
+        );
+        setTableDefs(defs);
+      })
+      .catch(() => {});
+  }, [project.id]);
+
   // 当 projectStages 加载完成后，按 sort_order 排序后定位到当前阶段
   useEffect(() => {
     if (projectStages.length > 0) {
@@ -161,6 +181,7 @@ export function StageLayout({
         activePanel={activePanel}
         onPanelChange={setActivePanel}
         onSubClick={handleOpenSubContent}
+        tableDefs={tableDefs}
       />
 
       {/* 右上工具栏 */}
@@ -245,7 +266,16 @@ export function StageLayout({
             </div>
 
             {/* 阶段详情 */}
-            <PhaseDetail phaseKey={`phase${activePhase}`} />
+            <PhaseDetail
+              phaseKey={`phase${activePhase}`}
+              stageCode={
+                projectStages.length > 0
+                  ? [...projectStages].sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99))[activePhase]?.code
+                  : undefined
+              }
+              tableDefs={tableDefs}
+              projectSchema={project.project_schema}
+            />
 
             {/* 项目总览 分隔标题 */}
             <div

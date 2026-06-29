@@ -85,6 +85,8 @@ export interface TableDefinition {
   references_config?: ReferenceConfig[];
   apply_project_types: string[];
   apply_project_stages: string[];
+  stage_desc_column?: string;
+  stage_display_mode?: string;
   sort_order: number;
   is_active: boolean;
   allow_add?: boolean;
@@ -970,6 +972,8 @@ export function StandardManagement({
     columns_config: [],
     apply_project_types: [],
     apply_project_stages: [],
+    stage_desc_column: "",
+    stage_display_mode: "both",
     sort_order: 0,
     is_active: true,
     allow_add: true,
@@ -1842,6 +1846,47 @@ export function StandardManagement({
                             </button>
                           ))}
                         </div>
+                      </div>
+                      <div className="mt-3">
+                        <Label className="text-xs font-medium mb-2 block">
+                          阶段式布局-任务概述列 <span className="text-muted-foreground font-normal">(可选)</span>
+                        </Label>
+                        <p className="text-[10px] text-muted-foreground mb-1.5">
+                          选中后，阶段式布局中点击该表记录时，将显示此列的内容作为任务概述
+                        </p>
+                        <select
+                          value={formData.stage_desc_column || ""}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, stage_desc_column: e.target.value }))
+                          }
+                          className="w-full h-8 px-2 rounded-md border border-input bg-background text-xs"
+                        >
+                          <option value="">不选（无概述）</option>
+                          {(formData.columns_config || []).map((col, ci) => (
+                            <option key={`col-${ci}-${col.name}`} value={col.name}>
+                              {col.name || "(未命名列)"}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="mt-3">
+                        <Label className="text-xs font-medium mb-2 block">
+                          阶段式布局-显示位置
+                        </Label>
+                        <p className="text-[10px] text-muted-foreground mb-1.5">
+                          控制该表在阶段式布局中的显示位置
+                        </p>
+                        <select
+                          value={formData.stage_display_mode || "both"}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, stage_display_mode: e.target.value }))
+                          }
+                          className="w-full h-8 px-2 rounded-md border border-input bg-background text-xs"
+                        >
+                          <option value="both">两者都显示</option>
+                          <option value="menu">仅在左侧菜单显示</option>
+                          <option value="phase">仅在阶段任务显示</option>
+                        </select>
                       </div>
                     </div>
                   </SectionPanel>

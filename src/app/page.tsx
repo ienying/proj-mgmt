@@ -537,7 +537,7 @@ export default function HomePage() {
 
   const handleStandardDelete = async (id: string) => {
     try {
-      const res = await fetch(`/api/standards/${id}`, {
+      const res = await fetch(`/api/standards/${id}?id=${id}`, {
         method: "DELETE",
       });
       

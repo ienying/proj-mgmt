@@ -94,6 +94,8 @@ export async function POST(request: NextRequest) {
       columns_config,
       apply_project_types,
       apply_project_stages,
+      stage_desc_column,
+      stage_display_mode,
       sort_order = 0,
       is_active = true,
     } = body;
@@ -130,6 +132,8 @@ export async function POST(request: NextRequest) {
       references_config: body.references_config || [],
       apply_project_types: apply_project_types || [],
       apply_project_stages: apply_project_stages || [],
+      stage_desc_column: stage_desc_column || null,
+      stage_display_mode: stage_display_mode || "both",
       sort_order,
       is_active,
       allow_add: body.allow_add !== undefined ? body.allow_add : true,
