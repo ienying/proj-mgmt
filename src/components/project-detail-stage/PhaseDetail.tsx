@@ -209,31 +209,42 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
               </div>
 
               {/* ── 摘要卡片 ── */}
+              {/* ── 摘要卡片 ── */}
               <div className="grid gap-px mb-5" style={{
                 gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
                 backgroundColor: "var(--s-border)",
               }}>
                 <div className="bg-[var(--s-bg)] px-5 py-5 flex flex-col gap-1.5">
-                  <span className="text-[10px] uppercase tracking-[1px] text-[var(--s-text-muted)]" style={{ fontFamily: "var(--font-mono, monospace)" }}>记录总数</span>
-                  <span className="text-2xl font-bold text-[var(--s-text)]" style={{ fontFamily: "var(--font-mono, monospace)" }}>{tableRecords[expandedTable].length}</span>
+                  <span className="text-[10px] uppercase tracking-[1px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)", fontWeight: 700 }}>步骤总数</span>
+                  <span className="text-2xl font-black tracking-[-1px]" style={{ color: "var(--s-text)", fontFamily: "var(--font-mono, monospace)" }}>{tableRecords[expandedTable].length}</span>
                 </div>
-                {/* 显示第一列的概要统计 */}
-                {visibleColumns.length > 0 && (
+                <div className="bg-[var(--s-bg)] px-5 py-5 flex flex-col gap-1.5">
+                  <span className="text-[10px] uppercase tracking-[1px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)", fontWeight: 700 }}>进度</span>
+                  <span className="text-2xl font-black tracking-[-1px]" style={{ color: "#d9480f", fontFamily: "var(--font-mono, monospace)" }}>
+                    {expandedDef.stage_desc_column && tableRecords[expandedTable].length > 0
+                      ? `${Math.round((tableRecords[expandedTable].filter((r) => {
+                          const v = r[expandedDef.stage_desc_column!];
+                          return v && String(v).trim();
+                        }).length / tableRecords[expandedTable].length) * 100)}%`
+                      : "—"}
+                  </span>
+                </div>
+                {visibleColumns.length > 1 && (
                   <div className="bg-[var(--s-bg)] px-5 py-5 flex flex-col gap-1.5">
-                    <span className="text-[10px] uppercase tracking-[1px] text-[var(--s-text-muted)]" style={{ fontFamily: "var(--font-mono, monospace)" }}>{visibleColumns[0].name}</span>
-                    <span className="text-[13px] font-semibold text-[var(--s-text-secondary)]">
-                      {[...new Set(tableRecords[expandedTable].map((r) => String(r[visibleColumns[0].name] || "—")))].join(" · ")}
+                    <span className="text-[10px] uppercase tracking-[1px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)", fontWeight: 700 }}>执行角色</span>
+                    <span className="text-[13px] font-bold" style={{ color: "var(--s-text)" }}>
+                      {[...new Set(tableRecords[expandedTable].map((r) => String(r[visibleColumns[1].name] || "—")))].filter(Boolean).join(" · ")}
                     </span>
                   </div>
                 )}
               </div>
 
-              {/* ── 任务概述（选中行时显示） ── */}
-              {selectedRecord?.tableCode === expandedTable && selectedRecord.rowIdx != null && expandedDef.stage_desc_column && (
-                <div className="bg-[var(--s-bg)] px-5 py-4 mb-5 flex flex-col gap-1.5">
-                  <span className="text-[10px] uppercase tracking-[1px] text-[var(--s-text-muted)]" style={{ fontFamily: "var(--font-mono, monospace)" }}>任务概述</span>
-                  <span className="text-[13px] text-[var(--s-text-secondary)] leading-relaxed">
-                    {String(tableRecords[expandedTable][selectedRecord.rowIdx][expandedDef.stage_desc_column] || "—")}
+              {/* ── 任务概述（始终显示所有记录该列的拼接） ── */}
+              {expandedDef.stage_desc_column && (
+                <div className="px-5 py-4 mb-5 flex flex-col gap-1.5" style={{ backgroundColor: "var(--s-bg)", borderLeft: "2px solid var(--s-orange)" }}>
+                  <span className="text-[10px] uppercase tracking-[1px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)", fontWeight: 700 }}>任务概述</span>
+                  <span className="text-sm leading-relaxed" style={{ color: "var(--s-text)", fontWeight: 500 }}>
+                    {tableRecords[expandedTable].map((r) => String(r[expandedDef.stage_desc_column!] || "")).filter(Boolean).join("；") || "—"}
                   </span>
                 </div>
               )}
