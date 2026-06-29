@@ -553,6 +553,26 @@ export default function HomePage() {
     }
   };
 
+  const handleStandardDuplicate = async (def: any) => {
+    try {
+      const res = await fetch("/api/standards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...def, id: undefined }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "复制失败");
+      }
+      toast.success(`已复制为 ${def.table_code}`);
+      const refreshRes = await fetch("/api/standards");
+      const refreshData = await refreshRes.json();
+      setStandards((refreshData.data || []).filter((d: any) => !String(d.table_code).startsWith("task_")));
+    } catch (error: any) {
+      toast.error("复制失败: " + error.message);
+    }
+  };
+
   const handleStandardReorder = async (fromIndex: number, toIndex: number) => {
     try {
       if (fromIndex === toIndex) return;
@@ -695,6 +715,7 @@ export default function HomePage() {
               onCreate={handleStandardCreate}
               onUpdate={handleStandardUpdate}
               onDelete={handleStandardDelete}
+              onDuplicate={handleStandardDuplicate}
               onReorder={handleStandardReorder}
             />
           </ContentErrorBoundary>

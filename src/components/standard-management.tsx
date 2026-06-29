@@ -160,6 +160,7 @@ interface StandardManagementProps {
   onCreate: (data: unknown) => void;
   onUpdate: (id: string, data: unknown) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (def: TableDefinition) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
 }
 
@@ -688,6 +689,7 @@ export function StandardManagement({
   onUpdate,
   onDelete,
   onReorder,
+  onDuplicate,
 }: StandardManagementProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -2470,13 +2472,13 @@ export function StandardManagement({
           <Table className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-8"></TableHead>
-                <TableHead className="min-w-[120px]">表名称</TableHead>
-                <TableHead className="w-[100px]">模块</TableHead>
-                <TableHead className="w-[80px]">类型</TableHead>
-                <TableHead className="w-[80px]">阶段</TableHead>
-                <TableHead className="w-[60px]">状态</TableHead>
-                <TableHead className="w-[180px]">操作</TableHead>
+                <TableHead className="w-6"></TableHead>
+                <TableHead className="w-[18%]">表名称</TableHead>
+                <TableHead className="w-[15%]">模块</TableHead>
+                <TableHead className="w-[11%]">类型</TableHead>
+                <TableHead className="w-[11%]">阶段</TableHead>
+                <TableHead className="w-[7%]">状态</TableHead>
+                <TableHead className="w-[38%]">操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -2540,6 +2542,14 @@ export function StandardManagement({
                         <button onClick={() => { openDrawer(def); setDrawerFullscreen(true); }} className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground rounded hover:bg-accent">全屏</button>
                         <button onClick={() => openDataDialog(def)} className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground rounded hover:bg-accent">数据</button>
                         <button onClick={() => openSyncDialog(def)} className="h-6 px-1.5 text-[10px] text-blue-600 hover:text-blue-700 rounded hover:bg-accent">同步</button>
+                        <button onClick={() => {
+                          const code = prompt("请输入新表代码（只能小写字母/数字/下划线）:", def.table_code + "_copy");
+                          if (!code) return;
+                          if (!/^[a-z][a-z0-9_]*$/.test(code)) { alert("表代码只能包含小写字母、数字和下划线，且必须以字母开头"); return; }
+                          const name = prompt("请输入新表名称:", def.table_name + "（副本）");
+                          if (!name) return;
+                          onDuplicate({ ...def, table_code: code, table_name: name });
+                        }} className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground rounded hover:bg-accent">复制</button>
                         <button onClick={() => onDelete(def.id)} className="h-6 px-1 text-destructive hover:text-destructive rounded hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                     </TableCell>
