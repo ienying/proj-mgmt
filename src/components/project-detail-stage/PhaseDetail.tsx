@@ -451,7 +451,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
         className={editable ? "cursor-pointer hover:bg-[var(--s-surface2)] px-1 -mx-1 rounded" : ""}
         style={{ color: "var(--s-text)" }}
         onClick={() => editable && startEdit(tableCode, rowIdx, col.name, value)}
-        title={editable ? "点击编辑" : "只读"}>
+        title={editable ? "点击编辑" : "只读-该记录由管理员设置"}>
         {value || "—"}
       </span>
     );
