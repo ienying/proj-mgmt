@@ -29,11 +29,12 @@ function formatFileSize(bytes: number): string {
 }
 
 interface FileUploadFieldProps {
-  fileType: string; // "office" | "pdf" | "md" | "image" | "archive"
-  value: string; // JSON 字符串: [{key, name, size}]
+  fileType: string;
+  value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
   maxFiles?: number;
+  projectCode?: string;
 }
 
 export function FileUploadField({
@@ -42,6 +43,7 @@ export function FileUploadField({
   onChange,
   disabled = false,
   maxFiles = 10,
+  projectCode,
 }: FileUploadFieldProps) {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -80,6 +82,7 @@ export function FileUploadField({
           const formData = new FormData();
           formData.append("file", file);
           formData.append("fileType", fileType);
+          if (projectCode) formData.append("projectCode", projectCode);
 
           const res = await fetch("/api/files/upload", {
             method: "POST",

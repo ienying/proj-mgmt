@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { phaseDetails } from "./mock-data";
 
 interface TableDef {
@@ -33,6 +33,10 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
     tableCode: string; rowIdx: number; colName: string;
   } | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [productModules, setProductModules] = useState<{ code: string; name: string }[]>([]);
+  const [userList, setUserList] = useState<{ id: string; name: string }[]>([]);
+  const [pmSearch, setPmSearch] = useState("");
+  const [userSearch, setUserSearch] = useState("");
 
   // 开始编辑单元格
   const startEdit = (tableCode: string, rowIdx: number, colName: string, currentValue: string) => {
@@ -40,12 +44,13 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
     setEditValue(currentValue);
   };
 
-  // 保存编辑
-  const saveEdit = async () => {
+  // 保存编辑（支持传入特定值，避免React状态异步问题）
+  const saveEdit = useCallback(async (saveValue?: string) => {
     if (!editingCell || !projectSchema) return;
     const { tableCode, rowIdx, colName } = editingCell;
     const row = tableRecords[tableCode]?.[rowIdx];
     if (!row) return;
+    const valueToSave = saveValue !== undefined ? saveValue : editValue;
     try {
       const res = await fetch("/api/project-data", {
         method: "PUT",
@@ -53,20 +58,20 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
         body: JSON.stringify({
           projectSchema,
           tableCode,
-          id: row.id,
-          data: { [colName]: editValue },
+          rowId: row.id,
+          data: { [colName]: valueToSave },
         }),
       });
       if (res.ok) {
         setTableRecords((prev) => {
           const updated = [...(prev[tableCode] || [])];
-          updated[rowIdx] = { ...updated[rowIdx], [colName]: editValue };
+          updated[rowIdx] = { ...updated[rowIdx], [colName]: valueToSave };
           return { ...prev, [tableCode]: updated };
         });
       }
     } catch {}
     setEditingCell(null);
-  };
+  }, [editingCell, editValue, projectSchema, tableRecords]);
 
   // 添加行
   const addRow = async (tableCode: string) => {
@@ -93,7 +98,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
     const row = tableRecords[tableCode]?.[rowIdx];
     if (!row?.id) return;
     try {
-      const res = await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(tableCode)}&id=${row.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(tableCode)}&rowId=${row.id}`, { method: "DELETE" });
       if (res.ok) {
         setTableRecords((prev) => {
           const updated = (prev[tableCode] || []).filter((_, i) => i !== rowIdx);
@@ -105,6 +110,59 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
 
   // 取消编辑
   const cancelEdit = () => setEditingCell(null);
+
+  // 文件上传处理（用 ref 避免 React 状态异步问题）
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadTargetRef = useRef<{ tableCode: string; rowIdx: number; colName: string } | null>(null);
+  const [uploadingCell, setUploadingCell] = useState<{ tableCode: string; rowIdx: number; colName: string } | null>(null);
+
+  const handleFileUpload = async (file: File) => {
+    const target = uploadTargetRef.current;
+    if (!target || !projectSchema) return;
+    const { tableCode, rowIdx, colName } = target;
+    const row = tableRecords[tableCode]?.[rowIdx];
+    if (!row) return;
+
+    setUploadingCell(target);
+    uploadTargetRef.current = null;
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("fileType", "attachment");
+      fd.append("projectCode", projectSchema);
+
+      const uploadRes = await fetch("/api/files/upload", { method: "POST", body: fd });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) {
+        console.error("上传失败:", uploadData.error);
+        setUploadingCell(null);
+        return;
+      }
+      const fileKey = uploadData.key || "";
+      if (!fileKey) { setUploadingCell(null); return; }
+
+      // 保存 key 到数据库
+      const saveRes = await fetch("/api/project-data", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectSchema, tableCode, rowId: row.id, data: { [colName]: fileKey } }),
+      });
+      if (!saveRes.ok) {
+        console.error("保存文件key失败");
+        setUploadingCell(null);
+        return;
+      }
+
+      setTableRecords((prev) => {
+        const updated = [...(prev[tableCode] || [])];
+        updated[rowIdx] = { ...updated[rowIdx], [colName]: fileKey };
+        return { ...prev, [tableCode]: updated };
+      });
+    } catch (e) {
+      console.error("上传异常:", e);
+    }
+    setUploadingCell(null);
+  };
 
   // 筛选属于当前阶段 + 显示位置为 phase/both 的表
   const phaseTables = stageCode
@@ -128,6 +186,19 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       if (!tableRecords[tableCode] && projectSchema) {
         setLoadingTable(tableCode);
         try {
+          // 预加载产品模块字典（用于 procurement_module 类型）
+          if (productModules.length === 0) {
+            fetch("/api/dicts?type=product_module_types")
+              .then((r) => r.json())
+              .then((d) => setProductModules((d.data || []).map((item: any) => ({ code: item.code, name: item.module_name || item.product_name || item.code }))))
+              .catch(() => {});
+          }
+          if (userList.length === 0) {
+            fetch("/api/users")
+              .then((r) => r.json())
+              .then((d) => setUserList((d.data || d.users || []).map((u: any) => ({ id: u.id, name: u.name || u.username }))))
+              .catch(() => {});
+          }
           // 先同步引用数据
           await fetch(`/api/project-data/sync?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(tableCode)}`).catch(() => {});
           // 加载数据
@@ -162,7 +233,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
   const isColumnEditable = (col: { type: string; readonly?: boolean }, row?: Record<string, unknown>) => {
     if (col.readonly) return false;
     if (row?._readonly) return false;
-    return ["text", "number", "date", "textarea", "select", "multiple_select"].includes(col.type);
+    return ["text", "number", "date", "textarea", "select", "multiple_select", "procurement_module", "user"].includes(col.type);
   };
 
   // 渲染可编辑单元格
@@ -175,7 +246,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       return (
         <div className="flex items-center gap-1">
           {col.type === "select" && (col.options || []).length > 0 ? (
-            <select value={editValue} onChange={(e) => { setEditValue(e.target.value); saveEdit(); }}
+            <select value={editValue} onChange={(e) => { setEditValue(e.target.value); saveEdit(e.target.value); }}
               className="px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none"
               autoFocus>
               <option value="">请选择</option>
@@ -200,7 +271,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                         fetch("/api/project-data", {
                           method: "PUT",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ projectSchema, tableCode, id: row.id, data: { [colName]: newVal } }),
+                          body: JSON.stringify({ projectSchema, tableCode, rowId: row.id, data: { [colName]: newVal } }),
                         }).then((r) => {
                           if (r.ok) setTableRecords((prev) => {
                             const updated = [...(prev[tableCode] || [])];
@@ -215,29 +286,109 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                 );
               })}
             </div>
+          ) : col.type === "procurement_module" ? (
+            <div className="flex flex-col gap-1 w-full max-w-[200px]">
+              <input type="text" value={pmSearch} onChange={(e) => setPmSearch(e.target.value)}
+                placeholder="搜索模块..."
+                className="w-full px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none"
+                autoFocus />
+              <div className="max-h-[120px] overflow-y-auto border border-[var(--s-border)] bg-[var(--s-surface)]">
+                {productModules.filter((m) => !pmSearch || m.name.includes(pmSearch) || m.code.includes(pmSearch)).slice(0, 20).map((m) => (
+                  <div key={m.code}
+                    onClick={() => { setEditValue(m.name); setPmSearch(""); saveEdit(m.name); }}
+                    className={`px-2 py-1 text-xs cursor-pointer hover:bg-[var(--s-surface2)] ${editValue === m.name ? "bg-[rgba(28,126,214,.08)] text-[var(--s-blue)]" : "text-[var(--s-text)]"}`}>
+                    {m.name}
+                  </div>
+                ))}
+                {productModules.length === 0 && (
+                  <div className="px-2 py-1 text-xs text-[var(--s-text-muted)]">加载中...</div>
+                )}
+              </div>
+            </div>
+          ) : col.type === "user" ? (
+            <div className="flex flex-col gap-1 w-full max-w-[200px]">
+              <input type="text" value={userSearch} onChange={(e) => setUserSearch(e.target.value)}
+                placeholder="搜索用户..."
+                className="w-full px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none"
+                autoFocus />
+              <div className="max-h-[120px] overflow-y-auto border border-[var(--s-border)] bg-[var(--s-surface)]">
+                {userList.filter((u) => !userSearch || u.name.includes(userSearch)).slice(0, 20).map((u) => (
+                  <div key={u.id}
+                    onClick={() => { setEditValue(u.name); setUserSearch(""); saveEdit(u.name); }}
+                    className={`px-2 py-1 text-xs cursor-pointer hover:bg-[var(--s-surface2)] ${editValue === u.name ? "bg-[rgba(28,126,214,.08)] text-[var(--s-blue)]" : "text-[var(--s-text)]"}`}>
+                    {u.name}
+                  </div>
+                ))}
+                {userList.length === 0 && (
+                  <div className="px-2 py-1 text-xs text-[var(--s-text-muted)]">加载中...</div>
+                )}
+              </div>
+            </div>
           ) : col.type === "textarea" ? (
             <textarea value={editValue} onChange={(e) => setEditValue(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); } }}
+              onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit((e.target as HTMLTextAreaElement).value); } }}
+              onBlur={(e) => saveEdit((e.target as HTMLTextAreaElement).value)}
               className="flex-1 px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none resize-none min-h-[24px]"
               autoFocus />
           ) : col.type === "number" ? (
             <input type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter") saveEdit(); }}
-              onBlur={saveEdit}
+              onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter") saveEdit((e.target as HTMLInputElement).value); }}
+              onBlur={(e) => saveEdit((e.target as HTMLInputElement).value)}
               className="w-full px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none"
               autoFocus />
           ) : col.type === "date" ? (
             <input type="date" value={editValue} onChange={(e) => setEditValue(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); }}
-              onBlur={saveEdit}
+              onBlur={(e) => saveEdit((e.target as HTMLInputElement).value)}
               className="w-full px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none"
               autoFocus />
           ) : (
             <input type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter") saveEdit(); }}
-              onBlur={saveEdit}
+              onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter") saveEdit((e.target as HTMLInputElement).value); }}
+              onBlur={(e) => saveEdit((e.target as HTMLInputElement).value)}
               className="w-full px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none"
               autoFocus />
+          )}
+        </div>
+      );
+    }
+
+    // 附件/视频类型：上传按钮
+    if (col.type === "attachment" || col.type === "video") {
+      const value = String(row[col.name] ?? "");
+      const hasFile = value && value !== "undefined" && value !== "null";
+      return (
+        <div className="flex items-center gap-1">
+          {hasFile ? (
+            <>
+              <a href={value.startsWith("http") ? value : `/api/files/download?key=${encodeURIComponent(value)}`}
+                target="_blank" className="text-[11px] text-blue-600 hover:underline truncate max-w-[120px]"
+                onClick={(e) => e.stopPropagation()}
+                title={value}>
+                {(value.split("/").pop()?.split("?")[0] || "文件").replace(/^\d+_/, "")}
+              </a>
+              <button onClick={(e) => {
+                e.stopPropagation();
+                fileInputRef.current?.click();
+                uploadTargetRef.current = { tableCode, rowIdx, colName: col.name };
+                fileInputRef.current?.click();
+              }}
+                className="text-[10px] text-red-500 hover:text-red-700"
+                title="替换文件">
+                ↻
+              </button>
+            </>
+          ) : (
+            <button onClick={(e) => {
+              e.stopPropagation();
+              uploadTargetRef.current = { tableCode, rowIdx, colName: col.name };
+              fileInputRef.current?.click();
+            }}
+              className={`text-[10px] cursor-pointer hover:text-primary ${uploadingCell?.tableCode === tableCode && uploadingCell?.rowIdx === rowIdx && uploadingCell?.colName === col.name ? "opacity-50" : ""}`}>
+              {uploadingCell?.tableCode === tableCode && uploadingCell?.rowIdx === rowIdx && uploadingCell?.colName === col.name
+                ? "上传中..."
+                : "📎 上传"}
+            </button>
           )}
         </div>
       );
@@ -519,8 +670,8 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                               }}>
                               {editingCell?.tableCode === expandedTable && editingCell?.rowIdx === ri && editingCell?.colName === col.name
                                 ? <input type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)}
-                                    onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter") { saveEdit(); } }}
-                                    onBlur={saveEdit}
+                                    onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter") saveEdit((e.target as HTMLInputElement).value); }}
+                                    onBlur={(e) => saveEdit((e.target as HTMLInputElement).value)}
                                     className="w-full px-1 py-0.5 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] outline-none"
                                     autoFocus onClick={(e) => e.stopPropagation()} />
                                 : <span className={isColumnEditable(col, row) ? "cursor-pointer" : ""}
@@ -571,6 +722,14 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
           )}
         </div>
       )}
+      {/* 隐藏文件上传输入框 */}
+      <input type="file" ref={fileInputRef} className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFileUpload(file);
+          e.target.value = "";
+        }}
+      />
     </div>
   );
 }
