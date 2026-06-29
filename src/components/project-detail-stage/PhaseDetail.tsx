@@ -13,7 +13,7 @@ interface TableDef {
   stage_display_mode?: string;
   allow_add?: boolean;
   readonly_mode?: string;
-  columns_config?: Array<{ name: string; type: string; readonly?: boolean }>;
+  columns_config?: Array<{ name: string; type: string; readonly?: boolean; options?: string[]; display_mode?: string }>;
 }
 
 interface PhaseDetailProps {
@@ -29,6 +29,82 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
   const [loadingTable, setLoadingTable] = useState<string | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<{ tableCode: string; rowIdx: number } | null>(null);
   const [taskViewMode, setTaskViewMode] = useState<Record<string, "card" | "table">>({});
+  const [editingCell, setEditingCell] = useState<{
+    tableCode: string; rowIdx: number; colName: string;
+  } | null>(null);
+  const [editValue, setEditValue] = useState("");
+
+  // 开始编辑单元格
+  const startEdit = (tableCode: string, rowIdx: number, colName: string, currentValue: string) => {
+    setEditingCell({ tableCode, rowIdx, colName });
+    setEditValue(currentValue);
+  };
+
+  // 保存编辑
+  const saveEdit = async () => {
+    if (!editingCell || !projectSchema) return;
+    const { tableCode, rowIdx, colName } = editingCell;
+    const row = tableRecords[tableCode]?.[rowIdx];
+    if (!row) return;
+    try {
+      const res = await fetch("/api/project-data", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectSchema,
+          tableCode,
+          id: row.id,
+          data: { [colName]: editValue },
+        }),
+      });
+      if (res.ok) {
+        setTableRecords((prev) => {
+          const updated = [...(prev[tableCode] || [])];
+          updated[rowIdx] = { ...updated[rowIdx], [colName]: editValue };
+          return { ...prev, [tableCode]: updated };
+        });
+      }
+    } catch {}
+    setEditingCell(null);
+  };
+
+  // 添加行
+  const addRow = async (tableCode: string) => {
+    if (!projectSchema) return;
+    try {
+      const res = await fetch("/api/project-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectSchema, tableCode, data: {} }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTableRecords((prev) => ({
+          ...prev,
+          [tableCode]: [...(prev[tableCode] || []), data.data || data],
+        }));
+      }
+    } catch {}
+  };
+
+  // 删除行
+  const deleteRow = async (tableCode: string, rowIdx: number) => {
+    if (!projectSchema) return;
+    const row = tableRecords[tableCode]?.[rowIdx];
+    if (!row?.id) return;
+    try {
+      const res = await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(tableCode)}&id=${row.id}`, { method: "DELETE" });
+      if (res.ok) {
+        setTableRecords((prev) => {
+          const updated = (prev[tableCode] || []).filter((_, i) => i !== rowIdx);
+          return { ...prev, [tableCode]: updated };
+        });
+      }
+    } catch {}
+  };
+
+  // 取消编辑
+  const cancelEdit = () => setEditingCell(null);
 
   // 筛选属于当前阶段 + 显示位置为 phase/both 的表
   const phaseTables = stageCode
@@ -52,6 +128,9 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       if (!tableRecords[tableCode] && projectSchema) {
         setLoadingTable(tableCode);
         try {
+          // 先同步引用数据
+          await fetch(`/api/project-data/sync?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(tableCode)}`).catch(() => {});
+          // 加载数据
           const res = await fetch(
             `/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(tableCode)}`
           );
@@ -74,10 +153,118 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
   };
 
   const expandedDef = expandedTable ? phaseTables.find((t) => t.table_code === expandedTable) : null;
-  // 表格显示列：排除 stage_desc_column（它只在详情面板中显示）
+  // 表格显示列：排除 stage_desc_column
   const visibleColumns = (expandedDef?.columns_config || []).filter(
     (col) => col.name !== expandedDef?.stage_desc_column
   );
+
+  // 判断列是否可编辑
+  const isColumnEditable = (col: { type: string; readonly?: boolean }, row?: Record<string, unknown>) => {
+    if (col.readonly) return false;
+    if (row?._readonly) return false;
+    return ["text", "number", "date", "textarea", "select", "multiple_select"].includes(col.type);
+  };
+
+  // 渲染可编辑单元格
+  const renderCell = (tableCode: string, rowIdx: number, col: { name: string; type: string; readonly?: boolean; options?: string[]; display_mode?: string }, row: Record<string, unknown>) => {
+    const value = String(row[col.name] ?? "");
+    const isEditing = editingCell?.tableCode === tableCode && editingCell?.rowIdx === rowIdx && editingCell?.colName === col.name;
+    const editable = isColumnEditable(col, row);
+
+    if (isEditing) {
+      return (
+        <div className="flex items-center gap-1">
+          {col.type === "select" && (col.options || []).length > 0 ? (
+            <select value={editValue} onChange={(e) => { setEditValue(e.target.value); saveEdit(); }}
+              className="px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none"
+              autoFocus>
+              <option value="">请选择</option>
+              {col.options!.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          ) : col.type === "multiple_select" && (col.options || []).length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {col.options!.map((opt) => {
+                const selected = (editValue || "").split(",").map((s: string) => s.trim()).includes(opt);
+                return (
+                  <label key={opt} className="inline-flex items-center gap-1 text-[10px] cursor-pointer">
+                    <input type="checkbox" checked={selected} onChange={() => {
+                      const current = (editValue || "").split(",").map((s: string) => s.trim()).filter(Boolean);
+                      const next = selected ? current.filter((v: string) => v !== opt) : [...current, opt];
+                      const newVal = next.join(",");
+                      setEditValue(newVal);
+                      // auto-save for multi-select
+                      if (editingCell) {
+                        const { tableCode, rowIdx, colName } = editingCell;
+                        fetch("/api/project-data", {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ projectSchema, tableCode, id: row.id, data: { [colName]: newVal } }),
+                        }).then((r) => {
+                          if (r.ok) setTableRecords((prev) => {
+                            const updated = [...(prev[tableCode] || [])];
+                            updated[rowIdx] = { ...updated[rowIdx], [colName]: newVal };
+                            return { ...prev, [tableCode]: updated };
+                          });
+                        });
+                      }
+                    }} className="w-3 h-3" />
+                    <span>{opt}</span>
+                  </label>
+                );
+              })}
+            </div>
+          ) : col.type === "textarea" ? (
+            <textarea value={editValue} onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); } }}
+              className="flex-1 px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none resize-none min-h-[24px]"
+              autoFocus />
+          ) : col.type === "number" ? (
+            <input type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter") saveEdit(); }}
+              onBlur={saveEdit}
+              className="w-full px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none"
+              autoFocus />
+          ) : col.type === "date" ? (
+            <input type="date" value={editValue} onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); }}
+              onBlur={saveEdit}
+              className="w-full px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none"
+              autoFocus />
+          ) : (
+            <input type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter") saveEdit(); }}
+              onBlur={saveEdit}
+              className="w-full px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none"
+              autoFocus />
+          )}
+        </div>
+      );
+    }
+
+    // 非编辑态的显示
+    if (col.type === "select" || col.type === "multiple_select") {
+      return (
+        <span
+          className={editable ? "cursor-pointer hover:bg-[var(--s-surface2)] px-1 -mx-1 rounded" : ""}
+          style={{ color: col.readonly || row._readonly ? "var(--s-text-muted)" : "var(--s-text)" }}
+          onClick={() => editable && startEdit(tableCode, rowIdx, col.name, value)}>
+          {value || "—"}
+        </span>
+      );
+    }
+
+    return (
+      <span
+        className={editable ? "cursor-pointer hover:bg-[var(--s-surface2)] px-1 -mx-1 rounded" : ""}
+        style={{ color: col.readonly || row._readonly ? "var(--s-text-muted)" : "var(--s-text)" }}
+        onClick={() => editable && startEdit(tableCode, rowIdx, col.name, value)}
+        title={editable ? "点击编辑" : ""}>
+        {value || "—"}
+      </span>
+    );
+  };
 
   // 静态阶段详情
   const detail = phaseDetails[phaseKey];
@@ -128,9 +315,9 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
 
         {/* 右列：表任务列表（紧凑模式） */}
         <div className="px-16 py-12 flex flex-col gap-5">
-          <div className="text-[10px] uppercase tracking-[2px] mb-1"
-            style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
-            {phaseTables.length > 0 ? "阶段数据表" : "阶段任务"}
+          <div className="mb-1"
+            style={{ color: "var(--s-orange)", fontFamily: "var(--font-mono, monospace)", fontSize: "11px", fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase" }}>
+            {phaseTables.length > 0 ? "任务清单 TASKS" : "阶段任务"}
           </div>
 
           {phaseTables.length > 0 ? (
@@ -144,7 +331,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                 >
                   <div className="flex items-center gap-2.5 text-[13px] text-[var(--s-text-secondary)]">
                     <span className="w-1.5 h-1.5 flex-shrink-0 bg-[var(--s-green)]" />
-                    📋 {def.table_name}
+                    {def.table_name}
                     {def.allow_add === false && (
                       <span className="text-[9px] px-1 border border-[var(--s-red)] text-[var(--s-red)]">只读</span>
                     )}
@@ -178,6 +365,13 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                     style={{ fontFamily: "var(--font-mono, monospace)" }}>
                     {tableRecords[expandedTable].length} 条
                   </span>
+                  {expandedDef.allow_add !== false && (
+                    <button onClick={() => addRow(expandedTable)}
+                      className="text-[10px] px-2.5 py-1.5 border border-[var(--s-green)] text-[var(--s-green)] bg-transparent cursor-pointer hover:bg-[rgba(43,138,62,.06)] uppercase tracking-[0.5px] font-semibold"
+                      style={{ fontFamily: "var(--font-mono, monospace)" }}>
+                      + 添加
+                    </button>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button onClick={() => setTaskViewMode((prev) => ({ ...prev, [expandedTable]: prev[expandedTable] === "table" ? "card" : "table" }))}
@@ -270,6 +464,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                             <th key={col.name} className="text-left px-4 py-[11px] text-[10px] uppercase tracking-[1px] font-medium bg-[var(--s-surface)] border-b-2 border-[var(--s-border)] text-[var(--s-text-muted)]"
                               style={{ fontFamily: "var(--font-mono, monospace)" }}>{col.name}</th>
                           ))}
+                          {expandedDef.allow_add !== false && <th className="w-10"></th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -279,8 +474,14 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                               selectedRecord?.tableCode === expandedTable && selectedRecord?.rowIdx === ri ? "bg-[rgba(28,126,214,.04)]" : ""}`}>
                             <td className="px-4 py-3 text-[11px] text-[var(--s-text-muted)]" style={{ fontFamily: "var(--font-mono, monospace)" }}>{ri + 1}</td>
                             {visibleColumns.map((col) => (
-                              <td key={col.name} className="px-4 py-3 text-xs text-[var(--s-text)]">{String(row[col.name] ?? "—")}</td>
+                              <td key={col.name} className="px-4 py-3 text-xs">{renderCell(expandedTable, ri, col, row)}</td>
                             ))}
+                            {expandedDef.allow_add !== false && (
+                              <td className="px-2 py-3">{!row._readonly && (
+                                <button onClick={(e) => { e.stopPropagation(); if (confirm("确定删除？")) deleteRow(expandedTable, ri); }}
+                                  className="text-[10px] text-[var(--s-red)] hover:underline">删除</button>
+                              )}</td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -311,8 +512,22 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                             selectedRecord?.tableCode === expandedTable && selectedRecord?.rowIdx === ri ? "bg-[rgba(28,126,214,.04)] border-l-2 border-l-[var(--s-blue)]" : ""}`}>
                           <td className="px-4 py-3 text-xs font-semibold text-[var(--s-text)]">{ri === 0 ? expandedDef.table_name : ""}</td>
                           {visibleColumns.map((col) => (
-                            <td key={col.name} className={`px-4 py-3 text-xs truncate max-w-[200px] ${col.readonly || row._readonly ? "text-[var(--s-text-muted)]" : "text-[var(--s-text)]"}`}>
-                              {String(row[col.name] ?? "—").slice(0, 28)}{String(row[col.name] ?? "").length > 28 ? "…" : ""}
+                            <td key={col.name} className={`px-4 py-3 text-xs truncate max-w-[200px]`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isColumnEditable(col, row)) startEdit(expandedTable, ri, col.name, String(row[col.name] ?? ""));
+                              }}>
+                              {editingCell?.tableCode === expandedTable && editingCell?.rowIdx === ri && editingCell?.colName === col.name
+                                ? <input type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter") { saveEdit(); } }}
+                                    onBlur={saveEdit}
+                                    className="w-full px-1 py-0.5 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] outline-none"
+                                    autoFocus onClick={(e) => e.stopPropagation()} />
+                                : <span className={isColumnEditable(col, row) ? "cursor-pointer" : ""}
+                                    style={{ color: col.readonly || row._readonly ? "var(--s-text-muted)" : "var(--s-text)" }}>
+                                    {String(row[col.name] ?? "—").slice(0, 28)}{String(row[col.name] ?? "").length > 28 ? "…" : ""}
+                                  </span>
+                              }
                             </td>
                           ))}
                           <td className="px-4 py-3 text-[10px] text-[var(--s-text-muted)]">▶</td>

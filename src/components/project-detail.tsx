@@ -1127,7 +1127,7 @@ export function ProjectDetail({
       if (col.multiple) return renderMultiSelectTags(strValue);
       return renderSelectTag(strValue);
     }
-    if (["office", "pdf", "md", "image", "archive"].includes(col.type)) {
+    if (["attachment"].includes(col.type)) {
       return renderFileCellDisplay(String(value ?? ""), col.type);
     }
     if (col.type === "video") {
@@ -1226,7 +1226,7 @@ export function ProjectDetail({
             projectModules={project.procurement_modules || []}
             systemModules={productModuleNames}
           />
-        ) : ["office", "pdf", "md", "image", "archive"].includes(col.type) ? (
+        ) : ["attachment"].includes(col.type) ? (
           <FileUploadField
             fileType={col.type}
             value={editValue || ""}
@@ -4230,7 +4230,7 @@ export function ProjectDetail({
                     projectModules={project.procurement_modules || []}
                     systemModules={productModuleNames}
                   />
-                ) : ["office", "pdf", "md", "image", "archive"].includes(col.type) ? (
+                ) : ["attachment"].includes(col.type) ? (
                   <FileUploadField
                     fileType={col.type}
                     value={newRowData[col.name] || ""}

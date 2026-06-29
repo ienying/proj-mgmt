@@ -106,7 +106,8 @@ export interface ColumnConfig {
   display_mode?: "dropdown" | "checkbox" | "project" | "system"; // 单选展示方式 或 采购模块数据来源
   multiple?: boolean; // 采购模块选择是否多选
   label?: string;
-  max_size?: string; // 视频最大文件大小: "100MB" / "500MB" / "1GB"
+  file_type?: string; // 附件列允许的文件类型，如 "pdf,doc,xlsx"
+  max_size?: string;
   max_count?: number; // 视频最多上传个数
   format?: "number" | "percent"; // 数字列的显示格式
   reference_config?: {
@@ -140,18 +141,14 @@ const MODULE_TYPES = [
 
 const COLUMN_TYPES = [
   { code: "text", name: "文本" },
+  { code: "textarea", name: "多行文本" },
   { code: "number", name: "数字" },
   { code: "date", name: "日期" },
   { code: "select", name: "单选" },
   { code: "multiple_select", name: "多选" },
-  { code: "textarea", name: "多行文本" },
-  { code: "procurement_module", name: "产品模块" },
-  { code: "office", name: "Office 文件" },
-  { code: "pdf", name: "PDF 文件" },
-  { code: "md", name: "Markdown 文件" },
-  { code: "image", name: "图片" },
-  { code: "archive", name: "压缩包" },
+  { code: "attachment", name: "附件" },
   { code: "video", name: "视频" },
+  { code: "procurement_module", name: "产品模块" },
   { code: "procurement_record", name: "采购模块记录" },
   { code: "user", name: "用户" },
 ];
@@ -702,6 +699,7 @@ export function StandardManagement({
   // 抽屉式展开编辑
   const [expandedDefId, setExpandedDefId] = useState<string | null>(null);
   const [drawerFormData, setDrawerFormData] = useState<TableDefinition | null>(null);
+  const [drawerFullscreen, setDrawerFullscreen] = useState(false);
 
   // 规范定义列表拖拽排序
   const [dragDefIndex, setDragDefIndex] = useState<number | null>(null);
@@ -1181,11 +1179,7 @@ export function StandardManagement({
         "多选": "multiple_select", "multiple_select": "multiple_select",
         "多行文本": "textarea", "textarea": "textarea",
         "产品模块": "procurement_module", "procurement_module": "procurement_module",
-        "Office 文件": "office", "office": "office",
-        "PDF 文件": "pdf", "pdf": "pdf",
-        "Markdown 文件": "md", "md": "md",
-        "图片": "image", "image": "image",
-        "压缩包": "archive", "archive": "archive",
+        "附件": "attachment", "attachment": "attachment",
         "视频": "video", "video": "video",
         "采购模块记录": "procurement_record", "procurement_record": "procurement_record",
         "用户": "user", "user": "user",
@@ -1292,6 +1286,7 @@ export function StandardManagement({
   const closeDrawer = () => {
     setExpandedDefId(null);
     setDrawerFormData(null);
+    setDrawerFullscreen(false);
   };
 
   const handleDrawerSave = () => {
@@ -1713,82 +1708,39 @@ export function StandardManagement({
                 <div className="flex-1 min-w-0 space-y-3 overflow-y-auto pr-2">
                   {/* 基本信息 */}
                   <SectionPanel title="基本信息" icon={FileText} defaultOpen>
-                    <div className="grid grid-cols-2 gap-4 pt-3">
-                      <div className="space-y-2">
-                        <Label className="text-xs font-medium">
-                          表代码 <span className="text-destructive">*</span>
-                        </Label>
-                        <Input
-                          value={formData.table_code || ""}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, table_code: e.target.value }))
-                          }
-                          placeholder="如: scope_wbs"
-                          disabled={!!editingId}
-                          className="h-9"
-                        />
+                    <div className="grid grid-cols-3 gap-2 pt-2">
+                      <div>
+                        <Label className="text-[11px]">表代码 *</Label>
+                        <Input value={formData.table_code || ""} onChange={(e) => setFormData((prev) => ({ ...prev, table_code: e.target.value }))}
+                          placeholder="如: scope_wbs" disabled={!!editingId} className="h-7 text-xs" />
                       </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs font-medium">
-                          表名称 <span className="text-destructive">*</span>
-                        </Label>
-                        <Input
-                          value={formData.table_name || ""}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, table_name: e.target.value }))
-                          }
-                          placeholder="如: WBS分解表"
-                          className="h-9"
-                        />
+                      <div>
+                        <Label className="text-[11px]">表名称 *</Label>
+                        <Input value={formData.table_name || ""} onChange={(e) => setFormData((prev) => ({ ...prev, table_name: e.target.value }))}
+                          placeholder="如: WBS分解表" className="h-7 text-xs" />
+                      </div>
+                      <div>
+                        <Label className="text-[11px]">描述</Label>
+                        <Input value={formData.description || ""} onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                          placeholder="表描述" className="h-7 text-xs" />
                       </div>
                     </div>
-                    <div className="space-y-2 pt-3">
-                      <Label className="text-xs font-medium">描述</Label>
-                      <Input
-                        value={formData.description || ""}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, description: e.target.value }))
-                        }
-                        placeholder="表描述"
-                        className="h-9"
-                      />
-                    </div>
-
-                    {/* 操作权限 */}
-                    <div className="flex items-center justify-between pt-3 border-t mt-3">
-                      <div className="space-y-0.5">
-                        <Label className="text-xs font-medium">允许项目添加记录</Label>
-                        <p className="text-xs text-muted-foreground">关闭后，项目模块管理中不显示"添加记录"按钮</p>
-                      </div>
-                      <Switch
-                        checked={formData.allow_add !== false}
-                        onCheckedChange={(checked: boolean) =>
-                          setFormData((prev) => ({ ...prev, allow_add: checked }))
-                        }
-                      />
+                    <div className="flex items-center gap-3 pt-2 mt-2 border-t">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <Switch checked={formData.allow_add !== false} onCheckedChange={(c: boolean) => setFormData((prev) => ({ ...prev, allow_add: c }))} className="scale-75" />
+                        <span className="text-[11px] font-medium">允许添加</span>
+                      </label>
+                      <span className="text-[9px] text-muted-foreground">关闭后项目中将不显示"添加"按钮</span>
                     </div>
                   </SectionPanel>
-                  <SectionPanel
-                    title="所属模块"
-                    icon={Layers}
-                    badge={formData.module_type?.length || null}
-                  >
-                    <div className="pt-3">
-                      <Label className="text-xs font-medium mb-2 block">
-                        选择所属模块 <span className="text-muted-foreground font-normal">(可多选)</span>
-                      </Label>
-                      <div className="grid grid-cols-5 gap-2">
+                  <SectionPanel title="所属模块" icon={Layers} badge={formData.module_type?.length || null}>
+                    <div className="pt-2">
+                      <div className="grid grid-cols-5 gap-1">
                         {moduleTypes.map((module) => (
-                          <label
-                            key={module.code}
-                            className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm cursor-pointer hover:bg-accent transition-colors has-[:checked]:bg-primary/10 has-[:checked]:text-primary"
-                          >
-                            <Checkbox
-                              checked={formData.module_type?.includes(module.code)}
-                              onCheckedChange={() => toggleModule(module.code)}
-                              className="h-4 w-4"
-                            />
-                            <span className="truncate text-xs">{module.name}</span>
+                          <label key={module.code}
+                            className="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs cursor-pointer hover:bg-accent has-[:checked]:bg-primary/10 has-[:checked]:text-primary">
+                            <Checkbox checked={formData.module_type?.includes(module.code)} onCheckedChange={() => toggleModule(module.code)} className="h-3 w-3" />
+                            <span className="truncate text-[11px]">{module.name}</span>
                           </label>
                         ))}
                       </div>
@@ -1796,54 +1748,25 @@ export function StandardManagement({
                   </SectionPanel>
 
                   {/* 适用范围 */}
-                  <SectionPanel
-                    title="适用范围"
-                    icon={Settings}
-                    badge={
-                      (formData.apply_project_types?.length || 0) +
-                      (formData.apply_project_stages?.length || 0) || null
-                    }
-                  >
-                    <div className="pt-3 space-y-4">
+                  <SectionPanel title="适用范围" icon={Settings} badge={(formData.apply_project_types?.length || 0) + (formData.apply_project_stages?.length || 0) || null}>
+                    <div className="pt-2 space-y-2">
                       <div>
-                        <Label className="text-xs font-medium mb-2 block">
-                          适用项目类型 <span className="text-muted-foreground font-normal">(可多选)</span>
-                        </Label>
-                        <div className="flex flex-wrap gap-2">
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-[0.5px] font-semibold">适用类型</span>
+                        <div className="flex flex-wrap gap-1 mt-0.5">
                           {projectTypes.map((type) => (
-                            <button
-                              key={type.code}
-                              type="button"
-                              onClick={() => toggleProjectType(type.code)}
-                              className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${
-                                formData.apply_project_types?.includes(type.code)
-                                  ? "bg-primary text-primary-foreground border-primary"
-                                  : "hover:bg-muted border-border"
-                              }`}
-                            >
-                              {type.name}
-                            </button>
+                            <button key={type.code} type="button" onClick={() => toggleProjectType(type.code)}
+                              className={`text-[10px] px-2 py-1 rounded border ${
+                                formData.apply_project_types?.includes(type.code) ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted border-border"}`}>{type.name}</button>
                           ))}
                         </div>
                       </div>
                       <div>
-                        <Label className="text-xs font-medium mb-2 block">
-                          适用项目阶段 <span className="text-muted-foreground font-normal">(可多选)</span>
-                        </Label>
-                        <div className="flex flex-wrap gap-2">
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-[0.5px] font-semibold">适用阶段</span>
+                        <div className="flex flex-wrap gap-1 mt-0.5">
                           {projectStages.map((stage) => (
-                            <button
-                              key={stage.code}
-                              type="button"
-                              onClick={() => toggleProjectStage(stage.code)}
-                              className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${
-                                formData.apply_project_stages?.includes(stage.code)
-                                  ? "bg-primary text-primary-foreground border-primary"
-                                  : "hover:bg-muted border-border"
-                              }`}
-                            >
-                              {stage.name}
-                            </button>
+                            <button key={stage.code} type="button" onClick={() => toggleProjectStage(stage.code)}
+                              className={`text-[10px] px-2 py-1 rounded border ${
+                                formData.apply_project_stages?.includes(stage.code) ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted border-border"}`}>{stage.name}</button>
                           ))}
                         </div>
                       </div>
@@ -2280,6 +2203,33 @@ export function StandardManagement({
                                     </TableCell>
                                   </TableRow>
                                 )}
+                                {col.type === 'attachment' && (
+                                  <TableRow>
+                                    <TableCell colSpan={5} className="py-2 px-3 bg-muted/30">
+                                      <div className="flex items-center gap-3 flex-wrap">
+                                        <span className="text-xs text-muted-foreground shrink-0">允许文件类型:</span>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {["pdf","doc","docx","xls","xlsx","ppt","pptx","md","txt","jpg","png","gif","zip","rar"].map((ft) => {
+                                            const selected = (col.file_type || "pdf,doc,docx,xls,xlsx,ppt,pptx,md,zip").split(",");
+                                            const isSelected = selected.includes(ft);
+                                            return (
+                                              <button key={ft}
+                                                onClick={() => {
+                                                  const next = isSelected ? selected.filter((s: string) => s !== ft) : [...selected, ft];
+                                                  updateColumn(index, "file_type", next.join(","));
+                                                }}
+                                                className={`text-[10px] px-2 py-0.5 rounded border cursor-pointer transition-colors ${
+                                                  isSelected ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted border-border"
+                                                }`}>
+                                                {ft.toUpperCase()}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
                                 {col.type === 'video' && (
                                   <TableRow>
                                     <TableCell colSpan={5} className="py-2 px-3 bg-muted/30">
@@ -2495,51 +2445,16 @@ export function StandardManagement({
         </div>
       </div>
 
-      {/* 统计卡片 */}
+      {/* 紧凑统计栏 */}
       <div className="px-6 pt-3">
-        <div className="grid grid-cols-4 gap-3">
-          <Card className="shadow-sm">
-            <CardContent className="p-3 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">总表数</p>
-                <p className="text-xl font-bold">{definitions.length}</p>
-              </div>
-              <Database className="w-5 h-5 text-muted-foreground opacity-50" />
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm">
-            <CardContent className="p-3 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">覆盖模块</p>
-                <p className="text-xl font-bold">
-                  {new Set(definitions.flatMap(d => Array.isArray(d.module_type) ? d.module_type : d.module_type ? [d.module_type] : [])).size}
-                </p>
-              </div>
-              <Layers className="w-5 h-5 text-muted-foreground opacity-50" />
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm">
-            <CardContent className="p-3 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">覆盖类型</p>
-                <p className="text-xl font-bold">
-                  {new Set(definitions.flatMap(d => d.apply_project_types || [])).size}
-                </p>
-              </div>
-              <Settings className="w-5 h-5 text-muted-foreground opacity-50" />
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm">
-            <CardContent className="p-3 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">覆盖阶段</p>
-                <p className="text-xl font-bold">
-                  {new Set(definitions.flatMap(d => d.apply_project_stages || [])).size}
-                </p>
-              </div>
-              <RefreshCw className="w-5 h-5 text-muted-foreground opacity-50" />
-            </CardContent>
-          </Card>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span>共 <strong className="text-foreground">{definitions.length}</strong> 张表</span>
+          <span className="text-border">|</span>
+          <span>覆盖 <strong className="text-foreground">{new Set(definitions.flatMap(d => Array.isArray(d.module_type) ? d.module_type : d.module_type ? [d.module_type] : [])).size}</strong> 个模块</span>
+          <span className="text-border">|</span>
+          <span><strong className="text-foreground">{new Set(definitions.flatMap(d => d.apply_project_types || [])).size}</strong> 种类型</span>
+          <span className="text-border">|</span>
+          <span><strong className="text-foreground">{new Set(definitions.flatMap(d => d.apply_project_stages || [])).size}</strong> 个阶段</span>
         </div>
       </div>
 
@@ -2555,13 +2470,13 @@ export function StandardManagement({
           <Table className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10"></TableHead>
-                <TableHead>表名称</TableHead>
-                <TableHead>模块</TableHead>
-                <TableHead>适用类型</TableHead>
-                <TableHead>适用阶段</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead className="w-32">操作</TableHead>
+                <TableHead className="w-8"></TableHead>
+                <TableHead className="min-w-[120px]">表名称</TableHead>
+                <TableHead className="w-[100px]">模块</TableHead>
+                <TableHead className="w-[80px]">类型</TableHead>
+                <TableHead className="w-[80px]">阶段</TableHead>
+                <TableHead className="w-[60px]">状态</TableHead>
+                <TableHead className="w-[180px]">操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -2585,52 +2500,34 @@ export function StandardManagement({
                     <TableCell>
                       <GripVertical className="w-4 h-4 text-muted-foreground" />
                     </TableCell>
-                    <TableCell className="font-medium">{def.table_name}</TableCell>
+                    <TableCell className="font-medium text-sm">{def.table_name}</TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {(() => {
-                          const modules = Array.isArray(def.module_type)
-                            ? def.module_type
-                            : def.module_type
-                            ? [def.module_type]
-                            : [];
-                          return modules.length === 0 ? (
-                            <span className="text-muted-foreground text-sm">-</span>
-                          ) : (
-                            modules.map((mod) => (
-                              <Badge key={mod} variant="outline" className="text-xs">
-                                {moduleTypes.find((m) => m.code === mod)?.name || mod}
-                              </Badge>
-                            ))
-                          );
-                        })()}
-                      </div>
+                      {(() => {
+                        const mods = Array.isArray(def.module_type) ? def.module_type : def.module_type ? [def.module_type] : [];
+                        if (mods.length === 0) return <span className="text-[11px] text-muted-foreground">-</span>;
+                        const names = mods.map((m) => moduleTypes.find((mt) => mt.code === m)?.name || m);
+                        return <span className="text-[11px] truncate block max-w-[90px]" title={names.join("、")}>{names.slice(0, 2).join("、")}{names.length > 2 ? ` +${names.length - 2}` : ""}</span>;
+                      })()}
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {def.apply_project_types.length === 0 ? (
-                          <span className="text-muted-foreground text-sm">全部</span>
-                        ) : (
-                          def.apply_project_types.map((type) => (
-                            <Badge key={type} variant="secondary" className="text-xs">
-                              {projectTypes.find((t) => t.code === type)?.name || type}
-                            </Badge>
-                          ))
-                        )}
-                      </div>
+                      {def.apply_project_types.length === 0 ? (
+                        <span className="text-[11px] text-muted-foreground">-</span>
+                      ) : (
+                        <span className="text-[11px] truncate block max-w-[70px]" title={def.apply_project_types.map((t) => projectTypes.find((pt) => pt.code === t)?.name || t).join("、")}>
+                          {def.apply_project_types.slice(0, 2).map((t) => projectTypes.find((pt) => pt.code === t)?.name || t).join("、")}
+                          {def.apply_project_types.length > 2 ? ` +${def.apply_project_types.length - 2}` : ""}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {def.apply_project_stages.length === 0 ? (
-                          <span className="text-muted-foreground text-sm">全部</span>
-                        ) : (
-                          def.apply_project_stages.map((stage) => (
-                            <Badge key={stage} variant="outline" className="text-xs">
-                              {projectStages.find((s) => s.code === stage)?.name || stage}
-                            </Badge>
-                          ))
-                        )}
-                      </div>
+                      {def.apply_project_stages.length === 0 ? (
+                        <span className="text-[11px] text-muted-foreground">-</span>
+                      ) : (
+                        <span className="text-[11px] truncate block max-w-[70px]" title={def.apply_project_stages.map((s) => projectStages.find((ps) => ps.code === s)?.name || s).join("、")}>
+                          {def.apply_project_stages.slice(0, 2).map((s) => projectStages.find((ps) => ps.code === s)?.name || s).join("、")}
+                          {def.apply_project_stages.length > 2 ? ` +${def.apply_project_stages.length - 2}` : ""}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge variant={def.is_active ? "default" : "secondary"}>
@@ -2638,41 +2535,12 @@ export function StandardManagement({
                       </Badge>
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
-                          onClick={() => openEditDialog(def)}
-                        >
-                          编辑
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
-                          title="查看数据"
-                          onClick={() => openDataDialog(def)}
-                        >
-                          数据
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2 text-xs text-blue-600 hover:text-blue-700"
-                          onClick={() => openSyncDialog(def)}
-                        >
-                          同步
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          title="删除表定义"
-                          onClick={() => onDelete(def.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                      <div className="flex items-center gap-0.5">
+                        <button onClick={() => openEditDialog(def)} className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground rounded hover:bg-accent">编辑</button>
+                        <button onClick={() => { openDrawer(def); setDrawerFullscreen(true); }} className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground rounded hover:bg-accent">全屏</button>
+                        <button onClick={() => openDataDialog(def)} className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground rounded hover:bg-accent">数据</button>
+                        <button onClick={() => openSyncDialog(def)} className="h-6 px-1.5 text-[10px] text-blue-600 hover:text-blue-700 rounded hover:bg-accent">同步</button>
+                        <button onClick={() => onDelete(def.id)} className="h-6 px-1 text-destructive hover:text-destructive rounded hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -2680,139 +2548,77 @@ export function StandardManagement({
                   {expandedDefId === def.id && drawerFormData && (
                     <TableRow className="bg-muted/20 hover:bg-muted/20">
                       <TableCell colSpan={7} className="p-0">
-                        <div className="overflow-hidden">
-                        <div className="px-6 py-4 space-y-4 border-b-2 border-b-primary/20 max-h-[65vh] overflow-y-auto">
-                          {/* Row 1: 基本信息 */}
-                          <div className="rounded-lg border bg-card p-4">
-                            <div className="flex items-center gap-2 mb-3">
-                              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                              <span className="font-medium text-sm">基本信息</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label className="text-xs font-medium">
-                                  表代码 <span className="text-destructive">*</span>
-                                </Label>
-                                <Input
-                                  value={drawerFormData.table_code || ""}
-                                  onChange={(e) => drawerUpdateField("table_code", e.target.value)}
-                                  placeholder="如: scope_wbs"
-                                  disabled
-                                  className="h-8 text-sm"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label className="text-xs font-medium">
-                                  表名称 <span className="text-destructive">*</span>
-                                </Label>
-                                <Input
-                                  value={drawerFormData.table_name || ""}
-                                  onChange={(e) => drawerUpdateField("table_name", e.target.value)}
-                                  placeholder="如: WBS分解表"
-                                  className="h-8 text-sm"
-                                />
-                              </div>
-                            </div>
-                            <div className="space-y-2 mt-3">
-                              <Label className="text-xs font-medium">描述</Label>
-                              <Input
-                                value={drawerFormData.description || ""}
-                                onChange={(e) => drawerUpdateField("description", e.target.value)}
-                                placeholder="表描述"
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div className="flex items-center justify-between pt-3 mt-3 border-t">
-                              <div className="space-y-0.5">
-                                <Label className="text-xs font-medium">允许项目添加记录</Label>
-                                <p className="text-xs text-muted-foreground">关闭后，项目模块管理中不显示"添加记录"按钮</p>
-                              </div>
-                              <Switch
-                                checked={drawerFormData.allow_add !== false}
-                                onCheckedChange={(checked: boolean) => drawerUpdateField("allow_add", checked)}
-                              />
+                        <div className={`overflow-hidden ${drawerFullscreen ? "fixed inset-0 z-50 bg-background" : ""}`}>
+                        {drawerFullscreen && (
+                          <div className="flex items-center justify-between px-6 py-3 border-b bg-card">
+                            <span className="font-bold text-sm">编辑: {drawerFormData.table_name || drawerFormData.table_code}</span>
+                            <div className="flex items-center gap-1.5">
+                              <button onClick={handleDrawerSave} className="h-7 px-3 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90">保存</button>
+                              <button onClick={closeDrawer} className="h-7 px-3 text-xs border border-border rounded hover:bg-muted">取消</button>
+                              <button onClick={() => setDrawerFullscreen(false)} className="h-7 px-3 text-xs border border-border rounded hover:bg-muted">退出全屏</button>
                             </div>
                           </div>
-
-                          {/* Row 2: 所属模块 + 适用范围 */}
-                          <div className="grid grid-cols-2 gap-4">
-                            {/* 所属模块 */}
-                            <div className="rounded-lg border bg-card p-4">
-                              <div className="flex items-center gap-2 mb-3">
-                                <Layers className="h-4 w-4 text-muted-foreground shrink-0" />
-                                <span className="font-medium text-sm">所属模块</span>
-                                <Badge variant="secondary" className="ml-auto text-xs shrink-0">
-                                  {(drawerFormData.module_type || []).length}
-                                </Badge>
+                        )}
+                        <div className={`px-6 py-4 space-y-4 border-b-2 border-b-primary/20 ${
+                          drawerFullscreen ? "max-h-[calc(100vh-60px)] overflow-y-auto" : "max-h-[65vh] overflow-y-auto"
+                        }`}>
+                          {/* Row 1: 基本信息 + 所属模块 + 适用范围（紧凑布局） */}
+                          <div className="rounded-lg border bg-card p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <span className="font-medium text-xs">基本信息</span>
+                            </div>
+                            <div className="grid grid-cols-4 gap-2 mb-2">
+                              <div>
+                                <Label className="text-[11px]">表代码</Label>
+                                <Input value={drawerFormData.table_code || ""} disabled className="h-7 text-xs" />
                               </div>
-                              <div className="grid grid-cols-2 gap-1.5">
-                                {moduleTypes.map((module) => (
-                                  <label
-                                    key={module.code}
-                                    className="flex items-center gap-2 rounded-md px-2 py-1 text-xs cursor-pointer hover:bg-accent transition-colors has-[:checked]:bg-primary/10 has-[:checked]:text-primary"
-                                  >
-                                    <Checkbox
-                                      checked={(drawerFormData.module_type || []).includes(module.code)}
-                                      onCheckedChange={() => drawerToggleModule(module.code)}
-                                      className="h-3.5 w-3.5"
-                                    />
-                                    <span className="truncate">{module.name}</span>
-                                  </label>
-                                ))}
+                              <div>
+                                <Label className="text-[11px]">表名称 *</Label>
+                                <Input value={drawerFormData.table_name || ""} onChange={(e) => drawerUpdateField("table_name", e.target.value)} placeholder="如: WBS分解表" className="h-7 text-xs" />
+                              </div>
+                              <div>
+                                <Label className="text-[11px]">描述</Label>
+                                <Input value={drawerFormData.description || ""} onChange={(e) => drawerUpdateField("description", e.target.value)} className="h-7 text-xs" />
+                              </div>
+                              <div className="flex flex-col items-start justify-end pb-0.5 gap-0.5">
+                                <label className="flex items-center gap-1.5 cursor-pointer">
+                                  <Switch checked={drawerFormData.allow_add !== false} onCheckedChange={(c: boolean) => drawerUpdateField("allow_add", c)} className="scale-75" />
+                                  <span className="text-[11px] font-medium">允许添加</span>
+                                </label>
+                                <span className="text-[9px] text-muted-foreground leading-tight">关闭后项目中将不显示"添加"按钮</span>
                               </div>
                             </div>
-
-                            {/* 适用范围 */}
-                            <div className="rounded-lg border bg-card p-4">
-                              <div className="flex items-center gap-2 mb-3">
-                                <Settings className="h-4 w-4 text-muted-foreground shrink-0" />
-                                <span className="font-medium text-sm">适用范围</span>
-                                <Badge variant="secondary" className="ml-auto text-xs shrink-0">
-                                  {(drawerFormData.apply_project_types || []).length + (drawerFormData.apply_project_stages || []).length || 0}
-                                </Badge>
-                              </div>
-                              <div className="space-y-3">
-                                <div>
-                                  <Label className="text-xs font-medium mb-1.5 block">
-                                    适用项目类型 <span className="text-muted-foreground font-normal">(可多选)</span>
-                                  </Label>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {projectTypes.map((type) => (
-                                      <button
-                                        key={type.code}
-                                        type="button"
-                                        onClick={() => drawerToggleProjectType(type.code)}
-                                        className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
-                                          (drawerFormData.apply_project_types || []).includes(type.code)
-                                            ? "bg-primary text-primary-foreground border-primary"
-                                            : "hover:bg-muted border-border"
-                                        }`}
-                                      >
-                                        {type.name}
-                                      </button>
-                                    ))}
-                                  </div>
+                            {/* 所属模块 + 适用范围 合并一行，带竖向分隔 */}
+                            <div className="grid grid-cols-3 gap-0 pt-2 border-t">
+                              <div className="px-2">
+                                <span className="text-[10px] text-muted-foreground uppercase tracking-[0.5px] font-semibold">所属模块</span>
+                                <div className="flex flex-wrap gap-0.5 mt-0.5">
+                                  {moduleTypes.map((m) => (
+                                    <button key={m.code} type="button" onClick={() => drawerToggleModule(m.code)}
+                                      className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                        (drawerFormData.module_type || []).includes(m.code) ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted border-border"}`}>{m.name}</button>
+                                  ))}
                                 </div>
-                                <div>
-                                  <Label className="text-xs font-medium mb-1.5 block">
-                                    适用项目阶段 <span className="text-muted-foreground font-normal">(可多选)</span>
-                                  </Label>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {projectStages.map((stage) => (
-                                      <button
-                                        key={stage.code}
-                                        type="button"
-                                        onClick={() => drawerToggleProjectStage(stage.code)}
-                                        className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
-                                          (drawerFormData.apply_project_stages || []).includes(stage.code)
-                                            ? "bg-primary text-primary-foreground border-primary"
-                                            : "hover:bg-muted border-border"
-                                        }`}
-                                      >
-                                        {stage.name}
-                                      </button>
-                                    ))}
-                                  </div>
+                              </div>
+                              <div className="px-2 border-l">
+                                <span className="text-[10px] text-muted-foreground uppercase tracking-[0.5px] font-semibold">适用类型</span>
+                                <div className="flex flex-wrap gap-0.5 mt-0.5">
+                                  {projectTypes.map((t) => (
+                                    <button key={t.code} type="button" onClick={() => drawerToggleProjectType(t.code)}
+                                      className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                        (drawerFormData.apply_project_types || []).includes(t.code) ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted border-border"}`}>{t.name}</button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="px-2 border-l">
+                                <span className="text-[10px] text-muted-foreground uppercase tracking-[0.5px] font-semibold">适用阶段</span>
+                                <div className="flex flex-wrap gap-0.5 mt-0.5">
+                                  {projectStages.map((s) => (
+                                    <button key={s.code} type="button" onClick={() => drawerToggleProjectStage(s.code)}
+                                      className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                        (drawerFormData.apply_project_stages || []).includes(s.code) ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted border-border"}`}>{s.name}</button>
+                                  ))}
                                 </div>
                               </div>
                             </div>
@@ -3013,6 +2819,31 @@ export function StandardManagement({
                                         </div>
                                       )}
 
+                                      {/* attachment: 文件子类型 */}
+                                      {col.type === "attachment" && (
+                                        <div className="space-y-1">
+                                          <Label className="text-xs text-muted-foreground">允许文件类型</Label>
+                                          <div className="flex flex-wrap gap-1">
+                                            {["pdf","doc","docx","xls","xlsx","ppt","pptx","md","txt","jpg","png","gif","zip","rar"].map((ft) => {
+                                              const sel = (col.file_type || "pdf,doc,docx,xls,xlsx,ppt,pptx,md,zip").split(",");
+                                              const active = sel.includes(ft);
+                                              return (
+                                                <button key={ft} type="button"
+                                                  onClick={() => {
+                                                    const n = active ? sel.filter((s: string) => s !== ft) : [...sel, ft];
+                                                    drawerUpdateColumn(ci, "file_type", n.join(","));
+                                                  }}
+                                                  className={`text-[10px] px-1.5 py-0.5 rounded border cursor-pointer ${
+                                                    active ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted border-border"
+                                                  }`}>
+                                                  {ft.toUpperCase()}
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      )}
+
                                       {/* video: 文件限制 */}
                                       {col.type === "video" && (
                                         <div className="space-y-2 pt-1 border-t">
@@ -3105,15 +2936,11 @@ export function StandardManagement({
                           </div>
                         </div>
 
-                        {/* 操作按钮 */}
-                        <div className="px-6 py-3 border-t bg-muted/30 flex justify-end gap-2">
-                          <Button variant="outline" size="sm" onClick={closeDrawer}>
-                            取消
-                          </Button>
-                          <Button size="sm" onClick={handleDrawerSave}>
-                            保存
-                          </Button>
                         </div>
+                        {/* 操作按钮（全屏时固定在底部） */}
+                        <div className={`flex justify-end gap-2 px-6 py-3 border-t bg-muted/30 ${drawerFullscreen ? "sticky bottom-0 z-10" : ""}`}>
+                          <Button variant="outline" size="sm" onClick={closeDrawer}>取消</Button>
+                          <Button size="sm" onClick={handleDrawerSave}>保存</Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -3309,7 +3136,7 @@ export function StandardManagement({
                                   return u ? u.name : id;
                                 }).join(", ") || "-";
                               })()
-                            : ["office", "pdf", "md", "image", "archive"].includes(col.type as string)
+                            : ["attachment"].includes(col.type as string)
                             ? renderFileCellDisplay(String(record[col.name] ?? ""), col.type as string)
                             : col.type === "number" && col.format === "percent"
                             ? `${String(record[col.name] ?? "-")}%`
@@ -3530,7 +3357,7 @@ export function StandardManagement({
                         users={userList}
                         disabled={isReadonly}
                       />
-                  ) : ["office", "pdf", "md", "image", "archive"].includes(col.type as string) ? (
+                  ) : ["attachment"].includes(col.type as string) ? (
                       <FileUploadField
                         fileType={col.type as string}
                         value={String(recordFormData[col.name] || "")}
