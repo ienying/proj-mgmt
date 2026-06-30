@@ -1,7 +1,49 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { phaseDetails } from "./mock-data";
+
+// Docx/PPTX 客户端预览组件（使用 CDN 加载 mammoth.js）
+function DocxPreview({ src, fn }: { src: string; fn: string }) {
+  const [html, setHtml] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const ext = fn.split(".").pop()?.toLowerCase();
+    if (ext === "pptx") {
+      setError("PPTX 预览暂不支持，请下载查看");
+      setLoading(false);
+      return;
+    }
+    // 加载 mammoth.js CDN
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js";
+    script.onload = async () => {
+      try {
+        const res = await fetch(src);
+        const buffer = await res.arrayBuffer();
+        const result = await (window as any).mammoth.convertToHtml({ arrayBuffer: buffer });
+        setHtml(result.value);
+      } catch {
+        setError("加载失败，请下载查看");
+      }
+      setLoading(false);
+    };
+    script.onerror = () => { setError("CDN加载失败，请下载查看"); setLoading(false); };
+    document.head.appendChild(script);
+    return () => { document.head.removeChild(script); };
+  }, [src, fn]);
+
+  if (loading) return <div className="flex items-center justify-center h-full text-sm text-muted-foreground">⏳ 加载中...</div>;
+  if (error) return (
+    <div className="text-center p-8">
+      <p className="text-sm mb-3">{error}</p>
+      <a href={src} target="_blank" className="px-4 py-2 text-xs bg-[var(--s-orange)] text-white rounded no-underline">下载查看</a>
+    </div>
+  );
+  return <div className="p-4 h-full overflow-auto bg-white" dangerouslySetInnerHTML={{ __html: html }} />;
+}
 
 interface TableDef {
   id: string;
@@ -41,6 +83,8 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
   const [userList, setUserList] = useState<{ id: string; name: string }[]>([]);
   const [pmSearch, setPmSearch] = useState("");
   const [userSearch, setUserSearch] = useState("");
+  const [previewFile, setPreviewFile] = useState<{ key: string; name: string } | null>(null);
+  const [previewFullscreen, setPreviewFullscreen] = useState(false);
 
   // 开始编辑单元格
   const startEdit = (tableCode: string, rowIdx: number, colName: string, currentValue: string) => {
@@ -393,41 +437,78 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       );
     }
 
-    // 附件/视频类型：上传按钮
+    // 附件/视频类型：上传+预览+下载+删除
     if (col.type === "attachment" || col.type === "video") {
       const value = String(row[col.name] ?? "");
-      const hasFile = value && value !== "undefined" && value !== "null";
+      const hasFile = value && value !== "undefined" && value !== "null" && value.length > 5;
+      const isUploading = uploadingCell?.tableCode === tableCode && uploadingCell?.rowIdx === rowIdx && uploadingCell?.colName === col.name;
+      const fileName = (value.split("/").pop()?.split("?")[0] || "文件").replace(/^\d+_/, "");
+      const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i.test(fileName);
+      const isVideo = /\.(mp4|webm|mov|avi|mkv)$/i.test(fileName) || col.type === "video";
+
       return (
-        <div className="flex items-center gap-1">
-          {hasFile ? (
-            <>
-              <a href={value.startsWith("http") ? value : `/api/files/download?key=${encodeURIComponent(value)}`}
-                target="_blank" className="text-[11px] text-blue-600 hover:underline truncate max-w-[120px]"
-                onClick={(e) => e.stopPropagation()}
-                title={value}>
-                {(value.split("/").pop()?.split("?")[0] || "文件").replace(/^\d+_/, "")}
-              </a>
+        <div className="flex items-center gap-1 min-w-[60px]">
+          {isUploading ? (
+            <span className="text-[10px] text-muted-foreground">⏳ 上传中...</span>
+          ) : hasFile ? (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPreviewFile({ key: value, name: fileName });
+                }}
+                className="text-[11px] text-blue-600 hover:underline truncate max-w-[100px] cursor-pointer bg-transparent border-none"
+                title="点击预览">
+                {isImage ? "🖼 " : isVideo ? "🎬 " : "📄 "}{fileName}
+              </button>
+              <button onClick={async (e) => {
+                e.stopPropagation();
+                if (value.startsWith("http") || value.startsWith("uploads/")) {
+                  window.open(value.startsWith("http") ? value : `/${value}`, "_blank");
+                } else {
+                  const res = await fetch(`/api/files/download?key=${encodeURIComponent(value)}`);
+                  const data = await res.json();
+                  if (data.url) window.open(data.url, "_blank");
+                }
+              }}
+                className="text-[10px] text-muted-foreground hover:text-primary"
+                title="下载">⬇</button>
               <button onClick={(e) => {
                 e.stopPropagation();
-                fileInputRef.current?.click();
                 uploadTargetRef.current = { tableCode, rowIdx, colName: col.name };
                 fileInputRef.current?.click();
               }}
+                className="text-[10px] text-muted-foreground hover:text-primary"
+                title="替换">↻</button>
+              <button onClick={(e) => {
+                e.stopPropagation();
+                if (!confirm("确定删除该文件？")) return;
+                const delUrl = value.startsWith("uploads/") ? `/${value}` : value;
+                fetch(`/api/files/download?key=${encodeURIComponent(value)}`, { method: "DELETE" }).catch(() => {});
+                const newVal = "";
+                fetch("/api/project-data", {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ projectSchema, tableCode, rowId: row.id, data: { [col.name]: newVal } }),
+                }).then((r) => {
+                  if (r.ok) setTableRecords((prev) => {
+                    const updated = [...(prev[tableCode] || [])];
+                    updated[rowIdx] = { ...updated[rowIdx], [col.name]: newVal };
+                    return { ...prev, [tableCode]: updated };
+                  });
+                });
+              }}
                 className="text-[10px] text-red-500 hover:text-red-700"
-                title="替换文件">
-                ↻
-              </button>
-            </>
+                title="删除文件">✕</button>
+            </div>
           ) : (
             <button onClick={(e) => {
               e.stopPropagation();
               uploadTargetRef.current = { tableCode, rowIdx, colName: col.name };
               fileInputRef.current?.click();
             }}
-              className={`text-[10px] cursor-pointer hover:text-primary ${uploadingCell?.tableCode === tableCode && uploadingCell?.rowIdx === rowIdx && uploadingCell?.colName === col.name ? "opacity-50" : ""}`}>
-              {uploadingCell?.tableCode === tableCode && uploadingCell?.rowIdx === rowIdx && uploadingCell?.colName === col.name
-                ? "上传中..."
-                : "📎 上传"}
+              className="text-[10px] cursor-pointer hover:text-primary text-muted-foreground">
+              📎 上传
             </button>
           )}
         </div>
@@ -769,6 +850,83 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
           e.target.value = "";
         }}
       />
+
+      {/* 文件预览面板（右侧划出） */}
+      {previewFile && (
+        <div className={`fixed z-50 bg-[var(--s-surface)] border-l border-[var(--s-border)] flex flex-col transition-all duration-300 ${
+          previewFullscreen ? "inset-0" : "top-0 right-0 w-[520px] h-screen"
+        }`}>
+          {/* 头部 */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--s-border)]">
+            <span className="text-sm font-bold text-[var(--s-text)] truncate">{previewFile.name}</span>
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => {
+                const url = previewFile.key.startsWith("http") ? previewFile.key : `/api/files/download?key=${encodeURIComponent(previewFile.key)}`;
+                window.open(url, "_blank");
+              }}
+                className="px-2.5 py-1 text-[11px] border border-[var(--s-border)] rounded hover:bg-muted"
+                title="下载">下载</button>
+              <button onClick={() => setPreviewFullscreen(!previewFullscreen)}
+                className="px-2.5 py-1 text-[11px] border border-[var(--s-border)] rounded hover:bg-muted">
+                {previewFullscreen ? "退出全屏" : "全屏"}
+              </button>
+              <button onClick={() => { setPreviewFile(null); setPreviewFullscreen(false); }}
+                className="px-2 py-1 text-[13px] hover:text-[var(--s-red)]">✕</button>
+            </div>
+          </div>
+          {/* 预览内容 */}
+          <div className="flex-1 overflow-auto flex items-center justify-center bg-[var(--s-bg)] p-4">
+            {(() => {
+              const fn = previewFile.name;
+              const src = previewFile.key.includes("://") ? previewFile.key : `/${previewFile.key}`;
+              if (/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i.test(fn)) {
+                return <img src={src} alt="" className="max-w-full max-h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />;
+              }
+              if (/\.(mp4|webm|mov|avi|mkv)$/i.test(fn)) {
+                return <video src={src} controls className="max-w-full max-h-full" />;
+              }
+              if (/\.(pdf)$/i.test(fn)) {
+                return <iframe src={src} className="w-full h-full border-0" title="PDF" />;
+              }
+              if (/\.(xls|xlsx|csv|md|markdown|txt)$/i.test(fn)) {
+                const previewUrl = previewFile.key.includes("://")
+                  ? previewFile.key
+                  : `/api/files/preview?key=${encodeURIComponent(previewFile.key)}`;
+                return <iframe src={previewUrl} className="w-full h-full border-0 bg-white" title="预览" />;
+              }
+              if (/\.(docx|pptx)$/i.test(fn)) {
+                // 客户端加载 mammoth.js 预览 docx，pptx 类似用 pptx2html
+                return <DocxPreview src={src} fn={fn} />;
+              }
+              if (/\.(doc|ppt)$/i.test(fn)) {
+                // 旧版 Office 格式不支持客户端渲染
+                const dlUrl = previewFile.key.includes("://") ? previewFile.key : `/${previewFile.key}`;
+                return (
+                  <div className="text-center text-[var(--s-text-muted)] p-8">
+                    <p className="text-4xl mb-3">📝</p>
+                    <p className="text-sm text-[var(--s-text)] mb-2">{fn}</p>
+                    <p className="text-xs mb-4">旧版格式(.doc/.ppt)不支持预览，请转换为 .docx/.pptx</p>
+                    <a href={dlUrl} target="_blank" className="px-4 py-2 text-xs bg-[var(--s-orange)] text-white rounded hover:opacity-90 no-underline">下载</a>
+                  </div>
+                );
+              }
+              return (
+                <div className="text-center text-[var(--s-text-muted)]">
+                  <p className="text-4xl mb-3">📄</p>
+                  <p className="text-sm mb-2">{fn}</p>
+                  <p className="text-xs mb-3">不支持在线预览</p>
+                  <button onClick={() => { const url = previewFile.key.includes("://") ? previewFile.key : `/${previewFile.key}`; window.open(url, "_blank"); }}
+                    className="text-xs text-blue-600 hover:underline">点击下载</button>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+      {/* 预览遮罩 */}
+      {previewFile && !previewFullscreen && (
+        <div className="fixed inset-0 z-40 bg-black/20" onClick={() => setPreviewFile(null)} />
+      )}
     </div>
   );
 }

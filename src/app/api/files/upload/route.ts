@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
         : path.join(process.cwd(), "public", "uploads");
       if (!existsSync(uploadDir)) mkdirSync(uploadDir, { recursive: true });
       const timestamp = Date.now();
-      const safeName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const safeName = `${timestamp}_${file.name.replace(/[<>:"/\\|?*]/g, "_")}`;
       const filePath = path.join(uploadDir, safeName);
       writeFileSync(filePath, buffer);
       key = projectCode ? `uploads/${projectCode}/${safeName}` : `uploads/${safeName}`;
