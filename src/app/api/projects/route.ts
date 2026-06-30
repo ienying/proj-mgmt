@@ -398,13 +398,22 @@ async function copyTableDefinitionsToSchema(
           });
         } catch { /* ignore */ }
 
-        // 获取用户定义的列名（排除系统字段）
-        const userColumns = columnsConfig.map((col) => col.name);
-        
-        // 直接尝试复制数据（如果源表不存在会失败，但可以忽略）
+        // 获取源表实际存在的列
+        let sourceColumns: string[] = [];
+        try {
+          const { data: cols } = await client.rpc("execute_sql", {
+            p_sql: `SELECT column_name FROM information_schema.columns WHERE table_schema = 'design_public' AND table_name = 'std_definition_${tableCode}'`,
+          });
+          if (Array.isArray(cols)) sourceColumns = cols.map((c: Record<string, unknown>) => String(c.column_name));
+        } catch {}
+
+        // 只复制源表中存在的用户列
+        const userColumns = columnsConfig
+          .map((col) => col.name)
+          .filter((name) => sourceColumns.includes(name));
+
         if (userColumns.length > 0) {
           try {
-            // 复制数据（包含 _readonly, allow_delete 和 data_source）
             const columnsList = userColumns.map((col) => `"${col}"`).join(", ");
             const copyDataSQL = `
               INSERT INTO ${projectSchema}."${tableCode}"
@@ -418,16 +427,17 @@ async function copyTableDefinitionsToSchema(
                 NOW() as created_at
               FROM ${sourceTable}
             `;
-            
+
             await client.rpc("execute_sql", {
               p_sql: copyDataSQL,
             });
-            
+
             console.log(`已复制 ${tableCode} 表的数据到 ${projectSchema}`);
           } catch (copyErr) {
-            // 源表可能不存在或没有数据，忽略错误
-            console.log(`复制 ${tableCode} 表数据失败（可能源表不存在）:`, copyErr);
+            console.error(`复制 ${tableCode} 表数据失败:`, copyErr);
           }
+        } else {
+          console.log(`表 ${tableCode} 在源表中没有匹配列，跳过数据复制`);
         }
       } catch (err) {
         console.error(`创建表 ${tableCode} 失败:`, err);

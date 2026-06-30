@@ -8,6 +8,7 @@ import { Toolbar } from "./Toolbar";
 import { NavDrawer } from "./NavDrawer";
 import { AIDialog } from "./AIDialog";
 import { SubContentArea } from "./SubContentArea";
+import { TableDataView } from "./TableDataView";
 import { HeroSection } from "./HeroSection";
 import { ProductGrid } from "./ProductGrid";
 import { PhaseStepper } from "./PhaseStepper";
@@ -253,11 +254,21 @@ export function StageLayout({
       {/* ═══ 主内容区 ═══ */}
       {/* 子内容钻取（替换主内容） */}
       {subContent ? (
-        <SubContentArea
-          data={subContentData[subContent.key] || null}
-          label={subContent.label}
-          onBack={handleCloseSubContent}
-        />
+        subContent.key.startsWith("table:") ? (
+          <TableDataView
+            tableCode={subContent.key.replace("table:", "")}
+            tableName={subContent.label}
+            projectSchema={project.project_schema}
+            tableDef={tableDefs.find((d) => d.table_code === subContent.key.replace("table:", ""))}
+            onBack={handleCloseSubContent}
+          />
+        ) : (
+          <SubContentArea
+            data={subContentData[subContent.key] || null}
+            label={subContent.label}
+            onBack={handleCloseSubContent}
+          />
+        )
       ) : (
         <div
           className="relative"
