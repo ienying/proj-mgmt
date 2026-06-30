@@ -252,7 +252,11 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
               .catch(() => {});
           }
           // 先同步引用数据
-          await fetch(`/api/project-data/sync?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(tableCode)}`).catch(() => {});
+          await fetch("/api/project-data/sync-references", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ projectSchema }),
+          }).catch(() => {});
           // 加载数据
           const res = await fetch(
             `/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(tableCode)}`
