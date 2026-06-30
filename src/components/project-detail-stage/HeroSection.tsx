@@ -95,13 +95,13 @@ export function HeroSection({ project, projectTypes, projectStages, customerType
 
   return (
     <div
-      className="px-16 pt-[80px] pb-12 relative"
+      className="px-16 pt-[200px] pb-12 relative"
       style={{ borderBottom: "1px solid var(--s-border)", backgroundColor: "var(--s-bg)" }}
     >
 
       {/* Hero Grid */}
       <div
-        className="grid gap-px mb-12"
+        className="grid gap-px mb-12 -mt-[80px]"
         style={{
           gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr",
           backgroundColor: "var(--s-border)",

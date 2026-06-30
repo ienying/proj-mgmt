@@ -66,7 +66,7 @@ export function NavDrawer({ open, panelData, activePanel, onPanelChange, onSubCl
       <div
         ref={drawerRef}
         className="fixed z-36 bg-[var(--s-surface)] border border-[var(--s-border)] min-w-[440px] max-h-[calc(100vh-100px)] overflow-y-auto flex"
-        style={{ top: "76px", right: "80px" }}
+        style={{ top: "85px", right: "62px" }}
       >
         {/* L1 列 */}
         <div className="w-[140px] flex-shrink-0 flex flex-col py-2">
