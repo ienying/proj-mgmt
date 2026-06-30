@@ -39,6 +39,8 @@ export function StageLayout({
     stage_desc_column?: string; stage_display_mode?: string;
     stage_progress_column?: string; stage_progress_target?: string;
     stage_summary_fields?: string;
+    stage_plan_start_col?: string; stage_plan_end_col?: string;
+    stage_actual_start_col?: string; stage_actual_end_col?: string;
     allow_add?: boolean; allow_delete?: boolean;
     readonly_mode?: string;
     columns_config?: Array<{ name: string; type: string; readonly?: boolean }>;
@@ -65,6 +67,36 @@ export function StageLayout({
       if (idx >= 0) setActivePhase(idx);
     }
   }, [projectStages, project.project_stage]);
+
+  // 计算每个阶段的日期范围
+  const [phaseDates, setPhaseDates] = useState<Record<number, { planStart?: string; planEnd?: string; actualStart?: string; actualEnd?: string }>>({});
+  useEffect(() => {
+    if (tableDefs.length === 0 || !project.project_schema) return;
+    const sorted = [...projectStages].sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99));
+    (async () => {
+      const dates: Record<number, { planStart?: string; planEnd?: string; actualStart?: string; actualEnd?: string }> = {};
+      for (let i = 0; i < sorted.length; i++) {
+        const sc = sorted[i].code;
+        const pts = tableDefs.filter((def) => def.apply_project_stages?.includes(sc));
+        let ps = "", pe = "", as = "", ae = "";
+        for (const def of pts) {
+          if (!def.stage_plan_start_col && !def.stage_plan_end_col) continue;
+          try {
+            const r = await fetch(`/api/project-data?projectSchema=${project.project_schema}&tableCode=${def.table_code}`);
+            const d = await r.json();
+            const recs = (d.data || []) as Array<Record<string, unknown>>;
+            if (!recs.length) continue;
+            if (def.stage_plan_start_col) { const ds = recs.map((r) => String(r[def.stage_plan_start_col!] || "")).filter(Boolean).sort(); if (ds[0] && (!ps || ds[0] < ps)) ps = ds[0]; }
+            if (def.stage_plan_end_col) { const ds = recs.map((r) => String(r[def.stage_plan_end_col!] || "")).filter(Boolean).sort(); if (ds[ds.length - 1] && (!pe || ds[ds.length - 1] > pe)) pe = ds[ds.length - 1]; }
+            if (def.stage_actual_start_col) { const ds = recs.map((r) => String(r[def.stage_actual_start_col!] || "")).filter(Boolean).sort(); if (ds[0] && (!as || ds[0] < as)) as = ds[0]; }
+            if (def.stage_actual_end_col) { const ds = recs.map((r) => String(r[def.stage_actual_end_col!] || "")).filter(Boolean).sort(); if (ds[ds.length - 1] && (!ae || ds[ds.length - 1] > ae)) ae = ds[ds.length - 1]; }
+          } catch {}
+        }
+        if (ps || pe) dates[i] = { planStart: ps, planEnd: pe, actualStart: as, actualEnd: ae };
+      }
+      setPhaseDates(dates);
+    })();
+  }, [tableDefs, project.project_schema, projectStages]);
 
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== "undefined") {
@@ -252,7 +284,7 @@ export function StageLayout({
             />
 
             {/* 阶段步骤条（内含 Phases 项目阶段 标签） */}
-            <PhaseStepper activePhase={activePhase} onPhaseChange={setActivePhase} stages={projectStages} />
+            <PhaseStepper activePhase={activePhase} onPhaseChange={setActivePhase} stages={projectStages} phaseDates={phaseDates} />
 
             {/* Phase Details 阶段详情 — 分隔标题 */}
             <div

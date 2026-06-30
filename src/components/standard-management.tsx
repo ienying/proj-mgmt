@@ -90,6 +90,10 @@ export interface TableDefinition {
   stage_progress_column?: string;
   stage_progress_target?: string;
   stage_summary_fields?: string;
+  stage_plan_start_col?: string;
+  stage_plan_end_col?: string;
+  stage_actual_start_col?: string;
+  stage_actual_end_col?: string;
   sort_order: number;
   is_active: boolean;
   allow_add?: boolean;
@@ -1916,6 +1920,56 @@ export function StandardManagement({
                         })()}
                       </div>
                     </div>
+                    {/* 阶段日期绑定 */}
+                    <div className="pt-2 mt-2 border-t">
+                      <Label className="text-[11px] font-medium mb-1.5 block">阶段日期绑定</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-[10px]">计划开始列</Label>
+                          <select value={formData.stage_plan_start_col || ""}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, stage_plan_start_col: e.target.value }))}
+                            className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                            <option value="">不绑定</option>
+                            {(formData.columns_config || []).filter((c) => c.type === "date").map((c) => (
+                              <option key={c.name} value={c.name}>{c.name || "(未命名)"}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">计划完成列</Label>
+                          <select value={formData.stage_plan_end_col || ""}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, stage_plan_end_col: e.target.value }))}
+                            className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                            <option value="">不绑定</option>
+                            {(formData.columns_config || []).filter((c) => c.type === "date").map((c) => (
+                              <option key={c.name} value={c.name}>{c.name || "(未命名)"}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">实际开始列</Label>
+                          <select value={formData.stage_actual_start_col || ""}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, stage_actual_start_col: e.target.value }))}
+                            className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                            <option value="">不绑定</option>
+                            {(formData.columns_config || []).filter((c) => c.type === "date").map((c) => (
+                              <option key={c.name} value={c.name}>{c.name || "(未命名)"}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">实际完成列</Label>
+                          <select value={formData.stage_actual_end_col || ""}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, stage_actual_end_col: e.target.value }))}
+                            className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                            <option value="">不绑定</option>
+                            {(formData.columns_config || []).filter((c) => c.type === "date").map((c) => (
+                              <option key={c.name} value={c.name}>{c.name || "(未命名)"}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
                   </SectionPanel>
 
                   {/* 列配置 */}
@@ -2749,8 +2803,8 @@ export function StandardManagement({
                                   onChange={(e) => drawerUpdateField("stage_progress_column", e.target.value)}
                                   className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
                                   <option value="">不计算</option>
-                                  {(drawerFormData.columns_config || []).map((col) => (
-                                    <option key={col.name} value={col.name}>{col.name || "(未命名)"}</option>
+                                  {(drawerFormData.columns_config || []).map((col, ci) => (
+                                    <option key={`dp_${ci}_${col.name}`} value={col.name}>{col.name || "(未命名)"}</option>
                                   ))}
                                 </select>
                               </div>
@@ -2823,6 +2877,32 @@ export function StandardManagement({
                                   </div>
                                 );
                               })()}
+                            </div>
+                          </div>
+                          {/* 阶段日期绑定 */}
+                          <div className="rounded-lg border bg-card p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="font-medium text-xs">阶段日期绑定</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[
+                                ["计划开始列", "stage_plan_start_col"],
+                                ["计划完成列", "stage_plan_end_col"],
+                                ["实际开始列", "stage_actual_start_col"],
+                                ["实际完成列", "stage_actual_end_col"],
+                              ].map(([label, field]) => (
+                                <div key={field}>
+                                  <Label className="text-[10px]">{label}</Label>
+                                  <select value={(drawerFormData as any)[field] || ""}
+                                    onChange={(e) => drawerUpdateField(field, e.target.value)}
+                                    className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                    <option value="">不绑定</option>
+                                    {(drawerFormData.columns_config || []).filter((c) => c.type === "date").map((c) => (
+                                      <option key={c.name} value={c.name}>{c.name || "(未命名)"}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              ))}
                             </div>
                           </div>
 

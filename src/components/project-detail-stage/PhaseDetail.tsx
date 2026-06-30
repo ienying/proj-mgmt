@@ -56,6 +56,10 @@ interface TableDef {
   stage_progress_column?: string;
   stage_progress_target?: string;
   stage_summary_fields?: string;
+  stage_plan_start_col?: string;
+  stage_plan_end_col?: string;
+  stage_actual_start_col?: string;
+  stage_actual_end_col?: string;
   allow_add?: boolean;
   allow_delete?: boolean;
   readonly_mode?: string;
@@ -572,6 +576,60 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
           <h3 className="text-[32px] font-bold tracking-[-0.5px] leading-[1.2] text-[var(--s-text)]">{detail.name}</h3>
           <p className="text-[15px] text-[var(--s-text-secondary)] leading-[1.75] max-w-[580px]">{detail.description}</p>
           <div className="text-[11px] text-[var(--s-text-muted)]" style={{ fontFamily: "var(--font-mono, monospace)" }}>{detail.dateRange}</div>
+          {/* 动态日期（从表数据计算） */}
+          {(() => {
+            if (phaseTables.length === 0) return null;
+            const fmt = (d: string) => { if (!d) return ""; const p = d.split(/[-T]/); return p.length >= 3 ? `${p[0]}.${p[1]}.${p[2]}` : d.slice(0, 10); };
+            let planStart = "", planEnd = "", actualStart = "", actualEnd = "";
+            for (const def of phaseTables) {
+              if (!def.stage_plan_start_col && !def.stage_plan_end_col) continue;
+              const records = tableRecords[def.table_code] || [];
+              if (records.length === 0) continue;
+              if (def.stage_plan_start_col) {
+                const dates = records.map((r) => String(r[def.stage_plan_start_col!] || "")).filter(Boolean).sort();
+                if (dates[0] && (!planStart || dates[0] < planStart)) planStart = dates[0];
+              }
+              if (def.stage_plan_end_col) {
+                const dates = records.map((r) => String(r[def.stage_plan_end_col!] || "")).filter(Boolean).sort();
+                if (dates[dates.length - 1] && (!planEnd || dates[dates.length - 1] > planEnd)) planEnd = dates[dates.length - 1];
+              }
+              if (def.stage_actual_start_col) {
+                const dates = records.map((r) => String(r[def.stage_actual_start_col!] || "")).filter(Boolean).sort();
+                if (dates[0] && (!actualStart || dates[0] < actualStart)) actualStart = dates[0];
+              }
+              if (def.stage_actual_end_col) {
+                const dates = records.map((r) => String(r[def.stage_actual_end_col!] || "")).filter(Boolean).sort();
+                if (dates[dates.length - 1] && (!actualEnd || dates[dates.length - 1] > actualEnd)) actualEnd = dates[dates.length - 1];
+              }
+            }
+            if (!planStart && !planEnd) return null;
+            const isDelay = actualEnd && planEnd && actualEnd > planEnd;
+            return (
+              <div className="flex flex-col gap-1 mt-1" style={{ fontFamily: "var(--font-mono, monospace)" }}>
+                {(planStart || planEnd) && (
+                  <div className="flex items-center gap-2 text-[11px]" style={{ color: "var(--s-text-muted)" }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                      计划
+                    </span>
+                    <span style={{ color: "var(--s-text)" }}>{fmt(planStart)} — {fmt(planEnd)}</span>
+                    {planStart && planEnd && <span className="text-[10px]">({(() => { const d = (new Date(planEnd).getTime() - new Date(planStart).getTime()) / 86400000; return Math.round(d) + 1; })()}天)</span>}
+                  </div>
+                )}
+                {(actualStart || actualEnd) && (
+                  <div className="flex items-center gap-2 text-[11px]" style={{ color: isDelay ? "var(--s-red)" : "var(--s-text-muted)" }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                      实际
+                    </span>
+                    <span style={{ color: isDelay ? "var(--s-red)" : "var(--s-text)" }}>{fmt(actualStart)} — {fmt(actualEnd)}</span>
+                    {actualStart && actualEnd && <span className="text-[10px]">({(() => { const d = (new Date(actualEnd).getTime() - new Date(actualStart).getTime()) / 86400000; return Math.round(d) + 1; })()}天)</span>}
+                    {isDelay && planEnd && <span className="text-[10px]">⚠ 延期{(() => { const d = (new Date(actualEnd).getTime() - new Date(planEnd).getTime()) / 86400000; return Math.round(d); })()}天</span>}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           <div className="flex gap-px" style={{ backgroundColor: "var(--s-border)" }}>
             {detail.metaItems.map((item, i) => (
               <div key={i} className="bg-[var(--s-bg)] px-5 py-4 flex items-center gap-2 text-[11px] uppercase tracking-[0.5px]"
