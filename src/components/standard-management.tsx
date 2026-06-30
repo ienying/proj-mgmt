@@ -1834,8 +1834,8 @@ export function StandardManagement({
                             onChange={(e) => setFormData((prev) => ({ ...prev, stage_progress_column: e.target.value }))}
                             className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
                             <option value="">不计算进度</option>
-                            {(formData.columns_config || []).map((col) => (
-                              <option key={col.name} value={col.name}>{col.name || "(未命名)"}</option>
+                            {(formData.columns_config || []).map((col, ci) => (
+                              <option key={`pc_${ci}`} value={col.name}>{col.name || "(未命名)"}</option>
                             ))}
                           </select>
                         </div>

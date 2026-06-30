@@ -220,6 +220,17 @@ export function StageLayout({
         tableDefs={tableDefs}
       />
 
+      {/* 左上返回按钮（固定） */}
+      <button
+        onClick={onBack}
+        className="fixed z-35 flex items-center justify-center w-[38px] h-[38px] cursor-pointer transition-all border border-[var(--s-border)] bg-[var(--s-surface)] text-[var(--s-text-muted)] hover:bg-[var(--s-surface2)] hover:text-[var(--s-text)]"
+        style={{ top: "76px", left: "24px" }}
+        title="返回">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+      </button>
+
       {/* 右上工具栏 */}
       <Toolbar
         onNavToggle={() => setNavDrawerOpen(!navDrawerOpen)}
@@ -229,6 +240,7 @@ export function StageLayout({
         aiActive={aiDialogOpen}
         isDark={isDark}
         onThemeToggle={toggleTheme}
+        onSwitchLayout={() => onSwitchLayout("management")}
       />
 
       {/* 导航抽屉 */}

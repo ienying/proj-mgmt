@@ -98,25 +98,6 @@ export function HeroSection({ project, projectTypes, projectStages, customerType
       className="px-16 pt-[80px] pb-12 relative"
       style={{ borderBottom: "1px solid var(--s-border)", backgroundColor: "var(--s-bg)" }}
     >
-      {/* 操作按钮行 */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[1px] border border-[var(--s-border)] text-[var(--s-text-secondary)] bg-transparent cursor-pointer transition-all hover:bg-[var(--s-surface)] hover:text-[var(--s-orange)] hover:border-[var(--s-orange)]"
-            style={{ fontFamily: "var(--font-mono, monospace)" }}
-          >
-            ← 返回列表
-          </button>
-          <button
-            onClick={() => onSwitchLayout("management")}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[1px] border border-[var(--s-orange)] text-[var(--s-orange)] bg-transparent cursor-pointer transition-all hover:bg-[rgba(232,89,12,.06)]"
-            style={{ fontFamily: "var(--font-mono, monospace)" }}
-          >
-            切换到管理式布局
-          </button>
-        </div>
-      </div>
 
       {/* Hero Grid */}
       <div

@@ -122,9 +122,9 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
     return (
       <span
         className={editable ? "cursor-pointer hover:bg-gray-100 px-1 -mx-1 rounded" : ""}
-        style={{ color: "var(--s-text)", backgroundColor: editable ? "transparent" : (row._readonly || col.readonly ? "#fef9e7" : "transparent") }}
+        style={{ color: "var(--s-text)" }}
         onClick={() => { if (editable) { setEditingCell({ rowIdx: ri, colName: col.name }); setEditValue(val === "—" ? "" : val); } }}
-        title={editable ? "点击编辑" : `rowIdx:${ri} col:${col.name} type:${col.type} readonly:${col.readonly} _readonly:${row._readonly}`}>
+        title={editable ? "点击编辑" : "只读-该记录由管理员设置"}>
         {val}
       </span>
     );
