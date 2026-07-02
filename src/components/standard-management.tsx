@@ -2133,7 +2133,7 @@ export function StandardManagement({
                                       setDragOverColIndex(null);
                                     }}
                                   >
-                                    <TableCell colSpan={7} className="bg-muted/30 px-4 py-3">
+                                    <TableCell colSpan={8} className="bg-muted/30 px-4 py-3">
                                       <div className="flex flex-col gap-2">
                                         {col.type === "select" && (
                                           <div className="flex items-center gap-2">
@@ -2212,7 +2212,7 @@ export function StandardManagement({
                                       setDragOverColIndex(null);
                                     }}
                                   >
-                                    <TableCell colSpan={7} className="bg-muted/30 px-4 py-3">
+                                    <TableCell colSpan={8} className="bg-muted/30 px-4 py-3">
                                       <div className="flex flex-wrap items-center gap-2">
                                         <span className="text-xs text-muted-foreground shrink-0">快捷语:</span>
                                         {(col.quick_inputs || []).map((phrase, qi) => (
@@ -2264,7 +2264,7 @@ export function StandardManagement({
                                       setDragOverColIndex(null);
                                     }}
                                   >
-                                    <TableCell colSpan={7} className="bg-muted/30 px-4 py-3">
+                                    <TableCell colSpan={8} className="bg-muted/30 px-4 py-3">
                                       <div className="flex items-center gap-2">
                                         <span className="text-xs text-muted-foreground shrink-0">显示格式:</span>
                                         <div className="flex gap-1">
@@ -2309,7 +2309,7 @@ export function StandardManagement({
                                       setDragOverColIndex(null);
                                     }}
                                   >
-                                    <TableCell colSpan={7} className="bg-muted/30 px-4 py-3">
+                                    <TableCell colSpan={8} className="bg-muted/30 px-4 py-3">
                                       <div className="flex items-center gap-6">
                                         <div className="flex items-center gap-2">
                                           <span className="text-xs text-muted-foreground shrink-0">数据来源:</span>
@@ -2633,7 +2633,8 @@ export function StandardManagement({
                 <TableHead className="w-[15%]">模块</TableHead>
                 <TableHead className="w-[11%]">类型</TableHead>
                 <TableHead className="w-[11%]">阶段</TableHead>
-                <TableHead className="w-[7%]">状态</TableHead>
+                <TableHead className="w-[8%]">显示位置</TableHead>
+                <TableHead className="w-[6%]">状态</TableHead>
                 <TableHead className="w-[38%]">操作</TableHead>
               </TableRow>
             </TableHeader>
@@ -2688,6 +2689,16 @@ export function StandardManagement({
                       )}
                     </TableCell>
                     <TableCell>
+                      <span className={`text-[10px] ${
+                        def.stage_display_mode === "phase" ? "text-orange-500" :
+                        def.stage_display_mode === "menu" ? "text-blue-500" :
+                        "text-muted-foreground"
+                      }`}>
+                        {def.stage_display_mode === "phase" ? "阶段任务" :
+                         def.stage_display_mode === "menu" ? "左侧菜单" : "两者"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
                       <Badge variant={def.is_active ? "default" : "secondary"}>
                         {def.is_active ? "启用" : "禁用"}
                       </Badge>
@@ -2713,7 +2724,7 @@ export function StandardManagement({
                   {/* 抽屉式编辑面板 */}
                   {expandedDefId === def.id && drawerFormData && (
                     <TableRow className="bg-muted/20 hover:bg-muted/20">
-                      <TableCell colSpan={7} className="p-0">
+                      <TableCell colSpan={8} className="p-0">
                         <div className={`overflow-hidden ${drawerFullscreen ? "fixed inset-0 z-50 bg-background" : ""}`}>
                         {drawerFullscreen && (
                           <div className="flex items-center justify-between px-6 py-3 border-b bg-card">
