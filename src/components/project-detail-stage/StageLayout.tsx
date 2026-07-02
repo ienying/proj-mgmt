@@ -69,23 +69,25 @@ export function StageLayout({
     }
   }, [projectStages, project.project_stage]);
 
-  // 计算每个阶段的日期范围
+  // 计算每个阶段的日期范围 + 缓存表数据
   const [phaseDates, setPhaseDates] = useState<Record<number, { planStart?: string; planEnd?: string; actualStart?: string; actualEnd?: string }>>({});
+  const [allTableRecords, setAllTableRecords] = useState<Record<string, Array<Record<string, unknown>>>>({});
   useEffect(() => {
     if (tableDefs.length === 0 || !project.project_schema) return;
     const sorted = [...projectStages].sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99));
     (async () => {
       const dates: Record<number, { planStart?: string; planEnd?: string; actualStart?: string; actualEnd?: string }> = {};
+      const recordsCache: Record<string, Array<Record<string, unknown>>> = {};
       for (let i = 0; i < sorted.length; i++) {
         const sc = sorted[i].code;
         const pts = tableDefs.filter((def) => def.apply_project_stages?.includes(sc));
         let ps = "", pe = "", as = "", ae = "";
         for (const def of pts) {
-          if (!def.stage_plan_start_col && !def.stage_plan_end_col) continue;
           try {
             const r = await fetch(`/api/project-data?projectSchema=${project.project_schema}&tableCode=${def.table_code}`);
             const d = await r.json();
             const recs = (d.data || []) as Array<Record<string, unknown>>;
+            recordsCache[def.table_code] = recs;
             if (!recs.length) continue;
             if (def.stage_plan_start_col) { const ds = recs.map((r) => String(r[def.stage_plan_start_col!] || "")).filter(Boolean).sort(); if (ds[0] && (!ps || ds[0] < ps)) ps = ds[0]; }
             if (def.stage_plan_end_col) { const ds = recs.map((r) => String(r[def.stage_plan_end_col!] || "")).filter(Boolean).sort(); if (ds[ds.length - 1] && (!pe || ds[ds.length - 1] > pe)) pe = ds[ds.length - 1]; }
@@ -96,6 +98,7 @@ export function StageLayout({
         if (ps || pe) dates[i] = { planStart: ps, planEnd: pe, actualStart: as, actualEnd: ae };
       }
       setPhaseDates(dates);
+      setAllTableRecords(recordsCache);
     })();
   }, [tableDefs, project.project_schema, projectStages]);
 
@@ -350,10 +353,10 @@ export function StageLayout({
             </div>
 
             {/* 总览网格 */}
-            <OverviewGrid />
+            <OverviewGrid stages={projectStages} tableDefs={tableDefs} tableRecords={allTableRecords} />
 
             {/* 图表区域 */}
-            <ChartsSection />
+            <ChartsSection stages={projectStages} tableDefs={tableDefs} tableRecords={allTableRecords} />
           </div>
         </div>
       )}
