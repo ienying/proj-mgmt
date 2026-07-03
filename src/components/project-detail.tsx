@@ -133,6 +133,11 @@ interface ColumnConfig {
   options?: string[];
   data_source?: string;
   allow_custom?: boolean;
+  calc_left_col?: string;
+  calc_operator?: string;
+  calc_right_col?: string;
+  calc_sum?: boolean;
+  calc_format?: string;
   quick_inputs?: string[];
   multiple?: boolean;
   display_mode?: "dropdown" | "checkbox" | "project" | "system";
@@ -1132,7 +1137,30 @@ export function ProjectDetail({
   };
 
   // 渲染单元格显示值（非编辑态）
-  const renderCellValue = (col: ColumnConfig, value: unknown) => {
+  const computeCalc = (col: ColumnConfig, row?: Record<string, unknown>, allRows?: Record<string, unknown>[]) => {
+    if (col.type !== "calc" || !col.calc_left_col || !col.calc_right_col) return null;
+    if (col.calc_sum && allRows) {
+      let sum = 0;
+      for (const r of allRows) {
+        const l = Number(r[col.calc_left_col] ?? 0); const rv = Number(r[col.calc_right_col] ?? 0);
+        sum += col.calc_operator === "-" ? (l - rv) : col.calc_operator === "*" ? (l * rv) : col.calc_operator === "/" ? (rv ? l / rv : 0) : (l + rv);
+      }
+      return sum;
+    }
+    if (!row) return null;
+    const l = Number(row[col.calc_left_col] ?? 0); const r = Number(row[col.calc_right_col] ?? 0);
+    return col.calc_operator === "-" ? (l - r) : col.calc_operator === "*" ? (l * r) : col.calc_operator === "/" ? (r ? l / r : 0) : (l + r);
+  };
+
+  const renderCellValue = (col: ColumnConfig, value: unknown, row?: Record<string, unknown>) => {
+    if (col.type === "calc") {
+      const result = computeCalc(col, row);
+      if (result !== null) {
+        const formatted = col.calc_format === "currency" ? `¥${result.toLocaleString()}` : col.calc_format === "percent" ? `${result}%` : String(result);
+        return <span className="font-mono text-sm">{formatted}</span>;
+      }
+      return <span className="text-slate-400">-</span>;
+    }
     const strValue = String(value ?? "-");
     if (col.type === "select" && getOpts(col).length > 0) {
       return value ? renderSelectTag(strValue) : <span className="text-slate-400">-</span>;
@@ -1813,10 +1841,10 @@ export function ProjectDetail({
                             onClick={() => !isReadonly && startEdit(table.table_code, row.id as string, col.name, row[col.name])}
                           >
                             {isReadonly ? (
-                              <span className="text-slate-500">{renderCellValue(col, row[col.name])}</span>
+                              <span className="text-slate-500">{renderCellValue(col, row[col.name], row)}</span>
                             ) : (
                               <span className="flex items-center gap-1 group">
-                                {renderCellValue(col, row[col.name])}
+                                {renderCellValue(col, row[col.name], row)}
                                 <Pencil className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                               </span>
                             )}
@@ -2181,10 +2209,10 @@ export function ProjectDetail({
                               onClick={() => !isReadonly && startEdit(table.table_code, row.id as string, col.name, row[col.name])}
                             >
                               {isReadonly ? (
-                                <span className="text-slate-500">{renderCellValue(col, row[col.name])}</span>
+                                <span className="text-slate-500">{renderCellValue(col, row[col.name], row)}</span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 group">
-                                  {renderCellValue(col, row[col.name])}
+                                  {renderCellValue(col, row[col.name], row)}
                                   <Pencil className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                                 </span>
                               )}
@@ -2450,10 +2478,10 @@ export function ProjectDetail({
                               onClick={() => !isReadonly && startEdit(table.table_code, rowId, col.name, row[colKey])}
                             >
                               {isReadonly ? (
-                                renderCellValue(col, row[colKey])
+                                renderCellValue(col, row[colKey], row)
                               ) : (
                                 <span className="group inline-flex items-center gap-1">
-                                  {renderCellValue(col, row[colKey])}
+                                  {renderCellValue(col, row[colKey], row)}
                                   <Pencil className="w-2.5 h-2.5 text-slate-300 opacity-0 group-hover:opacity-100 shrink-0" />
                                 </span>
                               )}

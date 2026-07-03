@@ -63,7 +63,7 @@ interface TableDef {
   allow_add?: boolean;
   allow_delete?: boolean;
   readonly_mode?: string;
-  columns_config?: Array<{ name: string; type: string; readonly?: boolean; options?: string[]; display_mode?: string; data_source?: string; allow_custom?: boolean }>;
+  columns_config?: Array<{ name: string; type: string; readonly?: boolean; options?: string[]; display_mode?: string; data_source?: string; allow_custom?: boolean; calc_left_col?: string; calc_operator?: string; calc_right_col?: string; calc_sum?: boolean }>;
 }
 
 interface PhaseDetailProps {
@@ -345,7 +345,17 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
   };
 
   // 渲染可编辑单元格
-  const renderCell = (tableCode: string, rowIdx: number, col: { name: string; type: string; readonly?: boolean; options?: string[]; display_mode?: string; data_source?: string; allow_custom?: boolean }, row: Record<string, unknown>) => {
+  const computeCalcRow = (col: any, row: Record<string, unknown>) => {
+    if (!col.calc_left_col || !col.calc_right_col) return null;
+    const l = Number(row[col.calc_left_col] ?? 0); const r = Number(row[col.calc_right_col] ?? 0);
+    return col.calc_operator === "-" ? (l - r) : col.calc_operator === "*" ? (l * r) : col.calc_operator === "/" ? (r ? l / r : 0) : (l + r);
+  };
+
+  const renderCell = (tableCode: string, rowIdx: number, col: any, row: Record<string, unknown>) => {
+    if (col.type === "calc") {
+      const r = computeCalcRow(col, row);
+      return <span className="font-mono text-xs" style={{ color: "var(--s-text)" }}>{r !== null ? String(r) : "—"}</span>;
+    }
     const value = String(row[col.name] ?? "");
     const isEditing = editingCell?.tableCode === tableCode && editingCell?.rowIdx === rowIdx && editingCell?.colName === col.name;
     const editable = isColumnEditable(col, row);

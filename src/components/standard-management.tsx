@@ -110,7 +110,12 @@ export interface ColumnConfig {
   description?: string;
   options?: string[]; // 单选/多选类型的选项列表
   data_source?: string; // 数据来源: "custom"|"project_types"|"project_stages"|...
-  allow_custom?: boolean; // 单选/多选是否允许用户自定义输入
+  allow_custom?: boolean;
+  calc_left_col?: string;
+  calc_operator?: string;
+  calc_right_col?: string;
+  calc_sum?: boolean;
+  calc_format?: string;
   quick_inputs?: string[];
   display_mode?: "dropdown" | "checkbox" | "project" | "system"; // 单选展示方式 或 采购模块数据来源
   multiple?: boolean; // 采购模块选择是否多选
@@ -156,6 +161,7 @@ const COLUMN_TYPES = [
   { code: "select", name: "单选" },
   { code: "multiple_select", name: "多选" },
   { code: "attachment", name: "附件" },
+  { code: "calc", name: "计算" },
   { code: "video", name: "视频" },
   { code: "procurement_module", name: "产品模块" },
   { code: "procurement_record", name: "采购模块记录" },
@@ -2430,6 +2436,41 @@ export function StandardManagement({
                                     </TableCell>
                                   </TableRow>
                                 )}
+                                {col.type === 'calc' && (
+                                  <TableRow>
+                                    <TableCell colSpan={5} className="py-2 px-3 bg-muted/30">
+                                      <div className="flex items-center gap-3 flex-wrap">
+                                        <span className="text-xs text-muted-foreground shrink-0">计算公式:</span>
+                                        <select value={col.calc_left_col || ""} onChange={(e) => updateColumn(index, "calc_left_col", e.target.value)}
+                                          className="h-6 text-xs border rounded px-1.5">
+                                          <option value="">选择列</option>
+                                          {(formData.columns_config || []).filter((c) => c.type === "number" && c.name).map((c) => (
+                                            <option key={c.name} value={c.name}>{c.name}</option>
+                                          ))}
+                                        </select>
+                                        <select value={col.calc_operator || "*"} onChange={(e) => updateColumn(index, "calc_operator", e.target.value)}
+                                          className="h-6 text-xs border rounded px-1.5 w-16">
+                                          <option value="+">＋</option>
+                                          <option value="-">－</option>
+                                          <option value="*">×</option>
+                                          <option value="/">÷</option>
+                                        </select>
+                                        <select value={col.calc_right_col || ""} onChange={(e) => updateColumn(index, "calc_right_col", e.target.value)}
+                                          className="h-6 text-xs border rounded px-1.5">
+                                          <option value="">选择列</option>
+                                          {(formData.columns_config || []).filter((c) => c.type === "number" && c.name).map((c) => (
+                                            <option key={c.name} value={c.name}>{c.name}</option>
+                                          ))}
+                                        </select>
+                                        <label className="flex items-center gap-1 text-xs cursor-pointer">
+                                          <input type="checkbox" checked={col.calc_sum === true}
+                                            onChange={(e) => updateColumn(index, "calc_sum", e.target.checked)} className="w-3 h-3" />
+                                          汇总全部行
+                                        </label>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
                                 {col.type === 'video' && (
                                   <TableRow>
                                     <TableCell colSpan={5} className="py-2 px-3 bg-muted/30">
@@ -3209,6 +3250,38 @@ export function StandardManagement({
                                         </div>
                                       )}
 
+                                      {/* calc: 计算列 */}
+                                      {col.type === "calc" && (
+                                        <div className="space-y-2 pt-1 border-t">
+                                          <Label className="text-xs text-muted-foreground">计算公式</Label>
+                                          <div className="flex items-center gap-1 flex-wrap">
+                                            <select value={col.calc_left_col || ""} onChange={(e) => drawerUpdateColumn(ci, "calc_left_col", e.target.value)}
+                                              className="h-6 text-[10px] border rounded px-1">
+                                              <option value="">左列</option>
+                                              {(drawerFormData?.columns_config || []).filter((c) => c.type === "number" && c.name).map((c) => (
+                                                <option key={c.name} value={c.name}>{c.name}</option>
+                                              ))}
+                                            </select>
+                                            <select value={col.calc_operator || "*"} onChange={(e) => drawerUpdateColumn(ci, "calc_operator", e.target.value)}
+                                              className="h-6 text-[10px] border rounded px-1 w-14">
+                                              <option value="+">＋</option><option value="-">－</option>
+                                              <option value="*">×</option><option value="/">÷</option>
+                                            </select>
+                                            <select value={col.calc_right_col || ""} onChange={(e) => drawerUpdateColumn(ci, "calc_right_col", e.target.value)}
+                                              className="h-6 text-[10px] border rounded px-1">
+                                              <option value="">右列</option>
+                                              {(drawerFormData?.columns_config || []).filter((c) => c.type === "number" && c.name).map((c) => (
+                                                <option key={c.name} value={c.name}>{c.name}</option>
+                                              ))}
+                                            </select>
+                                            <label className="flex items-center gap-1 text-[10px] cursor-pointer ml-1">
+                                              <input type="checkbox" checked={col.calc_sum === true}
+                                                onChange={(e) => drawerUpdateColumn(ci, "calc_sum", e.target.checked)} className="w-3 h-3" />
+                                              汇总
+                                            </label>
+                                          </div>
+                                        </div>
+                                      )}
                                       {/* video: 文件限制 */}
                                       {col.type === "video" && (
                                         <div className="space-y-2 pt-1 border-t">

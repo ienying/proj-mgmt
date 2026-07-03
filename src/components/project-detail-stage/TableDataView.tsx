@@ -95,7 +95,12 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
 
   const fmt = (v: unknown) => String(v ?? "—");
 
-  const renderValue = (col: { name: string; type: string; readonly?: boolean; options?: string[] }, row: Record<string, unknown>, ri: number) => {
+  const renderValue = (col: any, row: Record<string, unknown>, ri: number) => {
+    if (col.type === "calc" && col.calc_left_col && col.calc_right_col) {
+      const l = Number(row[col.calc_left_col] ?? 0); const r = Number(row[col.calc_right_col] ?? 0);
+      const result = col.calc_operator === "-" ? (l - r) : col.calc_operator === "*" ? (l * r) : col.calc_operator === "/" ? (r ? l / r : 0) : (l + r);
+      return <span className="font-mono text-xs" style={{ color: "var(--s-text)" }}>{String(result)}</span>;
+    }
     const val = String(row[col.name] ?? "—");
     const editable = isColEditable(col, row, tableDef);
     const isEditing = editingCell?.rowIdx === ri && editingCell?.colName === col.name;
