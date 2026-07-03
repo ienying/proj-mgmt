@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
+import crypto from "crypto";
 
 export async function GET(request: NextRequest) {
   try {
@@ -81,95 +82,130 @@ export async function POST(request: NextRequest) {
     const workflowNodes = d.workflow_nodes || [];
     const formColumns = d.form_columns || [];
 
-    // 2. Determine initial assignee
-    let assigneeId = null;
-    let assigneeName = null;
-    let currentNodeId = null;
+    // 2. Ensure parallel_group_id column exists
+    await client.rpc("execute_sql", {
+      p_sql: `ALTER TABLE public.task_center_instances ADD COLUMN IF NOT EXISTS parallel_group_id VARCHAR(36)`,
+    }).catch(() => {});
+
+    // 3. Determine initial assignee(s)
+    let assigneeId: string | null = null;
+    let assigneeName: string | null = null;
+    let currentNodeId: string | null = null;
     let currentNodeIndex = 0;
+    let isParallelFirstNode = false;
+    let parallelGroupId: string | null = null;
 
     if (taskMode === "process" && workflowNodes.length > 0) {
       const firstNode = workflowNodes[0];
-      assigneeId = firstNode.handler_id;
-      assigneeName = firstNode.handler_name;
       currentNodeId = firstNode.id;
       currentNodeIndex = 0;
+
+      if (firstNode.node_type === "parallel" && firstNode.handler_ids?.length > 0) {
+        isParallelFirstNode = true;
+        parallelGroupId = crypto.randomUUID();
+      } else {
+        assigneeId = firstNode.handler_id || null;
+        assigneeName = firstNode.handler_name || null;
+      }
     }
 
-    // 3. Build physical table insert data
-    const rowData: Record<string, any> = {
-      project_id: project_id || null,
-    };
-
-    // Copy board record source data
-    if (boardRecords.length > 0) {
-      for (const ref of boardRecords) {
-        try {
-          const sourceSchema = ref.source_schema;
-          const sourceTable = ref.source_table;
-          const sourceRecordId = ref.source_record_id;
-
-          const { data: sourceRows } = await client.rpc("execute_sql", {
-            p_sql: `SELECT * FROM ${sourceSchema}."${sourceTable}" WHERE id = '${String(sourceRecordId).replace(/'/g, "''")}'`,
-          });
-
-          if (sourceRows && Array.isArray(sourceRows) && sourceRows.length > 0) {
-            const sourceRow = sourceRows[0] as Record<string, any>;
-            for (const cc of ref.copy_columns || []) {
-              rowData[cc.target_col] = sourceRow[cc.source_col] ?? null;
-            }
-          }
-        } catch (e) {
-          console.warn(`复制看板记录 ${ref.ref_id} 失败:`, e);
+    // Helper: build physical table insert data
+    const buildRowData = (handlerId?: string): Record<string, any> => {
+      const rowData: Record<string, any> = {
+        project_id: project_id || null,
+        submitted_by: handlerId || null,
+      };
+      for (const col of formColumns) {
+        if (col.default_value !== undefined && col.default_value !== null && col.default_value !== "") {
+          rowData[col.name] = col.default_value;
         }
       }
-    }
+      return rowData;
+    };
 
-    // Set form column defaults
-    for (const col of formColumns) {
-      if (col.default_value !== undefined && col.default_value !== null && col.default_value !== "") {
-        rowData[col.name] = col.default_value;
+    // Helper: copy board record data
+    const copyBoardData = async (rowData: Record<string, any>) => {
+      if (boardRecords.length > 0) {
+        for (const ref of boardRecords) {
+          try {
+            const sourceSchema = ref.source_schema;
+            const sourceTable = ref.source_table;
+            const sourceRecordId = ref.source_record_id;
+            const { data: sourceRows } = await client.rpc("execute_sql", {
+              p_sql: `SELECT * FROM ${sourceSchema}."${sourceTable}" WHERE id = '${String(sourceRecordId).replace(/'/g, "''")}'`,
+            });
+            if (sourceRows && Array.isArray(sourceRows) && sourceRows.length > 0) {
+              const sourceRow = sourceRows[0] as Record<string, any>;
+              for (const cc of ref.copy_columns || []) {
+                rowData[cc.target_col] = sourceRow[cc.source_col] ?? null;
+              }
+            }
+          } catch (e) {
+            console.warn(`复制看板记录 ${ref.ref_id} 失败:`, e);
+          }
+        }
       }
-    }
+    };
 
-    // 4. Insert into physical table
-    const { data: physRow, error: physError } = await client.rpc("dp_insert_generic", {
-      p_schema: schemaName,
-      p_table: tableName,
-      p_data: rowData,
-    });
-    if (physError) {
-      return NextResponse.json({ error: `写入物理表失败: ${physError.message}` }, { status: 500 });
-    }
+    // Helper: create one instance + phys row
+    const createOneInstance = async (handlerId: string | null, handlerName: string | null) => {
+      const rowData = buildRowData(handlerId || undefined);
+      await copyBoardData(rowData);
 
-    // 5. Insert instance
-    const { data: instance, error: instError } = await client.rpc("dp_insert", {
-      p_table: "public.task_center_instances",
-      p_data: {
-        def_id,
-        period_label: period_label || null,
-        assignee_id: assigneeId,
-        assignee_name: assigneeName,
-        current_node_id: currentNodeId,
-        current_node_index: currentNodeIndex,
-        node_history: [],
-        status: "pending",
-        project_id: project_id || null,
-        project_name: project_name || null,
-        due_date: due_date || null,
-      },
-    });
-    if (instError) {
-      return NextResponse.json({ error: `创建实例失败: ${instError.message}` }, { status: 500 });
-    }
-
-    // 6. Link physical row to instance
-    const physId = (physRow as Record<string, any>)?.id;
-    if (physId) {
-      await client.rpc("execute_sql", {
-        p_sql: `UPDATE ${schemaName}."${tableName}" SET instance_id = '${String((instance as Record<string, any>).id).replace(/'/g, "''")}' WHERE id = '${String(physId).replace(/'/g, "''")}'`,
+      const { data: physRow, error: physError } = await client.rpc("dp_insert_generic", {
+        p_schema: schemaName,
+        p_table: tableName,
+        p_data: rowData,
       });
+      if (physError) throw new Error(`写入物理表失败: ${physError.message}`);
+
+      const { data: instance, error: instError } = await client.rpc("dp_insert", {
+        p_table: "public.task_center_instances",
+        p_data: {
+          def_id,
+          period_label: period_label || null,
+          assignee_id: handlerId,
+          assignee_name: handlerName,
+          current_node_id: currentNodeId,
+          current_node_index: currentNodeIndex,
+          node_history: [],
+          status: "pending",
+          project_id: project_id || null,
+          project_name: project_name || null,
+          due_date: due_date || null,
+          parallel_group_id: parallelGroupId,
+        },
+      });
+      if (instError) throw new Error(`创建实例失败: ${instError.message}`);
+
+      const physId = (physRow as Record<string, any>)?.id;
+      if (physId) {
+        await client.rpc("execute_sql", {
+          p_sql: `UPDATE ${schemaName}."${tableName}" SET instance_id = '${String((instance as Record<string, any>).id).replace(/'/g, "''")}' WHERE id = '${String(physId).replace(/'/g, "''")}'`,
+        });
+      }
+      return instance;
+    };
+
+    // 4. Create instances
+    if (isParallelFirstNode) {
+      const firstNode = workflowNodes[0];
+      const instances: any[] = [];
+      for (let idx = 0; idx < firstNode.handler_ids.length; idx++) {
+        const handlerId = firstNode.handler_ids[idx];
+        const handlerName = firstNode.handler_names?.[idx] || "";
+        try {
+          const inst = await createOneInstance(handlerId, handlerName);
+          instances.push(inst);
+        } catch (e: any) {
+          console.error(`为 ${handlerName} 创建实例失败:`, e.message);
+        }
+      }
+      return NextResponse.json({ data: instances, parallel_group_id: parallelGroupId });
     }
 
+    // Sequential (original path)
+    const instance = await createOneInstance(assigneeId, assigneeName);
     return NextResponse.json({ data: instance });
   } catch (error) {
     console.error("创建任务实例失败:", error);

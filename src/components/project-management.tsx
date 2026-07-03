@@ -129,6 +129,41 @@ const PROJECT_PERMISSIONS = [
 
 // 卡片顶部装饰色（统一蓝色）
 
+// 紧凑日期范围组件（单按钮 + 弹窗选时间段）
+function DateRange({ label, from, to, onFrom, onTo }: {
+  label: string; from: string; to: string;
+  onFrom: (v: string) => void; onTo: (v: string) => void;
+}) {
+  const hasValue = from || to;
+  const display = hasValue
+    ? `${from ? from.slice(5) : '...'} ~ ${to ? to.slice(5) : '...'}`
+    : label;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button className={`inline-flex items-center gap-1 px-2.5 h-9 text-xs rounded-lg border transition-colors hover:bg-accent w-[110px] justify-center ${
+          hasValue ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-input text-muted-foreground'
+        }`}>
+          <Calendar className="w-3 h-3" />
+          <span className="truncate">{display}</span>
+          {hasValue && <X className="w-3 h-3 hover:text-red-500" onClick={(e) => { e.stopPropagation(); onFrom(""); onTo(""); }} />}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[260px] p-3" align="start">
+        <div className="text-xs font-medium mb-2">{label}日期范围</div>
+        <div className="flex items-center gap-2">
+          <Input type="date" value={from} onChange={(e) => onFrom(e.target.value)} className="h-8 text-xs" />
+          <span className="text-slate-400 text-xs">至</span>
+          <Input type="date" value={to} onChange={(e) => onTo(e.target.value)} className="h-8 text-xs" />
+        </div>
+        {hasValue && (
+          <button className="text-xs text-red-500 hover:underline mt-2" onClick={() => { onFrom(""); onTo(""); }}>清除</button>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // 紧凑多选下拉组件 - 样式与 Select 保持一致
 function MultiSelectBadge({ label, options, selected, onChange }: {
   label: string;
@@ -206,6 +241,7 @@ export function ProjectManagement({
   const [filterInitialDateTo, setFilterInitialDateTo] = useState("");
   const [filterFinalDateFrom, setFilterFinalDateFrom] = useState("");
   const [filterFinalDateTo, setFilterFinalDateTo] = useState("");
+  const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
   const [filterChannelCompanies, setFilterChannelCompanies] = useState<string[]>([]);
   const [filterProjectMembers, setFilterProjectMembers] = useState<string[]>([]);
   const [filterProcurementModules, setFilterProcurementModules] = useState<string[]>([]);
@@ -395,6 +431,7 @@ export function ProjectManagement({
   // 筛选项目 - 计算可选值
   const departments = useMemo(() => [...new Set(projects.map(p => p.department).filter((d): d is string => !!d))].sort(), [projects]);
   const deployModes = useMemo(() => [...new Set(projects.map(p => p.deployment_mode).filter((d): d is string => !!d))].sort(), [projects]);
+  const allDeployModes = deployModes;
   const managers = useMemo(() => [...new Set(projects.map(p => p.role_project_manager).filter((d): d is string => !!d))].sort(), [projects]);
   const implementationUnits = useMemo(() => [...new Set(projects.map(p => (p as unknown as Record<string,string>).implementation_unit).filter((d): d is string => !!d))].sort(), [projects]);
   const salesList = useMemo(() => [...new Set(projects.map(p => p.role_sales).filter((d): d is string => !!d))].sort(), [projects]);
@@ -1340,103 +1377,124 @@ export function ProjectManagement({
 
         {/* 筛选工具栏 */}
         <div className="p-6 pb-0">
-          <div className="border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm">
-            {/* 第一行：核心筛选 */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative w-[180px] shrink-0">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                <Input placeholder="搜索项目名称..." value={searchQuery} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)} className="pl-8 h-8 text-xs" />
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            {/* 第一排 */}
+            <div className="px-4 py-3 flex items-center gap-2">
+              <div className="relative w-[260px] shrink-0">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input placeholder="搜索名称/编号..." value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 h-9 text-sm border-slate-200 rounded-lg focus-visible:ring-indigo-500" />
               </div>
-              <Select value={filterType} onValueChange={(v) => setFilterType(v)}>
-                <SelectTrigger className="w-[130px] h-8 text-xs"><SelectValue placeholder="项目类型" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">项目类型</SelectItem>{projectTypes.filter(t => t.code).map((t: { name: string; code: string }) => <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="w-px h-6 bg-slate-200" />
               <Select value={filterStage} onValueChange={(v) => setFilterStage(v)}>
-                <SelectTrigger className="w-[130px] h-8 text-xs"><SelectValue placeholder="项目阶段" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">项目阶段</SelectItem>{projectStages.filter(s => s.code).map((s: { name: string; code: string }) => <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>)}</SelectContent>
+                <SelectTrigger className="w-[110px] h-9 text-xs rounded-lg"><SelectValue placeholder="阶段" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">全部</SelectItem>{projectStages.filter(s => s.code).map((s) => <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>)}</SelectContent>
               </Select>
               <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v)}>
-                <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue placeholder="项目状态" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">项目状态</SelectItem><SelectItem value="进行中">进行中</SelectItem><SelectItem value="已完成">已完成</SelectItem><SelectItem value="已暂停">已暂停</SelectItem></SelectContent>
-              </Select>
-              <Select value={filterDept} onValueChange={(v) => setFilterDept(v)}>
-                <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue placeholder="部门" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">部门</SelectItem>{departments.map((d: string) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                <SelectTrigger className="w-[110px] h-9 text-xs rounded-lg"><SelectValue placeholder="状态" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">全部</SelectItem><SelectItem value="进行中">进行中</SelectItem><SelectItem value="已完成">已完成</SelectItem><SelectItem value="已暂停">已暂停</SelectItem></SelectContent>
               </Select>
               <Select value={filterSales} onValueChange={(v) => setFilterSales(v)}>
-                <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue placeholder="销售" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">销售</SelectItem>{salesList.map((s: string) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-              </Select>
-              <Select value={filterPresales} onValueChange={(v) => setFilterPresales(v)}>
-                <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue placeholder="售前" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">售前</SelectItem>{presalesList.map((s: string) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-              </Select>
-              <Select value={filterMarketProduct} onValueChange={(v) => setFilterMarketProduct(v)}>
-                <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue placeholder="市场产品" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">市场产品</SelectItem>{marketProductList.map((s: string) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                <SelectTrigger className="w-[110px] h-9 text-xs rounded-lg"><SelectValue placeholder="销售" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">全部</SelectItem>{salesList.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
               <Select value={filterManager} onValueChange={(v) => setFilterManager(v)}>
-                <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue placeholder="项目经理" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">项目经理</SelectItem>{managers.map((m: string) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                <SelectTrigger className="w-[110px] h-9 text-xs rounded-lg"><SelectValue placeholder="项目经理" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">全部</SelectItem>{managers.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
               </Select>
-              <MultiSelectBadge label="客户类型" options={allCustomerTypes} selected={filterCustomerTypes} onChange={setFilterCustomerTypes} />
+              {/* 日期：进场 初验 终验 */}
+              <DateRange label="进场" from={filterEntryDateFrom} to={filterEntryDateTo}
+                onFrom={(v) => setFilterEntryDateFrom(v)} onTo={(v) => setFilterEntryDateTo(v)} />
+              <DateRange label="初验" from={filterInitialDateFrom} to={filterInitialDateTo}
+                onFrom={(v) => setFilterInitialDateFrom(v)} onTo={(v) => setFilterInitialDateTo(v)} />
+              <DateRange label="终验" from={filterFinalDateFrom} to={filterFinalDateTo}
+                onFrom={(v) => setFilterFinalDateFrom(v)} onTo={(v) => setFilterFinalDateTo(v)} />
+              <div className="w-px h-6 bg-slate-200" />
+              <Button variant="ghost" size="sm"
+                className={`h-9 gap-1 text-xs rounded-lg whitespace-nowrap ${showAdvancedFilter ? "bg-slate-100 text-slate-700" : "text-slate-500"}`}
+                onClick={() => setShowAdvancedFilter(!showAdvancedFilter)}>
+                <SlidersHorizontal className="w-3.5 h-3.5" />更多选项
+                {[filterType, filterDept, filterPresales, filterMarketProduct, filterDeployMode, ...filterImplementationUnit, ...filterCustomerTypes, ...filterChannelCompanies, ...filterProjectMembers, ...filterProcurementModules, filterIntegrationModule, filterCustomDevModule].some(v => v !== "all" && v !== "" && (!Array.isArray(v) || v.length > 0)) && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                )}
+              </Button>
               <div className="flex-1" />
-              <Button variant="ghost" size="sm" className="h-8 text-xs text-gray-500" onClick={() => {
-                setFilterDept("all"); setFilterType("all"); setFilterStage("all"); setFilterStatus("all");
-                setFilterSales("all"); setFilterPresales("all"); setFilterMarketProduct("all"); setFilterManager("all");
-                setFilterImplementationUnit([]); setFilterCustomerTypes([]);
-                setFilterEntryDateFrom(""); setFilterEntryDateTo("");
-                setFilterInitialDateFrom(""); setFilterInitialDateTo("");
-                setFilterFinalDateFrom(""); setFilterFinalDateTo("");
-                setFilterChannelCompanies([]); setFilterProjectMembers([]); setFilterProcurementModules([]);
-                setFilterIntegrationModule("all"); setFilterCustomDevModule("all");
-                setSearchQuery("");
-              }}>清除</Button>
-              <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={handleExport}><Download className="w-3 h-3" />导出</Button>
-              <Button size="sm" className="h-8 gap-1 text-xs bg-indigo-600 hover:bg-indigo-700" onClick={() => { setEditingProject(null); setShowProjectForm(true); }}><Plus className="w-3 h-3" />新建项目</Button>
+              <span className="text-xs text-slate-400">{filteredProjects.length} 个项目</span>
+              <Button variant="outline" size="sm" className="h-9 gap-1 text-xs rounded-lg" onClick={handleExport}><Download className="w-3.5 h-3.5" />导出</Button>
+              <Button size="sm" className="h-9 gap-1 text-xs rounded-lg bg-indigo-600 hover:bg-indigo-700"
+                onClick={() => { setEditingProject(null); setShowProjectForm(true); }}>
+                <Plus className="w-3.5 h-3.5" />新建项目</Button>
             </div>
-            {/* 第二行：扩展筛选 - 多选 + 时间 + 模块 */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <MultiSelectBadge label="实施单位" options={implementationUnits} selected={filterImplementationUnit} onChange={setFilterImplementationUnit} />
-              <MultiSelectBadge label="渠道公司" options={allChannelCompanies} selected={filterChannelCompanies} onChange={setFilterChannelCompanies} />
-              <MultiSelectBadge label="项目成员" options={allProjectMembers} selected={filterProjectMembers} onChange={setFilterProjectMembers} />
-              <MultiSelectBadge label="采购模块" options={allProcurementModules} selected={filterProcurementModules} onChange={setFilterProcurementModules} />
-              <Select value={filterIntegrationModule} onValueChange={(v) => setFilterIntegrationModule(v)}>
-                <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue placeholder="对接模块" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">对接模块</SelectItem>{allIntegrationModules.map((m: string) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-              </Select>
-              <Select value={filterCustomDevModule} onValueChange={(v) => setFilterCustomDevModule(v)}>
-                <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue placeholder="定制模块" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">定制模块</SelectItem>{allCustomDevModules.map((m: string) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-              </Select>
-              <div className="flex items-center gap-1 text-xs"><span className="text-gray-500 shrink-0">进场</span><Input type="date" value={filterEntryDateFrom} onChange={(e) => setFilterEntryDateFrom(e.target.value)} className="w-[140px] h-8 text-xs" /><span className="text-gray-400">-</span><Input type="date" value={filterEntryDateTo} onChange={(e) => setFilterEntryDateTo(e.target.value)} className="w-[140px] h-8 text-xs" /></div>
-              <div className="flex items-center gap-1 text-xs"><span className="text-gray-500 shrink-0">初验</span><Input type="date" value={filterInitialDateFrom} onChange={(e) => setFilterInitialDateFrom(e.target.value)} className="w-[140px] h-8 text-xs" /><span className="text-gray-400">-</span><Input type="date" value={filterInitialDateTo} onChange={(e) => setFilterInitialDateTo(e.target.value)} className="w-[140px] h-8 text-xs" /></div>
-              <div className="flex items-center gap-1 text-xs"><span className="text-gray-500 shrink-0">终验</span><Input type="date" value={filterFinalDateFrom} onChange={(e) => setFilterFinalDateFrom(e.target.value)} className="w-[140px] h-8 text-xs" /><span className="text-gray-400">-</span><Input type="date" value={filterFinalDateTo} onChange={(e) => setFilterFinalDateTo(e.target.value)} className="w-[140px] h-8 text-xs" /></div>
+
+            {/* 第二排：更多选项 */}
+            {showAdvancedFilter && (
+            <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/80 space-y-2.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] text-slate-400 uppercase tracking-[1px] w-12 shrink-0">属性</span>
+                <Select value={filterType} onValueChange={(v) => setFilterType(v)}>
+                  <SelectTrigger className="w-[100px] h-7 text-[11px] rounded-lg"><SelectValue placeholder="类型" /></SelectTrigger>
+                  <SelectContent><SelectItem value="all">全部</SelectItem>{projectTypes.filter(t => t.code).map((t) => <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={filterDept} onValueChange={(v) => setFilterDept(v)}>
+                  <SelectTrigger className="w-[100px] h-7 text-[11px] rounded-lg"><SelectValue placeholder="部门" /></SelectTrigger>
+                  <SelectContent><SelectItem value="all">全部</SelectItem>{departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={filterDeployMode} onValueChange={(v) => setFilterDeployMode(v)}>
+                  <SelectTrigger className="w-[100px] h-7 text-[11px] rounded-lg"><SelectValue placeholder="部署模式" /></SelectTrigger>
+                  <SelectContent><SelectItem value="all">全部</SelectItem>{allDeployModes.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] text-slate-400 uppercase tracking-[1px] w-12 shrink-0">人员</span>
+                <Select value={filterPresales} onValueChange={(v) => setFilterPresales(v)}>
+                  <SelectTrigger className="w-[100px] h-7 text-[11px] rounded-lg"><SelectValue placeholder="售前" /></SelectTrigger>
+                  <SelectContent><SelectItem value="all">全部</SelectItem>{presalesList.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={filterMarketProduct} onValueChange={(v) => setFilterMarketProduct(v)}>
+                  <SelectTrigger className="w-[100px] h-7 text-[11px] rounded-lg"><SelectValue placeholder="市场产品" /></SelectTrigger>
+                  <SelectContent><SelectItem value="all">全部</SelectItem>{marketProductList.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                </Select>
+                <MultiSelectBadge label="项目成员" options={allProjectMembers} selected={filterProjectMembers} onChange={setFilterProjectMembers} />
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] text-slate-400 uppercase tracking-[1px] w-12 shrink-0">客户</span>
+                <MultiSelectBadge label="客户类型"
+          options={allCustomerTypes.map((c) => customerTypes.find((ct) => ct.code === c)?.name || c)}
+          selected={filterCustomerTypes.map((c) => customerTypes.find((ct) => ct.code === c)?.name || c)}
+          onChange={(names) => {
+            const codes = names.map((n) => customerTypes.find((ct) => ct.name === n)?.code || n);
+            setFilterCustomerTypes(codes);
+          }} />
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] text-slate-400 uppercase tracking-[1px] w-12 shrink-0">采购</span>
+                <MultiSelectBadge label="采购模块"
+                  options={allProcurementModules.map((c) => procurementModules.find((pm) => pm.code === c)?.name || c)}
+                  selected={filterProcurementModules.map((c) => procurementModules.find((pm) => pm.code === c)?.name || c)}
+                  onChange={(names) => {
+                    const codes = names.map((n) => procurementModules.find((pm) => pm.name === n)?.code || n);
+                    setFilterProcurementModules(codes);
+                  }} />
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] text-slate-400 uppercase tracking-[1px] w-12 shrink-0">其他</span>
+                <MultiSelectBadge label="实施单位" options={implementationUnits} selected={filterImplementationUnit} onChange={setFilterImplementationUnit} />
+                <MultiSelectBadge label="渠道公司" options={allChannelCompanies} selected={filterChannelCompanies} onChange={setFilterChannelCompanies} />
+                <Button variant="ghost" size="sm" className="h-7 text-[11px] text-slate-400 ml-auto" onClick={() => {
+                  setFilterDept("all"); setFilterType("all"); setFilterStage("all"); setFilterStatus("all");
+                  setFilterSales("all"); setFilterPresales("all"); setFilterMarketProduct("all"); setFilterManager("all");
+                  setFilterDeployMode("all"); setFilterImplementationUnit([]); setFilterCustomerTypes([]);
+                  setFilterEntryDateFrom(""); setFilterEntryDateTo("");
+                  setFilterInitialDateFrom(""); setFilterInitialDateTo("");
+                  setFilterFinalDateFrom(""); setFilterFinalDateTo("");
+                  setFilterChannelCompanies([]); setFilterProjectMembers([]); setFilterProcurementModules([]);
+                  setFilterIntegrationModule("all"); setFilterCustomDevModule("all");
+                  setSearchQuery(""); setShowAdvancedFilter(false);
+                }}>清除全部筛选</Button>
+              </div>
             </div>
-            {/* 活跃筛选标签 */}
-            {(() => {
-              const tags: { label: string; onClear: () => void }[] = [];
-              if (filterImplementationUnit.length > 0) tags.push({ label: `实施:${filterImplementationUnit.length}`, onClear: () => setFilterImplementationUnit([]) });
-              if (filterCustomerTypes.length > 0) tags.push({ label: `客户类型:${filterCustomerTypes.length}`, onClear: () => setFilterCustomerTypes([]) });
-              if (filterChannelCompanies.length > 0) tags.push({ label: `渠道:${filterChannelCompanies.length}`, onClear: () => setFilterChannelCompanies([]) });
-              if (filterProjectMembers.length > 0) tags.push({ label: `成员:${filterProjectMembers.length}`, onClear: () => setFilterProjectMembers([]) });
-              if (filterProcurementModules.length > 0) tags.push({ label: `采购:${filterProcurementModules.length}`, onClear: () => setFilterProcurementModules([]) });
-              if (filterIntegrationModule !== "all") tags.push({ label: `对接:${filterIntegrationModule}`, onClear: () => setFilterIntegrationModule("all") });
-              if (filterCustomDevModule !== "all") tags.push({ label: `定制:${filterCustomDevModule}`, onClear: () => setFilterCustomDevModule("all") });
-              if (filterEntryDateFrom || filterEntryDateTo) tags.push({ label: "进场时间", onClear: () => { setFilterEntryDateFrom(""); setFilterEntryDateTo(""); } });
-              if (filterInitialDateFrom || filterInitialDateTo) tags.push({ label: "初验时间", onClear: () => { setFilterInitialDateFrom(""); setFilterInitialDateTo(""); } });
-              if (filterFinalDateFrom || filterFinalDateTo) tags.push({ label: "终验时间", onClear: () => { setFilterFinalDateFrom(""); setFilterFinalDateTo(""); } });
-              if (tags.length === 0) return null;
-              return (
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {tags.map((t, i) => (
-                    <Badge key={i} variant="secondary" className="text-xs gap-1 cursor-pointer hover:bg-red-50" onClick={t.onClear}>
-                      {t.label} <X className="h-3 w-3" />
-                    </Badge>
-                  ))}
-                </div>
-              );
-            })()}
+            )}
           </div>
         </div>
         {/* 项目表单弹窗 */}

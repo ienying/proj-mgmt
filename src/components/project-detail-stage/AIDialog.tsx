@@ -1,142 +1,141 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Sparkles, Send, Loader2, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AIPromptDialog } from "@/components/ai-prompt-dialog";
 
 interface AIDialogProps {
   open: boolean;
   onClose: () => void;
-  replies: string[];
+  projectSchema: string;
+  projectName: string;
 }
 
-export function AIDialog({ open, onClose, replies }: AIDialogProps) {
-  const [messages, setMessages] = useState<Array<{ role: "user" | "ai"; text: string }>>([]);
-  const [input, setInput] = useState("");
+export function AIDialog({ open, onClose, projectSchema, projectName }: AIDialogProps) {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ analysis: string; tableCount: number; totalRows: number } | null>(null);
+  const [error, setError] = useState("");
+  const [followUpQ, setFollowUpQ] = useState("");
+  const [followUpLoading, setFollowUpLoading] = useState(false);
+  const [conversation, setConversation] = useState<Array<{ role: string; content: string }>>([]);
+  const [promptDialogOpen, setPromptDialogOpen] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (open) {
-      setMessages([]);
-      setInput("");
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [open]);
+  useEffect(() => { setResult(null); setError(""); setConversation([]); }, [open]);
 
-  useEffect(() => {
-    if (bodyRef.current) {
-      bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-    }
-  }, [messages]);
-
-  // 点击外部关闭 + Escape 键关闭
-  useEffect(() => {
-    if (!open) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dialogRef.current && !dialogRef.current.contains(e.target as Node)) {
-        onClose();
+  const runAnalysis = useCallback(async (systemMsg?: string, userPrompt?: string) => {
+    setLoading(true); setResult(null); setError(""); setConversation([]);
+    try {
+      const res = await fetch("/api/ai/analyze-project", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectSchema, projectName, ...(systemMsg ? { systemMessage: systemMsg } : {}), ...(userPrompt ? { userPrompt } : {}) }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        setError(json.code === "NO_KEY" ? "NO_KEY" : json.error || "分析失败");
+        return;
       }
-    };
-
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
+      if (json.data) {
+        setResult({ analysis: json.data.analysis || "", tableCount: json.data.tableCount || 0, totalRows: json.data.totalRows || 0 });
+        if (json.data.conversationHistory) setConversation(json.data.conversationHistory);
       }
-    };
+    } catch (e) { setError(String(e)); }
+    finally { setLoading(false); }
+  }, [projectSchema, projectName]);
 
-    const timer = setTimeout(() => {
-      document.addEventListener("click", handleClickOutside);
-      document.addEventListener("keydown", handleEscape);
-    }, 50);
-
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener("click", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [open, onClose]);
-
-  const handleSend = () => {
-    const text = input.trim();
-    if (!text) return;
-    const reply = replies[Math.floor(Math.random() * replies.length)];
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", text },
-      { role: "ai", text: reply },
-    ]);
-    setInput("");
-  };
-
-  if (!open) return null;
+  const handleFollowUp = useCallback(async () => {
+    if (!followUpQ.trim() || !conversation.length) return;
+    setFollowUpLoading(true);
+    try {
+      const res = await fetch("/api/ai/analyze-project", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectSchema, projectName, conversationHistory: conversation, userPrompt: followUpQ.trim() }),
+      });
+      const json = await res.json();
+      if (json.data) {
+        setResult((prev) => prev ? { ...prev, analysis: prev.analysis + "\n\n---\n\n" + (json.data.analysis || "") } : { analysis: json.data.analysis || "", tableCount: json.data.tableCount || 0, totalRows: json.data.totalRows || 0 });
+        if (json.data.conversationHistory) setConversation(json.data.conversationHistory);
+      }
+      setFollowUpQ("");
+    } catch {}
+    setFollowUpLoading(false);
+  }, [followUpQ, conversation, projectSchema, projectName]);
 
   return (
     <>
-      {/* 遮罩 */}
-      <div
-        className="fixed inset-0 z-38 bg-black/15 backdrop-blur-[2px]"
-        onClick={onClose}
+      <AIPromptDialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}
+        onSubmit={(r) => { setPromptDialogOpen(false); runAnalysis(r.systemMessage, r.userPrompt); }}
+        projectSchema={projectSchema} promptType="global"
       />
-
-      {/* 对话框 */}
-      <div
-        ref={dialogRef}
-        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-39 w-[520px] max-h-[70vh] bg-[var(--s-surface)] border border-[var(--s-border)] flex flex-col"
-      >
-        {/* 头部 */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--s-border)]">
-          <div className="flex items-center gap-2 text-[13px] font-bold text-[var(--s-text)]">
-            <span className="w-2 h-2 rounded-full bg-[var(--s-orange)] animate-[pulse_2s_infinite]" />
-            AI 项目助手
+      <Dialog open={open} onOpenChange={onClose}>
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-teal-500" /> AI 数据分析
+            </DialogTitle>
+          </DialogHeader>
+          <div ref={bodyRef} className="space-y-4 flex-1 overflow-y-auto min-h-0">
+            {loading && (
+              <div className="flex flex-col items-center py-12">
+                <Sparkles className="w-12 h-12 text-teal-400 animate-pulse mb-4" />
+                <p className="text-sm text-gray-500">AI 正在分析数据...</p>
+              </div>
+            )}
+            {error && !loading && (
+              <div className="py-8 text-center">
+                {error === "NO_KEY" ? (
+                  <div className="space-y-3">
+                    <Sparkles className="w-12 h-12 text-gray-300 mx-auto" />
+                    <p className="text-gray-500 text-sm">AI 功能尚未配置</p>
+                    <p className="text-gray-400 text-xs">请联系管理员在 系统设置 → 大模型配置 中设置 DeepSeek API Key</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-red-500 text-sm">分析失败</p>
+                    <p className="text-red-400 text-xs">{error}</p>
+                    <Button variant="outline" size="sm" onClick={() => runAnalysis()}>重试</Button>
+                  </div>
+                )}
+              </div>
+            )}
+            {result && !loading && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  已分析 <strong>{result.tableCount}</strong> 张表，共 <strong>{result.totalRows}</strong> 条数据
+                </div>
+                <div className="prose prose-sm max-w-none text-sm text-gray-700 whitespace-pre-wrap leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: result.analysis.replace(/\n/g, "<br>") }} />
+                {conversation.length > 0 && (
+                  <div className="flex items-center gap-2 pt-2 border-t">
+                    <input value={followUpQ} onChange={(e) => setFollowUpQ(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleFollowUp()}
+                      placeholder="追问 AI..." className="flex-1 h-9 px-3 text-sm border rounded-lg outline-none focus:border-teal-500"
+                      disabled={followUpLoading} />
+                    <Button size="sm" onClick={handleFollowUp} disabled={followUpLoading || !followUpQ.trim()}
+                      className="h-9 gap-1">
+                      {followUpLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                      发送
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-          <button
-            onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center border border-[var(--s-border)] bg-[var(--s-surface)] text-[var(--s-text-muted)] text-sm cursor-pointer transition-all hover:bg-[var(--s-surface2)] hover:text-[var(--s-red)] hover:border-[var(--s-red)]"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* 消息区 */}
-        <div ref={bodyRef} className="flex-1 p-5 overflow-y-auto flex flex-col gap-4">
-          {messages.length === 0 && (
-            <div className="text-xs text-[var(--s-text-secondary)] leading-relaxed p-3 bg-[var(--s-surface2)] border-l-2 border-[var(--s-orange)]">
-              你好！我是 AI 项目助手，可以帮你分析项目数据、回答进度问题、提供管理建议。请输入你的问题。
+          <div className="flex justify-between pt-2 border-t">
+            <Button variant="outline" size="sm" onClick={() => setPromptDialogOpen(true)}>
+              <Sparkles className="w-3.5 h-3.5 mr-1" /> 自定义提示词
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={() => runAnalysis()}>重新分析</Button>
+              <Button variant="outline" size="sm" onClick={onClose}>关闭</Button>
             </div>
-          )}
-          {messages.map((m, i) => (
-            <div
-              key={i}
-              className="text-xs leading-relaxed p-3"
-              style={{
-                backgroundColor: m.role === "user" ? "var(--s-surface)" : "var(--s-surface2)",
-                borderLeft: m.role === "user" ? "2px solid var(--s-blue)" : "2px solid var(--s-orange)",
-              }}
-            >
-              {m.role === "user" ? `👤 ${m.text}` : `🤖 ${m.text}`}
-            </div>
-          ))}
-        </div>
-
-        {/* 输入区 */}
-        <div className="flex gap-2 px-5 py-3 border-t border-[var(--s-border)]">
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="输入问题..."
-            className="flex-1 px-3.5 py-2.5 text-xs bg-[var(--s-surface2)] border border-[var(--s-border)] text-[var(--s-text)] outline-none font-sans focus:border-[var(--s-orange)]"
-          />
-          <button
-            onClick={handleSend}
-            className="px-4.5 py-2.5 text-xs font-semibold bg-[var(--s-orange)] text-white border-none cursor-pointer transition-all hover:bg-[var(--s-orange-dim)]"
-          >
-            发送
-          </button>
-        </div>
-      </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

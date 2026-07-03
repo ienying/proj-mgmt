@@ -27,17 +27,19 @@ export async function GET(
     });
 
     let physRow = null;
+    let physRows: any[] = [];
     if (def) {
       const d = def as Record<string, any>;
       const { data: rows } = await client.rpc("execute_sql", {
-        p_sql: `SELECT * FROM ${d.schema_name}."${d.table_name}" WHERE instance_id = '${String(inst.id).replace(/'/g, "''")}' LIMIT 1`,
+        p_sql: `SELECT * FROM ${d.schema_name}."${d.table_name}" WHERE instance_id = '${String(inst.id).replace(/'/g, "''")}' ORDER BY sort_order, created_at`,
       });
       if (rows && Array.isArray(rows) && rows.length > 0) {
+        physRows = rows;
         physRow = rows[0];
       }
     }
 
-    return NextResponse.json({ data: { ...inst, def, phys_row: physRow } });
+    return NextResponse.json({ data: { ...inst, def, phys_row: physRow, phys_rows: physRows } });
   } catch (error) {
     console.error("获取任务实例失败:", error);
     return NextResponse.json({ error: "获取任务实例失败" }, { status: 500 });
