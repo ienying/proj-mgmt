@@ -830,7 +830,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                             <th key={col.name} className="text-left px-4 py-[11px] text-[10px] uppercase tracking-[1px] font-medium bg-[var(--s-surface)] border-b-2 border-[var(--s-border)] text-[var(--s-text-muted)]"
                               style={{ fontFamily: "var(--font-mono, monospace)" }}>{col.name}</th>
                           ))}
-                          {expandedDef.allow_delete !== false && <th className="w-10"></th>}
+                          {expandedDef.allow_delete !== false && <th className="w-10 px-2 py-[11px] text-[10px] uppercase tracking-[1px] font-medium bg-[var(--s-surface)] border-b-2 border-[var(--s-border)]"></th>}
                         </tr>
                       </thead>
                       <tbody>
