@@ -42,14 +42,7 @@ export const panelData: PanelData = {
   },
   progress: {
     title: "PROGRESS 进度管理",
-    items: [
-      { label: "项目主计划", count: 1, link: "进度-主计划.html" },
-      { label: "里程碑管理", count: 7, active: true, key: "milestone" },
-      { label: "甘特图", count: 1, link: "进度-甘特图.html" },
-      { label: "周报汇总", count: 16, link: "进度-周报.html" },
-      { label: "日报汇总", count: 89, key: "daily" },
-      { label: "延期预警", count: 2, key: "delay" },
-    ],
+    items: [],
   },
   quality: {
     title: "QUALITY 质量管理",

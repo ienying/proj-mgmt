@@ -352,11 +352,13 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
   };
 
   const renderCell = (tableCode: string, rowIdx: number, col: any, row: Record<string, unknown>) => {
+    const fmtDate = (v: string) => { const d = v.split(/[T ]/)[0]; return d || v; };
     if (col.type === "calc") {
       const r = computeCalcRow(col, row);
       return <span className="font-mono text-xs" style={{ color: "var(--s-text)" }}>{r !== null ? String(r) : "—"}</span>;
     }
-    const value = String(row[col.name] ?? "");
+    const rawValue = String(row[col.name] ?? "");
+    const value = col.type === "date" && rawValue !== "—" ? fmtDate(rawValue) : rawValue;
     const isEditing = editingCell?.tableCode === tableCode && editingCell?.rowIdx === rowIdx && editingCell?.colName === col.name;
     const editable = isColumnEditable(col, row);
 
@@ -889,7 +891,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                                     autoFocus onClick={(e) => e.stopPropagation()} />
                                 : <span className={isColumnEditable(col, row) ? "cursor-pointer" : ""}
                                     style={{ color: "var(--s-text)", backgroundColor: isColumnEditable(col, row) ? "transparent" : "#fef9e7" }}>
-                                    {String(row[col.name] ?? "—").slice(0, 28)}{String(row[col.name] ?? "").length > 28 ? "…" : ""}
+                                    {(col.type === "date" ? (String(row[col.name] ?? "").split(/[T ]/)[0] || "—") : String(row[col.name] ?? "—")).slice(0, 28)}{String(row[col.name] ?? "").length > 28 ? "…" : ""}
                                   </span>
                               }
                             </td>

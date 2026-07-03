@@ -94,6 +94,13 @@ export interface TableDefinition {
   stage_plan_end_col?: string;
   stage_actual_start_col?: string;
   stage_actual_end_col?: string;
+  gantt_enabled?: boolean;
+  gantt_start_col?: string;
+  gantt_end_col?: string;
+  gantt_name_col?: string;
+  gantt_group_col?: string;
+  gantt_milestone_col?: string;
+  gantt_milestone_value?: string;
   sort_order: number;
   is_active: boolean;
   allow_add?: boolean;
@@ -1980,6 +1987,82 @@ export function StandardManagement({
                         </div>
                       </div>
                     </div>
+                    {/* 甘特图配置 */}
+                    <div className="pt-2 mt-2 border-t">
+                      <Label className="text-[11px] font-medium mb-1.5 flex items-center gap-2">
+                        <input type="checkbox" checked={formData.gantt_enabled === true}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, gantt_enabled: e.target.checked }))}
+                          className="w-3.5 h-3.5" />
+                        甘特图显示
+                      </Label>
+                      {formData.gantt_enabled && (
+                        <div className="grid grid-cols-2 gap-2 pl-5 mt-1">
+                          <div>
+                            <Label className="text-[10px]">起始日期列</Label>
+                            <select value={formData.gantt_start_col || ""}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, gantt_start_col: e.target.value }))}
+                              className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                              <option value="">选择列</option>
+                              {(formData.columns_config || []).filter((c) => c.type === "date" && c.name).map((c) => (
+                                <option key={c.name} value={c.name}>{c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">结束日期列</Label>
+                            <select value={formData.gantt_end_col || ""}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, gantt_end_col: e.target.value }))}
+                              className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                              <option value="">选择列</option>
+                              {(formData.columns_config || []).filter((c) => c.type === "date" && c.name).map((c) => (
+                                <option key={c.name} value={c.name}>{c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">任务名称列</Label>
+                            <select value={formData.gantt_name_col || ""}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, gantt_name_col: e.target.value }))}
+                              className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                              <option value="">选择列</option>
+                              {(formData.columns_config || []).filter((c) => c.name).map((c) => (
+                                <option key={c.name} value={c.name}>{c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">分组列（可选）</Label>
+                            <select value={formData.gantt_group_col || ""}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, gantt_group_col: e.target.value }))}
+                              className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                              <option value="">不分组</option>
+                              {(formData.columns_config || []).filter((c) => c.name).map((c) => (
+                                <option key={c.name} value={c.name}>{c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">里程碑标记列（可选）</Label>
+                            <select value={formData.gantt_milestone_col || ""}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, gantt_milestone_col: e.target.value }))}
+                              className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                              <option value="">无里程碑</option>
+                              {(formData.columns_config || []).filter((c) => c.name).map((c) => (
+                                <option key={c.name} value={c.name}>{c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          {formData.gantt_milestone_col && (
+                            <div>
+                              <Label className="text-[10px]">里程碑标记值</Label>
+                              <Input value={formData.gantt_milestone_value || ""}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, gantt_milestone_value: e.target.value }))}
+                                placeholder="如: 是" className="h-7 text-[11px]" />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </SectionPanel>
 
                   {/* 列配置 */}
@@ -2998,6 +3081,85 @@ export function StandardManagement({
                                 </div>
                               ))}
                             </div>
+                          </div>
+
+                          {/* 甘特图配置 */}
+                          <div className="rounded-lg border bg-card p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                                <input type="checkbox" checked={drawerFormData.gantt_enabled === true}
+                                  onChange={(e) => drawerUpdateField("gantt_enabled", e.target.checked)}
+                                  className="w-3.5 h-3.5" />
+                                甘特图显示
+                              </label>
+                            </div>
+                            {drawerFormData.gantt_enabled && (
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-[10px]">起始日期列</Label>
+                                  <select value={drawerFormData.gantt_start_col || ""}
+                                    onChange={(e) => drawerUpdateField("gantt_start_col", e.target.value)}
+                                    className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                    <option value="">选择</option>
+                                    {(drawerFormData.columns_config || []).filter((c) => c.type === "date" && c.name).map((c) => (
+                                      <option key={c.name} value={c.name}>{c.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <Label className="text-[10px]">结束日期列</Label>
+                                  <select value={drawerFormData.gantt_end_col || ""}
+                                    onChange={(e) => drawerUpdateField("gantt_end_col", e.target.value)}
+                                    className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                    <option value="">选择</option>
+                                    {(drawerFormData.columns_config || []).filter((c) => c.type === "date" && c.name).map((c) => (
+                                      <option key={c.name} value={c.name}>{c.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <Label className="text-[10px]">任务名称列</Label>
+                                  <select value={drawerFormData.gantt_name_col || ""}
+                                    onChange={(e) => drawerUpdateField("gantt_name_col", e.target.value)}
+                                    className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                    <option value="">选择</option>
+                                    {(drawerFormData.columns_config || []).filter((c) => c.name).map((c) => (
+                                      <option key={c.name} value={c.name}>{c.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <Label className="text-[10px]">分组列</Label>
+                                  <select value={drawerFormData.gantt_group_col || ""}
+                                    onChange={(e) => drawerUpdateField("gantt_group_col", e.target.value)}
+                                    className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                    <option value="">不分组</option>
+                                    {(drawerFormData.columns_config || []).filter((c) => c.name).map((c) => (
+                                      <option key={c.name} value={c.name}>{c.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <Label className="text-[10px]">里程碑列</Label>
+                                  <select value={drawerFormData.gantt_milestone_col || ""}
+                                    onChange={(e) => drawerUpdateField("gantt_milestone_col", e.target.value)}
+                                    className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                    <option value="">无</option>
+                                    {(drawerFormData.columns_config || []).filter((c) => c.name).map((c) => (
+                                      <option key={c.name} value={c.name}>{c.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                {drawerFormData.gantt_milestone_col && (
+                                  <div>
+                                    <Label className="text-[10px]">标记值</Label>
+                                    <Input value={drawerFormData.gantt_milestone_value || ""}
+                                      onChange={(e) => drawerUpdateField("gantt_milestone_value", e.target.value)}
+                                      placeholder="如: 是" className="h-7 text-[11px]" />
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           {/* Row 3: 列配置 —— 矩阵式布局（独立横向滚动） */}

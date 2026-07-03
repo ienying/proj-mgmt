@@ -373,9 +373,10 @@ export default function HomePage() {
       // 从前端状态中移除
       setProjects((prev) => prev.filter((p) => p.id !== id));
       
-      toast.success(result.deletedSchema 
-        ? `项目删除成功，已清理 Schema: ${result.deletedSchema}` 
-        : "项目删除成功");
+      const parts = ["项目删除成功"];
+      if (result.deletedSchema) parts.push(`已清理 Schema: ${result.deletedSchema}`);
+      if (result.uploadsCleaned) parts.push("已清理上传文件目录");
+      toast.success(parts.join("，"));
     } catch (error: any) {
       console.error("Delete error:", error);
       toast.error("删除失败: " + error.message);

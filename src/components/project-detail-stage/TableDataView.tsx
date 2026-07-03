@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { GanttChart } from "./GanttChart";
 
 interface TableDataViewProps {
   tableName: string;
@@ -12,6 +13,13 @@ interface TableDataViewProps {
     allow_add?: boolean;
     allow_delete?: boolean;
     readonly_mode?: string;
+    gantt_enabled?: boolean;
+    gantt_start_col?: string;
+    gantt_end_col?: string;
+    gantt_name_col?: string;
+    gantt_group_col?: string;
+    gantt_milestone_col?: string;
+    gantt_milestone_value?: string;
   };
   onBack: () => void;
 }
@@ -32,6 +40,8 @@ function isColEditable(col: { type: string; readonly?: boolean }, row?: Record<s
 export function TableDataView({ tableName, tableCode, projectSchema, tableDef, onBack }: TableDataViewProps) {
   const [records, setRecords] = useState<Array<Record<string, unknown>>>([]);
   const [loading, setLoading] = useState(true);
+  const [ganttExpanded, setGanttExpanded] = useState(true);
+  const [ganttScale, setGanttScale] = useState<"day" | "month">("month");
   const [editingCell, setEditingCell] = useState<{ rowIdx: number; colName: string } | null>(null);
   const [editValue, setEditValue] = useState("");
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
@@ -96,12 +106,14 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
   const fmt = (v: unknown) => String(v ?? "—");
 
   const renderValue = (col: any, row: Record<string, unknown>, ri: number) => {
+    const fmtDate = (v: string) => { const d = v.split(/[T ]/)[0]; return d || v; };
     if (col.type === "calc" && col.calc_left_col && col.calc_right_col) {
       const l = Number(row[col.calc_left_col] ?? 0); const r = Number(row[col.calc_right_col] ?? 0);
       const result = col.calc_operator === "-" ? (l - r) : col.calc_operator === "*" ? (l * r) : col.calc_operator === "/" ? (r ? l / r : 0) : (l + r);
       return <span className="font-mono text-xs" style={{ color: "var(--s-text)" }}>{String(result)}</span>;
     }
-    const val = String(row[col.name] ?? "—");
+    const rawVal = String(row[col.name] ?? "—");
+    const val = col.type === "date" && rawVal !== "—" ? fmtDate(rawVal) : rawVal;
     const editable = isColEditable(col, row, tableDef);
     const isEditing = editingCell?.rowIdx === ri && editingCell?.colName === col.name;
 
@@ -111,7 +123,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
           <select value={editValue} onChange={(e) => { setEditValue(e.target.value); saveEdit(e.target.value); }}
             className="w-full px-1 py-0.5 text-[11px] border border-[var(--s-orange)] outline-none bg-white" autoFocus>
             <option value="">请选择</option>
-            {col.options!.map((o) => <option key={o} value={o}>{o}</option>)}
+            {col.options!.map((o: string) => <option key={o} value={o}>{o}</option>)}
           </select>
         );
       }
@@ -147,7 +159,9 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
           </button>
         </div>
         <h2 className="text-4xl font-bold text-[var(--s-text)] tracking-[-0.5px] mb-2">{tableName}</h2>
-        <p className="text-[13px] text-[var(--s-text-secondary)] mb-6">项目数据表 · {records.length} 条记录</p>
+        <div className="flex items-center gap-3 mb-6">
+          <p className="text-[13px] text-[var(--s-text-secondary)]">项目数据表 · {records.length} 条记录</p>
+        </div>
 
         <div className="flex gap-px" style={{ backgroundColor: "var(--s-border)" }}>
           <div className="flex-1 bg-[var(--s-bg)] p-5 flex flex-col gap-1.5">
@@ -156,6 +170,37 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
           </div>
         </div>
       </div>
+
+      {/* 甘特图（可折叠） */}
+      {tableDef?.gantt_enabled && tableDef.gantt_start_col && tableDef.gantt_end_col && tableDef.gantt_name_col && (
+        <div className="border-b border-[var(--s-border)]">
+          <div className="px-16 py-2 flex items-center justify-between bg-[var(--s-surface2)] cursor-pointer hover:bg-[var(--s-surface)]"
+            onClick={() => setGanttExpanded(!ganttExpanded)}>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-[1px] text-[var(--s-text-muted)]" style={{ fontFamily: "var(--font-mono, monospace)" }}>📊 甘特图</span>
+              <span className="text-[10px] text-[var(--s-text-muted)]">{ganttExpanded ? "▲ 点击收起" : "▼ 点击展开"}</span>
+            </div>
+            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center border border-[var(--s-border)] rounded p-0.5 mr-1">
+                {(["day","month"] as const).map((s) => (
+                  <button key={s} onClick={() => setGanttScale(s)}
+                    className={`px-2 py-0.5 text-[10px] rounded font-semibold uppercase tracking-[0.5px] ${ganttScale === s ? "bg-[var(--s-orange)] text-white" : "text-[var(--s-text-muted)] hover:bg-[var(--s-surface2)]"}`}
+                    style={{ fontFamily: "var(--font-mono, monospace)" }}>{s === "day" ? "日" : "月"}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+          {ganttExpanded && (
+            <div className="overflow-x-auto px-4 py-3">
+              <GanttChart records={records}
+                startCol={tableDef.gantt_start_col!} endCol={tableDef.gantt_end_col!}
+                nameCol={tableDef.gantt_name_col!} groupCol={tableDef.gantt_group_col}
+                milestoneCol={tableDef.gantt_milestone_col} milestoneValue={tableDef.gantt_milestone_value}
+                timeScale={ganttScale} />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 表格/操作 */}
       <div className="px-16 py-6">

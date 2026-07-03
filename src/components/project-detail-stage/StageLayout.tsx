@@ -32,8 +32,16 @@ export function StageLayout({
   const [subContent, setSubContent] = useState<{ key: string; label: string } | null>(null);
   // 根据项目当前阶段确定激活的阶段索引
   const [activePhase, setActivePhase] = useState(0);
+  const [leftStripExpanded, setLeftStripExpanded] = useState(false);
 
   // 获取规范管理的数据表定义
+  const [moduleTypes, setModuleTypes] = useState<{ code: string; name: string }[]>([]);
+  useEffect(() => {
+    fetch("/api/module-types").then(r => r.json()).then(d => {
+      setModuleTypes((d.data || []).map((m: any) => ({ code: m.code, name: m.name })));
+    }).catch(() => {});
+  }, []);
+
   const [tableDefs, setTableDefs] = useState<Array<{
     id: string; table_code: string; table_name: string;
     module_type: string[]; apply_project_stages: string[];
@@ -136,14 +144,6 @@ export function StageLayout({
     setSubContent(null);
   }, []);
 
-  const aiReplies = [
-    "根据当前项目数据，总体进度 71%，已完成 4 个阶段。建议重点关注「质量管理」和「风险管理」领域，其中缺陷跟踪仍有 47 项待处理。",
-    "项目剩余 120 天，按当前节奏预计可如期交付。深圳市教育局和南山区教育局两客户实施进度略有差异，建议每周对齐一次。",
-    "已部署 15 项产品中，核心教务系统运行稳定。智慧教育课堂教学分析系统尚在部分部署阶段，预计下月完成全量上线。",
-    "最近一周新增 3 项变更申请，均在范围管理流程中。建议尽快完成变更影响评估。",
-    "好的，我帮你梳理一下：目前 32 项任务中已完成 17 项，进行中 9 项，待开始 6 项。本周重点推进测试用例执行和用户培训材料准备。",
-  ];
-
   const handleSearch = useCallback(() => {
     alert("搜索功能 — 待实现");
   }, []);
@@ -221,18 +221,23 @@ export function StageLayout({
         onPanelChange={setActivePanel}
         onSubClick={handleOpenSubContent}
         tableDefs={tableDefs}
+        onHoverChange={setLeftStripExpanded}
+        tableRecordCounts={Object.fromEntries(Object.entries(allTableRecords).map(([k, v]) => [k, v.length]))}
+        moduleTypes={moduleTypes}
       />
 
-      {/* 左上返回按钮（固定） */}
-      <button
-        onClick={onBack}
-        className="fixed z-35 flex items-center justify-center w-[38px] h-[38px] cursor-pointer transition-all border border-[var(--s-border)] bg-[var(--s-surface)] text-[var(--s-text-muted)] hover:bg-[var(--s-surface2)] hover:text-[var(--s-text)]"
-        style={{ top: "85px", left: "24px" }}
-        title="返回">
+      {/* 左上返回按钮（左侧菜单展开时隐藏） */}
+      {!leftStripExpanded && (
+        <button
+          onClick={onBack}
+          className="fixed z-35 flex items-center justify-center w-[38px] h-[38px] cursor-pointer transition-all border border-[var(--s-border)] bg-[var(--s-surface)] text-[var(--s-text-muted)] hover:bg-[var(--s-surface2)] hover:text-[var(--s-text)]"
+          style={{ top: "85px", left: "24px" }}
+          title="返回">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <polyline points="15 18 9 12 15 6" />
         </svg>
       </button>
+      )}
 
       {/* 右上工具栏 */}
       <Toolbar
@@ -263,7 +268,8 @@ export function StageLayout({
       <AIDialog
         open={aiDialogOpen}
         onClose={() => setAiDialogOpen(false)}
-        replies={aiReplies}
+        projectSchema={project.project_schema}
+        projectName={project.project_name}
       />
 
       {/* ═══ 主内容区 ═══ */}

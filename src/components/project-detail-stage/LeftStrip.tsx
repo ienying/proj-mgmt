@@ -21,6 +21,7 @@ interface TableDef {
   module_type: string[];
   apply_project_stages: string[];
   stage_display_mode?: string;
+  gantt_enabled?: boolean;
 }
 
 interface LeftStripProps {
@@ -30,6 +31,10 @@ interface LeftStripProps {
   onSubClick: (key: string, label: string) => void;
   /** 动态表定义（用于生成菜单） */
   tableDefs?: TableDef[];
+  onHoverChange?: (expanded: boolean) => void;
+  tableRecordCounts?: Record<string, number>;
+  /** 系统模块类型（动态生成L1菜单） */
+  moduleTypes?: { code: string; name: string }[];
 }
 
 export function LeftStrip({
@@ -38,34 +43,57 @@ export function LeftStrip({
   onPanelChange,
   onSubClick,
   tableDefs = [],
+  onHoverChange,
+  tableRecordCounts = {},
+  moduleTypes = [],
 }: LeftStripProps) {
-  const [hoveredPanel, setHoveredPanel] = useState<PanelKey>("scope");
+  const [hoveredPanel, setHoveredPanel] = useState<string>(activePanel);
 
-  // 动态生成面板数据：混合原有 panelData + 实际表名
+  // 动态生成面板数据
   const dynamicPanelData: PanelData = { ...panelData };
+
+  // 使用系统模块类型生成 L1 菜单
+  const l1Items = moduleTypes.length > 0 ? moduleTypes : [
+    { code: "scope", name: "范围管理" },
+    { code: "schedule", name: "进度管理" },
+    { code: "quality", name: "质量管理" },
+    { code: "cost", name: "成本管理" },
+    { code: "communication", name: "沟通管理" },
+    { code: "risk", name: "风险管理" },
+    { code: "document", name: "资料管理" },
+  ];
+
+  // 为每个模块类型创建面板条目
+  for (const mt of l1Items) {
+    if (!dynamicPanelData[mt.code as PanelKey]) {
+      dynamicPanelData[mt.code as PanelKey] = { title: mt.name, items: [] };
+    }
+  }
 
   // 将表按 module_type 分组
   if (tableDefs.length > 0) {
-    for (const [pk, pdata] of Object.entries(dynamicPanelData) as [PanelKey, (typeof panelData)[PanelKey]][]) {
-      // 只显示 stage_display_mode 为 menu 或 both 的表
+    for (const mt of l1Items) {
+      const pk = mt.code as PanelKey;
+      // 兼容 schedule → progress 等别名
+      const pkAliases = [mt.code];
       const tablesInModule = tableDefs.filter(
         (def) =>
-          def.module_type?.includes(pk) &&
+          (def.module_type || []).some((m) => pkAliases.includes(m)) &&
           (!def.stage_display_mode || def.stage_display_mode === "menu" || def.stage_display_mode === "both")
       );
-      if (tablesInModule.length > 0) {
-        // 用实际表名替换/补充原有子项
-        pdata.items = tablesInModule.map((def) => ({
+      if (dynamicPanelData[pk]) {
+        dynamicPanelData[pk].items = tablesInModule.map((def) => ({
           label: def.table_name,
-          count: 0, // 可以通过 API 获取实际记录数
+          count: tableRecordCounts[def.table_code] || 0,
           key: `table:${def.table_code}`,
           active: false,
+          gantt: def.gantt_enabled,
         }));
       }
     }
   }
 
-  const currentData = dynamicPanelData[hoveredPanel] || dynamicPanelData.scope;
+  const currentData = dynamicPanelData[hoveredPanel as PanelKey] || dynamicPanelData.scope;
 
   return (
     <div
@@ -73,9 +101,11 @@ export function LeftStrip({
       style={{ width: "12px", transition: "width 0.3s" }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLElement).style.width = "440px";
+        onHoverChange?.(true);
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLElement).style.width = "12px";
+        onHoverChange?.(false);
       }}
     >
       {/* 右边界线 */}
@@ -96,28 +126,27 @@ export function LeftStrip({
         <div className="flex flex-row py-3 gap-0 min-w-[440px] h-full overflow-y-auto">
           {/* L1 列：8个面板 */}
           <div className="flex flex-col w-[140px] flex-shrink-0 py-0">
-            {(Object.keys(dynamicPanelData) as PanelKey[]).map((pk) => {
-              const label = MODULE_LABELS[pk] || pk;
+            {l1Items.map((mt) => {
               return (
                 <button
-                  key={pk}
-                  data-panel={pk}
+                  key={mt.code}
+                  data-panel={mt.code}
                   onMouseEnter={() => {
-                    setHoveredPanel(pk);
-                    onPanelChange(pk);
+                    setHoveredPanel(mt.code);
+                    onPanelChange(mt.code as PanelKey);
                   }}
                   className={`flex items-center gap-0 px-3 py-[11px] cursor-pointer whitespace-nowrap text-xs font-medium tracking-[0.3px] transition-all flex-shrink-0 text-left ${
-                    activePanel === pk
+                    activePanel === mt.code
                       ? "text-[var(--s-orange)] border-l-2 border-[var(--s-orange)] bg-[rgba(250,140,22,.06)]"
                       : "text-[var(--s-text-muted)] border-l-2 border-transparent hover:bg-[var(--s-surface2)] hover:text-[var(--s-text)]"
                   }`}
                 >
                   <span
                     className={`w-[2px] h-[14px] mr-2 flex-shrink-0 transition-colors ${
-                      activePanel === pk ? "bg-[var(--s-orange)]" : "bg-transparent"
+                      activePanel === mt.code ? "bg-[var(--s-orange)]" : "bg-transparent"
                     }`}
                   />
-                  {label.replace(/^(SCOPE|DEMAND|PROGRESS|QUALITY|COST|COMMUNICATION|RISK|DOCS)\s/, "")}
+                  {mt.name}
                 </button>
               );
             })}
@@ -168,7 +197,7 @@ export function LeftStrip({
                         : "bg-[var(--s-border-light)]"
                     }`}
                   />
-                  {it.label}
+                  {(it as any).gantt ? "📊 " : ""}{it.label}
                   {it.count > 0 && (
                     <span
                       className="ml-auto text-[10px] px-1.5 py-0.5 font-medium"
