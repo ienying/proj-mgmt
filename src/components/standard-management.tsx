@@ -109,7 +109,9 @@ export interface ColumnConfig {
   readonly_reason?: string;
   description?: string;
   options?: string[]; // 单选/多选类型的选项列表
-  quick_inputs?: string[]; // 文本类型的快捷语列表
+  data_source?: string; // 数据来源: "custom"|"project_types"|"project_stages"|...
+  allow_custom?: boolean; // 单选/多选是否允许用户自定义输入
+  quick_inputs?: string[];
   display_mode?: "dropdown" | "checkbox" | "project" | "system"; // 单选展示方式 或 采购模块数据来源
   multiple?: boolean; // 采购模块选择是否多选
   label?: string;
@@ -700,6 +702,8 @@ export function StandardManagement({
 }: StandardManagementProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [pasteColumnsOpen, setPasteColumnsOpen] = useState(false);
+  const [pasteColumnsText, setPasteColumnsText] = useState("");
   const [selectedProjectType, setSelectedProjectType] = useState<string>("all");
   const [selectedModule, setSelectedModule] = useState<string>("all");
   const [selectedStage, setSelectedStage] = useState<string>("all");
@@ -1983,6 +1987,9 @@ export function StandardManagement({
                         <Button type="button" variant="outline" size="sm" onClick={addColumn} className="h-8 text-xs gap-1">
                           <Plus className="h-3.5 w-3.5" /> 添加列
                         </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setPasteColumnsOpen(true)} className="h-8 text-xs gap-1">
+                          <span className="text-xs mr-0.5">📋</span> 粘贴列名
+                        </Button>
                         <Button type="button" variant="outline" size="sm" onClick={handleExportColumns} className="h-8 text-xs gap-1" disabled={formData.columns_config?.length === 0}>
                           <Download className="h-3.5 w-3.5" /> 导出列配置
                         </Button>
@@ -2160,6 +2167,41 @@ export function StandardManagement({
                                             </div>
                                           </div>
                                         )}
+                                        {/* 数据来源 */}
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-xs text-muted-foreground shrink-0">数据来源:</span>
+                                          <select value={col.data_source || "custom"}
+                                            onChange={(e) => updateColumn(index, "data_source", e.target.value)}
+                                            className="h-6 text-xs border rounded px-1.5">
+                                            <option value="custom">自定义选项</option>
+                                            <optgroup label="基础数据">
+                                              <option value="project_types">项目类型</option>
+                                              <option value="project_stages">项目阶段</option>
+                                              <option value="project_statuses">项目状态</option>
+                                              <option value="todo_statuses">事项状态</option>
+                                              <option value="customer_types">客户类型</option>
+                                              <option value="construction_units">施工单位</option>
+                                              <option value="member_role_types">成员角色</option>
+                                              <option value="deployment_modes">部署模式</option>
+                                              <option value="dev_integration_types">开发对接类型</option>
+                                              <option value="custom_dev_types">定制开发类型</option>
+                                            </optgroup>
+                                            <optgroup label="产品模块">
+                                              <option value="procurement_project">项目采购模块</option>
+                                              <option value="procurement_system">系统产品模块</option>
+                                            </optgroup>
+                                            <optgroup label="用户数据">
+                                              <option value="departments">部门</option>
+                                            </optgroup>
+                                          </select>
+                                          <label className="flex items-center gap-1 text-xs cursor-pointer">
+                                            <input type="checkbox" checked={col.allow_custom === true}
+                                              onChange={(e) => updateColumn(index, "allow_custom", e.target.checked)}
+                                              className="w-3 h-3" />
+                                            允许自定义输入
+                                          </label>
+                                        </div>
+                                        {/* 选项列表（仅自定义模式下显示） */}
                                         <div className="flex flex-wrap items-center gap-2">
                                           <span className="text-xs text-muted-foreground shrink-0">选项:</span>
                                           {(col.options || []).map((opt, oi) => (
@@ -2999,10 +3041,40 @@ export function StandardManagement({
                                         />
                                       </div>
 
-                                      {/* select/multiple_select: 选项 */}
+                                      {/* select/multiple_select: 数据来源 + 选项 */}
                                       {(col.type === "select" || col.type === "multiple_select") && (
                                         <div className="space-y-2 pt-1 border-t">
-                                          <Label className="text-xs text-muted-foreground">选项</Label>
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <Label className="text-xs text-muted-foreground">数据来源:</Label>
+                                            <select value={col.data_source || "custom"}
+                                              onChange={(e) => drawerUpdateColumn(ci, "data_source", e.target.value)}
+                                              className="h-6 text-[10px] border rounded px-1">
+                                              <option value="custom">自定义</option>
+                                              <optgroup label="基础">
+                                                <option value="project_types">项目类型</option>
+                                                <option value="project_stages">项目阶段</option>
+                                                <option value="project_statuses">项目状态</option>
+                                                <option value="customer_types">客户类型</option>
+                                                <option value="construction_units">施工单位</option>
+                                                <option value="member_role_types">成员角色</option>
+                                                <option value="deployment_modes">部署模式</option>
+                                              </optgroup>
+                                              <optgroup label="产品">
+                                                <option value="procurement_project">项目采购模块</option>
+                                                <option value="procurement_system">系统产品模块</option>
+                                              </optgroup>
+                                              <optgroup label="用户">
+                                                <option value="departments">部门</option>
+                                              </optgroup>
+                                            </select>
+                                            <label className="flex items-center gap-1 text-[10px] cursor-pointer">
+                                              <input type="checkbox" checked={col.allow_custom === true}
+                                                onChange={(e) => drawerUpdateColumn(ci, "allow_custom", e.target.checked)}
+                                                className="w-3 h-3" />
+                                              允许自定义
+                                            </label>
+                                          </div>
+                                          <Label className="text-xs text-muted-foreground">选项 {col.data_source && col.data_source !== "custom" ? "(自动加载)" : ""}</Label>
                                           <div className="flex flex-wrap items-center gap-1 min-h-[28px]">
                                             {(col.options || []).map((opt, oi) => (
                                               <span key={oi} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs px-1.5 py-0.5 rounded-full">
@@ -3193,6 +3265,15 @@ export function StandardManagement({
                                 className="h-8 text-xs gap-1"
                               >
                                 <Plus className="h-3.5 w-3.5" /> 添加列
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPasteColumnsOpen(true)}
+                                className="h-8 text-xs gap-1 ml-2"
+                              >
+                                <span className="text-xs mr-0.5">📋</span> 粘贴列名
                               </Button>
                             </div>
                           </div>
@@ -4017,6 +4098,52 @@ export function StandardManagement({
             <Button variant="outline" onClick={() => setRefDialogOpen(false)}>取消</Button>
             <Button onClick={handleSaveRef} disabled={!refForm.name || !refForm.source_table_code || !refForm.entry_column || !refForm.match_condition.target_column || !refForm.match_condition.source_column || refForm.column_mapping.length === 0}>
               保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 粘贴列名弹窗（弹窗和抽屉共用） */}
+      <Dialog open={pasteColumnsOpen} onOpenChange={setPasteColumnsOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              📋 粘贴列名
+            </DialogTitle>
+            <DialogDescription>
+              从 Excel 复制一列或一行列名，粘贴到下方。每行一个列名，默认类型为「文本」。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <textarea value={pasteColumnsText}
+              onChange={(e) => setPasteColumnsText(e.target.value)}
+              placeholder={"任务名称\n负责人\n开始日期\n结束日期\n..."}
+              className="w-full h-40 px-3 py-2 text-sm border rounded-lg resize-none focus:outline-none focus:border-primary"
+              autoFocus />
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                识别到 <strong>{pasteColumnsText.split(/[\n\r\t]+/).filter(Boolean).length}</strong> 个列名，默认类型: 文本
+              </span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => { setPasteColumnsOpen(false); setPasteColumnsText(""); }}>
+              取消
+            </Button>
+            <Button size="sm" onClick={() => {
+              const names = pasteColumnsText.split(/[\n\r\t]+/).map((s) => s.trim()).filter(Boolean);
+              if (names.length === 0) return;
+              const newCols = names.map((n) => ({ name: n, type: "text", required: false, readonly: false, description: "", options: [] }));
+              // 同时添加到 formData 和 drawerFormData（哪个存在就加哪个）
+              setFormData((prev) => prev.columns_config ? {
+                ...prev, columns_config: [...(prev.columns_config || []), ...newCols],
+              } : prev);
+              setDrawerFormData((prev) => prev ? {
+                ...prev, columns_config: [...(prev.columns_config || []), ...newCols],
+              } : null);
+              setPasteColumnsOpen(false); setPasteColumnsText("");
+            }}>
+              添加 {pasteColumnsText.split(/[\n\r\t]+/).filter(Boolean).length} 列
             </Button>
           </DialogFooter>
         </DialogContent>

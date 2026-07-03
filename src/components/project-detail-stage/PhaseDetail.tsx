@@ -63,7 +63,7 @@ interface TableDef {
   allow_add?: boolean;
   allow_delete?: boolean;
   readonly_mode?: string;
-  columns_config?: Array<{ name: string; type: string; readonly?: boolean; options?: string[]; display_mode?: string }>;
+  columns_config?: Array<{ name: string; type: string; readonly?: boolean; options?: string[]; display_mode?: string; data_source?: string; allow_custom?: boolean }>;
 }
 
 interface PhaseDetailProps {
@@ -83,6 +83,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
     tableCode: string; rowIdx: number; colName: string;
   } | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [dictCache, setDictCache] = useState<Record<string, string[]>>({});
   const [productModules, setProductModules] = useState<{ code: string; name: string }[]>([]);
   const [userList, setUserList] = useState<{ id: string; name: string }[]>([]);
   const [pmSearch, setPmSearch] = useState("");
@@ -162,6 +163,21 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
 
   // 取消编辑
   const cancelEdit = () => setEditingCell(null);
+
+  // 获取列的合并选项
+  const getMergedOpts = (col: any) => {
+    const src = (col.data_source && col.data_source !== "custom") ? (dictCache[col.data_source] || []) : [];
+    const custom = col.options || [];
+    if (src.length > 0) return col.allow_custom ? [...new Set([...src, ...custom])] : src;
+    return custom;
+  };
+  // 预加载字典
+  const preloadDict = async (col: any) => {
+    if (!col.data_source || col.data_source === "custom" || dictCache[col.data_source]) return;
+    const m: Record<string, string> = { project_types: "project_types", project_stages: "project_stages", project_statuses: "project_statuses", todo_statuses: "todo_statuses", customer_types: "customer_types", construction_units: "construction_units", member_role_types: "member_role_types", deployment_modes: "deployment_modes", departments: "departments", procurement_system: "product_module_types", procurement_project: "product_module_types" };
+    const api = m[col.data_source]; if (!api) return;
+    try { const r = await fetch(`/api/dicts?type=${api}`); const d = await r.json(); setDictCache((prev) => ({ ...prev, [col.data_source]: (d.data || []).map((i: any) => i.name || i.module_name || i.product_name || i.code) })); } catch {}
+  };
 
   // 文件上传处理（用 ref 避免 React 状态异步问题）
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -329,7 +345,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
   };
 
   // 渲染可编辑单元格
-  const renderCell = (tableCode: string, rowIdx: number, col: { name: string; type: string; readonly?: boolean; options?: string[]; display_mode?: string }, row: Record<string, unknown>) => {
+  const renderCell = (tableCode: string, rowIdx: number, col: { name: string; type: string; readonly?: boolean; options?: string[]; display_mode?: string; data_source?: string; allow_custom?: boolean }, row: Record<string, unknown>) => {
     const value = String(row[col.name] ?? "");
     const isEditing = editingCell?.tableCode === tableCode && editingCell?.rowIdx === rowIdx && editingCell?.colName === col.name;
     const editable = isColumnEditable(col, row);
@@ -337,19 +353,22 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
     if (isEditing) {
       return (
         <div className="flex items-center gap-1">
-          {col.type === "select" && (col.options || []).length > 0 ? (
-            <select value={editValue} onChange={(e) => { setEditValue(e.target.value); saveEdit(e.target.value); }}
-              className="px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none"
-              autoFocus>
-              <option value="">请选择</option>
-              {col.options!.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          ) : col.type === "multiple_select" && (col.options || []).length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {col.options!.map((opt) => {
-                const selected = (editValue || "").split(",").map((s: string) => s.trim()).includes(opt);
+          {col.type === "select" || col.type === "multiple_select" ? (
+            (() => {
+              const mOpts = getMergedOpts(col);
+              if (col.data_source && col.data_source !== "custom") preloadDict(col);
+              if (mOpts.length === 0) return <span className="text-xs text-[var(--s-text-muted)]">无可用选项</span>;
+              if (col.type === "select") return (
+                <select value={editValue} onChange={(e) => { setEditValue(e.target.value); saveEdit(e.target.value); }}
+                  className="px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none" autoFocus>
+                  <option value="">请选择</option>
+                  {mOpts.map((opt: string) => (<option key={opt} value={opt}>{opt}</option>))}
+                </select>
+              );
+              return (
+                <div className="flex flex-wrap gap-1">
+                  {mOpts.map((opt: string) => {
+                    const selected = (editValue || "").split(",").map((s: string) => s.trim()).includes(opt);
                 return (
                   <label key={opt} className="inline-flex items-center gap-1 text-[10px] cursor-pointer">
                     <input type="checkbox" checked={selected} onChange={() => {
@@ -378,6 +397,8 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                 );
               })}
             </div>
+            );
+          })()
           ) : col.type === "procurement_module" ? (
             <div className="flex flex-col gap-1 w-full max-w-[200px]">
               <input type="text" value={pmSearch} onChange={(e) => setPmSearch(e.target.value)}

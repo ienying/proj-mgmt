@@ -131,7 +131,9 @@ interface ColumnConfig {
   required: boolean;
   readonly?: boolean;
   options?: string[];
-  quick_inputs?: string[]; // 文本类型的快捷语列表
+  data_source?: string;
+  allow_custom?: boolean;
+  quick_inputs?: string[];
   multiple?: boolean;
   display_mode?: "dropdown" | "checkbox" | "project" | "system";
   max_size?: string; // 视频最大文件大小: "100MB" / "500MB" / "1GB"
@@ -512,6 +514,22 @@ export function ProjectDetail({
   const [editValue, setEditValue] = useState<string>("");
   // 产品模块列表（系统产品模块名称，用于采购模块选择类型）
   const [productModuleNames, setProductModuleNames] = useState<string[]>([]);
+  const [dictCache, setDictCache] = useState<Record<string, string[]>>({});
+  const getOpts = (col: ColumnConfig) => {
+    const s = col.data_source && col.data_source !== "custom" ? (dictCache[col.data_source] || []) : [];
+    const c = col.options || [];
+    // 懒加载字典
+    if (col.data_source && col.data_source !== "custom" && !dictCache[col.data_source]) {
+      const m: Record<string, string> = { project_types: "project_types", project_stages: "project_stages", project_statuses: "project_statuses", todo_statuses: "todo_statuses", customer_types: "customer_types", construction_units: "construction_units", member_role_types: "member_role_types", deployment_modes: "deployment_modes", departments: "departments", procurement_system: "product_module_types", procurement_project: "product_module_types" };
+      const api = m[col.data_source];
+      if (api) {
+        fetch(`/api/dicts?type=${api}`).then(r => r.json()).then(d => {
+          setDictCache(prev => ({ ...prev, [col.data_source!]: (d.data || []).map((i: any) => i.name || i.module_name || i.product_name || i.code) }));
+        }).catch(() => {});
+      }
+    }
+    return s.length > 0 ? (col.allow_custom ? [...new Set([...s, ...c])] : s) : c;
+  };
   // 树形视图展开状态
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(new Set());
   // 树形视图迷你表格行展开详情
@@ -1116,7 +1134,7 @@ export function ProjectDetail({
   // 渲染单元格显示值（非编辑态）
   const renderCellValue = (col: ColumnConfig, value: unknown) => {
     const strValue = String(value ?? "-");
-    if (col.type === "select" && (col.options || []).length > 0) {
+    if (col.type === "select" && getOpts(col).length > 0) {
       return value ? renderSelectTag(strValue) : <span className="text-slate-400">-</span>;
     }
     if (col.type === "multiple_select") {
@@ -1165,9 +1183,9 @@ export function ProjectDetail({
     }
     return (
       <div className="flex items-center gap-1">
-        {col.type === "multiple_select" && (col.options || []).length > 0 ? (
+        {col.type === "multiple_select" && getOpts(col).length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
-            {(col.options || []).map((opt: string) => {
+            {getOpts(col).map((opt: string) => {
               const currentValues: string[] = (() => {
                 if (Array.isArray(editValue)) return editValue;
                 if (typeof editValue === "string" && editValue) return editValue.split(",").map((s: string) => s.trim());
@@ -1190,14 +1208,14 @@ export function ProjectDetail({
               );
             })}
           </div>
-        ) : col.type === "select" && (col.options || []).length > 0 ? (
+        ) : col.type === "select" && getOpts(col).length > 0 ? (
           col.display_mode === "checkbox" ? (
             <RadioGroup
               value={editValue || ""}
               onValueChange={(val) => { setEditValue(val); saveEdit(val); }}
               className="flex flex-wrap gap-1.5"
             >
-              {col.options?.map((opt: string) => (
+              {getOpts(col).map((opt: string) => (
                 <div key={opt} className="flex items-center space-x-1">
                   <RadioGroupItem value={opt} id={`edit_${col.name}_${opt}`} className="h-3.5 w-3.5" />
                   <Label htmlFor={`edit_${col.name}_${opt}`} className="text-xs cursor-pointer">{opt}</Label>
@@ -1210,7 +1228,7 @@ export function ProjectDetail({
                 <SelectValue placeholder="请选择" />
               </SelectTrigger>
               <SelectContent>
-                {col.options?.map((opt: string) => (
+                {getOpts(col).map((opt: string) => (
                   <SelectItem key={opt} value={opt}>
                     {opt}
                   </SelectItem>
@@ -4162,9 +4180,9 @@ export function ProjectDetail({
                     );
                   })}
                 </div>
-                {col.type === "multiple_select" && (col.options || []).length > 0 ? (
+                {col.type === "multiple_select" && getOpts(col).length > 0 ? (
                     <div className="flex flex-wrap gap-2">
-                      {(col.options || []).map((opt: string) => {
+                      {getOpts(col).map((opt: string) => {
                         const currentValues: string[] = (() => {
                           const raw = newRowData[col.name];
                           if (Array.isArray(raw)) return raw;
@@ -4189,7 +4207,7 @@ export function ProjectDetail({
                         );
                       })}
                     </div>
-                ) : col.type === "select" && (col.options || []).length > 0 ? (
+                ) : col.type === "select" && getOpts(col).length > 0 ? (
                     col.display_mode === "checkbox" ? (
                       <RadioGroup
                         value={newRowData[col.name] || ""}
@@ -4197,7 +4215,7 @@ export function ProjectDetail({
                         
                         className="flex flex-wrap gap-2"
                       >
-                        {col.options?.map((opt: string) => (
+                        {getOpts(col).map((opt: string) => (
                           <div key={opt} className="flex items-center space-x-1.5">
                             <RadioGroupItem value={opt} id={`${col.name}_${opt}`} />
                             <Label htmlFor={`${col.name}_${opt}`} className="text-sm cursor-pointer">{opt}</Label>
@@ -4214,7 +4232,7 @@ export function ProjectDetail({
                           <SelectValue placeholder={`请选择${col.label || col.name}`} />
                         </SelectTrigger>
                         <SelectContent>
-                          {col.options?.map((opt: string) => (
+                          {getOpts(col).map((opt: string) => (
                             <SelectItem key={opt} value={opt}>
                               {opt}
                             </SelectItem>
