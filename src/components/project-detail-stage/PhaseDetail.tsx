@@ -71,9 +71,10 @@ interface PhaseDetailProps {
   stageCode?: string;
   tableDefs?: TableDef[];
   projectSchema?: string;
+  onRecordsUpdate?: (tableCode: string, records: Array<Record<string, unknown>>) => void;
 }
 
-export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema }: PhaseDetailProps) {
+export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema, onRecordsUpdate }: PhaseDetailProps) {
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [tableRecords, setTableRecords] = useState<Record<string, Array<Record<string, unknown>>>>({});
   const [loadingTable, setLoadingTable] = useState<string | null>(null);
@@ -119,7 +120,9 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
         setTableRecords((prev) => {
           const updated = [...(prev[tableCode] || [])];
           updated[rowIdx] = { ...updated[rowIdx], [colName]: valueToSave };
-          return { ...prev, [tableCode]: updated };
+          const newRecs = { ...prev, [tableCode]: updated };
+          onRecordsUpdate?.(tableCode, updated);
+          return newRecs;
         });
       }
     } catch {}
@@ -137,10 +140,11 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       });
       if (res.ok) {
         const data = await res.json();
-        setTableRecords((prev) => ({
-          ...prev,
-          [tableCode]: [...(prev[tableCode] || []), data.data || data],
-        }));
+        setTableRecords((prev) => {
+          const updated = [...(prev[tableCode] || []), data.data || data];
+          onRecordsUpdate?.(tableCode, updated);
+          return { ...prev, [tableCode]: updated };
+        });
       }
     } catch {}
   };
@@ -155,6 +159,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       if (res.ok) {
         setTableRecords((prev) => {
           const updated = (prev[tableCode] || []).filter((_, i) => i !== rowIdx);
+          onRecordsUpdate?.(tableCode, updated);
           return { ...prev, [tableCode]: updated };
         });
       }
@@ -224,6 +229,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       setTableRecords((prev) => {
         const updated = [...(prev[tableCode] || [])];
         updated[rowIdx] = { ...updated[rowIdx], [colName]: fileKey };
+        onRecordsUpdate?.(tableCode, updated);
         return { ...prev, [tableCode]: updated };
       });
     } catch (e) {
@@ -399,6 +405,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                           if (r.ok) setTableRecords((prev) => {
                             const updated = [...(prev[tableCode] || [])];
                             updated[rowIdx] = { ...updated[rowIdx], [colName]: newVal };
+                            onRecordsUpdate?.(tableCode, updated);
                             return { ...prev, [tableCode]: updated };
                           });
                         });

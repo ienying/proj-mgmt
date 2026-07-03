@@ -2,7 +2,6 @@
 
 import type { StageLayoutProps } from "./types";
 import type { LayoutMode } from "./types";
-import { phases } from "./mock-data";
 
 interface HeroSectionProps {
   project: StageLayoutProps["project"];
@@ -11,6 +10,8 @@ interface HeroSectionProps {
   customerTypeDict?: StageLayoutProps["customerTypeDict"];
   onBack: () => void;
   onSwitchLayout: (mode: LayoutMode) => void;
+  tableDefs?: any[];
+  tableRecords?: Record<string, Array<Record<string, unknown>>>;
 }
 
 // 辅助：安全提取字符串
@@ -19,7 +20,7 @@ function s(v: unknown): string {
   return "";
 }
 
-export function HeroSection({ project, projectTypes, projectStages, customerTypeDict, onBack, onSwitchLayout }: HeroSectionProps) {
+export function HeroSection({ project, projectTypes, projectStages, customerTypeDict, onBack, onSwitchLayout, tableDefs = [], tableRecords = {} }: HeroSectionProps) {
   // 类型名称
   const typeName =
     projectTypes.find((t) => t.code === project.project_type)?.name || project.project_type || "—";
@@ -88,10 +89,73 @@ export function HeroSection({ project, projectTypes, projectStages, customerType
     ? allTeam.map((m) => `${m.role}·${m.name}`).join("  ")
     : "—";
 
-  const overallProgress = 71;
-  const completedPhases = phases.filter((p) => p.status === "done").length;
-  const totalTasks = 32;
-  const remainingDays = 120;
+  // ── 动态统计：基于阶段式布局中的数据表 ──
+  // 只统计 stage_display_mode 为 phase 或 both 的表
+  const stageLayoutTables = tableDefs.filter(
+    (d) => d.apply_project_stages?.length > 0 && (!d.stage_display_mode || d.stage_display_mode === "phase" || d.stage_display_mode === "both")
+  );
+  // 总任务数 = 所有阶段布局表的记录总数
+  let totalTasks = 0;
+  let totalCompleted = 0;
+  for (const def of stageLayoutTables) {
+    const recs = tableRecords[def.table_code] || [];
+    totalTasks += recs.length;
+    if (def.stage_progress_column && def.stage_progress_target) {
+      const col = def.stage_progress_column;
+      const target = String(def.stage_progress_target).trim();
+      totalCompleted += recs.filter((r) => String(r[col] || "").trim() === target).length;
+    }
+  }
+  // 总进度
+  const overallProgress = totalTasks > 0 ? Math.round((totalCompleted / totalTasks) * 100) : 0;
+
+  // 已完成阶段 = 每个阶段所有表进度100%
+  const sortedStages = [...projectStages].sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99));
+  let completedPhases = 0;
+  for (const stage of sortedStages) {
+    const phaseTables = tableDefs.filter((d) => d.apply_project_stages?.includes(stage.code));
+    if (phaseTables.length === 0) continue;
+    let allDone = true;
+    for (const def of phaseTables) {
+      const recs = tableRecords[def.table_code] || [];
+      if (recs.length === 0) { allDone = false; break; }
+      if (def.stage_progress_column && def.stage_progress_target) {
+        const col = def.stage_progress_column;
+        const target = String(def.stage_progress_target).trim();
+        if (recs.some((r) => String(r[col] || "").trim() !== target)) { allDone = false; break; }
+      }
+    }
+    if (allDone) completedPhases++;
+  }
+
+  // 剩余天数：从所有阶段日期中取最早计划开始和最晚计划结束
+  let planStart = "", planEnd = "";
+  for (const def of tableDefs) {
+    if (!def.stage_plan_start_col && !def.stage_plan_end_col) continue;
+    const recs = tableRecords[def.table_code] || [];
+    if (!recs.length) continue;
+    if (def.stage_plan_start_col) {
+      const ds = recs.map((r) => String(r[def.stage_plan_start_col] || "")).filter(Boolean).sort();
+      if (ds[0] && (!planStart || ds[0] < planStart)) planStart = ds[0];
+    }
+    if (def.stage_plan_end_col) {
+      const ds = recs.map((r) => String(r[def.stage_plan_end_col] || "")).filter(Boolean).sort();
+      if (ds[ds.length - 1] && (!planEnd || ds[ds.length - 1] > planEnd)) planEnd = ds[ds.length - 1];
+    }
+  }
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  let remainingDays = "—";
+  let remainingLabel = "剩余天数";
+  if (planStart && planEnd) {
+    const endDate = new Date(planEnd.split(/[T ]/)[0]);
+    const diff = Math.ceil((endDate.getTime() - today.getTime()) / 86400000);
+    if (diff < 0) {
+      remainingDays = `${Math.abs(diff)}天`;
+      remainingLabel = "已超时";
+    } else {
+      remainingDays = `${diff}天`;
+    }
+  }
 
   return (
     <div
@@ -151,9 +215,9 @@ export function HeroSection({ project, projectTypes, projectStages, customerType
         >
           {[
             { value: `${overallProgress}%`, label: "总进度", accent: true },
-            { value: `${completedPhases}/7`, label: "已完成阶段", green: true },
+            { value: `${completedPhases}/${sortedStages.length}`, label: "已完成阶段", green: true },
             { value: `${totalTasks}`, label: "任务总数" },
-            { value: `${remainingDays}`, label: "剩余天数" },
+            { value: remainingDays, label: remainingLabel },
           ].map((stat, i) => (
             <div
               key={i}

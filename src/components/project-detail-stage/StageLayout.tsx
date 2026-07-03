@@ -307,6 +307,8 @@ export function StageLayout({
               customerTypeDict={customerTypeDict}
               onBack={onBack}
               onSwitchLayout={onSwitchLayout}
+              tableDefs={tableDefs}
+              tableRecords={allTableRecords}
             />
 
             {/* 产品网格 */}
@@ -342,6 +344,9 @@ export function StageLayout({
               }
               tableDefs={tableDefs}
               projectSchema={project.project_schema}
+              onRecordsUpdate={(code, records) => {
+                setAllTableRecords((prev) => ({ ...prev, [code]: records }));
+              }}
             />
 
             {/* 项目总览 分隔标题 */}
