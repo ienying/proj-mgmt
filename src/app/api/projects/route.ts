@@ -414,10 +414,15 @@ async function copyTableDefinitionsToSchema(
 
         if (userColumns.length > 0) {
           try {
-            const columnsList = userColumns.map((col) => `"${col}"`).join(", ");
+            // 文件附件列的值清空（旧项目文件key新项目无效）
+            const columnsList = userColumns.map((col) => {
+              const colDef = columnsConfig.find((c: any) => c.name === col);
+              return (colDef && (colDef.type === "attachment" || colDef.type === "video")) ? `'' as "${col}"` : `"${col}"`;
+            }).join(", ");
+            const insertCols = userColumns.map((c) => `"${c}"`).join(", ");
             const copyDataSQL = `
               INSERT INTO ${projectSchema}."${tableCode}"
-                (${columnsList}, _readonly, allow_delete, data_source, sort_order, created_at)
+                (${insertCols}, _readonly, allow_delete, data_source, sort_order, created_at)
               SELECT
                 ${columnsList},
                 COALESCE(_readonly, false) as _readonly,
