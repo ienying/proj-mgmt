@@ -128,6 +128,9 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
 
   // New UI state
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const [pubInstances, setPubInstances] = useState<Record<string, any[]>>({});
+  const [pubPhysData, setPubPhysData] = useState<Record<string, Record<string, any>>>({});
+  const [pubLoading, setPubLoading] = useState<Record<string, boolean>>({});
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<FilterState>({
     status: "all", priority: "all", tagType: "all",
@@ -144,6 +147,14 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
         const res = await fetch(`/api/tasks/defs?user_id=${uid}&status=active`);
         const json = await res.json();
         if (json.data) setDefs(json.data);
+        // Also load instances to show fill counts for published tasks
+        const instRes = await fetch(`/api/tasks/instances`);
+        const instJson = await instRes.json();
+        if (instJson.data) {
+          // Only keep instances for defs created by this user
+          const userDefIds = new Set((json.data || []).map((d: any) => d.id));
+          setInstances((instJson.data || []).filter((i: any) => userDefIds.has(i.def_id)));
+        }
       } else if (activeTab === "todos") {
         const res = await fetch(`/api/tasks/instances?user_id=${uid}&mode=my_todos`);
         const json = await res.json();
@@ -250,12 +261,34 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
     return new Date(d).toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
   };
 
-  const toggleExpand = (id: string) => {
+  const toggleExpand = (id: string, isDef?: boolean, defId?: string) => {
     setExpandedCards(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+    // Fetch instances + phys data when expanding a published task
+    if (isDef && defId && !expandedCards.has(id)) {
+      setPubLoading(prev => ({ ...prev, [id]: true }));
+      fetch(`/api/tasks/instances?def_id=${defId}`)
+        .then(r => r.json())
+        .then(async j => {
+          const insts = j.data || [];
+          setPubInstances(prev => ({ ...prev, [id]: insts }));
+          // Fetch phys data for each instance
+          const physMap: Record<string, any> = {};
+          await Promise.all(insts.map(async (inst: any) => {
+            try {
+              const r = await fetch(`/api/tasks/instances/${inst.id}`);
+              const d = await r.json();
+              physMap[inst.id] = d.data?.phys_row || {};
+            } catch (e) { physMap[inst.id] = {}; }
+          }));
+          setPubPhysData(prev => ({ ...prev, ...physMap }));
+        })
+        .catch(() => {})
+        .finally(() => setPubLoading(prev => ({ ...prev, [id]: false })));
+    }
   };
 
   const toggleSelect = (id: string) => {
@@ -978,209 +1011,458 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
     );
   }
 
+  if (selectedInstance && selectedDef) {
+    return (
+      <TaskCenterDetail
+        instance={selectedInstance}
+        def={selectedDef}
+        currentUser={currentUser}
+        onRefresh={loadData}
+        onBack={() => { setSelectedInstance(null); setSelectedDef(null); }}
+      />
+    );
+  }
+
   return (
-    <div className="h-full flex flex-col bg-gray-50 pt-12">
-      {/* ====== 阶段式任务中心 / TASK CENTER ====== */}
-      {/* 页面标题栏 */}
-      <div className="shrink-0 bg-white border-b px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h2 className="text-lg font-bold text-black tracking-wide">任务中心 / TASK CENTER</h2>
-          <div className="flex items-center gap-1">
-            {[
-              { key: "todos" as const, label: "我的待办", count: instances.filter(i => i.status === "in_progress" || i.status === "pending").length },
-              { key: "published" as const, label: "我的发布", count: defs.length },
-              { key: "all" as const, label: "全部", count: instances.length },
-            ].map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => { setActiveTab(tab.key); setSelectedIds(new Set()); }}
-                className={`px-3 py-1 text-xs font-medium transition-colors
-                  ${activeTab === tab.key ? "bg-gray-900 text-white" : "text-black hover:bg-gray-100"}`}
-              >
-                {tab.label} {tab.count}
-              </button>
-            ))}
+    <div className="h-full flex bg-[#f4f7fb] pt-12" style={{fontFamily: "'PingFang SC','Microsoft YaHei',-apple-system,BlinkMacSystemFont,sans-serif"}}>
+      {/* ====== 左侧导航 ====== */}
+      <nav className="w-[172px] shrink-0 flex flex-col gap-0 bg-transparent py-6 fixed left-[60px] top-1/2 -translate-y-1/2 z-50 border-0">
+        <div className="text-[15px] font-extrabold text-black px-4 pb-5 tracking-wider">任务中心</div>
+        <div className="h-0.5 bg-[#0f2840] mx-4 my-3.5" />
+        {[
+          { key: "todos" as const, label: "我的待办", count: instances.filter(i => i.status === "in_progress" || i.status === "pending").length },
+          { key: "published" as const, label: "我的发布", count: defs.length },
+          { key: "all" as const, label: "全部任务", count: instances.length },
+        ].map(tab => (
+          <div key={tab.key}
+            onClick={() => { setActiveTab(tab.key); setSelectedInstance(null); setSelectedDef(null); }}
+            className={`py-[7px] px-4 text-[12.5px] cursor-pointer transition-colors duration-150
+              ${activeTab === tab.key ? "text-[#2563eb] font-semibold" : "text-black font-normal hover:text-[#2563eb]"}`}
+          >
+            {tab.label}<span className="text-[10px] text-[#999] ml-1 font-normal">{tab.count}</span>
           </div>
+        ))}
+        <div className="text-[11px] text-[#333] px-4 pt-1.5 pb-3 leading-relaxed">任务填报与处理，流程流转全程可视，团队协作高效透明。</div>
+        <div className="px-4 mt-1">
+          <button onClick={() => setShowWizard(true)}
+            className="py-[7px] text-[12.5px] font-semibold text-black cursor-pointer bg-transparent border-0 hover:text-[#2563eb] transition-colors">
+            + 新建任务
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={loadData} disabled={loading} className="h-8 w-8 p-0">
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-          <Button size="sm" onClick={() => setShowWizard(true)} className="h-8 text-xs">
-            <Plus className="w-3.5 h-3.5 mr-1" />新建任务
-          </Button>
-        </div>
-      </div>
+      </nav>
 
-      {/* 统计数字栏 */}
-      <div className="shrink-0 bg-white border-b px-6 py-3">
-        <div className="flex items-center gap-8">
-          {[
-            { label: "待处理", value: instances.filter(i => i.status === "pending").length, color: "#8c8c8c" },
-            { label: "进行中", value: instances.filter(i => i.status === "in_progress").length, color: "#1677ff" },
-            { label: "今日截止", value: instances.filter(i => i.due_date && new Date(i.due_date).toDateString() === new Date().toDateString() && i.status !== "completed").length, color: "#fa8c16" },
-            { label: "已完成", value: instances.filter(i => i.status === "completed").length, color: "#52c41a" },
-          ].map(s => (
-            <div key={s.label} className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-              <span className="text-xs text-black/60">{s.label}</span>
-              <span className="text-xl font-bold text-black">{s.value}</span>
+      {/* ====== 右侧主内容 ====== */}
+      <div className="flex-1 min-w-0 ml-[232px]">
+        <div className="bg-white max-w-[960px] mx-auto my-0 px-12 py-11">
+          {/* 标题 */}
+          <div className="flex items-baseline gap-2.5 mb-5">
+            <div>
+              <span className="text-xs text-[#7b8fa1] font-medium">
+                {activeTab === "todos" ? "MY TASKS" : activeTab === "published" ? "PUBLISHED" : "ALL TASKS"}
+              </span>
+              <h2 className="text-[22px] font-extrabold -tracking-[0.3px] leading-tight">
+                {activeTab === "todos" ? "我的待办" : activeTab === "published" ? "我的发布" : "全部任务"}
+              </h2>
             </div>
-          ))}
-          <div className="ml-auto flex items-center gap-2">
-            <div className="flex items-center bg-gray-50 border border-gray-200 px-2">
-              <Search className="w-3 h-3 text-black/40" />
-              <input
-                type="text"
-                placeholder="搜索..."
-                className="border-none outline-none bg-transparent py-1.5 px-2 text-xs text-black w-40"
-                value={filters.search}
-                onChange={(e) => setFilters(f => ({ ...f, search: e.target.value }))}
-              />
-              {filters.search && (
-                <button onClick={() => setFilters(f => ({ ...f, search: "" }))}><X className="w-3 h-3" /></button>
-              )}
-            </div>
-            <select
-              className="bg-gray-50 border border-gray-200 py-1.5 px-2 text-xs text-black outline-none"
-              value={filters.sort}
-              onChange={(e) => setFilters(f => ({ ...f, sort: e.target.value }))}
-            >
-              <option value="newest">最新</option>
-              <option value="deadline_asc">截止↑</option>
-            </select>
           </div>
-        </div>
-      </div>
 
-      {/* 双栏主体 */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* 左侧：任务清单 + 筛选 */}
-        <div className="w-[300px] shrink-0 border-r bg-white flex flex-col">
-          {/* 快速筛选 */}
-          <div className="px-4 py-2 border-b flex items-center gap-1 flex-wrap">
-            {[
-              { key: "all", label: "全部状态" },
-              { key: "in_progress", label: "进行中" },
-              { key: "pending", label: "待处理" },
-              { key: "completed", label: "已完成" },
-            ].map(opt => (
-              <button
-                key={opt.key}
-                onClick={() => setFilters(f => ({ ...f, status: f.status === opt.key ? "all" : opt.key }))}
-                className={`px-2 py-0.5 text-[10px] border transition-colors
-                  ${filters.status === opt.key ? "bg-gray-900 text-white border-gray-900" : "border-gray-200 text-black hover:border-gray-400"}`}
-              >{opt.label}</button>
-            ))}
-          </div>
-          {/* 任务清单列表 */}
-          <div className="flex-1 overflow-y-auto">
-            {loading ? (
-              <div className="py-12 text-center text-xs text-black">加载中...</div>
-            ) : filtered.length === 0 ? (
-              <div className="py-12 text-center text-xs text-black">
-                {activeTab === "published" ? "暂无发布的任务" : "暂无任务"}
-              </div>
-            ) : (
-              filtered.map((item: any, idx: number) => {
-                const isDef = activeTab === "published";
-                const isActive = !isDef && selectedInstance?.id === item.id;
-                const isGroup = (item as any)._isGroup;
-                const statusDot = isDef ? "#1890ff"
-                  : item.status === "completed" ? "#52c41a"
-                  : item.status === "in_progress" ? "#1677ff"
-                  : item.status === "pending" ? "#8c8c8c"
-                  : "#fa8c16";
-                return (
-                  <div key={item.id || idx}
-                    className={`px-4 py-2.5 border-b border-gray-50 cursor-pointer transition-colors
-                      ${isActive ? "bg-gray-100 border-l-2 border-l-gray-900" : "hover:bg-gray-50 border-l-2 border-l-transparent"}`}
-                    onClick={async () => {
-                      if (isDef) {
-                        try {
-                          const res = await fetch(`/api/tasks/instances?def_id=${item.id}`);
-                          const json = await res.json();
-                          if (json.data?.length > 0) { setSelectedDef(item); setSelectedInstance(json.data[0]); }
-                          else { toast.info("暂无实例"); }
-                        } catch (e) { }
-                      } else if (isGroup) {
-                        // Select first member for detail
-                        const firstMember = (item as any)._members?.[0];
-                        if (firstMember) {
-                          try {
-                            const defRes = await fetch(`/api/tasks/defs/${firstMember.def_id}`);
-                            const defJson = await defRes.json();
-                            if (defJson.data) { setSelectedDef(defJson.data); setSelectedInstance(firstMember); }
-                          } catch (e) { }
-                        }
-                      } else {
-                        try {
-                          const defRes = await fetch(`/api/tasks/defs/${item.def_id}`);
-                          const defJson = await defRes.json();
-                          if (defJson.data) { setSelectedDef(defJson.data); setSelectedInstance(item); }
-                        } catch (e) { }
-                      }
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: statusDot }} />
-                      <span className="text-xs font-medium text-black truncate flex-1">
-                        {isDef ? item.task_name : (item.task_name || "—")}
-                      </span>
-                      {isGroup && (
-                        <span className="text-[10px] text-black/60">
-                          {(item as any)._completedCount}/{(item as any)._totalCount}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1 ml-[14px] text-[10px] text-black/50">
-                      {!isDef && (
-                        <>
-                          <span>{item.assignee_name || "—"}</span>
-                          {item.due_date && <span>· {fmtDate(item.due_date)}</span>}
-                        </>
-                      )}
-                      {isDef && (
-                        <>
-                          <span>{MODE_LABELS[item.task_mode]?.label || item.task_mode}</span>
-                          <span>· {item.form_columns?.length || 0} 字段</span>
-                          <span>· {fmtDate(item.created_at)}</span>
-                        </>
-                      )}
-                    </div>
+          {/* 统计条 */}
+          {(() => {
+            const statItems: { v: number; l: string; c: string }[] = activeTab === "todos" ? [
+              { v: instances.filter(i => i.status === "pending").length, l: "待处理", c: "text-[#2563eb]" },
+              { v: stats.overdue, l: "逾期", c: stats.overdue > 0 ? "text-[#c24141]" : "text-[#7b8fa1] opacity-40" },
+              { v: instances.filter(i => i.status === "completed").length, l: "已完成", c: "text-[#0d9488]" },
+              { v: instances.filter(i => i.status === "in_progress").length, l: "进行中", c: "text-[#2563eb]" },
+            ] : activeTab === "published" ? [
+              { v: defs.length, l: "已发布", c: "text-[#2563eb]" },
+              { v: stats.overdue, l: "逾期", c: stats.overdue > 0 ? "text-[#c24141]" : "text-[#7b8fa1] opacity-40" },
+              { v: defs.filter((d: any) => d.status === "completed").length, l: "已完成", c: "text-[#0d9488]" },
+              { v: stats.weekDue, l: "本周截止", c: stats.weekDue > 0 ? "text-[#2563eb]" : "text-[#7b8fa1] opacity-40" },
+            ] : [
+              { v: instances.length + defs.length, l: "总计", c: "text-[#2563eb]" },
+              { v: instances.filter(i => i.status === "in_progress").length, l: "进行中", c: "text-[#2563eb]" },
+              { v: instances.filter(i => i.status === "completed").length, l: "已完成", c: "text-[#0d9488]" },
+              { v: stats.overdue, l: "逾期", c: stats.overdue > 0 ? "text-[#c24141]" : "text-[#7b8fa1] opacity-40" },
+            ];
+            return (
+              <div className="flex gap-0 border-2 border-[#0f2840] mb-7">
+                {statItems.map((s, i) => (
+                  <div key={i} className="flex-1 py-[18px] px-4 text-center border-r-2 border-[#0f2840] last:border-r-0">
+                    <div className={`text-4xl font-black leading-none -tracking-[1px] ${s.c}`}>{s.v}</div>
+                    <div className="text-[11px] font-bold text-[#7b8fa1] mt-1 uppercase tracking-wider">{s.l}</div>
                   </div>
-                );
-              })
-            )}
-          </div>
-          {/* 左侧底栏 */}
-          <div className="px-4 py-2 border-t text-[10px] text-black/40 flex items-center justify-between">
-            <span>共 {filtered.length} 条</span>
-            <button className="hover:text-black" onClick={() => setFilters({ status: "all", priority: "all", tagType: "all", project: "all", assignee: "all", search: "", sort: "newest" })}>重置筛选</button>
-          </div>
-        </div>
+                ))}
+              </div>
+            );
+          })()}
 
-        {/* 右侧：详情 / 填写区 */}
-        <div className="flex-1 overflow-y-auto bg-gray-50">
-          {selectedInstance && selectedDef ? (
-            <TaskCenterDetail
-              instance={selectedInstance}
-              def={selectedDef}
-              currentUser={currentUser}
-              onRefresh={loadData}
-              onBack={() => { setSelectedInstance(null); setSelectedDef(null); }}
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-black">
-              <CheckSquare className="w-16 h-16 mb-4 opacity-10" />
-              <p className="text-sm font-medium text-black/40">
-                {activeTab === "published" ? "点击左侧任务查看实例" : "点击左侧任务查看详情"}
-              </p>
-              <p className="text-xs text-black/30 mt-1">
-                或点击右上角「新建任务」发布新任务
-              </p>
+          {/* 工具栏 */}
+          <div className="flex gap-2 mb-5 items-center">
+            <div className="flex-1 relative min-w-[200px]">
+              <input type="text" placeholder="搜索任务名称、项目、处理人..."
+                className="w-full py-[9px] pl-[34px] pr-3.5 border-2 border-[#0f2840] text-[13px] bg-white text-[#0d2137] outline-none focus:border-[#2563eb]"
+                style={{fontFamily:"inherit"}}
+                value={filters.search}
+                onChange={(e) => setFilters(f => ({ ...f, search: e.target.value }))} />
+              <Search className="w-[15px] h-[15px] absolute left-3 top-1/2 -translate-y-1/2 text-[#7b8fa1]" />
             </div>
-          )}
+            <select className="py-[9px] px-4 border-2 border-[#0f2840] bg-white text-xs font-bold text-[#3d5468] cursor-pointer"
+              style={{fontFamily:"inherit"}}
+              value={filters.sort} onChange={(e) => setFilters(f => ({ ...f, sort: e.target.value }))}>
+              <option value="newest">最新创建 ▾</option>
+              <option value="deadline_asc">截止日期 ▾</option>
+            </select>
+            <button onClick={loadData} disabled={loading}
+              className="py-[9px] px-4 border-2 border-[#0f2840] bg-white text-xs font-bold text-[#3d5468] cursor-pointer hover:bg-[#0d2137] hover:text-white transition-all"
+              style={{fontFamily:"inherit"}}>
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            </button>
+          </div>
+
+          {/* 表格 */}
+          <table className="w-full border-collapse border border-[#c0c4cc]">
+            <thead>
+              <tr>
+                <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-9">#</th>
+                <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap">任务名称</th>
+                <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-[70px]">类型</th>
+                {activeTab !== "published" && <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-[70px]">模式</th>}
+                {activeTab !== "published" && <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-[80px]">状态</th>}
+                {activeTab === "published" ? (
+                  <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-[90px]">已填写</th>
+                ) : (
+                  <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-[100px]">{activeTab === "todos" ? "截止日期" : "负责人"}</th>
+                )}
+                <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-[80px]">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={8} className="py-16 text-center text-xs text-[#0d2137]">加载中...</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={8} className="py-16 text-center text-xs text-[#0d2137]">暂无任务</td></tr>
+              ) : (
+                filtered.map((item: any, idx: number) => {
+                  const isDef = activeTab === "published";
+                  const isGroup = (item as any)._isGroup;
+                  const isExpanded = expandedCards.has(item.id);
+                  return (
+                    <React.Fragment key={item.id || idx}>
+                      <tr className="cursor-pointer hover:bg-[#f0f7ff]" onClick={() => toggleExpand(item.id, isDef, isDef ? item.id : item.def_id)}>
+                        <td className="py-1.5 px-2.5 text-xs text-[#0d2137] border border-[#e0e3e8]">{idx + 1}</td>
+                        <td className="py-1.5 px-2.5 text-xs text-[#0d2137] border border-[#e0e3e8]">
+                          <strong>{item.task_name || "—"}</strong>
+                        </td>
+                        <td className="py-1.5 px-2.5 text-xs border border-[#e0e3e8]">
+                          <span className={`inline-block px-2 py-0.5 border text-[10px] font-semibold uppercase tracking-[0.3px]
+                            ${isDef ? (item.task_mode === "process" ? "border-[#2563eb] text-[#2563eb]" : "border-[#0d9488] text-[#0d9488]")
+                              : (item.task_mode === "process" ? "border-[#2563eb] text-[#2563eb]" : "border-[#2563eb] text-[#2563eb]")}`}>
+                            {isDef ? (MODE_LABELS[item.task_mode]?.label || item.task_mode) : (item.task_mode === "process" ? "流程型" : "项目型")}
+                          </span>
+                        </td>
+                        {activeTab !== "published" && (
+                          <td className="py-1.5 px-2.5 text-xs border border-[#e0e3e8]">
+                            {isGroup ? (
+                              <span className="inline-block px-2 py-0.5 border border-[#2563eb] text-[#2563eb] text-[10px] font-semibold">多人</span>
+                            ) : (
+                              <span className="inline-block px-2 py-0.5 border border-[#0d9488] text-[#0d9488] text-[10px] font-semibold">单人</span>
+                            )}
+                          </td>
+                        )}
+                        {activeTab !== "published" && (
+                          <td className="py-1.5 px-2.5 text-xs border border-[#e0e3e8]">
+                            {isGroup
+                              ? <span className="text-[#2563eb]">{(item as any)._completedCount}/{(item as any)._totalCount}</span>
+                              : item.status === "completed"
+                                ? <span className="text-[#0d9488]">已完成</span>
+                                : item.status === "in_progress" ? <span className="text-[#2563eb]">进行中</span>
+                                : <span className="text-[#0d2137]">待处理</span>}
+                          </td>
+                        )}
+                        {activeTab === "published" ? (
+                          <td className="py-1.5 px-2.5 text-xs text-[#0d2137] border border-[#e0e3e8]">
+                            {(() => {
+                              const totalMembers = instances.filter((i: any) => i.def_id === item.id).length;
+                              const completedMembers = instances.filter((i: any) => i.def_id === item.id && i.status === "completed").length;
+                              return `${completedMembers} / ${totalMembers} 人`;
+                            })()}
+                          </td>
+                        ) : (
+                          <td className="py-1.5 px-2.5 text-xs text-[#0d2137] border border-[#e0e3e8]">
+                            {activeTab === "todos" ? (item.due_date || "—") : (item.assignee_name || "—")}
+                          </td>
+                        )}
+                        <td className="py-1.5 px-2.5 text-xs border border-[#e0e3e8]">
+                          <span className="inline-block px-2 py-0.5 border border-[#2563eb] text-[#2563eb] text-[10px] font-semibold cursor-pointer"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (isDef) {
+                                try {
+                                  const res = await fetch(`/api/tasks/instances?def_id=${item.id}`);
+                                  const json = await res.json();
+                                  if (json.data?.length > 0) { setSelectedDef(item); setSelectedInstance(json.data[0]); }
+                                  else { toast.info("暂无实例"); }
+                                } catch (e) { }
+                              } else if (isGroup) {
+                                const m = (item as any)._members?.[0];
+                                if (m) {
+                                  try {
+                                    const defRes = await fetch(`/api/tasks/defs/${m.def_id}`);
+                                    const defJson = await defRes.json();
+                                    if (defJson.data) { setSelectedDef(defJson.data); setSelectedInstance(m); }
+                                  } catch (e) { }
+                                }
+                              } else {
+                                try {
+                                  const defRes = await fetch(`/api/tasks/defs/${item.def_id}`);
+                                  const defJson = await defRes.json();
+                                  if (defJson.data) { setSelectedDef(defJson.data); setSelectedInstance(item); }
+                                } catch (e) { }
+                              }
+                            }}>
+                            {isDef ? "查看实例" : isGroup ? "查看" : item.status === "completed" ? "查看" : "填写"}
+                          </span>
+                        </td>
+                      </tr>
+                      {/* 展开行 */}
+                      {isExpanded && !isDef && (
+                        <tr className="bg-[#f4f7fb]">
+                          <td colSpan={8} className="!p-0 border-b-2 border-[#0f2840]">
+                            <div className="flex flex-col">
+                              {!isGroup && (
+                                <div className="flex-1 px-5 py-4 border-b border-[#d5dfe8]">
+                                  <div className="text-[8px] text-[#7b8fa1] uppercase tracking-[1.5px] font-bold mb-2.5">填写字段</div>
+                                  <table className="w-full border-collapse">
+                                    <thead>
+                                      <tr>
+                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] bg-white border-b border-[#0f2840] font-semibold">#</th>
+                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] bg-white border-b border-[#0f2840] font-semibold">字段</th>
+                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] bg-white border-b border-[#0f2840] font-semibold">填写内容</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {(() => {
+                                        // Need to fetch def to get form_columns
+                                        return <tr><td colSpan={3} className="py-3 px-3 text-[11px] text-[#3d5468]">点击「填写」查看完整表单</td></tr>;
+                                      })()}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                              {isGroup && (
+                                <div className="flex-1 px-5 py-4 border-b border-[#d5dfe8]">
+                                  <div className="text-[8px] text-[#7b8fa1] uppercase tracking-[1.5px] font-bold mb-2.5">
+                                    填写人员 ({(item as any)._completedCount}/{(item as any)._totalCount})
+                                  </div>
+                                  <table className="w-full border-collapse">
+                                    <thead>
+                                      <tr>
+                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] bg-white border-b border-[#0f2840] font-semibold">填写人</th>
+                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] bg-white border-b border-[#0f2840] font-semibold">状态</th>
+                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] bg-white border-b border-[#0f2840] font-semibold">提交时间</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {((item as any)._members || []).map((m: any, mi: number) => (
+                                        <tr key={mi}>
+                                          <td className="py-2 px-3 text-[11px] text-[#3d5468] border-b border-[#d5dfe8]">{m.assignee_name || "—"}</td>
+                                          <td className="py-2 px-3 text-[11px] border-b border-[#d5dfe8]">
+                                            {m.status === "completed"
+                                              ? <span className="text-[#0d9488]">已完成</span>
+                                              : m.status === "in_progress" ? <span className="text-[#2563eb]">进行中</span>
+                                              : <span className="text-[#0d2137]">待处理</span>}
+                                          </td>
+                                          <td className="py-2 px-3 text-[11px] text-[#3d5468] border-b border-[#d5dfe8]">
+                                            {m.status === "completed" && m.node_history?.length > 0
+                                              ? new Date(m.node_history[m.node_history.length - 1].submitted_at).toLocaleString("zh-CN") : "—"}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                              <div className="py-3.5 px-5 flex justify-between items-center w-full border-t border-[#d5dfe8]">
+                                <div className="flex gap-2">
+                                  {item.status !== "completed" && (
+                                    <>
+                                      <button className="py-[9px] px-4 border-2 border-[#0f2840] bg-white text-xs font-bold text-[#3d5468] cursor-pointer hover:bg-[#0d2137] hover:text-white transition-all"
+                                        style={{fontFamily:"inherit"}} onClick={(e) => e.stopPropagation()}>
+                                        暂存草稿
+                                      </button>
+                                      <button className="py-[9px] px-4 border-2 border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold cursor-pointer hover:bg-[#2563eb] hover:border-[#2563eb] transition-all"
+                                        style={{fontFamily:"inherit"}}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setAdvanceTarget(item); setAdvanceAction("submit");
+                                        }}>
+                                        提交
+                                      </button>
+                                    </>
+                                  )}
+                                  {item.status === "completed" && (
+                                    <button className="py-[9px] px-4 border-2 border-[#0f2840] bg-white text-xs font-bold text-[#3d5468] cursor-pointer hover:bg-[#0d2137] hover:text-white transition-all"
+                                      style={{fontFamily:"inherit"}}
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          const defRes = await fetch(`/api/tasks/defs/${item.def_id}`);
+                                          const defJson = await defRes.json();
+                                          if (defJson.data) { setSelectedDef(defJson.data); setSelectedInstance(item); }
+                                        } catch (e) { }
+                                      }}>
+                                      查看详情
+                                    </button>
+                                  )}
+                                  <button className="py-[9px] px-4 border-2 border-[#0f2840] bg-white text-xs font-bold text-[#3d5468] cursor-pointer hover:bg-[#0d2137] hover:text-white transition-all"
+                                    style={{fontFamily:"inherit"}}
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      try {
+                                        const defRes = await fetch(`/api/tasks/defs/${item.def_id}`);
+                                        const defJson = await defRes.json();
+                                        const cols = defJson.data?.form_columns || [];
+                                        const instRes = await fetch(`/api/tasks/instances/${item.id}`);
+                                        const instJson = await instRes.json();
+                                        const physRow = instJson.data?.phys_row || {};
+                                        exportExcel({
+                                          "填写数据": {
+                                            headers: ["字段名", "显示标签", "填写内容"],
+                                            rows: cols.map((c: any) => [c.name, c.label || c.name, physRow[c.name] != null && physRow[c.name] !== "" ? String(physRow[c.name]) : "—"]),
+                                          },
+                                        }, `${item.task_name || "导出"}`);
+                                      } catch (e) { toast.error("导出失败"); }
+                                    }}>
+                                    <Download className="w-3 h-3 mr-1 inline" />导出
+                                  </button>
+                                </div>
+                                <button className="py-[9px] px-4 border-2 border-[#0f2840] bg-white text-xs font-bold text-[#3d5468] cursor-pointer hover:bg-[#0d2137] hover:text-white transition-all"
+                                  style={{fontFamily:"inherit"}}
+                                  onClick={(e) => { e.stopPropagation(); toggleExpand(item.id, isDef, isDef ? item.id : item.def_id); }}>收起</button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      {/* 发布任务展开行 — 直接显示填写字段值 */}
+                      {isExpanded && isDef && (
+                        <tr className="bg-[#f4f7fb]">
+                          <td colSpan={5} className="!p-0 border-b-2 border-[#0f2840]" style={{overflowX:"auto"}}>
+                            <div className="flex flex-col">
+                              <div className="flex-1 px-5 py-4" style={{minWidth:"max-content"}}>
+                                <div className="text-[8px] text-[#7b8fa1] uppercase tracking-[1.5px] font-bold mb-2.5">
+                                  填写情况 · {(pubInstances[item.id] || []).length} 人
+                                </div>
+                                {pubLoading[item.id] ? (
+                                  <div className="text-xs text-[#7b8fa1] py-4 text-center">加载中...</div>
+                                ) : pubInstances[item.id]?.length > 0 ? (
+                                  <table className="w-full border-collapse">
+                                    <thead>
+                                      <tr>
+                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] bg-white border-b border-[#0f2840] font-semibold whitespace-nowrap">填写人</th>
+                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] bg-white border-b border-[#0f2840] font-semibold whitespace-nowrap">状态</th>
+                                        {(item.form_columns || []).map((c: any) => (
+                                          <th key={c.name} className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] bg-white border-b border-[#0f2840] font-semibold whitespace-nowrap">{c.label || c.name}</th>
+                                        ))}
+                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] bg-white border-b border-[#0f2840] font-semibold whitespace-nowrap">提交时间</th>
+                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] bg-white border-b border-[#0f2840] font-semibold whitespace-nowrap">操作</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {pubInstances[item.id].map((inst: any, ii: number) => {
+                                        const phys = pubPhysData[inst.id] || {};
+                                        return (
+                                        <tr key={inst.id || ii}>
+                                          <td className="py-2 px-3 text-[11px] font-medium text-[#0d2137] border-b border-[#d5dfe8] whitespace-nowrap">{inst.assignee_name || "—"}</td>
+                                          <td className="py-2 px-3 text-[11px] border-b border-[#d5dfe8] whitespace-nowrap">
+                                            {inst.status === "completed"
+                                              ? <span className="text-[#0d9488]">已完成</span>
+                                              : inst.status === "in_progress" ? <span className="text-[#2563eb]">进行中</span>
+                                              : <span className="text-[#0d2137]">待处理</span>}
+                                          </td>
+                                          {(item.form_columns || []).map((c: any) => (
+                                            <td key={c.name} className="py-2 px-3 text-[11px] text-[#3d5468] border-b border-[#d5dfe8] whitespace-nowrap">
+                                              {phys[c.name] != null && phys[c.name] !== ""
+                                                ? String(phys[c.name])
+                                                : <span className="text-[#7b8fa1] italic">—</span>}
+                                            </td>
+                                          ))}
+                                          <td className="py-2 px-3 text-[11px] text-[#3d5468] border-b border-[#d5dfe8] whitespace-nowrap">
+                                            {inst.status === "completed" && inst.node_history?.length > 0
+                                              ? new Date(inst.node_history[inst.node_history.length - 1].submitted_at).toLocaleString("zh-CN") : "—"}
+                                          </td>
+                                          <td className="py-2 px-3 text-[11px] border-b border-[#d5dfe8] whitespace-nowrap">
+                                            <button className="py-1 px-2 border border-[#2563eb] text-[#2563eb] text-[10px] font-semibold hover:bg-[#eef4ff] transition-colors"
+                                              style={{fontFamily:"inherit"}}
+                                              onClick={async (e) => {
+                                                e.stopPropagation();
+                                                try {
+                                                  const defRes = await fetch(`/api/tasks/defs/${inst.def_id}`);
+                                                  const defJson = await defRes.json();
+                                                  if (defJson.data) { setSelectedDef(defJson.data); setSelectedInstance(inst); }
+                                                } catch (e) { }
+                                              }}>
+                                              查看详情
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      );})}
+                                    </tbody>
+                                  </table>
+                                ) : (
+                                  <div className="text-xs text-[#7b8fa1] py-4 text-center">暂无填写数据</div>
+                                )}
+                              </div>
+                              <div className="py-3.5 px-5 flex justify-between items-center w-full border-t border-[#d5dfe8]">
+                                <div className="flex gap-2">
+                                  <button className="py-[9px] px-4 border-2 border-[#0f2840] bg-white text-xs font-bold text-[#3d5468] cursor-pointer hover:bg-[#0d2137] hover:text-white transition-all"
+                                    style={{fontFamily:"inherit"}}
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      const insts = pubInstances[item.id] || [];
+                                      const cols = item.form_columns || [];
+                                      const headers = cols.map((c: any) => c.label || c.name);
+                                      const rows: string[][] = [];
+                                      for (const inst of insts) {
+                                        try {
+                                          const r = await fetch(`/api/tasks/instances/${inst.id}`);
+                                          const j = await r.json();
+                                          const phys = j.data?.phys_row || {};
+                                          rows.push(cols.map((c: any) => phys[c.name] != null ? String(phys[c.name]) : ""));
+                                        } catch (e) { rows.push(cols.map(() => "")); }
+                                      }
+                                      exportExcel({
+                                        "填写数据": { headers: ["填写人", "状态", ...headers], rows: insts.map((inst: any, ii: number) => [
+                                          inst.assignee_name || "—",
+                                          inst.status === "completed" ? "已完成" : inst.status === "in_progress" ? "进行中" : "待处理",
+                                          ...(rows[ii] || cols.map(() => "")),
+                                        ])},
+                                      }, `${item.task_name || "导出"}`);
+                                      toast.success("导出成功");
+                                    }}>
+                                    <Download className="w-3 h-3 mr-1 inline" />导出 Excel
+                                  </button>
+                                  <button className="py-[9px] px-4 border-2 border-[#0f2840] bg-white text-xs font-bold text-[#3d5468] cursor-pointer hover:bg-[#0d2137] hover:text-white transition-all"
+                                    style={{fontFamily:"inherit"}}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDeleteTarget({ type: "def", id: item.id, name: item.task_name });
+                                    }}>删除</button>
+                                </div>
+                                <button className="py-[9px] px-4 border-2 border-[#0f2840] bg-white text-xs font-bold text-[#3d5468] cursor-pointer hover:bg-[#0d2137] hover:text-white transition-all"
+                                  style={{fontFamily:"inherit"}}
+                                  onClick={(e) => { e.stopPropagation(); toggleExpand(item.id, isDef, isDef ? item.id : item.def_id); }}>收起</button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
