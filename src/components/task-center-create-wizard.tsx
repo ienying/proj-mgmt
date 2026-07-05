@@ -73,6 +73,7 @@ interface CreateWizardProps {
   currentUser: CurrentUser;
   onSave: (data: any) => Promise<void>;
   onBack: () => void;
+  initialData?: any | null;
 }
 
 const COLUMN_TYPES = [
@@ -97,21 +98,21 @@ const PERIOD_OPTIONS = [
   { value: "yearly", label: "每年" },
 ];
 
-export default function TaskCenterCreateWizard({ currentUser, onSave, onBack }: CreateWizardProps) {
+export default function TaskCenterCreateWizard({ currentUser, onSave, onBack, initialData }: CreateWizardProps) {
   const [saving, setSaving] = useState(false);
 
   // Form state
-  const [taskName, setTaskName] = useState("");
-  const [timeType, setTimeType] = useState("one_time");
-  const [periodType, setPeriodType] = useState("monthly");
-  const [taskMode, setTaskMode] = useState("process");
-  const [formColumns, setFormColumns] = useState<FormColumn[]>([]);
+  const [taskName, setTaskName] = useState(initialData?.task_name || "");
+  const [timeType, setTimeType] = useState(initialData?.time_type || "one_time");
+  const [periodType, setPeriodType] = useState(initialData?.periodic_config?.type || "monthly");
+  const [taskMode, setTaskMode] = useState(initialData?.task_mode || "process");
+  const [formColumns, setFormColumns] = useState<FormColumn[]>(initialData?.form_columns || []);
   const [newCol, setNewCol] = useState<FormColumn>({ name: "", label: "", type: "text", required: false });
   const [colOptInput, setColOptInput] = useState("");
   const [colOpts, setColOpts] = useState<string[]>([]);
 
   // Board records
-  const [boardRecords, setBoardRecords] = useState<BoardRecord[]>([]);
+  const [boardRecords, setBoardRecords] = useState<BoardRecord[]>(initialData?.board_records || []);
   const [showBoardSelector, setShowBoardSelector] = useState(false);
   const [boardProjects, setBoardProjects] = useState<any[]>([]);
   const [boardSelectedProject, setBoardSelectedProject] = useState("");
@@ -122,9 +123,9 @@ export default function TaskCenterCreateWizard({ currentUser, onSave, onBack }: 
   const [boardLoading, setBoardLoading] = useState(false);
 
   // Workflow
-  const [workflowNodes, setWorkflowNodes] = useState<WorkflowNode[]>([]);
-  const [projectId, setProjectId] = useState("");
-  const [moduleCode, setModuleCode] = useState("");
+  const [workflowNodes, setWorkflowNodes] = useState<WorkflowNode[]>(initialData?.workflow_nodes || []);
+  const [projectId, setProjectId] = useState(initialData?.assignee_config?.project_id || "");
+  const [moduleCode, setModuleCode] = useState(initialData?.assignee_config?.module_code || "");
   const [projects, setProjects] = useState<any[]>([]);
   const [systemUsers, setSystemUsers] = useState<any[]>([]);
   const [userComboOpen, setUserComboOpen] = useState<string | null>(null);
@@ -318,7 +319,7 @@ export default function TaskCenterCreateWizard({ currentUser, onSave, onBack }: 
   const handleSave = async () => {
     if (!canSave()) return;
     setSaving(true);
-    try { await onSave(buildData()); } finally { setSaving(false); }
+    try { await onSave({ ...buildData(), status: "active" }); } finally { setSaving(false); }
   };
 
   const handleReset = () => {
@@ -1223,9 +1224,14 @@ export default function TaskCenterCreateWizard({ currentUser, onSave, onBack }: 
             <div className="flex gap-2 pt-2 border-t border-gray-100">
               <Button className="h-10 px-6"
                 onClick={handleSave} disabled={saving || !canSave()}>
-                <Send className="w-4 h-4 mr-1.5" />{saving ? "发布中..." : "发布任务"}
+                <Send className="w-4 h-4 mr-1.5" />{saving ? "发布中..." : initialData ? "更新并发布" : "发布任务"}
               </Button>
-              <Button variant="outline" className="h-10" disabled={saving}>
+              <Button variant="outline" className="h-10"
+                onClick={() => {
+                  setSaving(true);
+                  onSave({ ...buildData(), status: "draft" }).finally(() => setSaving(false));
+                }}
+                disabled={saving || !taskName}>
                 <Save className="w-4 h-4 mr-1.5" />保存草稿
               </Button>
               <Button variant="ghost" className="h-10 text-red-500 hover:text-red-700" onClick={handleReset}>

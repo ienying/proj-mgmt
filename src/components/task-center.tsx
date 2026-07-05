@@ -109,9 +109,11 @@ interface FilterState {
 }
 
 export default function TaskCenter({ currentUser }: TaskCenterProps) {
-  const [activeTab, setActiveTab] = useState<"todos" | "published" | "all">("todos");
+  const [activeTab, setActiveTab] = useState<"todos" | "published" | "drafts" | "all">("todos");
   const [showWizard, setShowWizard] = useState(false);
   const [defs, setDefs] = useState<TaskDef[]>([]);
+  const [draftDefs, setDraftDefs] = useState<TaskDef[]>([]);
+  const [editDraft, setEditDraft] = useState<TaskDef | null>(null);
   const [instances, setInstances] = useState<TaskInstance[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -143,7 +145,11 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
     try {
       const uid = currentUser.id;
 
-      if (activeTab === "published") {
+      if (activeTab === "drafts") {
+        const res = await fetch(`/api/tasks/defs?user_id=${uid}&status=draft`);
+        const json = await res.json();
+        if (json.data) setDraftDefs(json.data);
+      } else if (activeTab === "published") {
         const res = await fetch(`/api/tasks/defs?user_id=${uid}&status=active`);
         const json = await res.json();
         if (json.data) setDefs(json.data);
@@ -151,7 +157,6 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
         const instRes = await fetch(`/api/tasks/instances`);
         const instJson = await instRes.json();
         if (instJson.data) {
-          // Only keep instances for defs created by this user
           const userDefIds = new Set((json.data || []).map((d: any) => d.id));
           setInstances((instJson.data || []).filter((i: any) => userDefIds.has(i.def_id)));
         }
@@ -177,11 +182,56 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
 
   useEffect(() => {
     fetch("/api/tasks/ensure-schemas", { method: "POST" }).catch(() => {});
+    // Ensure periodic instances are up to date
+    fetch("/api/tasks/ensure-periodic-instances", { method: "POST" }).catch(() => {});
   }, []);
 
-  /* ─── 创建任务 ─── */
+  // Refresh periodic instances when tab changes
+  useEffect(() => {
+    if (activeTab === "todos" || activeTab === "published") {
+      fetch("/api/tasks/ensure-periodic-instances", { method: "POST" })
+        .then(() => loadData())
+        .catch(() => {});
+    }
+  }, [activeTab]);
+
+  /* ─── 创建/保存任务 ─── */
   const handleCreate = async (data: any) => {
     try {
+      // If editing a draft, update it instead of creating new
+      if (editDraft?.id && data.status === "active") {
+        // Publish existing draft
+        const res = await fetch(`/api/tasks/defs/${editDraft.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...data, id: undefined }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "发布失败");
+        toast.success("任务发布成功");
+        setShowWizard(false);
+        setEditDraft(null);
+        loadData();
+        return;
+      }
+
+      if (editDraft?.id && data.status === "draft") {
+        // Update existing draft
+        const res = await fetch(`/api/tasks/defs/${editDraft.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...data, id: undefined }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "保存失败");
+        toast.success("草稿已保存");
+        setShowWizard(false);
+        setEditDraft(null);
+        loadData();
+        return;
+      }
+
+      // Create new (draft or active)
       const res = await fetch("/api/tasks/defs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -191,7 +241,7 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
       if (!res.ok) throw new Error(json.error || "创建失败");
 
       const def = json.data;
-      if (def.task_mode === "process" && def.workflow_nodes?.length > 0) {
+      if (def.task_mode === "process" && def.workflow_nodes?.length > 0 && def.status !== "draft") {
         await fetch("/api/tasks/instances", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -205,11 +255,12 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
         });
       }
 
-      toast.success("任务创建成功");
+      toast.success(def.status === "draft" ? "草稿已保存" : "任务创建成功");
       setShowWizard(false);
+      setEditDraft(null);
       loadData();
     } catch (e: any) {
-      toast.error("创建失败: " + e.message);
+      toast.error("操作失败: " + e.message);
     }
   };
 
@@ -366,10 +417,10 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
 
   /* ─── 筛选与排序 ─── */
   const filteredItems = (): any[] => {
-    let items: any[] = activeTab === "published" ? defs : instances;
+    let items: any[] = activeTab === "published" ? defs : activeTab === "drafts" ? draftDefs : instances;
 
     // Group parallel instances for "all" and "todos" tabs
-    if (activeTab !== "published") {
+    if (activeTab !== "published" && activeTab !== "drafts") {
       items = groupParallelInstances(items);
     }
 
@@ -1006,7 +1057,8 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
       <TaskCenterCreateWizard
         currentUser={currentUser}
         onSave={handleCreate}
-        onBack={() => setShowWizard(false)}
+        onBack={() => { setShowWizard(false); setEditDraft(null); }}
+        initialData={editDraft}
       />
     );
   }
@@ -1032,6 +1084,7 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
         {[
           { key: "todos" as const, label: "我的待办", count: instances.filter(i => i.status === "in_progress" || i.status === "pending").length },
           { key: "published" as const, label: "我的发布", count: defs.length },
+          { key: "drafts" as const, label: "草稿箱", count: draftDefs.length },
           { key: "all" as const, label: "全部任务", count: instances.length },
         ].map(tab => (
           <div key={tab.key}
@@ -1058,17 +1111,22 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
           <div className="flex items-baseline gap-2.5 mb-5">
             <div>
               <span className="text-xs text-[#7b8fa1] font-medium">
-                {activeTab === "todos" ? "MY TASKS" : activeTab === "published" ? "PUBLISHED" : "ALL TASKS"}
+                {activeTab === "todos" ? "MY TASKS" : activeTab === "published" ? "PUBLISHED" : activeTab === "drafts" ? "DRAFTS" : "ALL TASKS"}
               </span>
               <h2 className="text-[22px] font-extrabold -tracking-[0.3px] leading-tight">
-                {activeTab === "todos" ? "我的待办" : activeTab === "published" ? "我的发布" : "全部任务"}
+                {activeTab === "todos" ? "我的待办" : activeTab === "published" ? "我的发布" : activeTab === "drafts" ? "草稿箱" : "全部任务"}
               </h2>
             </div>
           </div>
 
           {/* 统计条 */}
           {(() => {
-            const statItems: { v: number; l: string; c: string }[] = activeTab === "todos" ? [
+            const statItems: { v: number; l: string; c: string }[] = activeTab === "drafts" ? [
+              { v: draftDefs.length, l: "草稿", c: "text-[#2563eb]" },
+              { v: 0, l: "—", c: "text-[#7b8fa1] opacity-40" },
+              { v: 0, l: "—", c: "text-[#7b8fa1] opacity-40" },
+              { v: 0, l: "—", c: "text-[#7b8fa1] opacity-40" },
+            ] : activeTab === "todos" ? [
               { v: instances.filter(i => i.status === "pending").length, l: "待处理", c: "text-[#2563eb]" },
               { v: stats.overdue, l: "逾期", c: stats.overdue > 0 ? "text-[#c24141]" : "text-[#7b8fa1] opacity-40" },
               { v: instances.filter(i => i.status === "completed").length, l: "已完成", c: "text-[#0d9488]" },
@@ -1120,16 +1178,20 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
           </div>
 
           {/* 表格 */}
-          <table className="w-full border-collapse border border-[#c0c4cc]">
+          <table className="w-full border-collapse border border-[#c0c4cc]" style={{tableLayout:"fixed"}}>
             <thead>
               <tr>
                 <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-9">#</th>
                 <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap">任务名称</th>
-                <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-[70px]">类型</th>
-                {activeTab !== "published" && <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-[70px]">模式</th>}
-                {activeTab !== "published" && <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-[80px]">状态</th>}
+                <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-[130px]">类型</th>
+                {activeTab !== "published" && activeTab !== "drafts" && <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-[70px]">模式</th>}
+                {activeTab !== "published" && activeTab !== "drafts" && <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-[80px]">状态</th>}
+                {activeTab === "drafts" && <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-20">字段</th>}
+                {activeTab === "drafts" && <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-28">修改时间</th>}
                 {activeTab === "published" ? (
                   <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-[90px]">已填写</th>
+                ) : activeTab === "drafts" ? (
+                  <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-20">创建时间</th>
                 ) : (
                   <th className="text-left py-1.5 px-2.5 text-[11px] font-semibold text-[#333] bg-[#f5f6f7] border border-[#d0d4da] whitespace-nowrap w-[100px]">{activeTab === "todos" ? "截止日期" : "负责人"}</th>
                 )}
@@ -1143,24 +1205,40 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
                 <tr><td colSpan={8} className="py-16 text-center text-xs text-[#0d2137]">暂无任务</td></tr>
               ) : (
                 filtered.map((item: any, idx: number) => {
-                  const isDef = activeTab === "published";
+                  const isDef = activeTab === "published" || activeTab === "drafts";
+                  const isDraft = activeTab === "drafts";
                   const isGroup = (item as any)._isGroup;
                   const isExpanded = expandedCards.has(item.id);
                   return (
                     <React.Fragment key={item.id || idx}>
-                      <tr className="cursor-pointer hover:bg-[#f0f7ff]" onClick={() => toggleExpand(item.id, isDef, isDef ? item.id : item.def_id)}>
+                      <tr className="cursor-pointer hover:bg-[#f0f7ff]" onClick={() => {
+                        if (isDraft) {
+                          setEditDraft(item);
+                          setShowWizard(true);
+                        } else {
+                          toggleExpand(item.id, isDef, isDef ? item.id : item.def_id);
+                        }
+                      }}>
                         <td className="py-1.5 px-2.5 text-xs text-[#0d2137] border border-[#e0e3e8]">{idx + 1}</td>
                         <td className="py-1.5 px-2.5 text-xs text-[#0d2137] border border-[#e0e3e8]">
                           <strong>{item.task_name || "—"}</strong>
                         </td>
                         <td className="py-1.5 px-2.5 text-xs border border-[#e0e3e8]">
-                          <span className={`inline-block px-2 py-0.5 border text-[10px] font-semibold uppercase tracking-[0.3px]
-                            ${isDef ? (item.task_mode === "process" ? "border-[#2563eb] text-[#2563eb]" : "border-[#0d9488] text-[#0d9488]")
-                              : (item.task_mode === "process" ? "border-[#2563eb] text-[#2563eb]" : "border-[#2563eb] text-[#2563eb]")}`}>
-                            {isDef ? (MODE_LABELS[item.task_mode]?.label || item.task_mode) : (item.task_mode === "process" ? "流程型" : "项目型")}
+                          <span className="inline-flex items-center gap-1.5 flex-nowrap">
+                            <span className={`px-2 py-0.5 border text-[10px] font-semibold uppercase tracking-[0.3px]
+                              ${isDef ? (item.task_mode === "process" ? "border-[#2563eb] text-[#2563eb]" : "border-[#0d9488] text-[#0d9488]")
+                                : (item.task_mode === "process" ? "border-[#2563eb] text-[#2563eb]" : "border-[#2563eb] text-[#2563eb]")}`}>
+                              {isDef ? (MODE_LABELS[item.task_mode]?.label || item.task_mode) : (item.task_mode === "process" ? "流程型" : "项目型")}
+                            </span>
+                            {isDef && !isDraft && item.time_type === "periodic" && (
+                              <span className="px-2 py-0.5 border border-[#0f2840] text-[#0d2137] text-[10px] font-semibold">周期性</span>
+                            )}
+                            {isDraft && (
+                              <span className="px-2 py-0.5 border border-[#c24141] text-[#c24141] text-[10px] font-semibold">草稿</span>
+                            )}
                           </span>
                         </td>
-                        {activeTab !== "published" && (
+                        {activeTab !== "published" && activeTab !== "drafts" && (
                           <td className="py-1.5 px-2.5 text-xs border border-[#e0e3e8]">
                             {isGroup ? (
                               <span className="inline-block px-2 py-0.5 border border-[#2563eb] text-[#2563eb] text-[10px] font-semibold">多人</span>
@@ -1179,11 +1257,20 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
                                 : <span className="text-[#0d2137]">待处理</span>}
                           </td>
                         )}
-                        {activeTab === "published" ? (
+                        {isDraft ? (
+                          <>
+                            <td className="py-1.5 px-2.5 text-xs text-[#0d2137] border border-[#e0e3e8]">{item.form_columns?.length || 0}</td>
+                            <td className="py-1.5 px-2.5 text-xs text-[#0d2137] border border-[#e0e3e8]">{fmtDate(item.created_at)}</td>
+                            <td className="py-1.5 px-2.5 text-xs text-[#0d2137] border border-[#e0e3e8]">{fmtDate(item.updated_at) || "—"}</td>
+                          </>
+                        ) : activeTab === "published" ? (
                           <td className="py-1.5 px-2.5 text-xs text-[#0d2137] border border-[#e0e3e8]">
                             {(() => {
                               const totalMembers = instances.filter((i: any) => i.def_id === item.id).length;
                               const completedMembers = instances.filter((i: any) => i.def_id === item.id && i.status === "completed").length;
+                              if (item.time_type === "periodic") {
+                                return `${completedMembers} / ${totalMembers} 期`;
+                              }
                               return `${completedMembers} / ${totalMembers} 人`;
                             })()}
                           </td>
@@ -1193,6 +1280,12 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
                           </td>
                         )}
                         <td className="py-1.5 px-2.5 text-xs border border-[#e0e3e8]">
+                          {isDraft ? (
+                            <span className="inline-block px-2 py-0.5 border border-[#2563eb] text-[#2563eb] text-[10px] font-semibold cursor-pointer hover:bg-[#eef4ff]"
+                              onClick={(e) => { e.stopPropagation(); setEditDraft(item); setShowWizard(true); }}>
+                              继续编辑
+                            </span>
+                          ) : (
                           <span className="inline-block px-2 py-0.5 border border-[#2563eb] text-[#2563eb] text-[10px] font-semibold cursor-pointer"
                             onClick={async (e) => {
                               e.stopPropagation();
@@ -1222,6 +1315,7 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
                             }}>
                             {isDef ? "查看实例" : isGroup ? "查看" : item.status === "completed" ? "查看" : "填写"}
                           </span>
+                          )}
                         </td>
                       </tr>
                       {/* 展开行 */}
@@ -1344,36 +1438,46 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
                           </td>
                         </tr>
                       )}
-                      {/* 发布任务展开行 — 直接显示填写字段值 */}
+                      {/* 发布任务展开行 — 填满整个表格宽度 */}
                       {isExpanded && isDef && (
                         <tr className="bg-[#f4f7fb]">
-                          <td colSpan={5} className="!p-0 border-b-2 border-[#0f2840]" style={{overflowX:"auto"}}>
-                            <div className="flex flex-col">
-                              <div className="flex-1 px-5 py-4" style={{minWidth:"max-content"}}>
+                          <td colSpan={5} className="!p-0 border-b-2 border-[#0f2840]" style={{overflow:"hidden"}}>
+                            <div className="flex flex-col" style={{overflow:"hidden"}}>
+                              <div style={{overflowX:"auto", WebkitOverflowScrolling:"touch", maxWidth:"100%"}}>
+                                <div className="px-5 pt-4">
+                                {(() => {
+                                  const insts = (pubInstances[item.id] || []).slice().sort((a: any, b: any) =>
+                                    (b.period_label || "").localeCompare(a.period_label || ""));
+                                  const isPeriodic = item.time_type === "periodic";
+                                  return (<>
                                 <div className="text-[8px] text-[#7b8fa1] uppercase tracking-[1.5px] font-bold mb-2.5">
-                                  填写情况 · {(pubInstances[item.id] || []).length} 人
+                                  {isPeriodic ? `周期实例 · ${insts.length} 期` : `填写情况 · ${insts.length} 人`}
                                 </div>
                                 {pubLoading[item.id] ? (
                                   <div className="text-xs text-[#7b8fa1] py-4 text-center">加载中...</div>
-                                ) : pubInstances[item.id]?.length > 0 ? (
-                                  <table className="w-full border-collapse">
+                                ) : insts.length > 0 ? (
+                                  <table className="border-collapse" style={{width:"100%"}}>
                                     <thead>
                                       <tr>
-                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] bg-white border-b border-[#0f2840] font-semibold whitespace-nowrap">填写人</th>
-                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] bg-white border-b border-[#0f2840] font-semibold whitespace-nowrap">状态</th>
+                                        {isPeriodic && <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] border-b border-[#0f2840] font-semibold whitespace-nowrap" style={{position:"sticky",left:-2,backgroundColor:"#fff",zIndex:20,boxShadow:"4px 0 8px -2px rgba(0,0,0,0.3)",borderRight:"2px solid #0f2840",paddingLeft:14,paddingRight:14}}>周期</th>}
+                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] border-b border-[#0f2840] font-semibold whitespace-nowrap" style={!isPeriodic ? {position:"sticky",left:-2,backgroundColor:"#fff",zIndex:20,boxShadow:"4px 0 8px -2px rgba(0,0,0,0.3)",borderRight:"2px solid #0f2840",paddingLeft:14,paddingRight:14} : {}}>填写人</th>
+                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] border-b border-[#0f2840] font-semibold whitespace-nowrap" style={{backgroundColor:"#fff"}}>状态</th>
                                         {(item.form_columns || []).map((c: any) => (
-                                          <th key={c.name} className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] bg-white border-b border-[#0f2840] font-semibold whitespace-nowrap">{c.label || c.name}</th>
+                                          <th key={c.name} className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] border-b border-[#0f2840] font-semibold whitespace-nowrap" style={{backgroundColor:"#fff"}}>{c.label || c.name}</th>
                                         ))}
-                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] bg-white border-b border-[#0f2840] font-semibold whitespace-nowrap">提交时间</th>
-                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] bg-white border-b border-[#0f2840] font-semibold whitespace-nowrap">操作</th>
+                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] border-b border-[#0f2840] font-semibold whitespace-nowrap" style={{backgroundColor:"#fff"}}>提交时间</th>
+                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] border-b border-[#0f2840] font-semibold whitespace-nowrap" style={{position:"sticky",right:-2,backgroundColor:"#fff",zIndex:20,boxShadow:"-4px 0 8px -2px rgba(0,0,0,0.3)",borderLeft:"2px solid #0f2840",paddingLeft:14,paddingRight:14}}>操作</th>
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {pubInstances[item.id].map((inst: any, ii: number) => {
+                                      {insts.map((inst: any, ii: number) => {
                                         const phys = pubPhysData[inst.id] || {};
                                         return (
                                         <tr key={inst.id || ii}>
-                                          <td className="py-2 px-3 text-[11px] font-medium text-[#0d2137] border-b border-[#d5dfe8] whitespace-nowrap">{inst.assignee_name || "—"}</td>
+                                          {item.time_type === "periodic" && (
+                                            <td className="py-2 px-3 text-[11px] font-medium text-[#0d2137] border-b border-[#d5dfe8] whitespace-nowrap" style={{position:"sticky",left:-2,backgroundColor:"#f4f7fb",zIndex:15,boxShadow:"4px 0 8px -2px rgba(0,0,0,0.3)",borderRight:"2px solid #0f2840",paddingLeft:14,paddingRight:14}}>{inst.period_label || "—"}</td>
+                                          )}
+                                          <td className="py-2 px-3 text-[11px] font-medium text-[#0d2137] border-b border-[#d5dfe8] whitespace-nowrap" style={!isPeriodic ? {position:"sticky",left:-2,backgroundColor:"#f4f7fb",zIndex:15,boxShadow:"4px 0 8px -2px rgba(0,0,0,0.3)",borderRight:"2px solid #0f2840",paddingLeft:14,paddingRight:14} : {backgroundColor:"#f4f7fb"}}>{inst.assignee_name || "—"}</td>
                                           <td className="py-2 px-3 text-[11px] border-b border-[#d5dfe8] whitespace-nowrap">
                                             {inst.status === "completed"
                                               ? <span className="text-[#0d9488]">已完成</span>
@@ -1391,7 +1495,7 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
                                             {inst.status === "completed" && inst.node_history?.length > 0
                                               ? new Date(inst.node_history[inst.node_history.length - 1].submitted_at).toLocaleString("zh-CN") : "—"}
                                           </td>
-                                          <td className="py-2 px-3 text-[11px] border-b border-[#d5dfe8] whitespace-nowrap">
+                                          <td className="py-2 px-3 text-[11px] border-b border-[#d5dfe8] whitespace-nowrap" style={{position:"sticky",right:-2,backgroundColor:"#f4f7fb",zIndex:15,boxShadow:"-4px 0 8px -2px rgba(0,0,0,0.3)",borderLeft:"2px solid #0f2840",paddingLeft:14,paddingRight:14}}>
                                             <button className="py-1 px-2 border border-[#2563eb] text-[#2563eb] text-[10px] font-semibold hover:bg-[#eef4ff] transition-colors"
                                               style={{fontFamily:"inherit"}}
                                               onClick={async (e) => {
@@ -1412,8 +1516,11 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
                                 ) : (
                                   <div className="text-xs text-[#7b8fa1] py-4 text-center">暂无填写数据</div>
                                 )}
+                                  </>);
+                                })()}
                               </div>
-                              <div className="py-3.5 px-5 flex justify-between items-center w-full border-t border-[#d5dfe8]">
+                              </div>
+                              <div className="py-3.5 px-5 flex justify-between items-center w-full border-t border-[#d5dfe8]" style={{flexShrink:0}}>
                                 <div className="flex gap-2">
                                   <button className="py-[9px] px-4 border-2 border-[#0f2840] bg-white text-xs font-bold text-[#3d5468] cursor-pointer hover:bg-[#0d2137] hover:text-white transition-all"
                                     style={{fontFamily:"inherit"}}

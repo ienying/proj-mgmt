@@ -62,9 +62,19 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status") || "active";
 
     const client = await createServerClient();
-    const sql = userId
-      ? `SELECT * FROM public.task_center_defs WHERE created_by = '${userId.replace(/'/g, "''")}' AND status = '${status.replace(/'/g, "''")}' ORDER BY created_at DESC`
-      : `SELECT * FROM public.task_center_defs WHERE status = '${status.replace(/'/g, "''")}' ORDER BY created_at DESC`;
+
+    let sql: string;
+    if (userId) {
+      if (status === "draft") {
+        sql = `SELECT * FROM public.task_center_defs WHERE created_by = '${userId.replace(/'/g, "''")}' AND status = 'draft' ORDER BY created_at DESC`;
+      } else if (status === "all") {
+        sql = `SELECT * FROM public.task_center_defs WHERE created_by = '${userId.replace(/'/g, "''")}' ORDER BY created_at DESC`;
+      } else {
+        sql = `SELECT * FROM public.task_center_defs WHERE created_by = '${userId.replace(/'/g, "''")}' AND status = '${status.replace(/'/g, "''")}' ORDER BY created_at DESC`;
+      }
+    } else {
+      sql = `SELECT * FROM public.task_center_defs WHERE status = '${status.replace(/'/g, "''")}' ORDER BY created_at DESC`;
+    }
 
     const { data, error } = await client.rpc("execute_sql", { p_sql: sql });
     if (error) {
@@ -81,7 +91,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { task_name, time_type, task_mode, periodic_config, form_columns, workflow_nodes, assignee_config, board_records, deadline_config, created_by, created_by_name } = body;
+    const { task_name, time_type, task_mode, periodic_config, form_columns, workflow_nodes, assignee_config, board_records, deadline_config, created_by, created_by_name, status } = body;
 
     if (!task_name || !time_type || !task_mode || !form_columns || !created_by) {
       return NextResponse.json({ error: "缺少必填字段: task_name, time_type, task_mode, form_columns, created_by" }, { status: 400 });
@@ -96,25 +106,27 @@ export async function POST(request: NextRequest) {
 
     const schemaName = getSchemaName(time_type, task_mode);
     const tableName = `task_${Date.now()}`;
+    const isDraft = status === "draft";
 
     const client = await createServerClient();
 
-    // 1. Ensure schema exists
-    const { error: schemaError } = await client.rpc("execute_sql", {
-      p_sql: `CREATE SCHEMA IF NOT EXISTS ${schemaName}`,
-    });
-    if (schemaError) {
-      return NextResponse.json({ error: `创建 schema 失败: ${schemaError.message}` }, { status: 500 });
+    if (!isDraft) {
+      // Active task: create schema and physical table
+      const { error: schemaError } = await client.rpc("execute_sql", {
+        p_sql: `CREATE SCHEMA IF NOT EXISTS ${schemaName}`,
+      });
+      if (schemaError) {
+        return NextResponse.json({ error: `创建 schema 失败: ${schemaError.message}` }, { status: 500 });
+      }
+
+      const createSQL = buildPhysicalTableSQL(schemaName, tableName, form_columns, board_records);
+      const { error: tableError } = await client.rpc("execute_sql", { p_sql: createSQL });
+      if (tableError) {
+        return NextResponse.json({ error: `创建物理表失败: ${tableError.message}` }, { status: 500 });
+      }
     }
 
-    // 2. Create physical table
-    const createSQL = buildPhysicalTableSQL(schemaName, tableName, form_columns, board_records);
-    const { error: tableError } = await client.rpc("execute_sql", { p_sql: createSQL });
-    if (tableError) {
-      return NextResponse.json({ error: `创建物理表失败: ${tableError.message}` }, { status: 500 });
-    }
-
-    // 3. Insert definition
+    // Insert definition
     const { data: def, error: defError } = await client.rpc("dp_insert", {
       p_table: "public.task_center_defs",
       p_data: {
@@ -127,16 +139,17 @@ export async function POST(request: NextRequest) {
         assignee_config: assignee_config || null,
         board_records: board_records || null,
         deadline_config: deadline_config || null,
-        schema_name: schemaName,
-        table_name: tableName,
-        status: "active",
+        schema_name: isDraft ? null : schemaName,
+        table_name: isDraft ? null : tableName,
+        status: isDraft ? "draft" : "active",
         created_by,
         created_by_name: created_by_name || null,
       },
     });
     if (defError) {
-      // Rollback: drop the physical table
-      await client.rpc("execute_sql", { p_sql: `DROP TABLE IF EXISTS ${schemaName}."${tableName}"` });
+      if (!isDraft) {
+        await client.rpc("execute_sql", { p_sql: `DROP TABLE IF EXISTS ${schemaName}."${tableName}"` });
+      }
       return NextResponse.json({ error: `创建任务定义失败: ${defError.message}` }, { status: 500 });
     }
 
