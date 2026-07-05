@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>任务中心 · 实施者 V2</title>
+<style>
+:root{
+    --bg:#f4f7fb;--surface:#ffffff;--ink:#0d2137;--ink2:#3d5468;--ink3:#7b8fa1;
+    --border:#0f2840;--border-light:#d5dfe8;
+    --accent:#2563eb;--accent-bg:#eef4ff;
+    --green:#0d9488;--green-bg:#edf8f7;
+    --blue:#2563eb;--blue-bg:#eef4ff;
+    --red:#c24141;--red-bg:#fdf2f2;
+    --font:'PingFang SC','Microsoft YaHei',-apple-system,BlinkMacSystemFont,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;border-radius:0}
+body{
+    font-family:var(--font);background:var(--bg);color:var(--ink);
+    line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh;
+    display:flex;padding:44px 52px 44px 272px;
+}
+.sidenav{
+    width:172px;display:flex;flex-direction:column;gap:0;
+    background:transparent;padding:24px 0 20px;
+    position:fixed;top:50%;left:60px;transform:translateY(-50%);
+    border:none;z-index:50;
+}
+.sn-logo{font-size:15px;font-weight:800;color:#000;padding:0 16px 20px;letter-spacing:1px}
+.sn-section-label{font-size:9px;font-weight:700;color:#000;text-transform:uppercase;letter-spacing:1.5px;padding:20px 16px 6px}
+.sn-link{
+    padding:7px 16px;font-size:12.5px;font-weight:400;
+    color:#000;cursor:pointer;transition:color .15s;
+}
+.sn-link:hover{color:var(--accent)}
+.sn-link.active{color:var(--accent);font-weight:600}
+.sn-count{font-size:10px;color:#999;margin-left:4px;font-weight:400}
+.sn-sep{height:2px;background:var(--border);margin:14px 16px}
+.sn-intro{font-size:11px;color:#333;padding:6px 16px 12px;line-height:1.5}
+.sn-action-link{
+    padding:7px 16px;font-size:12.5px;font-weight:600;
+    color:#000;cursor:pointer;transition:color .15s;
+}
+.sn-action-link:hover{color:var(--accent)}
+
+.main{flex:1;min-width:0}
+.page{display:none}
+.page.active{display:block}
+
+.table-page{background:var(--surface);max-width:960px;margin:0 auto;padding:44px 48px 36px}
+.tp-header{display:flex;align-items:baseline;gap:10px;margin-bottom:20px}
+.tp-title h2{font-size:22px;font-weight:800;letter-spacing:-.3px;line-height:1.2}
+.tp-sub{font-size:12px;color:var(--ink3);font-weight:500}
+
+.stats-strip{display:flex;gap:0;border:2px solid var(--border);margin-bottom:28px}
+.stat-cell{flex:1;padding:18px 16px;text-align:center;border-right:2px solid var(--border)}
+.stat-cell:last-child{border-right:none}
+.stat-num{font-size:36px;font-weight:900;line-height:1;letter-spacing:-1px}
+.stat-num.gr{color:var(--green)}.stat-num.or{color:var(--accent)}
+.stat-num.bl{color:var(--blue)}.stat-num.zero{color:var(--ink3);opacity:.4}
+.stat-lbl{font-size:11px;font-weight:700;color:var(--ink3);margin-top:4px;text-transform:uppercase;letter-spacing:1px}
+
+.tp-toolbar{display:flex;gap:8px;margin-bottom:20px;align-items:center}
+.tp-search{flex:1;position:relative;min-width:200px}
+.tp-search input{width:100%;padding:9px 14px 9px 34px;border:2px solid var(--border);font-size:13px;font-family:var(--font);background:var(--surface);color:var(--ink)}
+.tp-search input:focus{outline:none;border-color:var(--accent)}
+.tp-search input::placeholder{color:var(--ink3)}
+.tp-search::before{content:'\2315';position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--ink3);font-size:15px}
+.tp-btn{padding:9px 16px;border:2px solid var(--border);background:var(--surface);font-size:12px;font-weight:700;color:var(--ink2);font-family:var(--font);cursor:pointer;transition:all .15s}
+.tp-btn:hover{background:var(--ink);color:#fff}
+.tp-btn.accent{background:var(--accent);border-color:var(--accent);color:#fff}
+.tp-btn.accent:hover{background:#1d4ed8;border-color:#1d4ed8}
+.tp-btn.dark{background:var(--ink);color:#fff;border-color:var(--ink)}
+.tp-btn.dark:hover{background:var(--accent);border-color:var(--accent)}
+
+.tp-table{width:100%;border-collapse:collapse;border:1px solid #c0c4cc}
+.tp-table th{text-align:left;padding:6px 10px;font-size:11px;font-weight:600;color:#333;background:#f5f6f7;border:1px solid #d0d4da;white-space:nowrap}
+.tp-table td{padding:6px 10px;font-size:12px;color:var(--ink);border:1px solid #e0e3e8;vertical-align:middle}
+.tp-table tbody tr:hover{background:#f0f7ff}
+.tp-table .tag{display:inline-block;padding:3px 9px;border:1px solid var(--border);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.tp-table .tag.flow{border-color:var(--blue);color:var(--blue)}
+.tp-table .tag.once{border-color:var(--green);color:var(--green)}
+.tp-table .tag.multi{border-color:var(--accent);color:var(--accent)}
+
+.expand-row{display:none}
+.expand-row.open{display:table-row}
+.expand-row td{background:var(--bg);padding:0 !important;border-bottom:2px solid var(--border)}
+.expand-detail{display:flex;flex-direction:column}
+.exp-card{flex:1;padding:16px 20px;border-bottom:1px solid var(--border-light)}
+.exp-card:last-child{border-bottom:none}
+.exp-card-label{font-size:8px;color:var(--ink3);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:10px}
+.exp-info-grid{display:flex;flex-wrap:wrap;gap:1px;background:var(--border);margin-bottom:12px}
+.exp-info-cell{flex:1;min-width:140px;background:var(--surface);padding:8px 12px;display:flex;flex-direction:column;gap:2px}
+.exp-info-lbl{font-size:7px;color:var(--ink3);text-transform:uppercase;letter-spacing:1px;font-weight:700}
+.exp-info-val{font-size:11px;font-weight:600;color:var(--ink)}
+.exp-info-val.muted{color:var(--ink3);opacity:.4;font-weight:400}
+.inline-table{width:100%;border-collapse:collapse}
+.inline-table th{text-align:left;padding:8px 12px;font-size:9px;color:var(--ink3);text-transform:uppercase;letter-spacing:1px;background:var(--surface);border-bottom:1px solid var(--border);font-weight:600}
+.inline-table td{padding:9px 12px;font-size:11px;color:var(--ink2);border-bottom:1px solid var(--border-light)}
+.finp{width:100%;padding:6px 10px;border:1px solid var(--border);font-size:11px;font-family:inherit;background:var(--surface);color:var(--ink)}
+.finp:focus{outline:none;border-color:var(--accent)}
+.finp::placeholder{color:var(--ink3)}
+.exp-foot{padding:14px 20px;display:flex;justify-content:space-between;align-items:center;width:100%;border-top:1px solid var(--border-light)}
+
+@media(max-width:1000px){
+    body{flex-direction:column;padding:20px;gap:24px}
+    .sidenav{position:static;width:100%;max-height:none;flex-direction:row;flex-wrap:wrap;padding:16px;gap:4px}
+    .sn-logo{width:100%;padding-bottom:8px}.sn-section-label{width:100%;padding-top:8px}
+    .sn-link{padding:5px 10px;display:inline-block}.sn-action-link{padding:5px 10px;display:inline-block}
+    .sn-sep{width:100%}.sn-div{width:100%}
+    .table-page{max-width:100%;padding:32px 24px}
+    .tp-title h2{font-size:22px}.stat-num{font-size:28px}
+    .expand-detail{flex-direction:column}
+}
+</style>
+</head>
+<body>
+
+<nav class="sidenav">
+    <div class="sn-logo">任务中心</div>
+
+    <div class="sn-sep"></div>
+
+    <div class="sn-link active" data-page="todo">我的待办<span class="sn-count">1</span></div>
+    <div class="sn-link" data-page="publish">我的发布<span class="sn-count">1</span></div>
+    <div class="sn-link" data-page="all">全部任务<span class="sn-count">2</span></div>
+
+    <div class="sn-intro">任务填报与处理，流程流转全程可视，团队协作高效透明。</div>
+</nav>
+
+<main class="main">
+
+<div class="page active" id="page-todo">
+    <div class="table-page">
+        <div class="tp-header">
+            <div class="tp-title">
+                <span class="tp-sub">MY TASKS</span>
+                <h2>我的待办</h2>
+            </div>
+        </div>
+        <div class="stats-strip">
+            <div class="stat-cell"><div class="stat-num or">1</div><div class="stat-lbl">待处理</div></div>
+            <div class="stat-cell"><div class="stat-num zero">0</div><div class="stat-lbl">逾期</div></div>
+            <div class="stat-cell"><div class="stat-num gr">0</div><div class="stat-lbl">已完成</div></div>
+            <div class="stat-cell"><div class="stat-num bl">1</div><div class="stat-lbl">进行中</div></div>
+        </div>
+        <div class="tp-toolbar">
+            <div class="tp-search"><input type="text" placeholder="搜索任务名称、项目、处理人..."></div>
+            <button class="tp-btn">最新创建 ▾</button>
+        </div>
+        <table class="tp-table">
+            <thead><tr><th style="width:36px">#</th><th>任务名称</th><th style="width:70px">类型</th><th style="width:70px">模式</th><th style="width:80px">发布人</th><th style="width:90px">截止日期</th><th style="width:100px">进度</th><th style="width:80px">状态</th></tr></thead>
+            <tbody>
+                <tr onclick="toggleExpand('todo-exp')">
+                    <td>1</td><td><strong>需求收集</strong></td>
+                    <td><span class="tag flow">流程型</span></td>
+                    <td><span class="tag multi">多人</span></td>
+                    <td>super_admin</td><td>—</td><td>0/1 已完成</td><td>待处理</td>
+                </tr>
+                <tr class="expand-row open" id="todo-exp">
+                    <td colspan="8">
+                        <div class="expand-detail">
+                            <div class="exp-card">
+                                <div class="exp-card-label">填写字段</div>
+                                <table class="inline-table">
+                                    <thead><tr><th>#</th><th>字段</th><th>填写内容</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>1</td><td>项目名称</td><td><input class="finp" value="1" placeholder="请输入"></td></tr>
+                                        <tr><td>2</td><td>需求名称</td><td><input class="finp" value="1" placeholder="请输入"></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="exp-card">
+                                <div class="exp-card-label">填写人员 (0/1)</div>
+                                <table class="inline-table">
+                                    <thead><tr><th>填写人</th><th>状态</th><th>提交时间</th></tr></thead>
+                                    <tbody><tr><td>应超越</td><td>待处理</td><td>—</td></tr></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="exp-foot">
+                            <div style="display:flex;gap:8px">
+                                <button class="tp-btn" onclick="event.stopPropagation()">💾 暂存草稿</button>
+                                <button class="tp-btn dark" onclick="event.stopPropagation()">✓ 提交</button>
+                            </div>
+                            <button class="tp-btn" onclick="event.stopPropagation();toggleExpand('todo-exp')">收起</button>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="page" id="page-publish">
+    <div class="table-page">
+        <div class="tp-header">
+            <div class="tp-title">
+                <span class="tp-sub">PUBLISHED</span>
+                <h2>我的发布</h2>
+            </div>
+        </div>
+        <div class="stats-strip">
+            <div class="stat-cell"><div class="stat-num or">1</div><div class="stat-lbl">已发布</div></div>
+            <div class="stat-cell"><div class="stat-num zero">0</div><div class="stat-lbl">逾期</div></div>
+            <div class="stat-cell"><div class="stat-num gr">0</div><div class="stat-lbl">已完成</div></div>
+            <div class="stat-cell"><div class="stat-num zero">0</div><div class="stat-lbl">本周截止</div></div>
+        </div>
+        <div class="tp-toolbar">
+            <div class="tp-search"><input type="text" placeholder="搜索任务名称..."></div>
+            <button class="tp-btn">最新创建 ▾</button>
+        </div>
+        <table class="tp-table">
+            <thead><tr><th style="width:36px">#</th><th>任务名称</th><th style="width:70px">类型</th><th style="width:60px">模式</th><th style="width:50px">节点</th><th style="width:50px">字段</th><th style="width:90px">已填写</th><th style="width:100px">创建时间</th><th style="width:80px">操作</th></tr></thead>
+            <tbody>
+                <tr onclick="toggleExpand('pub-exp')">
+                    <td>1</td><td><strong>需求收集</strong></td>
+                    <td><span class="tag flow">流程型</span></td>
+                    <td><span class="tag once">一次性</span></td><td>1</td><td>2</td>
+                    <td>0 / 2 人</td><td>2026/07/04</td>
+                    <td><span class="tag flow" style="cursor:pointer">查看实例</span></td>
+                </tr>
+                <tr class="expand-row" id="pub-exp">
+                    <td colspan="9">
+                        <div class="expand-detail">
+                            <div class="exp-card">
+                                <div class="exp-card-label">字段列表</div>
+                                <table class="inline-table">
+                                    <thead><tr><th>#</th><th>字段</th><th>值</th><th>状态</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>1</td><td>项目名称</td><td>可选</td><td>编辑中</td></tr>
+                                        <tr><td>2</td><td>需求名称</td><td>可选</td><td>编辑中</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="exp-foot">
+                            <div style="display:flex;gap:8px">
+                                <button class="tp-btn">⇲ 查看数据</button>
+                                <button class="tp-btn">🗑 删除</button>
+                            </div>
+                            <button class="tp-btn" onclick="event.stopPropagation();toggleExpand('pub-exp')">收起</button>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="page" id="page-all">
+    <div class="table-page">
+        <div class="tp-header">
+            <div class="tp-title">
+                <span class="tp-sub">ALL TASKS</span>
+                <h2>全部任务</h2>
+            </div>
+        </div>
+        <div class="stats-strip">
+            <div class="stat-cell"><div class="stat-num or">2</div><div class="stat-lbl">总计</div></div>
+            <div class="stat-cell"><div class="stat-num bl">1</div><div class="stat-lbl">进行中</div></div>
+            <div class="stat-cell"><div class="stat-num gr">0</div><div class="stat-lbl">已完成</div></div>
+            <div class="stat-cell"><div class="stat-num zero">0</div><div class="stat-lbl">逾期</div></div>
+        </div>
+        <div class="tp-toolbar">
+            <div class="tp-search"><input type="text" placeholder="搜索任务..."></div>
+            <button class="tp-btn">类型 ▾</button>
+            <button class="tp-btn">状态 ▾</button>
+        </div>
+        <table class="tp-table">
+            <thead><tr><th style="width:36px">#</th><th>任务名称</th><th style="width:90px">类型</th><th style="width:90px">模式</th><th style="width:80px">状态</th><th style="width:100px">负责人</th><th style="width:140px">操作</th></tr></thead>
+            <tbody>
+                <tr><td>1</td><td><strong>需求收集</strong></td><td><span class="tag flow">流程型</span></td><td><span class="tag once">一次性</span></td><td>进行中</td><td>应超越</td><td><span class="tag flow" style="cursor:pointer">查看</span></td></tr>
+                <tr><td>2</td><td><strong>系统部署计划</strong></td><td><span class="tag multi">项目型</span></td><td><span class="tag once">一次性</span></td><td>待启动</td><td>靳三永</td><td><span class="tag flow" style="cursor:pointer">查看</span></td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+</main>
+
+<script>
+(function(){
+    var links=document.querySelectorAll('.sn-link[data-page]');
+    var pages=document.querySelectorAll('.page');
+    function switchPage(p){
+        links.forEach(function(l){l.classList.remove('active')});
+        document.querySelectorAll('.sn-link[data-page="'+p+'"]').forEach(function(m){m.classList.add('active')});
+        pages.forEach(function(pg){pg.classList.remove('active')});
+        var target=document.getElementById('page-'+p);
+        if(target)target.classList.add('active');
+    }
+    links.forEach(function(link){
+        link.addEventListener('click',function(){switchPage(this.getAttribute('data-page'))});
+    });
+    document.querySelectorAll('.sn-action-link[data-page]').forEach(function(btn){
+        btn.addEventListener('click',function(){switchPage(this.getAttribute('data-page'))});
+    });
+})();
+function toggleExpand(id){document.getElementById(id).classList.toggle('open');}
+</script>
+</body>
+</html>

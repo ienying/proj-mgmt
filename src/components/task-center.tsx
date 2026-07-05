@@ -1465,7 +1465,7 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
                                         {(item.form_columns || []).map((c: any) => (
                                           <th key={c.name} className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] border-b border-[#0f2840] font-semibold whitespace-nowrap" style={{backgroundColor:"#fff"}}>{c.label || c.name}</th>
                                         ))}
-                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] border-b border-[#0f2840] font-semibold whitespace-nowrap" style={{backgroundColor:"#fff"}}>提交时间</th>
+                                        <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] border-b border-[#0f2840] font-semibold whitespace-nowrap" style={{position:"sticky",right:80,backgroundColor:"#fff",zIndex:10}}>提交时间</th>
                                         <th className="text-left py-2 px-3 text-[9px] text-[#7b8fa1] uppercase tracking-[1px] border-b border-[#0f2840] font-semibold whitespace-nowrap" style={{position:"sticky",right:-2,backgroundColor:"#fff",zIndex:20,boxShadow:"-4px 0 8px -2px rgba(0,0,0,0.3)",borderLeft:"2px solid #0f2840",paddingLeft:14,paddingRight:14}}>操作</th>
                                       </tr>
                                     </thead>
@@ -1491,7 +1491,7 @@ export default function TaskCenter({ currentUser }: TaskCenterProps) {
                                                 : <span className="text-[#7b8fa1] italic">—</span>}
                                             </td>
                                           ))}
-                                          <td className="py-2 px-3 text-[11px] text-[#3d5468] border-b border-[#d5dfe8] whitespace-nowrap">
+                                          <td className="py-2 px-3 text-[11px] text-[#3d5468] border-b border-[#d5dfe8] whitespace-nowrap" style={{position:"sticky",right:80,backgroundColor:"#f4f7fb",zIndex:10}}>
                                             {inst.status === "completed" && inst.node_history?.length > 0
                                               ? new Date(inst.node_history[inst.node_history.length - 1].submitted_at).toLocaleString("zh-CN") : "—"}
                                           </td>
