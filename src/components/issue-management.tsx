@@ -209,6 +209,8 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
     category_id: undefined as string | undefined,
     sub_category_id: undefined as string | undefined,
     product_module_id: undefined as string | undefined,
+    product_module_ids: [] as string[],
+    product_module_names: [] as string[],
     is_major: false,
     urgency_id: undefined as string | undefined,
     warranty_status_id: undefined as string | undefined,
@@ -255,7 +257,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         fetch("/api/issue-dicts/urgency"),
         fetch("/api/issue-dicts/warranty"),
         fetch("/api/users"),
-        fetch("/api/dicts"),
+        fetch("/api/dicts?type=product_module_types"),
         fetch("/api/projects"),
       ]);
       if (catRes.ok) { const d = await catRes.json(); setCategories(d.data || []); }
@@ -271,9 +273,18 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
       if (modRes.ok) {
         const d = await modRes.json();
         const modList = d.product_modules || d.data || [];
-        setProductModules(modList.map((m: Record<string, unknown>) => ({
-          id: m.id as string, module_name: m.module_name as string, product_name: m.product_name as string || "", category: m.category as string || "",
-        })));
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        setProductModules(modList
+          .filter((m: Record<string, unknown>) => {
+            const name = String(m.module_name || "");
+            return name.trim() && !uuidPattern.test(name.trim());
+          })
+          .map((m: Record<string, unknown>) => ({
+            id: m.id as string,
+            module_name: (m.module_name as string) || "",
+            product_name: (m.product_name as string) || "",
+            category: uuidPattern.test(String(m.category || "")) ? "" : (m.category as string) || "",
+          })));
       }
       if (projRes.ok) {
         const d = await projRes.json();
@@ -430,6 +441,8 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
       notify_users: [],
       category_id: undefined, sub_category_id: undefined,
       product_module_id: undefined,
+      product_module_ids: [],
+      product_module_names: [],
       is_major: false, urgency_id: undefined, warranty_status_id: undefined,
       description: "", is_first_report: true, has_similar_history: false,
       remarks: "", expected_handle_time: "",
@@ -442,7 +455,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
     if (!form.project_id && !form.project_name.trim()) { alert("请选择所属项目"); return; }
     if (!form.handler_id) { alert("请选择指定处理人"); return; }
     if (!form.category_id && !form.sub_category_id) { alert("请选择问题类别"); return; }
-    if (!form.product_module_id) { alert("请选择对应产品模块"); return; }
+    if (form.product_module_ids.length === 0 && !form.product_module_id) { alert("请选择对应产品模块"); return; }
     if (!form.urgency_id) { alert("请选择紧急程度"); return; }
 
     try {
@@ -459,7 +472,9 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         handler_name: form.handler_name || null,
         handler_phone: form.handler_phone || null,
         category_id: categoryId,
-        product_module_id: form.product_module_id || null,
+        product_module_id: form.product_module_ids.length > 0 ? form.product_module_ids[0] : (form.product_module_id || null),
+        product_module_ids: form.product_module_ids.length > 0 ? form.product_module_ids : (form.product_module_id ? [form.product_module_id] : []),
+        product_module_names: form.product_module_names.length > 0 ? form.product_module_names : [],
         is_major: form.is_major,
         urgency_id: form.urgency_id,
         warranty_status_id: form.warranty_status_id || null,
@@ -511,7 +526,36 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
     }
   };
 
-  // 状态操作
+  // 不需弹窗的直接操作（如：开始处理）
+  const handleDirectAction = async (type: string) => {
+    if (!selectedIssue) return;
+    try {
+      const body: Record<string, string> = {
+        status: type === "process" ? "processing" : selectedIssue.status,
+        action_type: type,
+        operator_id: currentUser.id,
+        operator_name: currentUser.name,
+        comment: "",
+      };
+      const res = await fetch(`/api/issues/${selectedIssue.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        await Promise.all([loadIssues(), loadRecords()]);
+        if (result.data) setSelectedIssue(result.data);
+      } else {
+        const err = await res.json();
+        alert("操作失败: " + (err.error || "未知错误"));
+      }
+    } catch (e) {
+      alert("操作失败: " + String(e));
+    }
+  };
+
+  // 状态操作（需弹窗）
   const handleAction = async () => {
     if (!selectedIssue) return;
     try {
@@ -643,7 +687,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                 )}
                 {issue.status === "accepted" && (
                   <Button size="sm" variant="outline" className="h-6 text-xs rounded-none"
-                    onClick={() => { setSelectedIssue(issue); setActionType("process"); setShowActionDialog(true); }}>
+                    onClick={() => { setSelectedIssue(issue); handleDirectAction("process"); }}>
                     处理
                   </Button>
                 )}
@@ -969,7 +1013,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                   <h3 className="text-sm font-bold text-black">问题现象详细描述 <span className="text-red-500 text-xs">*</span></h3>
                 </div>
                 <div className="min-h-[350px] border border-gray-200 rounded-none">
-                  <RichTextEditor value={form.description} onChange={v => setForm(f => ({ ...f, description: v }))}
+                  <RichTextEditor className="!rounded-none" value={form.description} onChange={v => setForm(f => ({ ...f, description: v }))}
                     placeholder="什么时候开始、做了什么操作、出现什么报错、是否多人受影响" />
                 </div>
               </section>
@@ -1130,7 +1174,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                   <Button size="sm" className="rounded-none" onClick={() => { setSelectedIssue(si); setActionType("accept"); setShowActionDialog(true); setShowDetailDialog(false); }}>受理</Button>
                 )}
                 {si.status === "accepted" && (
-                  <Button size="sm" className="rounded-none" onClick={() => { setSelectedIssue(si); setActionType("process"); setShowActionDialog(true); setShowDetailDialog(false); }}>开始处理</Button>
+                  <Button size="sm" className="rounded-none" onClick={() => { setSelectedIssue(si); handleDirectAction("process"); setShowDetailDialog(false); }}>开始处理</Button>
                 )}
                 {si.status === "processing" && (
                   <>
@@ -1202,7 +1246,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
             />
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="mt-[10px]">
           <Button variant="outline" className="rounded-none" onClick={() => setShowActionDialog(false)}>取消</Button>
           <Button className="rounded-none" onClick={handleConfirm}>确认</Button>
         </DialogFooter>
@@ -1346,18 +1390,18 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         </div>
 
         {/* 基本信息 */}
-        <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b-2 border-[#0f2840] pb-3 mb-4">基本信息</div>
+        <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b border-[#d5dfe8] pb-3 mb-4">基本信息</div>
         <div className="flex flex-col gap-4 mb-4">
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">问题标题 <span className="text-red-500">*</span></label>
-            <input type="text" className="border-2 border-[#0f2840] h-[42px] px-3 text-sm text-[#0d2137] bg-white placeholder:text-[#7b8fa1] focus:outline-none focus:border-[#2563eb] transition-colors"
+            <input type="text" className="border border-[#d5dfe8] h-[42px] px-3 text-sm text-[#0d2137] bg-white placeholder:text-[#7b8fa1] focus:outline-none focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20 transition-colors"
               placeholder="请输入问题标题" value={form.title}
               onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2 flex flex-col gap-1">
               <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">所属项目</label>
-              <input type="text" className="border-2 border-[#0f2840] h-[42px] px-3 text-sm text-[#0d2137] bg-white placeholder:text-[#7b8fa1] focus:outline-none focus:border-[#2563eb] transition-colors"
+              <input type="text" className="border border-[#d5dfe8] h-[42px] px-3 text-sm text-[#0d2137] bg-white placeholder:text-[#7b8fa1] focus:outline-none focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20 transition-colors"
                 placeholder="输入或选择项目" value={form.project_name}
                 onChange={e => setForm(f => ({ ...f, project_name: e.target.value, project_id: undefined }))} />
             </div>
@@ -1367,7 +1411,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                 const proj = projects.find(p => p.id === v);
                 setForm(f => ({ ...f, project_id: v, project_name: proj?.project_name || "" }));
               }}>
-                <SelectTrigger className="border-2 border-[#0f2840] rounded-none h-[42px] text-sm bg-white"><SelectValue placeholder="选择已有项目" /></SelectTrigger>
+                <SelectTrigger className="!w-full !h-[42px] border border-[#d5dfe8] rounded-none text-sm bg-white focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20"><SelectValue placeholder="选择已有项目" /></SelectTrigger>
                 <SelectContent>
                   {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.project_name}</SelectItem>)}
                 </SelectContent>
@@ -1377,13 +1421,13 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         </div>
 
         {/* 人员与时间 */}
-        <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b-2 border-[#0f2840] pb-3 mb-4">人员与时间</div>
+        <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b border-[#d5dfe8] pb-3 mb-4">人员与时间</div>
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">报修人</label>
             <Popover>
               <PopoverTrigger asChild>
-                <button className="flex h-[42px] w-full items-center justify-between border-2 border-[#0f2840] bg-white px-3 text-sm focus:outline-none focus:border-[#2563eb] transition-colors">
+                <button className="flex h-[42px] w-full items-center justify-between border border-[#d5dfe8] bg-white px-3 text-sm focus:outline-none focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20 transition-colors">
                   <span className={form.reporter_name ? "text-[#0d2137]" : "text-[#7b8fa1]"}>{form.reporter_name || "搜索选择报修人"}</span>
                   <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
                 </button>
@@ -1407,12 +1451,12 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">报修人电话</label>
-            <input type="text" className="border-2 border-[#0f2840] h-[42px] px-3 text-sm text-[#7b8fa1] bg-[#f4f7fb]" readOnly value={form.reporter_phone} />
+            <input type="text" className="border border-[#d5dfe8] h-[42px] px-3 text-sm text-[#7b8fa1] bg-white" readOnly value={form.reporter_phone} />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">报修部门</label>
             <Select value={form.department} onValueChange={v => setForm(f => ({ ...f, department: v }))}>
-              <SelectTrigger className="border-2 border-[#0f2840] rounded-none h-[42px] text-sm bg-white"><SelectValue placeholder="选择部门" /></SelectTrigger>
+              <SelectTrigger className="!w-full !h-[42px] border border-[#d5dfe8] rounded-none text-sm bg-white focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20"><SelectValue placeholder="选择部门" /></SelectTrigger>
               <SelectContent>
                 {departments.map(d => <SelectItem key={d.code} value={d.name}>{d.name}</SelectItem>)}
               </SelectContent>
@@ -1424,7 +1468,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
             <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">指定处理人 <span className="text-red-500">*</span></label>
             <Popover>
               <PopoverTrigger asChild>
-                <button className="flex h-[42px] w-full items-center justify-between border-2 border-[#0f2840] bg-white px-3 text-sm focus:outline-none focus:border-[#2563eb] transition-colors">
+                <button className="flex h-[42px] w-full items-center justify-between border border-[#d5dfe8] bg-white px-3 text-sm focus:outline-none focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20 transition-colors">
                   <span className={form.handler_name ? "text-[#0d2137]" : "text-[#7b8fa1]"}>{form.handler_name || "搜索选择处理人"}</span>
                   <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
                 </button>
@@ -1448,14 +1492,14 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">处理人电话</label>
-            <input type="text" className="border-2 border-[#0f2840] h-[42px] px-3 text-sm text-[#7b8fa1] bg-[#f4f7fb]" readOnly value={form.handler_phone} />
+            <input type="text" className="border border-[#d5dfe8] h-[42px] px-3 text-sm text-[#7b8fa1] bg-white" readOnly value={form.handler_phone} />
           </div>
         </div>
         <div className="flex flex-col gap-1 mb-4">
           <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">告知对象（可多选，对应人待办事项中可查看）</label>
-          <div className="flex flex-wrap gap-2 items-center border-2 border-[#0f2840] p-2 min-h-[42px]">
+          <div className="flex flex-wrap gap-2 items-center border border-[#d5dfe8] p-2 min-h-[42px]">
             {form.notify_users.map(nu => (
-              <span key={nu.id} className="inline-flex items-center gap-1 border border-[#0f2840] text-[#0d2137] text-xs px-2.5 py-1">
+              <span key={nu.id} className="inline-flex items-center gap-1 border border-[#d5dfe8] text-[#0d2137] text-xs px-2.5 py-1">
                 {nu.name}
                 <button type="button" className="hover:text-red-500 ml-0.5" onClick={() => setForm(f => ({ ...f, notify_users: f.notify_users.filter(n => n.id !== nu.id) }))}>×</button>
               </span>
@@ -1485,44 +1529,31 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">问题上报时间</label>
-            <input type="text" className="border-2 border-[#0f2840] h-[42px] px-3 text-sm text-[#7b8fa1] bg-[#f4f7fb]" value={new Date().toLocaleString("zh-CN")} readOnly />
+            <input type="text" className="border border-[#d5dfe8] h-[42px] px-3 text-sm text-[#7b8fa1] bg-white" value={new Date().toLocaleString("zh-CN")} readOnly />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">期望处理时间</label>
-            <input type="datetime-local" className="border-2 border-[#0f2840] h-[42px] px-3 text-sm text-[#0d2137] bg-white focus:outline-none focus:border-[#2563eb] transition-colors"
+            <input type="datetime-local" className="border border-[#d5dfe8] h-[42px] px-3 text-sm text-[#0d2137] bg-white focus:outline-none focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20 transition-colors"
               value={form.expected_handle_time} onChange={e => setForm(f => ({ ...f, expected_handle_time: e.target.value }))} />
           </div>
         </div>
 
         {/* 详细描述 */}
         <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b-2 border-[#0f2840] pb-3 mb-4 mt-6">详细描述</div>
-        <div className="grid grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">问题类别（大类） <span className="text-red-500">*</span></label>
             <Select value={form.category_id} onValueChange={v => setForm(f => ({ ...f, category_id: v, sub_category_id: undefined }))}>
-              <SelectTrigger className="border-2 border-[#0f2840] rounded-none h-[42px] text-sm bg-white"><SelectValue placeholder="选择大类" /></SelectTrigger>
+              <SelectTrigger className="!w-full !h-[42px] border border-[#d5dfe8] rounded-none text-sm bg-white focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20"><SelectValue placeholder="选择大类" /></SelectTrigger>
               <SelectContent>
                 {topCategories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">问题子类</label>
-            {subCategories.length > 0 ? (
-              <Select value={form.sub_category_id} onValueChange={v => setForm(f => ({ ...f, sub_category_id: v }))}>
-                <SelectTrigger className="border-2 border-[#0f2840] rounded-none h-[42px] text-sm bg-white"><SelectValue placeholder="选择子类" /></SelectTrigger>
-                <SelectContent>
-                  {subCategories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            ) : (
-              <input type="text" className="border-2 border-[#0f2840] h-[42px] px-3 text-sm text-[#7b8fa1] bg-[#f4f7fb]" disabled placeholder="请先选择大类" />
-            )}
-          </div>
-          <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">紧急程度 <span className="text-red-500">*</span></label>
             <Select value={form.urgency_id} onValueChange={v => setForm(f => ({ ...f, urgency_id: v }))}>
-              <SelectTrigger className="border-2 border-[#0f2840] rounded-none h-[42px] text-sm bg-white"><SelectValue placeholder="选择" /></SelectTrigger>
+              <SelectTrigger className="!w-full !h-[42px] border border-[#d5dfe8] rounded-none text-sm bg-white focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20"><SelectValue placeholder="选择" /></SelectTrigger>
               <SelectContent>
                 {urgencyList.filter(u => u.is_enabled).map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
               </SelectContent>
@@ -1531,7 +1562,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">保修情况</label>
             <Select value={form.warranty_status_id} onValueChange={v => setForm(f => ({ ...f, warranty_status_id: v }))}>
-              <SelectTrigger className="border-2 border-[#0f2840] rounded-none h-[42px] text-sm bg-white"><SelectValue placeholder="选择" /></SelectTrigger>
+              <SelectTrigger className="!w-full !h-[42px] border border-[#d5dfe8] rounded-none text-sm bg-white focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20"><SelectValue placeholder="选择" /></SelectTrigger>
               <SelectContent>
                 {warrantyList.filter(w => w.is_enabled).map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
               </SelectContent>
@@ -1541,24 +1572,59 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">对应产品模块 <span className="text-red-500">*</span></label>
-            <Select value={form.product_module_id} onValueChange={v => setForm(f => ({ ...f, product_module_id: v }))}>
-              <SelectTrigger className="border-2 border-[#0f2840] rounded-none h-[42px] text-sm bg-white"><SelectValue placeholder="选择产品模块" /></SelectTrigger>
-              <SelectContent>
-                {productModules.map(m => <SelectItem key={m.id} value={m.id}>{m.module_name}{m.product_name ? ` (${m.product_name})` : ""}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <div className="flex flex-wrap gap-1.5 items-center border border-[#d5dfe8] p-2 min-h-[42px]">
+              {form.product_module_ids.map((mid, idx) => {
+                const mod = productModules.find(m => m.id === mid);
+                return (
+                  <span key={mid} className="inline-flex items-center gap-1 border border-[#d5dfe8] text-[#0d2137] text-xs px-2.5 py-1">
+                    {mod?.module_name || mid}
+                    <button type="button" className="hover:text-red-500 ml-0.5" onClick={() => {
+                      setForm(f => ({
+                        ...f,
+                        product_module_ids: f.product_module_ids.filter((_, i) => i !== idx),
+                        product_module_names: f.product_module_names.filter((_, i) => i !== idx),
+                      }));
+                    }}>×</button>
+                  </span>
+                );
+              })}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className="text-xs text-[#7b8fa1] hover:text-[#0d2137] px-1">+ 添加产品模块</button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[320px] p-0 rounded-none" align="start">
+                  <Command>
+                    <CommandInput placeholder="搜索产品模块..." />
+                    <CommandList>
+                      <CommandEmpty>无匹配模块</CommandEmpty>
+                      <CommandGroup>
+                        {productModules.filter(m => m.module_name && !form.product_module_ids.includes(m.id)).map(m => (
+                          <CommandItem key={m.id} value={m.module_name} onSelect={() => {
+                            setForm(f => ({
+                              ...f,
+                              product_module_ids: [...f.product_module_ids, m.id],
+                              product_module_names: [...f.product_module_names, m.module_name],
+                            }));
+                          }}>{m.module_name}{m.product_name ? <span className="ml-2 text-xs text-[#7b8fa1]">{m.product_name}</span> : ""}{m.category ? <span className="ml-2 text-xs text-[#7b8fa1]">· {m.category}</span> : ""}</CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">是否重大问题</label>
             <div className="flex h-[42px]">
               <button
                 type="button"
-                className={`px-8 border-2 border-[#0f2840] text-sm font-semibold transition-all ${!form.is_major ? "bg-[#0d2137] text-white border-[#0d2137]" : "bg-white text-[#3d5468] hover:bg-[#f4f7fb]"}`}
+                className={`px-8 border border-[#d5dfe8] text-sm font-semibold transition-all ${!form.is_major ? "bg-gray-400 text-white border-gray-400" : "bg-white text-[#3d5468] hover:bg-gray-50"}`}
                 onClick={() => setForm(f => ({ ...f, is_major: false }))}
               >否</button>
               <button
                 type="button"
-                className={`px-8 border-2 border-l-0 border-[#0f2840] text-sm font-semibold transition-all ${form.is_major ? "bg-[#0d2137] text-white border-[#0d2137]" : "bg-white text-[#3d5468] hover:bg-[#f4f7fb]"}`}
+                className={`px-8 border border-l-0 border-[#d5dfe8] text-sm font-semibold transition-all ${form.is_major ? "bg-red-500 text-white border-red-500" : "bg-white text-[#3d5468] hover:bg-gray-50"}`}
                 onClick={() => setForm(f => ({ ...f, is_major: true }))}
               >是</button>
             </div>
@@ -1566,8 +1632,8 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         </div>
         <div className="flex flex-col gap-1 mb-4">
           <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">问题现象详细描述 <span className="text-red-500">*</span></label>
-          <div className="border-2 border-[#0f2840] min-h-[200px]">
-            <RichTextEditor value={form.description} onChange={v => setForm(f => ({ ...f, description: v }))}
+          <div className="border border-[#d5dfe8] min-h-[200px]">
+            <RichTextEditor className="!rounded-none" value={form.description} onChange={v => setForm(f => ({ ...f, description: v }))}
               placeholder="请详细描述问题现象、复现步骤、影响范围等..." />
           </div>
         </div>
@@ -1575,11 +1641,11 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         {/* 辅助举证 */}
         <div className="flex flex-col gap-1 mb-4">
           <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">辅助举证</label>
-          <div className="border-2 border-dashed border-[#d5dfe8] bg-[#f4f7fb] p-4 flex items-center gap-3"
+          <div className="border border-dashed border-[#d5dfe8] bg-[#f4f7fb] p-4 flex items-center gap-3"
             onClick={() => fileInputRef.current?.click()}>
-            <span className="text-xs text-[#7b8fa1] flex-1">📎 问题截图 / 照片 / 视频上传，提升处理效率</span>
-            <button type="button" className="px-3 py-1.5 border-2 border-[#0f2840] bg-white text-[11px] font-semibold text-[#3d5468] hover:bg-[#0d2137] hover:text-white transition-colors">选择文件</button>
-            <input ref={fileInputRef} type="file" className="hidden" multiple accept="image/*,video/*"
+            <span className="text-xs text-[#7b8fa1] flex-1">📎 支持图片 / 视频 / 压缩包（zip, rar, 7z, tar, gz），提升处理效率</span>
+            <button type="button" className="px-3 py-1.5 border border-[#d5dfe8] bg-white text-[11px] font-semibold text-[#3d5468] hover:bg-[#0d2137] hover:text-white transition-colors">选择文件</button>
+            <input ref={fileInputRef} type="file" className="hidden" multiple accept="image/*,video/*,.zip,.rar,.7z,.tar,.gz,.tgz"
               onChange={e => {
                 const files = Array.from(e.target.files || []);
                 setFormFiles(prev => [...prev, ...files]);
@@ -1589,7 +1655,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
           {formFiles.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
               {formFiles.map((f, idx) => (
-                <div key={idx} className="flex items-center gap-1.5 border-2 border-[#0f2840] px-3 py-1.5 text-xs">
+                <div key={idx} className="flex items-center gap-1.5 border border-[#d5dfe8] px-3 py-1.5 text-xs">
                   {f.type.startsWith("image") ? <ImageIcon className="w-3 h-3 text-[#2563eb]" /> : <Video className="w-3 h-3 text-purple-400" />}
                   <span className="max-w-[120px] truncate text-[#0d2137]">{f.name}</span>
                   <X className="w-3 h-3 cursor-pointer text-[#7b8fa1] hover:text-red-500" onClick={() => setFormFiles(prev => prev.filter((_, i) => i !== idx))} />
@@ -1605,7 +1671,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
             className="px-6 py-2.5 border-2 border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:border-[#2563eb] transition-colors"
             onClick={handleSubmit}
           >提交工单</button>
-          <button className="px-6 py-2.5 border-2 border-[#0f2840] bg-white text-[#3d5468] text-xs font-bold uppercase tracking-[1px] hover:bg-[#0d2137] hover:text-white transition-colors">存为草稿</button>
+          <button className="px-6 py-2.5 border border-[#d5dfe8] bg-white text-[#3d5468] text-xs font-bold uppercase tracking-[1px] hover:bg-[#0d2137] hover:text-white transition-colors">存为草稿</button>
           <button
             className="px-6 py-2.5 text-xs font-bold uppercase tracking-[1px] text-[#7b8fa1] hover:text-[#0d2137] transition-colors"
             onClick={() => { resetForm(); setActiveTab("dashboard"); }}
@@ -1952,7 +2018,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         </div>
 
         {/* 基本信息 */}
-        <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b-2 border-[#0f2840] pb-3 mb-4">基本信息</div>
+        <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b border-[#d5dfe8] pb-3 mb-4">基本信息</div>
         <div className="grid grid-cols-2 gap-x-6 gap-y-4 mb-6">
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-[#7b8fa1] uppercase tracking-[1px]">上报时间</label>
@@ -2012,10 +2078,11 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         {/* 处理过程（处理人填写） */}
         {si.status === "processing" && si.handler_id === currentUser.id && (
           <div className="mt-6">
-            <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b-2 border-[#0f2840] pb-3 mb-4">处理过程记录</div>
+            <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b border-[#d5dfe8] pb-3 mb-4">处理过程记录</div>
             <p className="text-[11px] text-[#7b8fa1] mb-2">记录你的处理步骤、排查方法和解决方案，完成后可发布到信息广场</p>
-            <div className="min-h-[200px] border-2 border-[#0f2840] mb-3">
+            <div className="min-h-[200px] border border-[#d5dfe8] mb-3">
               <RichTextEditor
+                className="!rounded-none"
                 value={processingNotes}
                 onChange={setProcessingNotes}
                 placeholder="详细记录处理过程：排查了哪些问题、尝试了什么方法、最终如何解决的..."
@@ -2033,6 +2100,10 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                   });
                   if (res.ok) {
                     toast.success("处理过程已保存");
+                    // 同步刷新列表和当前查看的工单
+                    await loadIssues();
+                    // 更新当前查看的工单对象，使处理过程立即可见
+                    setSelectedIssue(prev => prev ? { ...prev, processing_notes: processingNotes } as Issue : prev);
                   } else {
                     alert("保存失败");
                   }
@@ -2049,11 +2120,18 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
           </div>
         )}
 
-        {/* 已保存的处理过程（非处理人查看） */}
-        {(si.status === "completed" || si.status === "closed" || si.handler_id !== currentUser.id) && (si as any).processing_notes && (
+        {/* 已保存的处理过程（工单完结后始终展示） */}
+        {(si.status === "completed" || si.status === "closed") && ((si as any).processing_notes || processingNotes) && (
           <div className="mt-6">
-            <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b-2 border-[#0f2840] pb-3 mb-4">处理过程记录</div>
-            <div className="border-2 border-[#0f2840] p-4 prose prose-sm max-w-none text-[#0d2137]" dangerouslySetInnerHTML={{ __html: (si as any).processing_notes }} />
+            <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b border-[#d5dfe8] pb-3 mb-4">处理过程记录</div>
+            <div className="border border-[#d5dfe8] p-4 prose prose-sm max-w-none text-[#0d2137]" dangerouslySetInnerHTML={{ __html: (si as any).processing_notes || processingNotes }} />
+          </div>
+        )}
+        {/* 非处理人查看时也展示 */}
+        {si.status !== "completed" && si.status !== "closed" && si.handler_id !== currentUser.id && ((si as any).processing_notes || processingNotes) && (
+          <div className="mt-6">
+            <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b border-[#d5dfe8] pb-3 mb-4">处理过程记录</div>
+            <div className="border border-[#d5dfe8] p-4 prose prose-sm max-w-none text-[#0d2137]" dangerouslySetInnerHTML={{ __html: (si as any).processing_notes || processingNotes }} />
           </div>
         )}
 
@@ -2079,27 +2157,16 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
           </>
         )}
 
-        {/* 操作按钮 */}
-        {si.status !== "completed" && si.status !== "closed" && (
+        {/* 操作按钮 - 仅处理人可见 */}
+        {si.status !== "completed" && si.status !== "closed" && si.handler_id === currentUser.id && (
           <div className="flex gap-2.5 mt-7 border-t-2 border-[#d5dfe8] pt-6">
             {si.status === "pending" && (
-              <>
-                <button className="px-6 py-2.5 border-2 border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:border-[#2563eb] transition-colors"
-                  onClick={() => { setActionType("accept"); setShowActionDialog(true); }}>受理</button>
-                <button className="px-6 py-2.5 border-2 border-red-500 text-red-500 bg-white text-xs font-bold uppercase tracking-[1px] hover:bg-red-500 hover:text-white transition-colors"
-                  onClick={() => {
-                    if (confirm(`确定要删除工单「${si.title}」吗？此操作不可恢复。`)) {
-                      fetch(`/api/issues/${si.id}`, { method: "DELETE" }).then(r => {
-                        if (r.ok) { toast.success("工单已删除"); setActiveTab("dashboard"); loadIssues(); }
-                        else alert("删除失败");
-                      });
-                    }
-                  }}>删除</button>
-              </>
+              <button className="px-6 py-2.5 border-2 border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:border-[#2563eb] transition-colors"
+                onClick={() => { setActionType("accept"); setShowActionDialog(true); }}>受理</button>
             )}
             {si.status === "accepted" && (
               <button className="px-6 py-2.5 border-2 border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:border-[#2563eb] transition-colors"
-                onClick={() => { setActionType("process"); setShowActionDialog(true); }}>开始处理</button>
+                onClick={() => handleDirectAction("process")}>开始处理</button>
             )}
             {si.status === "processing" && (
               <>
@@ -2121,6 +2188,22 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
               <button className="px-6 py-2.5 border-2 border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:border-[#2563eb] transition-colors"
                 onClick={() => { setActionType("reopen"); setShowActionDialog(true); }}>重新打开</button>
             )}
+          </div>
+        )}
+        {/* 返回和删除按钮 - 始终可见 */}
+        {(si.status !== "completed" && si.status !== "closed") && (
+          <div className="flex gap-2.5 mt-2">
+            {si.status === "pending" && si.creator_id === currentUser.id && (
+              <button className="px-6 py-2.5 border-2 border-red-500 text-red-500 bg-white text-xs font-bold uppercase tracking-[1px] hover:bg-red-500 hover:text-white transition-colors"
+                onClick={() => {
+                  if (confirm(`确定要删除工单「${si.title}」吗？此操作不可恢复。`)) {
+                    fetch(`/api/issues/${si.id}`, { method: "DELETE" }).then(r => {
+                      if (r.ok) { toast.success("工单已删除"); setActiveTab("dashboard"); loadIssues(); }
+                      else alert("删除失败");
+                    });
+                  }
+                }}>删除</button>
+            )}
             <button className="px-6 py-2.5 text-xs font-bold uppercase tracking-[1px] text-[#7b8fa1] hover:text-[#0d2137] transition-colors"
               onClick={() => setActiveTab("dashboard")}>返回</button>
           </div>
@@ -2130,14 +2213,10 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
             <button
               className="px-6 py-2.5 border-2 border-[#0d9488] bg-[#0d9488] text-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#0d9488]/80 transition-colors"
               onClick={async () => {
-                // 预填发布内容：问题描述 + 处理过程
-                const descText = si.description ? si.description.replace(/<[^>]*>/g, "") : "";
-                // 从处理记录中提取 comment
-                const processComments = issueRecords
-                  .filter(r => r.comment && (r.action_type === "complete" || r.action_type === "process" || r.action_type === "note"))
-                  .map(r => r.comment)
-                  .join("\n\n");
-                const combined = `## 问题描述\n\n${descText}\n\n## 处理过程\n\n${processComments || "详见处理流水"}`;
+                // 预填发布内容：问题描述（HTML） + 处理过程记录（富文本HTML）
+                const descHtml = si.description || "";
+                const processHtml = processingNotes || (si as any).processing_notes || "";
+                const combined = `${descHtml}${processHtml ? `<hr/><h2>处理过程记录</h2>${processHtml}` : ""}`;
                 setPublishTitle(si.title);
                 setPublishContent(combined);
                 setPublishCategory("");
@@ -2209,6 +2288,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
             <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px] mb-1.5 block">发布内容（可二次编辑）</label>
             <div className="min-h-[250px] border-2 border-[#0f2840]">
               <RichTextEditor
+                className="!rounded-none"
                 value={publishContent}
                 onChange={setPublishContent}
                 placeholder="编辑你要发布的内容..."

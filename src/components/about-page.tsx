@@ -1831,8 +1831,39 @@ function GuideContent({ onNavigate }: { onNavigate: (viewId: string) => void }) 
             </div>
             <div className="flex items-start gap-2">
               <div className="w-5 h-5 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-xs shrink-0">3</div>
-              <span>工单流转：<strong>待受理 → 处理中 → 已完结/已驳回 → 已关闭</strong></span>
+              <span>工单流转：<strong>发起 → 待受理 → 已受理 → 处理中 → 完结/驳回/转交</strong></span>
             </div>
+          </div>
+
+          {/* 流转操作说明表 */}
+          <div className="mt-4 border border-gray-200 overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-left px-3 py-2 font-semibold text-gray-700">操作</th>
+                  <th className="text-left px-3 py-2 font-semibold text-gray-700">弹窗</th>
+                  <th className="text-left px-3 py-2 font-semibold text-gray-700">意见/备注</th>
+                  <th className="text-left px-3 py-2 font-semibold text-gray-700">实际用途</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { op: "受理", dialog: "有弹窗", note: "处理意见（可选）", usage: "我接了，大概什么方向" },
+                  { op: "开始处理", dialog: "无弹窗", note: "无", usage: "直接进入处理状态，不废话" },
+                  { op: "处理中", dialog: "处理过程记录", note: "富文本编辑器", usage: "详细写排查过程、解决方案" },
+                  { op: "完结", dialog: "有弹窗", note: "处理意见", usage: "怎么解决的、需要注意什么" },
+                  { op: "驳回", dialog: "有弹窗", note: "驳回理由（必填）", usage: "为什么打回去" },
+                  { op: "转交", dialog: "有弹窗", note: "处理意见", usage: "为什么要转、接手的人注意什么" },
+                ].map((r, i) => (
+                  <tr key={i} className={`border-b border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-gray-50/50"}`}>
+                    <td className="px-3 py-2 font-medium text-gray-900">{r.op}</td>
+                    <td className="px-3 py-2 text-gray-600">{r.dialog}</td>
+                    <td className="px-3 py-2 text-gray-600">{r.note}</td>
+                    <td className="px-3 py-2 text-gray-600">{r.usage}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-2">
