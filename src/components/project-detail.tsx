@@ -120,6 +120,7 @@ interface ProjectDetailProps {
   projectTypes: { code: string; name: string }[];
   projectStages: { code: string; name: string }[];
   onBack: () => void;
+  onSwitchLayout?: (mode: "management" | "stage") => void;
 }
 
 interface ColumnConfig {
@@ -130,7 +131,14 @@ interface ColumnConfig {
   required: boolean;
   readonly?: boolean;
   options?: string[];
-  quick_inputs?: string[]; // 文本类型的快捷语列表
+  data_source?: string;
+  allow_custom?: boolean;
+  calc_left_col?: string;
+  calc_operator?: string;
+  calc_right_col?: string;
+  calc_sum?: boolean;
+  calc_format?: string;
+  quick_inputs?: string[];
   multiple?: boolean;
   display_mode?: "dropdown" | "checkbox" | "project" | "system";
   max_size?: string; // 视频最大文件大小: "100MB" / "500MB" / "1GB"
@@ -336,6 +344,7 @@ export function ProjectDetail({
   projectTypes,
   projectStages,
   onBack,
+  onSwitchLayout,
 }: ProjectDetailProps) {
   const [activeModule, setActiveModule] = useState("scope");
   
@@ -510,6 +519,22 @@ export function ProjectDetail({
   const [editValue, setEditValue] = useState<string>("");
   // 产品模块列表（系统产品模块名称，用于采购模块选择类型）
   const [productModuleNames, setProductModuleNames] = useState<string[]>([]);
+  const [dictCache, setDictCache] = useState<Record<string, string[]>>({});
+  const getOpts = (col: ColumnConfig) => {
+    const s = col.data_source && col.data_source !== "custom" ? (dictCache[col.data_source] || []) : [];
+    const c = col.options || [];
+    // 懒加载字典
+    if (col.data_source && col.data_source !== "custom" && !dictCache[col.data_source]) {
+      const m: Record<string, string> = { project_types: "project_types", project_stages: "project_stages", project_statuses: "project_statuses", todo_statuses: "todo_statuses", customer_types: "customer_types", construction_units: "construction_units", member_role_types: "member_role_types", deployment_modes: "deployment_modes", departments: "departments", procurement_system: "product_module_types", procurement_project: "product_module_types" };
+      const api = m[col.data_source];
+      if (api) {
+        fetch(`/api/dicts?type=${api}`).then(r => r.json()).then(d => {
+          setDictCache(prev => ({ ...prev, [col.data_source!]: (d.data || []).map((i: any) => i.name || i.module_name || i.product_name || i.code) }));
+        }).catch(() => {});
+      }
+    }
+    return s.length > 0 ? (col.allow_custom ? [...new Set([...s, ...c])] : s) : c;
+  };
   // 树形视图展开状态
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(new Set());
   // 树形视图迷你表格行展开详情
@@ -717,7 +742,7 @@ export function ProjectDetail({
             id: d.id as string,
             table_code: d.table_code as string,
             table_name: d.table_name as string,
-            module_codes: (d.module_type as string[]) || ["scope"],
+            module_codes: (d.module_type as string[]) || [],
             allow_add: d.allow_add as boolean | undefined,
             readonly_mode: d.readonly_mode as ("and" | "or") | undefined,
             columns_config: dedupeColumnsByName(d.columns_config as ColumnConfig[]).map(col => ({ ...col, key: col.key || col.name })),
@@ -1112,9 +1137,32 @@ export function ProjectDetail({
   };
 
   // 渲染单元格显示值（非编辑态）
-  const renderCellValue = (col: ColumnConfig, value: unknown) => {
+  const computeCalc = (col: ColumnConfig, row?: Record<string, unknown>, allRows?: Record<string, unknown>[]) => {
+    if (col.type !== "calc" || !col.calc_left_col || !col.calc_right_col) return null;
+    if (col.calc_sum && allRows) {
+      let sum = 0;
+      for (const r of allRows) {
+        const l = Number(r[col.calc_left_col] ?? 0); const rv = Number(r[col.calc_right_col] ?? 0);
+        sum += col.calc_operator === "-" ? (l - rv) : col.calc_operator === "*" ? (l * rv) : col.calc_operator === "/" ? (rv ? l / rv : 0) : (l + rv);
+      }
+      return sum;
+    }
+    if (!row) return null;
+    const l = Number(row[col.calc_left_col] ?? 0); const r = Number(row[col.calc_right_col] ?? 0);
+    return col.calc_operator === "-" ? (l - r) : col.calc_operator === "*" ? (l * r) : col.calc_operator === "/" ? (r ? l / r : 0) : (l + r);
+  };
+
+  const renderCellValue = (col: ColumnConfig, value: unknown, row?: Record<string, unknown>) => {
+    if (col.type === "calc") {
+      const result = computeCalc(col, row);
+      if (result !== null) {
+        const formatted = col.calc_format === "currency" ? `¥${result.toLocaleString()}` : col.calc_format === "percent" ? `${result}%` : String(result);
+        return <span className="font-mono text-sm">{formatted}</span>;
+      }
+      return <span className="text-slate-400">-</span>;
+    }
     const strValue = String(value ?? "-");
-    if (col.type === "select" && (col.options || []).length > 0) {
+    if (col.type === "select" && getOpts(col).length > 0) {
       return value ? renderSelectTag(strValue) : <span className="text-slate-400">-</span>;
     }
     if (col.type === "multiple_select") {
@@ -1125,7 +1173,7 @@ export function ProjectDetail({
       if (col.multiple) return renderMultiSelectTags(strValue);
       return renderSelectTag(strValue);
     }
-    if (["office", "pdf", "md", "image", "archive"].includes(col.type)) {
+    if (["attachment"].includes(col.type)) {
       return renderFileCellDisplay(String(value ?? ""), col.type);
     }
     if (col.type === "video") {
@@ -1163,9 +1211,9 @@ export function ProjectDetail({
     }
     return (
       <div className="flex items-center gap-1">
-        {col.type === "multiple_select" && (col.options || []).length > 0 ? (
+        {col.type === "multiple_select" && getOpts(col).length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
-            {(col.options || []).map((opt: string) => {
+            {getOpts(col).map((opt: string) => {
               const currentValues: string[] = (() => {
                 if (Array.isArray(editValue)) return editValue;
                 if (typeof editValue === "string" && editValue) return editValue.split(",").map((s: string) => s.trim());
@@ -1188,14 +1236,14 @@ export function ProjectDetail({
               );
             })}
           </div>
-        ) : col.type === "select" && (col.options || []).length > 0 ? (
+        ) : col.type === "select" && getOpts(col).length > 0 ? (
           col.display_mode === "checkbox" ? (
             <RadioGroup
               value={editValue || ""}
               onValueChange={(val) => { setEditValue(val); saveEdit(val); }}
               className="flex flex-wrap gap-1.5"
             >
-              {col.options?.map((opt: string) => (
+              {getOpts(col).map((opt: string) => (
                 <div key={opt} className="flex items-center space-x-1">
                   <RadioGroupItem value={opt} id={`edit_${col.name}_${opt}`} className="h-3.5 w-3.5" />
                   <Label htmlFor={`edit_${col.name}_${opt}`} className="text-xs cursor-pointer">{opt}</Label>
@@ -1208,7 +1256,7 @@ export function ProjectDetail({
                 <SelectValue placeholder="请选择" />
               </SelectTrigger>
               <SelectContent>
-                {col.options?.map((opt: string) => (
+                {getOpts(col).map((opt: string) => (
                   <SelectItem key={opt} value={opt}>
                     {opt}
                   </SelectItem>
@@ -1224,7 +1272,7 @@ export function ProjectDetail({
             projectModules={project.procurement_modules || []}
             systemModules={productModuleNames}
           />
-        ) : ["office", "pdf", "md", "image", "archive"].includes(col.type) ? (
+        ) : ["attachment"].includes(col.type) ? (
           <FileUploadField
             fileType={col.type}
             value={editValue || ""}
@@ -1751,7 +1799,7 @@ export function ProjectDetail({
                 isRowEditing && mc.ring
               )}>
                 {/* 卡片头部：第一个字段 + 操作 */}
-                <div className={cn("px-4 py-2 flex items-center justify-between", mc.header)}>
+                <div className={cn("px-4 py-2 flex items-center justify-between", mc.bg)}>
                   <span className="font-semibold text-sm text-white">
                     {columns[0] ? String(row[columns[0].name] ?? "-") : `记录 ${row.id}`}
                   </span>
@@ -1793,10 +1841,10 @@ export function ProjectDetail({
                             onClick={() => !isReadonly && startEdit(table.table_code, row.id as string, col.name, row[col.name])}
                           >
                             {isReadonly ? (
-                              <span className="text-slate-500">{renderCellValue(col, row[col.name])}</span>
+                              <span className="text-slate-500">{renderCellValue(col, row[col.name], row)}</span>
                             ) : (
                               <span className="flex items-center gap-1 group">
-                                {renderCellValue(col, row[col.name])}
+                                {renderCellValue(col, row[col.name], row)}
                                 <Pencil className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                               </span>
                             )}
@@ -2161,10 +2209,10 @@ export function ProjectDetail({
                               onClick={() => !isReadonly && startEdit(table.table_code, row.id as string, col.name, row[col.name])}
                             >
                               {isReadonly ? (
-                                <span className="text-slate-500">{renderCellValue(col, row[col.name])}</span>
+                                <span className="text-slate-500">{renderCellValue(col, row[col.name], row)}</span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 group">
-                                  {renderCellValue(col, row[col.name])}
+                                  {renderCellValue(col, row[col.name], row)}
                                   <Pencil className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                                 </span>
                               )}
@@ -2400,7 +2448,7 @@ export function ProjectDetail({
         <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: 300 }}>
         {groups.map((group) => (
           <div key={group.label} className="flex-shrink-0 w-72">
-            <div className={cn("px-3 py-2 font-semibold text-sm text-white", mc.header)}>
+            <div className={cn("px-3 py-2 font-semibold text-sm text-white", mc.bg)}>
               {group.label}
               <span className="ml-2 text-xs text-white/70">({group.items.length})</span>
             </div>
@@ -2430,10 +2478,10 @@ export function ProjectDetail({
                               onClick={() => !isReadonly && startEdit(table.table_code, rowId, col.name, row[colKey])}
                             >
                               {isReadonly ? (
-                                renderCellValue(col, row[colKey])
+                                renderCellValue(col, row[colKey], row)
                               ) : (
                                 <span className="group inline-flex items-center gap-1">
-                                  {renderCellValue(col, row[colKey])}
+                                  {renderCellValue(col, row[colKey], row)}
                                   <Pencil className="w-2.5 h-2.5 text-slate-300 opacity-0 group-hover:opacity-100 shrink-0" />
                                 </span>
                               )}
@@ -2868,7 +2916,7 @@ export function ProjectDetail({
         </div>
 
         <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-          <div className={cn("px-6 py-3 font-semibold text-sm text-white", mc.header)}>
+          <div className={cn("px-6 py-3 font-semibold text-sm text-white", mc.bg)}>
             {columns[0] && String(currentRow[columns[0].key] || '记录详情')}
           </div>
           <div className="p-6 space-y-4">
@@ -3870,7 +3918,7 @@ export function ProjectDetail({
     return (
       <div className="flex flex-col h-full">
         {/* 表头 */}
-        <div className={cn("px-4 py-3", mc.header)}>
+        <div className={cn("px-4 py-3", mc.bg)}>
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-3">
               <h4 className="font-semibold text-white flex items-center gap-2">
@@ -3931,6 +3979,17 @@ export function ProjectDetail({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {onSwitchLayout && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onSwitchLayout("stage")}
+                className="text-xs h-7 gap-1 border-[#e8590c] text-[#e8590c] hover:bg-orange-50 hover:text-[#d9480f]"
+              >
+                <GitBranch className="w-3.5 h-3.5" />
+                切换到阶段式布局
+              </Button>
+            )}
             {getStatusBadge(project.status)}
           </div>
         </div>
@@ -4149,9 +4208,9 @@ export function ProjectDetail({
                     );
                   })}
                 </div>
-                {col.type === "multiple_select" && (col.options || []).length > 0 ? (
+                {col.type === "multiple_select" && getOpts(col).length > 0 ? (
                     <div className="flex flex-wrap gap-2">
-                      {(col.options || []).map((opt: string) => {
+                      {getOpts(col).map((opt: string) => {
                         const currentValues: string[] = (() => {
                           const raw = newRowData[col.name];
                           if (Array.isArray(raw)) return raw;
@@ -4176,7 +4235,7 @@ export function ProjectDetail({
                         );
                       })}
                     </div>
-                ) : col.type === "select" && (col.options || []).length > 0 ? (
+                ) : col.type === "select" && getOpts(col).length > 0 ? (
                     col.display_mode === "checkbox" ? (
                       <RadioGroup
                         value={newRowData[col.name] || ""}
@@ -4184,7 +4243,7 @@ export function ProjectDetail({
                         
                         className="flex flex-wrap gap-2"
                       >
-                        {col.options?.map((opt: string) => (
+                        {getOpts(col).map((opt: string) => (
                           <div key={opt} className="flex items-center space-x-1.5">
                             <RadioGroupItem value={opt} id={`${col.name}_${opt}`} />
                             <Label htmlFor={`${col.name}_${opt}`} className="text-sm cursor-pointer">{opt}</Label>
@@ -4201,7 +4260,7 @@ export function ProjectDetail({
                           <SelectValue placeholder={`请选择${col.label || col.name}`} />
                         </SelectTrigger>
                         <SelectContent>
-                          {col.options?.map((opt: string) => (
+                          {getOpts(col).map((opt: string) => (
                             <SelectItem key={opt} value={opt}>
                               {opt}
                             </SelectItem>
@@ -4217,7 +4276,7 @@ export function ProjectDetail({
                     projectModules={project.procurement_modules || []}
                     systemModules={productModuleNames}
                   />
-                ) : ["office", "pdf", "md", "image", "archive"].includes(col.type) ? (
+                ) : ["attachment"].includes(col.type) ? (
                   <FileUploadField
                     fileType={col.type}
                     value={newRowData[col.name] || ""}
