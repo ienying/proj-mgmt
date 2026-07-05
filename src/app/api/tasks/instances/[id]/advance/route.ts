@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
+import crypto from "crypto";
 
 export async function POST(
   request: NextRequest,
@@ -76,8 +77,10 @@ export async function POST(
           return NextResponse.json({ error: "工作流节点不存在" }, { status: 400 });
         }
 
-        // Verify current user is the handler
-        if (currentNode.handler_id !== user_id) {
+        // Verify current user is a handler (check both sequential and parallel)
+        const isParallelNode = currentNode.node_type === "parallel";
+        const handlerIds: string[] = isParallelNode ? (currentNode.handler_ids || []) : [currentNode.handler_id];
+        if (!handlerIds.includes(user_id)) {
           return NextResponse.json({ error: "仅当前节点处理人可提交" }, { status: 403 });
         }
 
@@ -100,25 +103,153 @@ export async function POST(
           await updatePhysRow({});
         }
 
-        // Advance to next node or complete
-        const nextIndex = currentIndex + 1;
-        if (nextIndex >= workflowNodes.length) {
-          // Last node — task complete
+        if (isParallelNode) {
+          // Parallel node: complete this instance, check if all done
           await updateInstance({
             status: "completed",
-            current_node_index: nextIndex,
+            current_node_index: currentIndex,
             node_history: nodeHistory,
           });
+
+          // Check if all parallel instances in the group are done
+          const groupId = inst.parallel_group_id;
+          if (groupId) {
+            const { data: siblings } = await client.rpc("execute_sql", {
+              p_sql: `SELECT * FROM public.task_center_instances WHERE parallel_group_id = '${String(groupId).replace(/'/g, "''")}' AND status != 'completed' AND id != '${String(id).replace(/'/g, "''")}'`,
+            });
+            const pendingSiblings = (siblings as any[]) || [];
+
+            if (pendingSiblings.length === 0) {
+              // All parallel instances done → create summary instance for next node
+              const nextIndex = currentIndex + 1;
+
+              // Aggregate parallel histories
+              const { data: allGroupInstances } = await client.rpc("execute_sql", {
+                p_sql: `SELECT * FROM public.task_center_instances WHERE parallel_group_id = '${String(groupId).replace(/'/g, "''")}'`,
+              });
+              const aggregatedHistory: any[] = [];
+              if (allGroupInstances && Array.isArray(allGroupInstances)) {
+                for (const gi of allGroupInstances) {
+                  const giHistory = gi.node_history || [];
+                  if (Array.isArray(giHistory)) aggregatedHistory.push(...giHistory);
+                }
+              }
+
+              if (nextIndex < workflowNodes.length) {
+                const nextNode = workflowNodes[nextIndex];
+                const summaryGroupId = crypto.randomUUID();
+
+                // Create summary instances (1 per handler if next node is also parallel)
+                if (nextNode.node_type === "parallel" && nextNode.handler_ids?.length > 0) {
+                  for (let hi = 0; hi < nextNode.handler_ids.length; hi++) {
+                    const hid = nextNode.handler_ids[hi];
+                    const hname = nextNode.handler_names?.[hi] || "";
+                    const rowData: Record<string, any> = { project_id: inst.project_id || null, submitted_by: hid };
+                    const { data: physRow } = await client.rpc("dp_insert_generic", {
+                      p_schema: schemaName, p_table: tableName, p_data: rowData,
+                    });
+                    const { data: newInst } = await client.rpc("dp_insert", {
+                      p_table: "public.task_center_instances",
+                      p_data: {
+                        def_id: inst.def_id,
+                        assignee_id: hid, assignee_name: hname,
+                        current_node_id: nextNode.id, current_node_index: nextIndex,
+                        node_history: aggregatedHistory, status: "pending",
+                        project_id: inst.project_id, project_name: inst.project_name,
+                        due_date: inst.due_date, parallel_group_id: summaryGroupId,
+                      },
+                    });
+                    if (newInst && physRow) {
+                      const pid = (physRow as any)?.id;
+                      if (pid) await client.rpc("execute_sql", {
+                        p_sql: `UPDATE ${schemaName}."${tableName}" SET instance_id = '${String((newInst as any).id).replace(/'/g, "''")}' WHERE id = '${String(pid).replace(/'/g, "''")}'`,
+                      });
+                    }
+                  }
+                } else {
+                  // Sequential next node
+                  const rowData: Record<string, any> = { project_id: inst.project_id || null };
+                  const { data: physRow } = await client.rpc("dp_insert_generic", {
+                    p_schema: schemaName, p_table: tableName, p_data: rowData,
+                  });
+                  const { data: newInst } = await client.rpc("dp_insert", {
+                    p_table: "public.task_center_instances",
+                    p_data: {
+                      def_id: inst.def_id,
+                      assignee_id: nextNode.handler_id || null,
+                      assignee_name: nextNode.handler_name || null,
+                      current_node_id: nextNode.id, current_node_index: nextIndex,
+                      node_history: aggregatedHistory, status: "pending",
+                      project_id: inst.project_id, project_name: inst.project_name,
+                      due_date: inst.due_date,
+                    },
+                  });
+                  if (newInst && physRow) {
+                    const pid = (physRow as any)?.id;
+                    if (pid) await client.rpc("execute_sql", {
+                      p_sql: `UPDATE ${schemaName}."${tableName}" SET instance_id = '${String((newInst as any).id).replace(/'/g, "''")}' WHERE id = '${String(pid).replace(/'/g, "''")}'`,
+                    });
+                  }
+                }
+              }
+              // If last node (no next), all parallel instances completed = task done
+            }
+          }
         } else {
-          const nextNode = workflowNodes[nextIndex];
-          await updateInstance({
-            status: "in_progress",
-            current_node_id: nextNode.id,
-            current_node_index: nextIndex,
-            assignee_id: nextNode.handler_id,
-            assignee_name: nextNode.handler_name,
-            node_history: nodeHistory,
-          });
+          // Sequential node: advance to next or complete
+          const nextIndex = currentIndex + 1;
+          if (nextIndex >= workflowNodes.length) {
+            await updateInstance({
+              status: "completed",
+              current_node_index: nextIndex,
+              node_history: nodeHistory,
+            });
+          } else {
+            const nextNode = workflowNodes[nextIndex];
+            if (nextNode.node_type === "parallel" && nextNode.handler_ids?.length > 0) {
+              // Advancing to a parallel node: complete current, create parallel instances
+              await updateInstance({
+                status: "completed",
+                current_node_index: nextIndex,
+                node_history: nodeHistory,
+              });
+              const newGroupId = crypto.randomUUID();
+              for (let hi = 0; hi < nextNode.handler_ids.length; hi++) {
+                const hid = nextNode.handler_ids[hi];
+                const hname = nextNode.handler_names?.[hi] || "";
+                const rowData: Record<string, any> = { project_id: inst.project_id || null, submitted_by: hid };
+                const { data: physRow } = await client.rpc("dp_insert_generic", {
+                  p_schema: schemaName, p_table: tableName, p_data: rowData,
+                });
+                const { data: newInst } = await client.rpc("dp_insert", {
+                  p_table: "public.task_center_instances",
+                  p_data: {
+                    def_id: inst.def_id,
+                    assignee_id: hid, assignee_name: hname,
+                    current_node_id: nextNode.id, current_node_index: nextIndex,
+                    node_history: [], status: "pending",
+                    project_id: inst.project_id, project_name: inst.project_name,
+                    due_date: inst.due_date, parallel_group_id: newGroupId,
+                  },
+                });
+                if (newInst && physRow) {
+                  const pid = (physRow as any)?.id;
+                  if (pid) await client.rpc("execute_sql", {
+                    p_sql: `UPDATE ${schemaName}."${tableName}" SET instance_id = '${String((newInst as any).id).replace(/'/g, "''")}' WHERE id = '${String(pid).replace(/'/g, "''")}'`,
+                  });
+                }
+              }
+            } else {
+              await updateInstance({
+                status: "in_progress",
+                current_node_id: nextNode.id,
+                current_node_index: nextIndex,
+                assignee_id: nextNode.handler_id,
+                assignee_name: nextNode.handler_name,
+                node_history: nodeHistory,
+              });
+            }
+          }
         }
 
         break;
@@ -138,7 +269,10 @@ export async function POST(
           return NextResponse.json({ error: "工作流节点不存在" }, { status: 400 });
         }
 
-        if (currentNode.handler_id !== user_id) {
+        const rejectHandlerIds: string[] = currentNode.node_type === "parallel"
+          ? (currentNode.handler_ids || [])
+          : [currentNode.handler_id];
+        if (!rejectHandlerIds.includes(user_id)) {
           return NextResponse.json({ error: "仅当前节点处理人可驳回" }, { status: 403 });
         }
 
@@ -227,7 +361,10 @@ export async function POST(
           return NextResponse.json({ error: "缺少新处理人ID" }, { status: 400 });
         }
 
-        const isHandler = workflowNodes[currentIndex]?.handler_id === user_id;
+        const curNode = workflowNodes[currentIndex];
+        const isHandler = curNode?.node_type === "parallel"
+          ? (curNode?.handler_ids || []).includes(user_id)
+          : curNode?.handler_id === user_id;
         const isInitiator = d.created_by === user_id;
 
         if (!isHandler && !isInitiator) {

@@ -42,6 +42,7 @@ import {
   Cpu,
   BarChart3,
   X,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -1699,6 +1700,45 @@ function RolePermissionPanel({ users, onUserUpdate }: { users: User[]; onUserUpd
   // 移除成员弹窗
   const [removeMemberOpen, setRemoveMemberOpen] = useState<{ open: boolean; role: string }>({ open: false, role: "" });
   const [removeSelectedIds, setRemoveSelectedIds] = useState<Set<string>>(new Set());
+  // 功能权限开关（AI 助手等）
+  const [featureToggles, setFeatureToggles] = useState<Record<string, boolean>>({});
+
+  // 加载功能权限开关
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch("/api/ai/feature-permissions");
+        if (res.ok) {
+          const json = await res.json();
+          const data = json.data || {};
+          // 合并所有 feature_key 的开关到扁平结构: "role::feature_key" -> boolean
+          const flat: Record<string, boolean> = {};
+          for (const [featureKey, roles] of Object.entries(data) as [string, Record<string, boolean>][]) {
+            for (const [role, enabled] of Object.entries(roles)) {
+              flat[`${role}::${featureKey}`] = enabled;
+            }
+          }
+          setFeatureToggles(flat);
+        }
+      } catch { /* use defaults */ }
+    };
+    load();
+  }, []);
+
+  const handleFeatureToggle = async (role: string, featureKey: string, enabled: boolean) => {
+    const key = `${role}::${featureKey}`;
+    setFeatureToggles((prev) => ({ ...prev, [key]: enabled }));
+    try {
+      await fetch("/api/ai/feature-permissions", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role, feature_key: featureKey, enabled }),
+      });
+    } catch {
+      // 回滚
+      setFeatureToggles((prev) => ({ ...prev, [key]: !enabled }));
+    }
+  };
 
   const roleLabels: Record<string, string> = {
     super_admin: "超级管理员",
@@ -1886,6 +1926,16 @@ function RolePermissionPanel({ users, onUserUpdate }: { users: User[]; onUserUpd
                     {perm}
                   </Badge>
                 ))}
+              </div>
+              {/* 功能权限开关 */}
+              <div className="flex items-center justify-between py-2 mb-2 border-t border-border/30">
+                <span className="text-xs text-gray-600 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" />AI 助手
+                </span>
+                <Switch
+                  checked={featureToggles[`${group.role}::ai_assistant`] ?? (group.role !== "user")}
+                  onCheckedChange={(v) => handleFeatureToggle(group.role, "ai_assistant", v)}
+                />
               </div>
               {/* 操作按钮 */}
               <div className="flex items-center gap-1.5 mt-auto pt-3 border-t border-border/50">

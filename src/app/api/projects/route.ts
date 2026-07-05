@@ -1,6 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
 
+// 兼容 procurement_modules 新旧格式，统一转为 code 字符串数组
+function normalizeModules(modules: unknown): string[] {
+  if (!Array.isArray(modules)) return [];
+  return modules
+    .map((m: unknown) => {
+      if (typeof m === "string") return m;
+      if (m && typeof m === "object") {
+        const obj = m as Record<string, unknown>;
+        return String(obj.code || obj.module_code || "");
+      }
+      return "";
+    })
+    .filter(Boolean);
+}
+
 export async function GET() {
   try {
     const client = await createServerClient();
@@ -13,7 +28,33 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ data: data || [] });
+    // 批量查询所有项目的成员
+    const projects = (data || []) as Array<Record<string, unknown>>;
+    if (projects.length > 0) {
+      // 标准化 procurement_modules
+      for (const p of projects) {
+        (p as Record<string, unknown>).procurement_modules = normalizeModules(p.procurement_modules);
+      }
+
+      const projectIds = projects.map((p) => `'${String(p.id).replace(/'/g, "''")}'`).join(",");
+      const { data: allMembers } = await client.rpc("execute_sql", {
+        p_sql: `SELECT project_id, role_type, name, phone, email FROM design_public.project_members WHERE project_id IN (${projectIds}) ORDER BY project_id`,
+      });
+      const membersByProject = new Map<string, Array<Record<string, unknown>>>();
+      if (Array.isArray(allMembers)) {
+        for (const m of allMembers as Array<Record<string, unknown>>) {
+          const pid = String(m.project_id || "");
+          if (!membersByProject.has(pid)) membersByProject.set(pid, []);
+          membersByProject.get(pid)!.push(m);
+        }
+      }
+      for (const p of projects) {
+        const pid = String(p.id || "");
+        (p as Record<string, unknown>).members = membersByProject.get(pid) || [];
+      }
+    }
+
+    return NextResponse.json({ data: projects });
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Unknown error";
@@ -357,17 +398,31 @@ async function copyTableDefinitionsToSchema(
           });
         } catch { /* ignore */ }
 
-        // 获取用户定义的列名（排除系统字段）
-        const userColumns = columnsConfig.map((col) => col.name);
-        
-        // 直接尝试复制数据（如果源表不存在会失败，但可以忽略）
+        // 获取源表实际存在的列
+        let sourceColumns: string[] = [];
+        try {
+          const { data: cols } = await client.rpc("execute_sql", {
+            p_sql: `SELECT column_name FROM information_schema.columns WHERE table_schema = 'design_public' AND table_name = 'std_definition_${tableCode}'`,
+          });
+          if (Array.isArray(cols)) sourceColumns = cols.map((c: Record<string, unknown>) => String(c.column_name));
+        } catch {}
+
+        // 只复制源表中存在的用户列
+        const userColumns = columnsConfig
+          .map((col) => col.name)
+          .filter((name) => sourceColumns.includes(name));
+
         if (userColumns.length > 0) {
           try {
-            // 复制数据（包含 _readonly, allow_delete 和 data_source）
-            const columnsList = userColumns.map((col) => `"${col}"`).join(", ");
+            // 文件附件列的值清空（旧项目文件key新项目无效）
+            const columnsList = userColumns.map((col) => {
+              const colDef = columnsConfig.find((c: any) => c.name === col);
+              return (colDef && (colDef.type === "attachment" || colDef.type === "video")) ? `'' as "${col}"` : `"${col}"`;
+            }).join(", ");
+            const insertCols = userColumns.map((c) => `"${c}"`).join(", ");
             const copyDataSQL = `
               INSERT INTO ${projectSchema}."${tableCode}"
-                (${columnsList}, _readonly, allow_delete, data_source, sort_order, created_at)
+                (${insertCols}, _readonly, allow_delete, data_source, sort_order, created_at)
               SELECT
                 ${columnsList},
                 COALESCE(_readonly, false) as _readonly,
@@ -377,16 +432,17 @@ async function copyTableDefinitionsToSchema(
                 NOW() as created_at
               FROM ${sourceTable}
             `;
-            
+
             await client.rpc("execute_sql", {
               p_sql: copyDataSQL,
             });
-            
+
             console.log(`已复制 ${tableCode} 表的数据到 ${projectSchema}`);
           } catch (copyErr) {
-            // 源表可能不存在或没有数据，忽略错误
-            console.log(`复制 ${tableCode} 表数据失败（可能源表不存在）:`, copyErr);
+            console.error(`复制 ${tableCode} 表数据失败:`, copyErr);
           }
+        } else {
+          console.log(`表 ${tableCode} 在源表中没有匹配列，跳过数据复制`);
         }
       } catch (err) {
         console.error(`创建表 ${tableCode} 失败:`, err);

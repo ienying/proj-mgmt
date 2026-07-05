@@ -11,6 +11,7 @@ interface RichTextEditorProps {
   placeholder?: string;
   onEditorCreated?: (editor: IDomEditor) => void;
   onFileUploaded?: (filePath: string) => void;
+  className?: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -311,7 +312,7 @@ export default function RichTextEditor(props: RichTextEditorProps) {
   var handleContainerClick = function () { if (editor) editor.focus(); };
 
   return (
-    <div className="border border-gray-300 rounded-lg overflow-hidden focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-200" onClick={handleContainerClick}>
+    <div className={`border border-gray-300 rounded-lg overflow-hidden focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-200 ${props.className || ""}`} onClick={handleContainerClick}>
       <Toolbar editor={editor} defaultConfig={TOOLBAR_CONFIG} style={{ borderBottom: "1px solid #e5e7eb" }} />
       <Editor value={value} onChange={function (ed) { onChange(normalizeHtml(ed.getHtml())); }} onCreated={handleCreated} defaultConfig={editorConfig} style={{ minHeight: 180 }} />
     </div>

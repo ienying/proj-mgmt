@@ -85,6 +85,22 @@ export interface TableDefinition {
   references_config?: ReferenceConfig[];
   apply_project_types: string[];
   apply_project_stages: string[];
+  stage_desc_column?: string;
+  stage_display_mode?: string;
+  stage_progress_column?: string;
+  stage_progress_target?: string;
+  stage_summary_fields?: string;
+  stage_plan_start_col?: string;
+  stage_plan_end_col?: string;
+  stage_actual_start_col?: string;
+  stage_actual_end_col?: string;
+  gantt_enabled?: boolean;
+  gantt_start_col?: string;
+  gantt_end_col?: string;
+  gantt_name_col?: string;
+  gantt_group_col?: string;
+  gantt_milestone_col?: string;
+  gantt_milestone_value?: string;
   sort_order: number;
   is_active: boolean;
   allow_add?: boolean;
@@ -100,11 +116,19 @@ export interface ColumnConfig {
   readonly_reason?: string;
   description?: string;
   options?: string[]; // 单选/多选类型的选项列表
-  quick_inputs?: string[]; // 文本类型的快捷语列表
+  data_source?: string; // 数据来源: "custom"|"project_types"|"project_stages"|...
+  allow_custom?: boolean;
+  calc_left_col?: string;
+  calc_operator?: string;
+  calc_right_col?: string;
+  calc_sum?: boolean;
+  calc_format?: string;
+  quick_inputs?: string[];
   display_mode?: "dropdown" | "checkbox" | "project" | "system"; // 单选展示方式 或 采购模块数据来源
   multiple?: boolean; // 采购模块选择是否多选
   label?: string;
-  max_size?: string; // 视频最大文件大小: "100MB" / "500MB" / "1GB"
+  file_type?: string; // 附件列允许的文件类型，如 "pdf,doc,xlsx"
+  max_size?: string;
   max_count?: number; // 视频最多上传个数
   format?: "number" | "percent"; // 数字列的显示格式
   reference_config?: {
@@ -138,18 +162,15 @@ const MODULE_TYPES = [
 
 const COLUMN_TYPES = [
   { code: "text", name: "文本" },
+  { code: "textarea", name: "多行文本" },
   { code: "number", name: "数字" },
   { code: "date", name: "日期" },
   { code: "select", name: "单选" },
   { code: "multiple_select", name: "多选" },
-  { code: "textarea", name: "多行文本" },
-  { code: "procurement_module", name: "产品模块" },
-  { code: "office", name: "Office 文件" },
-  { code: "pdf", name: "PDF 文件" },
-  { code: "md", name: "Markdown 文件" },
-  { code: "image", name: "图片" },
-  { code: "archive", name: "压缩包" },
+  { code: "attachment", name: "附件" },
+  { code: "calc", name: "计算" },
   { code: "video", name: "视频" },
+  { code: "procurement_module", name: "产品模块" },
   { code: "procurement_record", name: "采购模块记录" },
   { code: "user", name: "用户" },
 ];
@@ -161,6 +182,7 @@ interface StandardManagementProps {
   onCreate: (data: unknown) => void;
   onUpdate: (id: string, data: unknown) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (def: TableDefinition) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
 }
 
@@ -689,9 +711,12 @@ export function StandardManagement({
   onUpdate,
   onDelete,
   onReorder,
+  onDuplicate,
 }: StandardManagementProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [pasteColumnsOpen, setPasteColumnsOpen] = useState(false);
+  const [pasteColumnsText, setPasteColumnsText] = useState("");
   const [selectedProjectType, setSelectedProjectType] = useState<string>("all");
   const [selectedModule, setSelectedModule] = useState<string>("all");
   const [selectedStage, setSelectedStage] = useState<string>("all");
@@ -700,6 +725,7 @@ export function StandardManagement({
   // 抽屉式展开编辑
   const [expandedDefId, setExpandedDefId] = useState<string | null>(null);
   const [drawerFormData, setDrawerFormData] = useState<TableDefinition | null>(null);
+  const [drawerFullscreen, setDrawerFullscreen] = useState(false);
 
   // 规范定义列表拖拽排序
   const [dragDefIndex, setDragDefIndex] = useState<number | null>(null);
@@ -970,6 +996,8 @@ export function StandardManagement({
     columns_config: [],
     apply_project_types: [],
     apply_project_stages: [],
+    stage_desc_column: "",
+    stage_display_mode: "both",
     sort_order: 0,
     is_active: true,
     allow_add: true,
@@ -1177,11 +1205,7 @@ export function StandardManagement({
         "多选": "multiple_select", "multiple_select": "multiple_select",
         "多行文本": "textarea", "textarea": "textarea",
         "产品模块": "procurement_module", "procurement_module": "procurement_module",
-        "Office 文件": "office", "office": "office",
-        "PDF 文件": "pdf", "pdf": "pdf",
-        "Markdown 文件": "md", "md": "md",
-        "图片": "image", "image": "image",
-        "压缩包": "archive", "archive": "archive",
+        "附件": "attachment", "attachment": "attachment",
         "视频": "video", "video": "video",
         "采购模块记录": "procurement_record", "procurement_record": "procurement_record",
         "用户": "user", "user": "user",
@@ -1288,6 +1312,7 @@ export function StandardManagement({
   const closeDrawer = () => {
     setExpandedDefId(null);
     setDrawerFormData(null);
+    setDrawerFullscreen(false);
   };
 
   const handleDrawerSave = () => {
@@ -1709,82 +1734,39 @@ export function StandardManagement({
                 <div className="flex-1 min-w-0 space-y-3 overflow-y-auto pr-2">
                   {/* 基本信息 */}
                   <SectionPanel title="基本信息" icon={FileText} defaultOpen>
-                    <div className="grid grid-cols-2 gap-4 pt-3">
-                      <div className="space-y-2">
-                        <Label className="text-xs font-medium">
-                          表代码 <span className="text-destructive">*</span>
-                        </Label>
-                        <Input
-                          value={formData.table_code || ""}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, table_code: e.target.value }))
-                          }
-                          placeholder="如: scope_wbs"
-                          disabled={!!editingId}
-                          className="h-9"
-                        />
+                    <div className="grid grid-cols-3 gap-2 pt-2">
+                      <div>
+                        <Label className="text-[11px]">表代码 *</Label>
+                        <Input value={formData.table_code || ""} onChange={(e) => setFormData((prev) => ({ ...prev, table_code: e.target.value }))}
+                          placeholder="如: scope_wbs" disabled={!!editingId} className="h-7 text-xs" />
                       </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs font-medium">
-                          表名称 <span className="text-destructive">*</span>
-                        </Label>
-                        <Input
-                          value={formData.table_name || ""}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, table_name: e.target.value }))
-                          }
-                          placeholder="如: WBS分解表"
-                          className="h-9"
-                        />
+                      <div>
+                        <Label className="text-[11px]">表名称 *</Label>
+                        <Input value={formData.table_name || ""} onChange={(e) => setFormData((prev) => ({ ...prev, table_name: e.target.value }))}
+                          placeholder="如: WBS分解表" className="h-7 text-xs" />
+                      </div>
+                      <div>
+                        <Label className="text-[11px]">描述</Label>
+                        <Input value={formData.description || ""} onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                          placeholder="表描述" className="h-7 text-xs" />
                       </div>
                     </div>
-                    <div className="space-y-2 pt-3">
-                      <Label className="text-xs font-medium">描述</Label>
-                      <Input
-                        value={formData.description || ""}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, description: e.target.value }))
-                        }
-                        placeholder="表描述"
-                        className="h-9"
-                      />
-                    </div>
-
-                    {/* 操作权限 */}
-                    <div className="flex items-center justify-between pt-3 border-t mt-3">
-                      <div className="space-y-0.5">
-                        <Label className="text-xs font-medium">允许项目添加记录</Label>
-                        <p className="text-xs text-muted-foreground">关闭后，项目模块管理中不显示"添加记录"按钮</p>
-                      </div>
-                      <Switch
-                        checked={formData.allow_add !== false}
-                        onCheckedChange={(checked: boolean) =>
-                          setFormData((prev) => ({ ...prev, allow_add: checked }))
-                        }
-                      />
+                    <div className="flex items-center gap-3 pt-2 mt-2 border-t">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <Switch checked={formData.allow_add !== false} onCheckedChange={(c: boolean) => setFormData((prev) => ({ ...prev, allow_add: c }))} className="scale-75" />
+                        <span className="text-[11px] font-medium">允许添加</span>
+                      </label>
+                      <span className="text-[9px] text-muted-foreground">关闭后项目中将不显示"添加"按钮</span>
                     </div>
                   </SectionPanel>
-                  <SectionPanel
-                    title="所属模块"
-                    icon={Layers}
-                    badge={formData.module_type?.length || null}
-                  >
-                    <div className="pt-3">
-                      <Label className="text-xs font-medium mb-2 block">
-                        选择所属模块 <span className="text-muted-foreground font-normal">(可多选)</span>
-                      </Label>
-                      <div className="grid grid-cols-5 gap-2">
+                  <SectionPanel title="所属模块" icon={Layers} badge={formData.module_type?.length || null}>
+                    <div className="pt-2">
+                      <div className="grid grid-cols-5 gap-1">
                         {moduleTypes.map((module) => (
-                          <label
-                            key={module.code}
-                            className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm cursor-pointer hover:bg-accent transition-colors has-[:checked]:bg-primary/10 has-[:checked]:text-primary"
-                          >
-                            <Checkbox
-                              checked={formData.module_type?.includes(module.code)}
-                              onCheckedChange={() => toggleModule(module.code)}
-                              className="h-4 w-4"
-                            />
-                            <span className="truncate text-xs">{module.name}</span>
+                          <label key={module.code}
+                            className="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs cursor-pointer hover:bg-accent has-[:checked]:bg-primary/10 has-[:checked]:text-primary">
+                            <Checkbox checked={formData.module_type?.includes(module.code)} onCheckedChange={() => toggleModule(module.code)} className="h-3 w-3" />
+                            <span className="truncate text-[11px]">{module.name}</span>
                           </label>
                         ))}
                       </div>
@@ -1792,57 +1774,294 @@ export function StandardManagement({
                   </SectionPanel>
 
                   {/* 适用范围 */}
-                  <SectionPanel
-                    title="适用范围"
-                    icon={Settings}
-                    badge={
-                      (formData.apply_project_types?.length || 0) +
-                      (formData.apply_project_stages?.length || 0) || null
-                    }
-                  >
-                    <div className="pt-3 space-y-4">
+                  <SectionPanel title="适用范围" icon={Settings} badge={(formData.apply_project_types?.length || 0) + (formData.apply_project_stages?.length || 0) || null}>
+                    <div className="pt-2 space-y-2">
                       <div>
-                        <Label className="text-xs font-medium mb-2 block">
-                          适用项目类型 <span className="text-muted-foreground font-normal">(可多选)</span>
-                        </Label>
-                        <div className="flex flex-wrap gap-2">
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-[0.5px] font-semibold">适用类型</span>
+                        <div className="flex flex-wrap gap-1 mt-0.5">
                           {projectTypes.map((type) => (
-                            <button
-                              key={type.code}
-                              type="button"
-                              onClick={() => toggleProjectType(type.code)}
-                              className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${
-                                formData.apply_project_types?.includes(type.code)
-                                  ? "bg-primary text-primary-foreground border-primary"
-                                  : "hover:bg-muted border-border"
-                              }`}
-                            >
-                              {type.name}
-                            </button>
+                            <button key={type.code} type="button" onClick={() => toggleProjectType(type.code)}
+                              className={`text-[10px] px-2 py-1 rounded border ${
+                                formData.apply_project_types?.includes(type.code) ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted border-border"}`}>{type.name}</button>
                           ))}
                         </div>
                       </div>
                       <div>
-                        <Label className="text-xs font-medium mb-2 block">
-                          适用项目阶段 <span className="text-muted-foreground font-normal">(可多选)</span>
-                        </Label>
-                        <div className="flex flex-wrap gap-2">
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-[0.5px] font-semibold">适用阶段</span>
+                        <div className="flex flex-wrap gap-1 mt-0.5">
                           {projectStages.map((stage) => (
-                            <button
-                              key={stage.code}
-                              type="button"
-                              onClick={() => toggleProjectStage(stage.code)}
-                              className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${
-                                formData.apply_project_stages?.includes(stage.code)
-                                  ? "bg-primary text-primary-foreground border-primary"
-                                  : "hover:bg-muted border-border"
-                              }`}
-                            >
-                              {stage.name}
-                            </button>
+                            <button key={stage.code} type="button" onClick={() => toggleProjectStage(stage.code)}
+                              className={`text-[10px] px-2 py-1 rounded border ${
+                                formData.apply_project_stages?.includes(stage.code) ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted border-border"}`}>{stage.name}</button>
                           ))}
                         </div>
                       </div>
+                      <div className="mt-3">
+                        <Label className="text-xs font-medium mb-2 block">
+                          阶段式布局-任务概述列 <span className="text-muted-foreground font-normal">(可选)</span>
+                        </Label>
+                        <p className="text-[10px] text-muted-foreground mb-1.5">
+                          选中后，阶段式布局中点击该表记录时，将显示此列的内容作为任务概述
+                        </p>
+                        <select
+                          value={formData.stage_desc_column || ""}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, stage_desc_column: e.target.value }))
+                          }
+                          className="w-full h-8 px-2 rounded-md border border-input bg-background text-xs"
+                        >
+                          <option value="">不选（无概述）</option>
+                          {(formData.columns_config || []).map((col, ci) => (
+                            <option key={`col-${ci}-${col.name}`} value={col.name}>
+                              {col.name || "(未命名列)"}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="mt-3">
+                        <Label className="text-xs font-medium mb-2 block">
+                          阶段式布局-显示位置
+                        </Label>
+                        <p className="text-[10px] text-muted-foreground mb-1.5">
+                          控制该表在阶段式布局中的显示位置
+                        </p>
+                        <select
+                          value={formData.stage_display_mode || "both"}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, stage_display_mode: e.target.value }))
+                          }
+                          className="w-full h-8 px-2 rounded-md border border-input bg-background text-xs"
+                        >
+                          <option value="both">两者都显示</option>
+                          <option value="menu">仅在左侧菜单显示</option>
+                          <option value="phase">仅在阶段任务显示</option>
+                        </select>
+                      </div>
+                    </div>
+                  </SectionPanel>
+
+                  {/* 阶段式布局-进度与汇总 */}
+                  <SectionPanel title="阶段式布局-进度与汇总" icon={Settings}>
+                    <div className="pt-2 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-[11px]">进度计算列</Label>
+                          <p className="text-[9px] text-muted-foreground mb-0.5">选择用于判断完成状态的列</p>
+                          <select value={formData.stage_progress_column || ""}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, stage_progress_column: e.target.value }))}
+                            className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                            <option value="">不计算进度</option>
+                            {(formData.columns_config || []).map((col, ci) => (
+                              <option key={`pc_${ci}`} value={col.name}>{col.name || "(未命名)"}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <Label className="text-[11px]">完成目标值</Label>
+                          <p className="text-[9px] text-muted-foreground mb-0.5">所有记录此列等于该值即 100%</p>
+                          {(() => {
+                            const progressCol = (formData.columns_config || []).find((c) => c.name === formData.stage_progress_column);
+                            const options = progressCol?.options || [];
+                            return options.length > 0 ? (
+                              <select value={formData.stage_progress_target || ""}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, stage_progress_target: e.target.value }))}
+                                className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                <option value="">选择目标</option>
+                                {options.map((opt) => (
+                                  <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <Input value={formData.stage_progress_target || ""}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, stage_progress_target: e.target.value }))}
+                                placeholder="输入目标值" className="h-7 text-[11px]" />
+                            );
+                          })()}
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-[11px]">汇总显示列 <span className="text-muted-foreground font-normal">（最多6列，横向选择）</span></Label>
+                        <p className="text-[9px] text-muted-foreground mb-1">勾选 = 摘要区显示，红色 = 明细表中隐藏</p>
+                        {(() => {
+                          const currentFields = (formData.stage_summary_fields || "").split("\n").map((l) => l.trim()).filter(Boolean);
+                          return (
+                            <div className="flex flex-wrap gap-1 max-h-[120px] overflow-y-auto border rounded p-1.5">
+                              {(formData.columns_config || []).map((col) => {
+                                if (!col.name) return null;
+                                const existingLine = currentFields.find(
+                                  (l) => l === col.name || l === `-${col.name}`
+                                );
+                                const isSelected = !!existingLine;
+                                const isHidden = existingLine?.startsWith("-");
+                                const canAdd = !isSelected && currentFields.length < 6;
+                                return (
+                                  <label key={col.name}
+                                    className={`flex items-center gap-1.5 px-1.5 py-1 rounded text-[11px] cursor-pointer ${
+                                      isSelected ? "bg-primary/10" : "hover:bg-muted"
+                                    } ${!isSelected && !canAdd ? "opacity-40 pointer-events-none" : ""}`}>
+                                    <input type="checkbox" checked={isSelected}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          const next = [...currentFields, col.name];
+                                          setFormData((prev) => ({ ...prev, stage_summary_fields: next.join("\n") }));
+                                        } else {
+                                          const next = currentFields.filter((l) => l !== col.name && l !== `-${col.name}`);
+                                          setFormData((prev) => ({ ...prev, stage_summary_fields: next.join("\n") }));
+                                        }
+                                      }}
+                                      className="w-3 h-3" />
+                                    <span className="flex-1 truncate">{col.name}</span>
+                                    {isSelected && (
+                                      <button type="button"
+                                        onClick={() => {
+                                          const next = currentFields.map((l) =>
+                                            l === col.name ? `-${col.name}` : l === `-${col.name}` ? col.name : l
+                                          );
+                                          setFormData((prev) => ({ ...prev, stage_summary_fields: next.join("\n") }));
+                                        }}
+                                        className={`text-[9px] px-1 py-0.5 rounded border cursor-pointer ${
+                                          isHidden ? "text-red-500 border-red-300" : "text-green-600 border-green-300"
+                                        }`}
+                                        title={isHidden ? "隐藏中，点击显示" : "显示中，点击隐藏"}>
+                                        {isHidden ? "隐藏" : "显示"}
+                                      </button>
+                                    )}
+                                  </label>
+                                );
+                              })}
+                              {(formData.columns_config || []).filter((c) => c.name).length === 0 && (
+                                <span className="text-[10px] text-muted-foreground p-1">请先配置列</span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                    {/* 阶段日期绑定 */}
+                    <div className="pt-2 mt-2 border-t">
+                      <Label className="text-[11px] font-medium mb-1.5 block">阶段日期绑定</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-[10px]">计划开始列</Label>
+                          <select value={formData.stage_plan_start_col || ""}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, stage_plan_start_col: e.target.value }))}
+                            className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                            <option value="">不绑定</option>
+                            {(formData.columns_config || []).filter((c) => c.type === "date").map((c) => (
+                              <option key={c.name} value={c.name}>{c.name || "(未命名)"}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">计划完成列</Label>
+                          <select value={formData.stage_plan_end_col || ""}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, stage_plan_end_col: e.target.value }))}
+                            className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                            <option value="">不绑定</option>
+                            {(formData.columns_config || []).filter((c) => c.type === "date").map((c) => (
+                              <option key={c.name} value={c.name}>{c.name || "(未命名)"}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">实际开始列</Label>
+                          <select value={formData.stage_actual_start_col || ""}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, stage_actual_start_col: e.target.value }))}
+                            className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                            <option value="">不绑定</option>
+                            {(formData.columns_config || []).filter((c) => c.type === "date").map((c) => (
+                              <option key={c.name} value={c.name}>{c.name || "(未命名)"}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">实际完成列</Label>
+                          <select value={formData.stage_actual_end_col || ""}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, stage_actual_end_col: e.target.value }))}
+                            className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                            <option value="">不绑定</option>
+                            {(formData.columns_config || []).filter((c) => c.type === "date").map((c) => (
+                              <option key={c.name} value={c.name}>{c.name || "(未命名)"}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    {/* 甘特图配置 */}
+                    <div className="pt-2 mt-2 border-t">
+                      <Label className="text-[11px] font-medium mb-1.5 flex items-center gap-2">
+                        <input type="checkbox" checked={formData.gantt_enabled === true}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, gantt_enabled: e.target.checked }))}
+                          className="w-3.5 h-3.5" />
+                        甘特图显示
+                      </Label>
+                      {formData.gantt_enabled && (
+                        <div className="grid grid-cols-2 gap-2 pl-5 mt-1">
+                          <div>
+                            <Label className="text-[10px]">起始日期列</Label>
+                            <select value={formData.gantt_start_col || ""}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, gantt_start_col: e.target.value }))}
+                              className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                              <option value="">选择列</option>
+                              {(formData.columns_config || []).filter((c) => c.type === "date" && c.name).map((c) => (
+                                <option key={c.name} value={c.name}>{c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">结束日期列</Label>
+                            <select value={formData.gantt_end_col || ""}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, gantt_end_col: e.target.value }))}
+                              className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                              <option value="">选择列</option>
+                              {(formData.columns_config || []).filter((c) => c.type === "date" && c.name).map((c) => (
+                                <option key={c.name} value={c.name}>{c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">任务名称列</Label>
+                            <select value={formData.gantt_name_col || ""}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, gantt_name_col: e.target.value }))}
+                              className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                              <option value="">选择列</option>
+                              {(formData.columns_config || []).filter((c) => c.name).map((c) => (
+                                <option key={c.name} value={c.name}>{c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">分组列（可选）</Label>
+                            <select value={formData.gantt_group_col || ""}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, gantt_group_col: e.target.value }))}
+                              className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                              <option value="">不分组</option>
+                              {(formData.columns_config || []).filter((c) => c.name).map((c) => (
+                                <option key={c.name} value={c.name}>{c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">里程碑标记列（可选）</Label>
+                            <select value={formData.gantt_milestone_col || ""}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, gantt_milestone_col: e.target.value }))}
+                              className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                              <option value="">无里程碑</option>
+                              {(formData.columns_config || []).filter((c) => c.name).map((c) => (
+                                <option key={c.name} value={c.name}>{c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          {formData.gantt_milestone_col && (
+                            <div>
+                              <Label className="text-[10px]">里程碑标记值</Label>
+                              <Input value={formData.gantt_milestone_value || ""}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, gantt_milestone_value: e.target.value }))}
+                                placeholder="如: 是" className="h-7 text-[11px]" />
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </SectionPanel>
 
@@ -1856,6 +2075,9 @@ export function StandardManagement({
                       <div className="flex items-center gap-2">
                         <Button type="button" variant="outline" size="sm" onClick={addColumn} className="h-8 text-xs gap-1">
                           <Plus className="h-3.5 w-3.5" /> 添加列
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setPasteColumnsOpen(true)} className="h-8 text-xs gap-1">
+                          <span className="text-xs mr-0.5">📋</span> 粘贴列名
                         </Button>
                         <Button type="button" variant="outline" size="sm" onClick={handleExportColumns} className="h-8 text-xs gap-1" disabled={formData.columns_config?.length === 0}>
                           <Download className="h-3.5 w-3.5" /> 导出列配置
@@ -2007,7 +2229,7 @@ export function StandardManagement({
                                       setDragOverColIndex(null);
                                     }}
                                   >
-                                    <TableCell colSpan={7} className="bg-muted/30 px-4 py-3">
+                                    <TableCell colSpan={8} className="bg-muted/30 px-4 py-3">
                                       <div className="flex flex-col gap-2">
                                         {col.type === "select" && (
                                           <div className="flex items-center gap-2">
@@ -2034,6 +2256,41 @@ export function StandardManagement({
                                             </div>
                                           </div>
                                         )}
+                                        {/* 数据来源 */}
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-xs text-muted-foreground shrink-0">数据来源:</span>
+                                          <select value={col.data_source || "custom"}
+                                            onChange={(e) => updateColumn(index, "data_source", e.target.value)}
+                                            className="h-6 text-xs border rounded px-1.5">
+                                            <option value="custom">自定义选项</option>
+                                            <optgroup label="基础数据">
+                                              <option value="project_types">项目类型</option>
+                                              <option value="project_stages">项目阶段</option>
+                                              <option value="project_statuses">项目状态</option>
+                                              <option value="todo_statuses">事项状态</option>
+                                              <option value="customer_types">客户类型</option>
+                                              <option value="construction_units">施工单位</option>
+                                              <option value="member_role_types">成员角色</option>
+                                              <option value="deployment_modes">部署模式</option>
+                                              <option value="dev_integration_types">开发对接类型</option>
+                                              <option value="custom_dev_types">定制开发类型</option>
+                                            </optgroup>
+                                            <optgroup label="产品模块">
+                                              <option value="procurement_project">项目采购模块</option>
+                                              <option value="procurement_system">系统产品模块</option>
+                                            </optgroup>
+                                            <optgroup label="用户数据">
+                                              <option value="departments">部门</option>
+                                            </optgroup>
+                                          </select>
+                                          <label className="flex items-center gap-1 text-xs cursor-pointer">
+                                            <input type="checkbox" checked={col.allow_custom === true}
+                                              onChange={(e) => updateColumn(index, "allow_custom", e.target.checked)}
+                                              className="w-3 h-3" />
+                                            允许自定义输入
+                                          </label>
+                                        </div>
+                                        {/* 选项列表（仅自定义模式下显示） */}
                                         <div className="flex flex-wrap items-center gap-2">
                                           <span className="text-xs text-muted-foreground shrink-0">选项:</span>
                                           {(col.options || []).map((opt, oi) => (
@@ -2086,7 +2343,7 @@ export function StandardManagement({
                                       setDragOverColIndex(null);
                                     }}
                                   >
-                                    <TableCell colSpan={7} className="bg-muted/30 px-4 py-3">
+                                    <TableCell colSpan={8} className="bg-muted/30 px-4 py-3">
                                       <div className="flex flex-wrap items-center gap-2">
                                         <span className="text-xs text-muted-foreground shrink-0">快捷语:</span>
                                         {(col.quick_inputs || []).map((phrase, qi) => (
@@ -2138,7 +2395,7 @@ export function StandardManagement({
                                       setDragOverColIndex(null);
                                     }}
                                   >
-                                    <TableCell colSpan={7} className="bg-muted/30 px-4 py-3">
+                                    <TableCell colSpan={8} className="bg-muted/30 px-4 py-3">
                                       <div className="flex items-center gap-2">
                                         <span className="text-xs text-muted-foreground shrink-0">显示格式:</span>
                                         <div className="flex gap-1">
@@ -2183,7 +2440,7 @@ export function StandardManagement({
                                       setDragOverColIndex(null);
                                     }}
                                   >
-                                    <TableCell colSpan={7} className="bg-muted/30 px-4 py-3">
+                                    <TableCell colSpan={8} className="bg-muted/30 px-4 py-3">
                                       <div className="flex items-center gap-6">
                                         <div className="flex items-center gap-2">
                                           <span className="text-xs text-muted-foreground shrink-0">数据来源:</span>
@@ -2231,6 +2488,68 @@ export function StandardManagement({
                                             </Button>
                                           </div>
                                         </div>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                                {col.type === 'attachment' && (
+                                  <TableRow>
+                                    <TableCell colSpan={5} className="py-2 px-3 bg-muted/30">
+                                      <div className="flex items-center gap-3 flex-wrap">
+                                        <span className="text-xs text-muted-foreground shrink-0">允许文件类型:</span>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {["pdf","doc","docx","xls","xlsx","ppt","pptx","md","txt","jpg","png","gif","zip","rar"].map((ft) => {
+                                            const selected = (col.file_type || "pdf,doc,docx,xls,xlsx,ppt,pptx,md,zip").split(",");
+                                            const isSelected = selected.includes(ft);
+                                            return (
+                                              <button key={ft}
+                                                onClick={() => {
+                                                  const next = isSelected ? selected.filter((s: string) => s !== ft) : [...selected, ft];
+                                                  updateColumn(index, "file_type", next.join(","));
+                                                }}
+                                                className={`text-[10px] px-2 py-0.5 rounded border cursor-pointer transition-colors ${
+                                                  isSelected ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted border-border"
+                                                }`}>
+                                                {ft.toUpperCase()}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                                {col.type === 'calc' && (
+                                  <TableRow>
+                                    <TableCell colSpan={5} className="py-2 px-3 bg-muted/30">
+                                      <div className="flex items-center gap-3 flex-wrap">
+                                        <span className="text-xs text-muted-foreground shrink-0">计算公式:</span>
+                                        <select value={col.calc_left_col || ""} onChange={(e) => updateColumn(index, "calc_left_col", e.target.value)}
+                                          className="h-6 text-xs border rounded px-1.5">
+                                          <option value="">选择列</option>
+                                          {(formData.columns_config || []).filter((c) => c.type === "number" && c.name).map((c) => (
+                                            <option key={c.name} value={c.name}>{c.name}</option>
+                                          ))}
+                                        </select>
+                                        <select value={col.calc_operator || "*"} onChange={(e) => updateColumn(index, "calc_operator", e.target.value)}
+                                          className="h-6 text-xs border rounded px-1.5 w-16">
+                                          <option value="+">＋</option>
+                                          <option value="-">－</option>
+                                          <option value="*">×</option>
+                                          <option value="/">÷</option>
+                                        </select>
+                                        <select value={col.calc_right_col || ""} onChange={(e) => updateColumn(index, "calc_right_col", e.target.value)}
+                                          className="h-6 text-xs border rounded px-1.5">
+                                          <option value="">选择列</option>
+                                          {(formData.columns_config || []).filter((c) => c.type === "number" && c.name).map((c) => (
+                                            <option key={c.name} value={c.name}>{c.name}</option>
+                                          ))}
+                                        </select>
+                                        <label className="flex items-center gap-1 text-xs cursor-pointer">
+                                          <input type="checkbox" checked={col.calc_sum === true}
+                                            onChange={(e) => updateColumn(index, "calc_sum", e.target.checked)} className="w-3 h-3" />
+                                          汇总全部行
+                                        </label>
                                       </div>
                                     </TableCell>
                                   </TableRow>
@@ -2450,51 +2769,16 @@ export function StandardManagement({
         </div>
       </div>
 
-      {/* 统计卡片 */}
+      {/* 紧凑统计栏 */}
       <div className="px-6 pt-3">
-        <div className="grid grid-cols-4 gap-3">
-          <Card className="shadow-sm">
-            <CardContent className="p-3 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">总表数</p>
-                <p className="text-xl font-bold">{definitions.length}</p>
-              </div>
-              <Database className="w-5 h-5 text-muted-foreground opacity-50" />
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm">
-            <CardContent className="p-3 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">覆盖模块</p>
-                <p className="text-xl font-bold">
-                  {new Set(definitions.flatMap(d => Array.isArray(d.module_type) ? d.module_type : d.module_type ? [d.module_type] : [])).size}
-                </p>
-              </div>
-              <Layers className="w-5 h-5 text-muted-foreground opacity-50" />
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm">
-            <CardContent className="p-3 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">覆盖类型</p>
-                <p className="text-xl font-bold">
-                  {new Set(definitions.flatMap(d => d.apply_project_types || [])).size}
-                </p>
-              </div>
-              <Settings className="w-5 h-5 text-muted-foreground opacity-50" />
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm">
-            <CardContent className="p-3 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">覆盖阶段</p>
-                <p className="text-xl font-bold">
-                  {new Set(definitions.flatMap(d => d.apply_project_stages || [])).size}
-                </p>
-              </div>
-              <RefreshCw className="w-5 h-5 text-muted-foreground opacity-50" />
-            </CardContent>
-          </Card>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span>共 <strong className="text-foreground">{definitions.length}</strong> 张表</span>
+          <span className="text-border">|</span>
+          <span>覆盖 <strong className="text-foreground">{new Set(definitions.flatMap(d => Array.isArray(d.module_type) ? d.module_type : d.module_type ? [d.module_type] : [])).size}</strong> 个模块</span>
+          <span className="text-border">|</span>
+          <span><strong className="text-foreground">{new Set(definitions.flatMap(d => d.apply_project_types || [])).size}</strong> 种类型</span>
+          <span className="text-border">|</span>
+          <span><strong className="text-foreground">{new Set(definitions.flatMap(d => d.apply_project_stages || [])).size}</strong> 个阶段</span>
         </div>
       </div>
 
@@ -2510,13 +2794,14 @@ export function StandardManagement({
           <Table className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10"></TableHead>
-                <TableHead>表名称</TableHead>
-                <TableHead>模块</TableHead>
-                <TableHead>适用类型</TableHead>
-                <TableHead>适用阶段</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead className="w-32">操作</TableHead>
+                <TableHead className="w-6"></TableHead>
+                <TableHead className="w-[18%]">表名称</TableHead>
+                <TableHead className="w-[15%]">模块</TableHead>
+                <TableHead className="w-[11%]">类型</TableHead>
+                <TableHead className="w-[11%]">阶段</TableHead>
+                <TableHead className="w-[8%]">显示位置</TableHead>
+                <TableHead className="w-[6%]">状态</TableHead>
+                <TableHead className="w-[38%]">操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -2540,52 +2825,44 @@ export function StandardManagement({
                     <TableCell>
                       <GripVertical className="w-4 h-4 text-muted-foreground" />
                     </TableCell>
-                    <TableCell className="font-medium">{def.table_name}</TableCell>
+                    <TableCell className="font-medium text-sm">{def.table_name}</TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {(() => {
-                          const modules = Array.isArray(def.module_type)
-                            ? def.module_type
-                            : def.module_type
-                            ? [def.module_type]
-                            : [];
-                          return modules.length === 0 ? (
-                            <span className="text-muted-foreground text-sm">-</span>
-                          ) : (
-                            modules.map((mod) => (
-                              <Badge key={mod} variant="outline" className="text-xs">
-                                {moduleTypes.find((m) => m.code === mod)?.name || mod}
-                              </Badge>
-                            ))
-                          );
-                        })()}
-                      </div>
+                      {(() => {
+                        const mods = Array.isArray(def.module_type) ? def.module_type : def.module_type ? [def.module_type] : [];
+                        if (mods.length === 0) return <span className="text-[11px] text-muted-foreground">-</span>;
+                        const names = mods.map((m) => moduleTypes.find((mt) => mt.code === m)?.name || m);
+                        return <span className="text-[11px] truncate block max-w-[90px]" title={names.join("、")}>{names.slice(0, 2).join("、")}{names.length > 2 ? ` +${names.length - 2}` : ""}</span>;
+                      })()}
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {def.apply_project_types.length === 0 ? (
-                          <span className="text-muted-foreground text-sm">全部</span>
-                        ) : (
-                          def.apply_project_types.map((type) => (
-                            <Badge key={type} variant="secondary" className="text-xs">
-                              {projectTypes.find((t) => t.code === type)?.name || type}
-                            </Badge>
-                          ))
-                        )}
-                      </div>
+                      {def.apply_project_types.length === 0 ? (
+                        <span className="text-[11px] text-muted-foreground">-</span>
+                      ) : (
+                        <span className="text-[11px] truncate block max-w-[70px]" title={def.apply_project_types.map((t) => projectTypes.find((pt) => pt.code === t)?.name || t).join("、")}>
+                          {def.apply_project_types.slice(0, 2).map((t) => projectTypes.find((pt) => pt.code === t)?.name || t).join("、")}
+                          {def.apply_project_types.length > 2 ? ` +${def.apply_project_types.length - 2}` : ""}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {def.apply_project_stages.length === 0 ? (
-                          <span className="text-muted-foreground text-sm">全部</span>
-                        ) : (
-                          def.apply_project_stages.map((stage) => (
-                            <Badge key={stage} variant="outline" className="text-xs">
-                              {projectStages.find((s) => s.code === stage)?.name || stage}
-                            </Badge>
-                          ))
-                        )}
-                      </div>
+                      {def.apply_project_stages.length === 0 ? (
+                        <span className="text-[11px] text-muted-foreground">-</span>
+                      ) : (
+                        <span className="text-[11px] truncate block max-w-[70px]" title={def.apply_project_stages.map((s) => projectStages.find((ps) => ps.code === s)?.name || s).join("、")}>
+                          {def.apply_project_stages.slice(0, 2).map((s) => projectStages.find((ps) => ps.code === s)?.name || s).join("、")}
+                          {def.apply_project_stages.length > 2 ? ` +${def.apply_project_stages.length - 2}` : ""}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <span className={`text-[10px] ${
+                        def.stage_display_mode === "phase" ? "text-orange-500" :
+                        def.stage_display_mode === "menu" ? "text-blue-500" :
+                        "text-muted-foreground"
+                      }`}>
+                        {def.stage_display_mode === "phase" ? "阶段任务" :
+                         def.stage_display_mode === "menu" ? "左侧菜单" : "两者"}
+                      </span>
                     </TableCell>
                     <TableCell>
                       <Badge variant={def.is_active ? "default" : "secondary"}>
@@ -2593,184 +2870,296 @@ export function StandardManagement({
                       </Badge>
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
-                          onClick={() => openEditDialog(def)}
-                        >
-                          编辑
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
-                          title="查看数据"
-                          onClick={() => openDataDialog(def)}
-                        >
-                          数据
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2 text-xs text-blue-600 hover:text-blue-700"
-                          onClick={() => openSyncDialog(def)}
-                        >
-                          同步
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          title="删除表定义"
-                          onClick={() => onDelete(def.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                      <div className="flex items-center gap-0.5">
+                        <button onClick={() => openEditDialog(def)} className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground rounded hover:bg-accent">编辑</button>
+                        <button onClick={() => { openDrawer(def); setDrawerFullscreen(true); }} className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground rounded hover:bg-accent">全屏</button>
+                        <button onClick={() => openDataDialog(def)} className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground rounded hover:bg-accent">数据</button>
+                        <button onClick={() => openSyncDialog(def)} className="h-6 px-1.5 text-[10px] text-blue-600 hover:text-blue-700 rounded hover:bg-accent">同步</button>
+                        <button onClick={() => {
+                          const code = prompt("请输入新表代码（只能小写字母/数字/下划线）:", def.table_code + "_copy");
+                          if (!code) return;
+                          if (!/^[a-z][a-z0-9_]*$/.test(code)) { alert("表代码只能包含小写字母、数字和下划线，且必须以字母开头"); return; }
+                          const name = prompt("请输入新表名称:", def.table_name + "（副本）");
+                          if (!name) return;
+                          onDuplicate({ ...def, table_code: code, table_name: name });
+                        }} className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground rounded hover:bg-accent">复制</button>
+                        <button onClick={() => onDelete(def.id)} className="h-6 px-1 text-destructive hover:text-destructive rounded hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                     </TableCell>
                   </TableRow>
                   {/* 抽屉式编辑面板 */}
                   {expandedDefId === def.id && drawerFormData && (
                     <TableRow className="bg-muted/20 hover:bg-muted/20">
-                      <TableCell colSpan={7} className="p-0">
-                        <div className="overflow-hidden">
-                        <div className="px-6 py-4 space-y-4 border-b-2 border-b-primary/20 max-h-[65vh] overflow-y-auto">
-                          {/* Row 1: 基本信息 */}
-                          <div className="rounded-lg border bg-card p-4">
-                            <div className="flex items-center gap-2 mb-3">
-                              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                              <span className="font-medium text-sm">基本信息</span>
+                      <TableCell colSpan={8} className="p-0">
+                        <div className={`overflow-hidden ${drawerFullscreen ? "fixed inset-0 z-50 bg-background" : ""}`}>
+                        {drawerFullscreen && (
+                          <div className="flex items-center justify-between px-6 py-3 border-b bg-card">
+                            <span className="font-bold text-sm">编辑: {drawerFormData.table_name || drawerFormData.table_code}</span>
+                            <div className="flex items-center gap-1.5">
+                              <button onClick={handleDrawerSave} className="h-7 px-3 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90">保存</button>
+                              <button onClick={closeDrawer} className="h-7 px-3 text-xs border border-border rounded hover:bg-muted">取消</button>
+                              <button onClick={() => setDrawerFullscreen(false)} className="h-7 px-3 text-xs border border-border rounded hover:bg-muted">退出全屏</button>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label className="text-xs font-medium">
-                                  表代码 <span className="text-destructive">*</span>
-                                </Label>
-                                <Input
-                                  value={drawerFormData.table_code || ""}
-                                  onChange={(e) => drawerUpdateField("table_code", e.target.value)}
-                                  placeholder="如: scope_wbs"
-                                  disabled
-                                  className="h-8 text-sm"
-                                />
+                          </div>
+                        )}
+                        <div className={`px-6 py-4 space-y-4 border-b-2 border-b-primary/20 ${
+                          drawerFullscreen ? "max-h-[calc(100vh-60px)] overflow-y-auto" : "max-h-[65vh] overflow-y-auto"
+                        }`}>
+                          {/* Row 1: 基本信息 + 所属模块 + 适用范围（紧凑布局） */}
+                          <div className="rounded-lg border bg-card p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <span className="font-medium text-xs">基本信息</span>
+                            </div>
+                            <div className="grid grid-cols-4 gap-2 mb-2">
+                              <div>
+                                <Label className="text-[11px]">表代码</Label>
+                                <Input value={drawerFormData.table_code || ""} disabled className="h-7 text-xs" />
                               </div>
-                              <div className="space-y-2">
-                                <Label className="text-xs font-medium">
-                                  表名称 <span className="text-destructive">*</span>
-                                </Label>
-                                <Input
-                                  value={drawerFormData.table_name || ""}
-                                  onChange={(e) => drawerUpdateField("table_name", e.target.value)}
-                                  placeholder="如: WBS分解表"
-                                  className="h-8 text-sm"
-                                />
+                              <div>
+                                <Label className="text-[11px]">表名称 *</Label>
+                                <Input value={drawerFormData.table_name || ""} onChange={(e) => drawerUpdateField("table_name", e.target.value)} placeholder="如: WBS分解表" className="h-7 text-xs" />
+                              </div>
+                              <div>
+                                <Label className="text-[11px]">描述</Label>
+                                <Input value={drawerFormData.description || ""} onChange={(e) => drawerUpdateField("description", e.target.value)} className="h-7 text-xs" />
+                              </div>
+                              <div className="flex flex-col items-start justify-end pb-0.5 gap-0.5">
+                                <label className="flex items-center gap-1.5 cursor-pointer">
+                                  <Switch checked={drawerFormData.allow_add !== false} onCheckedChange={(c: boolean) => drawerUpdateField("allow_add", c)} className="scale-75" />
+                                  <span className="text-[11px] font-medium">允许添加</span>
+                                </label>
+                                <span className="text-[9px] text-muted-foreground leading-tight">关闭后项目中将不显示"添加"按钮</span>
                               </div>
                             </div>
-                            <div className="space-y-2 mt-3">
-                              <Label className="text-xs font-medium">描述</Label>
-                              <Input
-                                value={drawerFormData.description || ""}
-                                onChange={(e) => drawerUpdateField("description", e.target.value)}
-                                placeholder="表描述"
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div className="flex items-center justify-between pt-3 mt-3 border-t">
-                              <div className="space-y-0.5">
-                                <Label className="text-xs font-medium">允许项目添加记录</Label>
-                                <p className="text-xs text-muted-foreground">关闭后，项目模块管理中不显示"添加记录"按钮</p>
+                            {/* 所属模块 + 适用范围 合并一行，带竖向分隔 */}
+                            <div className="grid grid-cols-3 gap-0 pt-2 border-t">
+                              <div className="px-2">
+                                <span className="text-[10px] text-muted-foreground uppercase tracking-[0.5px] font-semibold">所属模块</span>
+                                <div className="flex flex-wrap gap-0.5 mt-0.5">
+                                  {moduleTypes.map((m) => (
+                                    <button key={m.code} type="button" onClick={() => drawerToggleModule(m.code)}
+                                      className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                        (drawerFormData.module_type || []).includes(m.code) ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted border-border"}`}>{m.name}</button>
+                                  ))}
+                                </div>
                               </div>
-                              <Switch
-                                checked={drawerFormData.allow_add !== false}
-                                onCheckedChange={(checked: boolean) => drawerUpdateField("allow_add", checked)}
-                              />
+                              <div className="px-2 border-l">
+                                <span className="text-[10px] text-muted-foreground uppercase tracking-[0.5px] font-semibold">适用类型</span>
+                                <div className="flex flex-wrap gap-0.5 mt-0.5">
+                                  {projectTypes.map((t) => (
+                                    <button key={t.code} type="button" onClick={() => drawerToggleProjectType(t.code)}
+                                      className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                        (drawerFormData.apply_project_types || []).includes(t.code) ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted border-border"}`}>{t.name}</button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="px-2 border-l">
+                                <span className="text-[10px] text-muted-foreground uppercase tracking-[0.5px] font-semibold">适用阶段</span>
+                                <div className="flex flex-wrap gap-0.5 mt-0.5">
+                                  {projectStages.map((s) => (
+                                    <button key={s.code} type="button" onClick={() => drawerToggleProjectStage(s.code)}
+                                      className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                        (drawerFormData.apply_project_stages || []).includes(s.code) ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted border-border"}`}>{s.name}</button>
+                                  ))}
+                                </div>
+                              </div>
                             </div>
                           </div>
 
-                          {/* Row 2: 所属模块 + 适用范围 */}
-                          <div className="grid grid-cols-2 gap-4">
-                            {/* 所属模块 */}
-                            <div className="rounded-lg border bg-card p-4">
-                              <div className="flex items-center gap-2 mb-3">
-                                <Layers className="h-4 w-4 text-muted-foreground shrink-0" />
-                                <span className="font-medium text-sm">所属模块</span>
-                                <Badge variant="secondary" className="ml-auto text-xs shrink-0">
-                                  {(drawerFormData.module_type || []).length}
-                                </Badge>
+                          {/* Row 2.5: 进度与汇总 */}
+                          <div className="rounded-lg border bg-card p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Settings className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <span className="font-medium text-xs">阶段式布局-进度与汇总</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 mb-2">
+                              <div>
+                                <Label className="text-[10px]">进度计算列</Label>
+                                <select value={drawerFormData.stage_progress_column || ""}
+                                  onChange={(e) => drawerUpdateField("stage_progress_column", e.target.value)}
+                                  className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                  <option value="">不计算</option>
+                                  {(drawerFormData.columns_config || []).map((col, ci) => (
+                                    <option key={`dp_${ci}_${col.name}`} value={col.name}>{col.name || "(未命名)"}</option>
+                                  ))}
+                                </select>
                               </div>
-                              <div className="grid grid-cols-2 gap-1.5">
-                                {moduleTypes.map((module) => (
-                                  <label
-                                    key={module.code}
-                                    className="flex items-center gap-2 rounded-md px-2 py-1 text-xs cursor-pointer hover:bg-accent transition-colors has-[:checked]:bg-primary/10 has-[:checked]:text-primary"
-                                  >
-                                    <Checkbox
-                                      checked={(drawerFormData.module_type || []).includes(module.code)}
-                                      onCheckedChange={() => drawerToggleModule(module.code)}
-                                      className="h-3.5 w-3.5"
-                                    />
-                                    <span className="truncate">{module.name}</span>
-                                  </label>
-                                ))}
+                              <div>
+                                <Label className="text-[10px]">完成目标值</Label>
+                                {(() => {
+                                  const pcol = (drawerFormData.columns_config || []).find((c) => c.name === drawerFormData.stage_progress_column);
+                                  const opts = pcol?.options || [];
+                                  return opts.length > 0 ? (
+                                    <select value={drawerFormData.stage_progress_target || ""}
+                                      onChange={(e) => drawerUpdateField("stage_progress_target", e.target.value)}
+                                      className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                      <option value="">选择目标</option>
+                                      {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                  ) : (
+                                    <Input value={drawerFormData.stage_progress_target || ""}
+                                      onChange={(e) => drawerUpdateField("stage_progress_target", e.target.value)}
+                                      placeholder="输入目标值" className="h-7 text-[11px]" />
+                                  );
+                                })()}
                               </div>
                             </div>
+                            <div>
+                              <Label className="text-[10px]">汇总显示列（点击勾选，最多6列）</Label>
+                              {(() => {
+                                const currentFields = (drawerFormData.stage_summary_fields || "").split("\n").map((l) => l.trim()).filter(Boolean);
+                                return (
+                                  <div className="flex flex-wrap gap-1 max-h-[120px] overflow-y-auto border rounded p-1.5 mt-0.5">
+                                    {(drawerFormData.columns_config || []).map((col) => {
+                                      if (!col.name) return null;
+                                      const existingLine = currentFields.find((l) => l === col.name || l === `-${col.name}`);
+                                      const isSelected = !!existingLine;
+                                      const isHidden = existingLine?.startsWith("-");
+                                      const canAdd = !isSelected && currentFields.length < 6;
+                                      return (
+                                        <label key={col.name}
+                                          className={`flex items-center gap-1.5 px-1.5 py-1 rounded text-[11px] cursor-pointer ${
+                                            isSelected ? "bg-primary/10" : "hover:bg-muted"
+                                          } ${!isSelected && !canAdd ? "opacity-40 pointer-events-none" : ""}`}>
+                                          <input type="checkbox" checked={isSelected}
+                                            onChange={(e) => {
+                                              if (e.target.checked) {
+                                                const next = [...currentFields, col.name];
+                                                drawerUpdateField("stage_summary_fields", next.join("\n"));
+                                              } else {
+                                                const next = currentFields.filter((l) => l !== col.name && l !== `-${col.name}`);
+                                                drawerUpdateField("stage_summary_fields", next.join("\n"));
+                                              }
+                                            }}
+                                            className="w-3 h-3" />
+                                          <span className="flex-1 truncate">{col.name}</span>
+                                          {isSelected && (
+                                            <button type="button"
+                                              onClick={() => {
+                                                const next = currentFields.map((l) =>
+                                                  l === col.name ? `-${col.name}` : l === `-${col.name}` ? col.name : l
+                                                );
+                                                drawerUpdateField("stage_summary_fields", next.join("\n"));
+                                              }}
+                                              className={`text-[9px] px-1 py-0.5 rounded border cursor-pointer ${
+                                                isHidden ? "text-red-500 border-red-300" : "text-green-600 border-green-300"
+                                              }`}>
+                                              {isHidden ? "隐藏" : "显示"}
+                                            </button>
+                                          )}
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                          {/* 阶段日期绑定 */}
+                          <div className="rounded-lg border bg-card p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="font-medium text-xs">阶段日期绑定</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[
+                                ["计划开始列", "stage_plan_start_col"],
+                                ["计划完成列", "stage_plan_end_col"],
+                                ["实际开始列", "stage_actual_start_col"],
+                                ["实际完成列", "stage_actual_end_col"],
+                              ].map(([label, field]) => (
+                                <div key={field}>
+                                  <Label className="text-[10px]">{label}</Label>
+                                  <select value={(drawerFormData as any)[field] || ""}
+                                    onChange={(e) => drawerUpdateField(field, e.target.value)}
+                                    className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                    <option value="">不绑定</option>
+                                    {(drawerFormData.columns_config || []).filter((c) => c.type === "date").map((c) => (
+                                      <option key={c.name} value={c.name}>{c.name || "(未命名)"}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
 
-                            {/* 适用范围 */}
-                            <div className="rounded-lg border bg-card p-4">
-                              <div className="flex items-center gap-2 mb-3">
-                                <Settings className="h-4 w-4 text-muted-foreground shrink-0" />
-                                <span className="font-medium text-sm">适用范围</span>
-                                <Badge variant="secondary" className="ml-auto text-xs shrink-0">
-                                  {(drawerFormData.apply_project_types || []).length + (drawerFormData.apply_project_stages || []).length || 0}
-                                </Badge>
-                              </div>
-                              <div className="space-y-3">
-                                <div>
-                                  <Label className="text-xs font-medium mb-1.5 block">
-                                    适用项目类型 <span className="text-muted-foreground font-normal">(可多选)</span>
-                                  </Label>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {projectTypes.map((type) => (
-                                      <button
-                                        key={type.code}
-                                        type="button"
-                                        onClick={() => drawerToggleProjectType(type.code)}
-                                        className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
-                                          (drawerFormData.apply_project_types || []).includes(type.code)
-                                            ? "bg-primary text-primary-foreground border-primary"
-                                            : "hover:bg-muted border-border"
-                                        }`}
-                                      >
-                                        {type.name}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                                <div>
-                                  <Label className="text-xs font-medium mb-1.5 block">
-                                    适用项目阶段 <span className="text-muted-foreground font-normal">(可多选)</span>
-                                  </Label>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {projectStages.map((stage) => (
-                                      <button
-                                        key={stage.code}
-                                        type="button"
-                                        onClick={() => drawerToggleProjectStage(stage.code)}
-                                        className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
-                                          (drawerFormData.apply_project_stages || []).includes(stage.code)
-                                            ? "bg-primary text-primary-foreground border-primary"
-                                            : "hover:bg-muted border-border"
-                                        }`}
-                                      >
-                                        {stage.name}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
+                          {/* 甘特图配置 */}
+                          <div className="rounded-lg border bg-card p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                                <input type="checkbox" checked={drawerFormData.gantt_enabled === true}
+                                  onChange={(e) => drawerUpdateField("gantt_enabled", e.target.checked)}
+                                  className="w-3.5 h-3.5" />
+                                甘特图显示
+                              </label>
                             </div>
+                            {drawerFormData.gantt_enabled && (
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-[10px]">起始日期列</Label>
+                                  <select value={drawerFormData.gantt_start_col || ""}
+                                    onChange={(e) => drawerUpdateField("gantt_start_col", e.target.value)}
+                                    className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                    <option value="">选择</option>
+                                    {(drawerFormData.columns_config || []).filter((c) => c.type === "date" && c.name).map((c) => (
+                                      <option key={c.name} value={c.name}>{c.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <Label className="text-[10px]">结束日期列</Label>
+                                  <select value={drawerFormData.gantt_end_col || ""}
+                                    onChange={(e) => drawerUpdateField("gantt_end_col", e.target.value)}
+                                    className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                    <option value="">选择</option>
+                                    {(drawerFormData.columns_config || []).filter((c) => c.type === "date" && c.name).map((c) => (
+                                      <option key={c.name} value={c.name}>{c.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <Label className="text-[10px]">任务名称列</Label>
+                                  <select value={drawerFormData.gantt_name_col || ""}
+                                    onChange={(e) => drawerUpdateField("gantt_name_col", e.target.value)}
+                                    className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                    <option value="">选择</option>
+                                    {(drawerFormData.columns_config || []).filter((c) => c.name).map((c) => (
+                                      <option key={c.name} value={c.name}>{c.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <Label className="text-[10px]">分组列</Label>
+                                  <select value={drawerFormData.gantt_group_col || ""}
+                                    onChange={(e) => drawerUpdateField("gantt_group_col", e.target.value)}
+                                    className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                    <option value="">不分组</option>
+                                    {(drawerFormData.columns_config || []).filter((c) => c.name).map((c) => (
+                                      <option key={c.name} value={c.name}>{c.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <Label className="text-[10px]">里程碑列</Label>
+                                  <select value={drawerFormData.gantt_milestone_col || ""}
+                                    onChange={(e) => drawerUpdateField("gantt_milestone_col", e.target.value)}
+                                    className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]">
+                                    <option value="">无</option>
+                                    {(drawerFormData.columns_config || []).filter((c) => c.name).map((c) => (
+                                      <option key={c.name} value={c.name}>{c.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                {drawerFormData.gantt_milestone_col && (
+                                  <div>
+                                    <Label className="text-[10px]">标记值</Label>
+                                    <Input value={drawerFormData.gantt_milestone_value || ""}
+                                      onChange={(e) => drawerUpdateField("gantt_milestone_value", e.target.value)}
+                                      placeholder="如: 是" className="h-7 text-[11px]" />
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           {/* Row 3: 列配置 —— 矩阵式布局（独立横向滚动） */}
@@ -2855,10 +3244,40 @@ export function StandardManagement({
                                         />
                                       </div>
 
-                                      {/* select/multiple_select: 选项 */}
+                                      {/* select/multiple_select: 数据来源 + 选项 */}
                                       {(col.type === "select" || col.type === "multiple_select") && (
                                         <div className="space-y-2 pt-1 border-t">
-                                          <Label className="text-xs text-muted-foreground">选项</Label>
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <Label className="text-xs text-muted-foreground">数据来源:</Label>
+                                            <select value={col.data_source || "custom"}
+                                              onChange={(e) => drawerUpdateColumn(ci, "data_source", e.target.value)}
+                                              className="h-6 text-[10px] border rounded px-1">
+                                              <option value="custom">自定义</option>
+                                              <optgroup label="基础">
+                                                <option value="project_types">项目类型</option>
+                                                <option value="project_stages">项目阶段</option>
+                                                <option value="project_statuses">项目状态</option>
+                                                <option value="customer_types">客户类型</option>
+                                                <option value="construction_units">施工单位</option>
+                                                <option value="member_role_types">成员角色</option>
+                                                <option value="deployment_modes">部署模式</option>
+                                              </optgroup>
+                                              <optgroup label="产品">
+                                                <option value="procurement_project">项目采购模块</option>
+                                                <option value="procurement_system">系统产品模块</option>
+                                              </optgroup>
+                                              <optgroup label="用户">
+                                                <option value="departments">部门</option>
+                                              </optgroup>
+                                            </select>
+                                            <label className="flex items-center gap-1 text-[10px] cursor-pointer">
+                                              <input type="checkbox" checked={col.allow_custom === true}
+                                                onChange={(e) => drawerUpdateColumn(ci, "allow_custom", e.target.checked)}
+                                                className="w-3 h-3" />
+                                              允许自定义
+                                            </label>
+                                          </div>
+                                          <Label className="text-xs text-muted-foreground">选项 {col.data_source && col.data_source !== "custom" ? "(自动加载)" : ""}</Label>
                                           <div className="flex flex-wrap items-center gap-1 min-h-[28px]">
                                             {(col.options || []).map((opt, oi) => (
                                               <span key={oi} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs px-1.5 py-0.5 rounded-full">
@@ -2968,6 +3387,63 @@ export function StandardManagement({
                                         </div>
                                       )}
 
+                                      {/* attachment: 文件子类型 */}
+                                      {col.type === "attachment" && (
+                                        <div className="space-y-1">
+                                          <Label className="text-xs text-muted-foreground">允许文件类型</Label>
+                                          <div className="flex flex-wrap gap-1">
+                                            {["pdf","doc","docx","xls","xlsx","ppt","pptx","md","txt","jpg","png","gif","zip","rar"].map((ft) => {
+                                              const sel = (col.file_type || "pdf,doc,docx,xls,xlsx,ppt,pptx,md,zip").split(",");
+                                              const active = sel.includes(ft);
+                                              return (
+                                                <button key={ft} type="button"
+                                                  onClick={() => {
+                                                    const n = active ? sel.filter((s: string) => s !== ft) : [...sel, ft];
+                                                    drawerUpdateColumn(ci, "file_type", n.join(","));
+                                                  }}
+                                                  className={`text-[10px] px-1.5 py-0.5 rounded border cursor-pointer ${
+                                                    active ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted border-border"
+                                                  }`}>
+                                                  {ft.toUpperCase()}
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* calc: 计算列 */}
+                                      {col.type === "calc" && (
+                                        <div className="space-y-2 pt-1 border-t">
+                                          <Label className="text-xs text-muted-foreground">计算公式</Label>
+                                          <div className="flex items-center gap-1 flex-wrap">
+                                            <select value={col.calc_left_col || ""} onChange={(e) => drawerUpdateColumn(ci, "calc_left_col", e.target.value)}
+                                              className="h-6 text-[10px] border rounded px-1">
+                                              <option value="">左列</option>
+                                              {(drawerFormData?.columns_config || []).filter((c) => c.type === "number" && c.name).map((c) => (
+                                                <option key={c.name} value={c.name}>{c.name}</option>
+                                              ))}
+                                            </select>
+                                            <select value={col.calc_operator || "*"} onChange={(e) => drawerUpdateColumn(ci, "calc_operator", e.target.value)}
+                                              className="h-6 text-[10px] border rounded px-1 w-14">
+                                              <option value="+">＋</option><option value="-">－</option>
+                                              <option value="*">×</option><option value="/">÷</option>
+                                            </select>
+                                            <select value={col.calc_right_col || ""} onChange={(e) => drawerUpdateColumn(ci, "calc_right_col", e.target.value)}
+                                              className="h-6 text-[10px] border rounded px-1">
+                                              <option value="">右列</option>
+                                              {(drawerFormData?.columns_config || []).filter((c) => c.type === "number" && c.name).map((c) => (
+                                                <option key={c.name} value={c.name}>{c.name}</option>
+                                              ))}
+                                            </select>
+                                            <label className="flex items-center gap-1 text-[10px] cursor-pointer ml-1">
+                                              <input type="checkbox" checked={col.calc_sum === true}
+                                                onChange={(e) => drawerUpdateColumn(ci, "calc_sum", e.target.checked)} className="w-3 h-3" />
+                                              汇总
+                                            </label>
+                                          </div>
+                                        </div>
+                                      )}
                                       {/* video: 文件限制 */}
                                       {col.type === "video" && (
                                         <div className="space-y-2 pt-1 border-t">
@@ -3025,6 +3501,15 @@ export function StandardManagement({
                               >
                                 <Plus className="h-3.5 w-3.5" /> 添加列
                               </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPasteColumnsOpen(true)}
+                                className="h-8 text-xs gap-1 ml-2"
+                              >
+                                <span className="text-xs mr-0.5">📋</span> 粘贴列名
+                              </Button>
                             </div>
                           </div>
 
@@ -3060,15 +3545,11 @@ export function StandardManagement({
                           </div>
                         </div>
 
-                        {/* 操作按钮 */}
-                        <div className="px-6 py-3 border-t bg-muted/30 flex justify-end gap-2">
-                          <Button variant="outline" size="sm" onClick={closeDrawer}>
-                            取消
-                          </Button>
-                          <Button size="sm" onClick={handleDrawerSave}>
-                            保存
-                          </Button>
                         </div>
+                        {/* 操作按钮（全屏时固定在底部） */}
+                        <div className={`flex justify-end gap-2 px-6 py-3 border-t bg-muted/30 ${drawerFullscreen ? "sticky bottom-0 z-10" : ""}`}>
+                          <Button variant="outline" size="sm" onClick={closeDrawer}>取消</Button>
+                          <Button size="sm" onClick={handleDrawerSave}>保存</Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -3264,7 +3745,7 @@ export function StandardManagement({
                                   return u ? u.name : id;
                                 }).join(", ") || "-";
                               })()
-                            : ["office", "pdf", "md", "image", "archive"].includes(col.type as string)
+                            : ["attachment"].includes(col.type as string)
                             ? renderFileCellDisplay(String(record[col.name] ?? ""), col.type as string)
                             : col.type === "number" && col.format === "percent"
                             ? `${String(record[col.name] ?? "-")}%`
@@ -3485,7 +3966,7 @@ export function StandardManagement({
                         users={userList}
                         disabled={isReadonly}
                       />
-                  ) : ["office", "pdf", "md", "image", "archive"].includes(col.type as string) ? (
+                  ) : ["attachment"].includes(col.type as string) ? (
                       <FileUploadField
                         fileType={col.type as string}
                         value={String(recordFormData[col.name] || "")}
@@ -3852,6 +4333,52 @@ export function StandardManagement({
             <Button variant="outline" onClick={() => setRefDialogOpen(false)}>取消</Button>
             <Button onClick={handleSaveRef} disabled={!refForm.name || !refForm.source_table_code || !refForm.entry_column || !refForm.match_condition.target_column || !refForm.match_condition.source_column || refForm.column_mapping.length === 0}>
               保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 粘贴列名弹窗（弹窗和抽屉共用） */}
+      <Dialog open={pasteColumnsOpen} onOpenChange={setPasteColumnsOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              📋 粘贴列名
+            </DialogTitle>
+            <DialogDescription>
+              从 Excel 复制一列或一行列名，粘贴到下方。每行一个列名，默认类型为「文本」。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <textarea value={pasteColumnsText}
+              onChange={(e) => setPasteColumnsText(e.target.value)}
+              placeholder={"任务名称\n负责人\n开始日期\n结束日期\n..."}
+              className="w-full h-40 px-3 py-2 text-sm border rounded-lg resize-none focus:outline-none focus:border-primary"
+              autoFocus />
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                识别到 <strong>{pasteColumnsText.split(/[\n\r\t]+/).filter(Boolean).length}</strong> 个列名，默认类型: 文本
+              </span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => { setPasteColumnsOpen(false); setPasteColumnsText(""); }}>
+              取消
+            </Button>
+            <Button size="sm" onClick={() => {
+              const names = pasteColumnsText.split(/[\n\r\t]+/).map((s) => s.trim()).filter(Boolean);
+              if (names.length === 0) return;
+              const newCols = names.map((n) => ({ name: n, type: "text", required: false, readonly: false, description: "", options: [] }));
+              // 同时添加到 formData 和 drawerFormData（哪个存在就加哪个）
+              setFormData((prev) => prev.columns_config ? {
+                ...prev, columns_config: [...(prev.columns_config || []), ...newCols],
+              } : prev);
+              setDrawerFormData((prev) => prev ? {
+                ...prev, columns_config: [...(prev.columns_config || []), ...newCols],
+              } : null);
+              setPasteColumnsOpen(false); setPasteColumnsText("");
+            }}>
+              添加 {pasteColumnsText.split(/[\n\r\t]+/).filter(Boolean).length} 列
             </Button>
           </DialogFooter>
         </DialogContent>

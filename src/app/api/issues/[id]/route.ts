@@ -11,7 +11,7 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
-    const { status, handler_id, handler_name, handler_phone, operator_id, operator_name, action_type, comment, to_user_id, to_user_name } = body;
+    const { status, handler_id, handler_name, handler_phone, operator_id, operator_name, action_type, comment, to_user_id, to_user_name, processing_notes } = body;
 
     const updateData: Record<string, unknown> = {};
     if (status) updateData.status = status;
@@ -19,6 +19,9 @@ export async function PUT(
       updateData.handler_id = handler_id || null;
       updateData.handler_name = handler_name || null;
       updateData.handler_phone = handler_phone || null;
+    }
+    if (processing_notes !== undefined) {
+      updateData.processing_notes = processing_notes;
     }
 
     const { data, error } = await client.rpc("dp_update", {

@@ -1076,22 +1076,22 @@ export function ProjectForm({
     setChannelCompanies(channelCompanies.filter((cc) => cc.id !== id));
   };
 
-  // 添加项目成员
+  // 添加项目成员（使用 callback 避免异步加载覆盖）
   const addProjectMember = () => {
-    setProjectMembers([
-      ...projectMembers,
+    setProjectMembers((prev) => [
+      ...prev,
       { id: Date.now().toString(), user_id: "", name: "", role_type: "", phone: "" },
     ]);
   };
 
   // 更新项目成员
   const updateProjectMember = (id: string, field: keyof ProjectMember, value: string) => {
-    setProjectMembers(projectMembers.map((pm) => (pm.id === id ? { ...pm, [field]: value } : pm)));
+    setProjectMembers((prev) => prev.map((pm) => (pm.id === id ? { ...pm, [field]: value } : pm)));
   };
 
   // 删除项目成员
   const removeProjectMember = (id: string) => {
-    setProjectMembers(projectMembers.filter((pm) => pm.id !== id));
+    setProjectMembers((prev) => prev.filter((pm) => pm.id !== id));
   };
 
   // 切换采购模块选择
@@ -1951,6 +1951,7 @@ export function ProjectForm({
               title="项目成员"
               icon={<Users className="h-4 w-4 text-purple-600" />}
               count={validMembers.length}
+              defaultOpen={true}
             >
               <Button type="button" variant="outline" size="sm" onClick={addProjectMember}>
                 <Plus className="h-3.5 w-3.5 mr-1" /> 添加成员
@@ -1979,7 +1980,7 @@ export function ProjectForm({
                         <SelectValue placeholder="选择角色" />
                       </SelectTrigger>
                       <SelectContent>
-                        {memberRoles.filter(r => r).map((role) => (
+                        {(memberRoles.length > 0 ? memberRoles : ["销售", "售前", "市场产品", "项目经理", "技术负责人", "研发工程师", "测试工程师", "UI设计师", "运维工程师", "产品经理", "客户成功", "商务支持"]).filter(r => r).map((role) => (
                           <SelectItem key={role} value={role}>
                             {role}
                           </SelectItem>

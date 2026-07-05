@@ -142,10 +142,12 @@ export async function POST(request: NextRequest) {
       }
 
       // Auto-fit column widths
-      sheet.columns.forEach((col, i) => {
-        if (i === 0) col.width = 20; // project name
-        else col.width = 16;
-      });
+      if (sheet.columns) {
+        sheet.columns.forEach((col, i) => {
+          if (i === 0) col.width = 20; // project name
+          else col.width = 16;
+        });
+      }
     }
 
     if (!hasData) {

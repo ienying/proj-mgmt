@@ -28,7 +28,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { KpiConfigModal } from "@/components/kpi-config-modal";
 import {
   Popover,
   PopoverContent,
@@ -208,6 +207,10 @@ const MODULE_LABEL_MAP: Record<string, string> = {
   task: "任务管理",
 };
 
+const OPERATOR_LABEL: Record<string, string> = {
+  eq: "等于", gt: "大于", lt: "小于", gte: "≥", lte: "≤", in: "包含", not_in: "排除",
+};
+
 const WA_CLASSES = ["wa-doc", "wa-risk", "wa-cost", "wa-scope", "wa-schedule", "wa-procurement"] as const;
 
 const STATUS_LABELS: Record<string, string> = {
@@ -239,17 +242,26 @@ function KpiCard({
   variant,
   onSettings,
   onExport,
+  warn,
+  warnMsg,
 }: {
   value: number | string;
   label: string;
   variant: 1 | 2 | 3 | 4 | 5 | 6;
   onSettings?: () => void;
   onExport?: () => void;
+  warn?: boolean;
+  warnMsg?: string;
 }) {
   return (
-    <div className={`tk tk-k${variant}`} style={{ position: "relative" }}>
-      <div className="tk-val">{value}</div>
+    <div className={`tk tk-k${variant}`} style={{ position: "relative", ...(warn ? { boxShadow: "0 0 0 2px #ef4444", borderRadius: 10 } : {}) }}>
+      <div className="tk-val" style={warn ? { color: "#ef4444" } : {}}>{value}</div>
       <div className="tk-label">{label}</div>
+      {warn && warnMsg && (
+        <div style={{ fontSize: 9, color: "#ef4444", marginTop: 2, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={warnMsg}>
+          ⚠ {warnMsg}
+        </div>
+      )}
       {(onSettings || onExport) && (
         <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 4 }}>
           {onExport && (
@@ -360,8 +372,69 @@ function HealthRankCard({
 }
 
 /* ============================================================
+   DedicatedState type for inline KPI config dialogs
+   ============================================================ */
+
+interface Condition {
+  column: string;
+  operator: "eq" | "gt" | "lt" | "gte" | "lte" | "in" | "not_in";
+  values: string[];
+}
+interface ConditionGroup {
+  id: number;
+  conditions: Condition[];
+  relation: "AND" | "OR";
+}
+
+type DedicatedState = {
+  open: boolean; kpiKey: string; label: string;
+  currentConfig: any; module: string; table: string;
+  columns: Array<{ name: string; type: string; options?: string[] }>;
+  colA: string; valA: string; colB: string; valB: string;
+  valAOptions: string[]; valBOptions: string[]; saving: boolean;
+  groups: ConditionGroup[];
+  expression: string;
+  nextGroupId: number;
+  // 预警阀值
+  thresholdEnabled: boolean;
+  thresholdOperator: "gt" | "lt" | "gte" | "lte" | "eq";
+  thresholdValue: string;
+};
+
+const EMPTY_DEDICATED: DedicatedState = {
+  open: false, kpiKey: "", label: "",
+  currentConfig: null, module: "", table: "",
+  columns: [], colA: "", valA: "", colB: "", valB: "",
+  valAOptions: [], valBOptions: [], saving: false,
+  groups: [], expression: "s0", nextGroupId: 0,
+  thresholdEnabled: false, thresholdOperator: "gt", thresholdValue: "",
+};
+
+/* ============================================================
    Main Component
    ============================================================ */
+
+/* ConditionAdder — module-level component so React doesn't remount it on parent re-renders */
+function ConditionAdder({ columns, onAdd }: { columns: Array<{ name: string; type: string; options?: string[] }>; onAdd: (column: string, operator: Condition["operator"]) => void }) {
+  const [col, setCol] = useState("");
+  const [op, setOp] = useState<Condition["operator"]>("eq");
+  return (
+    <div className="flex items-center gap-1 mt-1">
+      <select className="h-7 rounded border border-input bg-transparent px-1 text-xs" style={{ minWidth: 80 }} value={col}
+        onChange={(e) => setCol(e.target.value)}>
+        <option value="">-- 列 --</option>
+        {columns.map((c) => (<option key={c.name} value={c.name}>{c.name}</option>))}
+      </select>
+      <select className="h-7 rounded border border-input bg-transparent px-1 text-xs" style={{ minWidth: 56 }} value={op}
+        onChange={(e) => setOp(e.target.value as Condition["operator"])}>
+        {Object.entries(OPERATOR_LABEL).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
+      </select>
+      <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => { onAdd(col, op); setCol(""); setOp("eq"); }} disabled={!col}>
+        + 添加
+      </Button>
+    </div>
+  );
+}
 
 export function ProjectDashboard({
   onViewProject,
@@ -375,6 +448,9 @@ export function ProjectDashboard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // KPI threshold alerts: kpi_key → { triggered, operator, threshold, currentValue }
+  const [kpiAlerts, setKpiAlerts] = useState<Record<string, { triggered: boolean; level: "error" | "warning"; operator: string; threshold: number; currentValue: number }>>({});
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [projectModalOpen, setProjectModalOpen] = useState(false);
@@ -382,49 +458,203 @@ export function ProjectDashboard({
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [deptFilter, setDeptFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [formulaModal, setFormulaModal] = useState<{
-    open: boolean;
-    title: string;
-    formulas: Array<{ metric: string; formula: string; source: string }>;
-  }>({ open: false, title: "", formulas: [] });
 
-  /* KPI config */
-  const [kpiConfigModal, setKpiConfigModal] = useState(false);
-  const [kpiConfig, setKpiConfig] = useState<{
-    table_code: string; module_type: string; table_name: string;
-  } | null>(null);
-  const [kpiConfigDefs, setKpiConfigDefs] = useState<Array<{
-    table_code: string; table_name: string; module_type: string[];
-  }>>([]);
-  const [kpiConfigSelectedModule, setKpiConfigSelectedModule] = useState("");
-  const [kpiConfigSelectedTable, setKpiConfigSelectedTable] = useState("");
-  const [kpiConfigSaving, setKpiConfigSaving] = useState(false);
-
-  // 高风险残留 KPI 配置
-  const [highRiskConfigModal, setHighRiskConfigModal] = useState(false);
-  const [highRiskConfig, setHighRiskConfig] = useState<{
-    table_code: string; module_type: string; table_name: string;
-    include_column: string; include_value: string;
-    exclude_column: string; exclude_value: string;
-  } | null>(null);
-  const [highRiskSelectedModule, setHighRiskSelectedModule] = useState("");
-  const [highRiskSelectedTable, setHighRiskSelectedTable] = useState("");
-  const [highRiskIncludeColumn, setHighRiskIncludeColumn] = useState("");
-  const [highRiskIncludeValue, setHighRiskIncludeValue] = useState("");
-  const [highRiskExcludeColumn, setHighRiskExcludeColumn] = useState("");
-  const [highRiskExcludeValue, setHighRiskExcludeValue] = useState("");
-  const [highRiskSaving, setHighRiskSaving] = useState(false);
-  // 选中表后加载的列选项
-  const [highRiskTableColumns, setHighRiskTableColumns] = useState<Array<{ name: string; type: string; options?: string[] }>>([]);
-  const [highRiskIncludeValues, setHighRiskIncludeValues] = useState<string[]>([]);
-  const [highRiskExcludeValues, setHighRiskExcludeValues] = useState<string[]>([]);
-
-  /* unified KPI config modal */
-  const [kpiModal, setKpiModal] = useState<{ open: boolean; key: string; label: string }>({ open: false, key: "", label: "" });
-  const openKpiModal = (key: string, label: string) => setKpiModal({ open: true, key, label });
   const [domainPopoverOpen, setDomainPopoverOpen] = useState(false);
   const [radarDomainPopoverOpen, setRadarDomainPopoverOpen] = useState(false);
 
+  /* KPI config defs (shared across all dialogs) */
+  const [kpiConfigDefs, setKpiConfigDefs] = useState<Array<{
+    table_code: string; table_name: string; module_type: string[];
+  }>>([]);
+
+  /* ---- Dedicated KPI config state hooks ---- */
+  const [highRisk, setHighRisk] = useState<DedicatedState>(EMPTY_DEDICATED);
+  const [taskTotal, setTaskTotal] = useState<DedicatedState>(EMPTY_DEDICATED);
+  const [kpiCard, setKpiCard] = useState<DedicatedState>(EMPTY_DEDICATED);
+  const [domainCfg, setDomainCfg] = useState<DedicatedState>(EMPTY_DEDICATED);
+  const [reqStats, setReqStats] = useState<DedicatedState>(EMPTY_DEDICATED);
+  const [warningCfg, setWarningCfg] = useState<DedicatedState>(EMPTY_DEDICATED);
+  const [healthRank, setHealthRank] = useState<DedicatedState>(EMPTY_DEDICATED);
+  const [weakArea, setWeakArea] = useState<DedicatedState>(EMPTY_DEDICATED);
+
+  /* ---- Shared KPI config helpers ---- */
+
+  const openDedicated = (setter: any, kpiKey: string, label: string) => {
+    setter((p: any) => ({ ...EMPTY_DEDICATED, open: true, kpiKey, label }));
+    fetch(`/api/dashboard/kpi-config?kpi_key=${encodeURIComponent(kpiKey)}`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.data) {
+          const cfg = json.data;
+          let module = "", table = "", expression = "s0", nextId = 0;
+          let groups: ConditionGroup[] = [];
+
+          if (cfg.sources && Array.isArray(cfg.sources) && cfg.sources.length > 0) {
+            // New format: {sources: [...], expression: "..."}
+            groups = cfg.sources.map((s: any) => ({
+              id: nextId++,
+              conditions: (s.conditions || []).map((c: any) => ({
+                column: String(c.column || ""),
+                operator: (c.operator || "eq") as Condition["operator"],
+                values: Array.isArray(c.values) ? c.values.map(String) : [],
+              })),
+              relation: (s.relation === "OR" ? "OR" : "AND") as "AND" | "OR",
+            }));
+            expression = cfg.expression || groups.map((_, i) => `s${i}`).join(" + ");
+            module = cfg.sources[0]?.module_type || "";
+            table = cfg.sources[0]?.table_code || "";
+          } else if (cfg.include_column || cfg.exclude_column) {
+            // Legacy format: {include_column, include_value, exclude_column, exclude_value}
+            module = cfg.module_type || "";
+            table = cfg.table_code || "";
+            const hasA = cfg.include_column && cfg.include_value;
+            const hasB = cfg.exclude_column && cfg.exclude_value;
+            if (hasA) {
+              groups.push({
+                id: nextId++,
+                conditions: [{ column: cfg.include_column, operator: "eq" as const, values: [cfg.include_value] }],
+                relation: "AND" as const,
+              });
+            }
+            if (hasB) {
+              groups.push({
+                id: nextId++,
+                conditions: [
+                  ...(hasA ? [{ column: cfg.include_column, operator: "eq" as const, values: [cfg.include_value] }] : []),
+                  { column: cfg.exclude_column, operator: "eq" as const, values: [cfg.exclude_value] },
+                ],
+                relation: "AND" as const,
+              });
+            }
+            expression = groups.length === 2 ? "s0 - s1" : groups.length === 1 ? "s0" : "";
+          } else if (cfg.table_code) {
+            // Very old format: just {table_code, module_type, table_name}
+            module = cfg.module_type || "";
+            table = cfg.table_code || "";
+          }
+          // Parse threshold
+        const threshold = cfg.threshold as { enabled?: boolean; operator?: string; value?: number } | undefined;
+        setter((p: any) => ({
+          ...p, currentConfig: cfg, module, table, groups, expression, nextGroupId: nextId,
+          thresholdEnabled: threshold?.enabled || false,
+          thresholdOperator: (threshold?.operator as DedicatedState["thresholdOperator"]) || "gt",
+          thresholdValue: threshold?.value != null ? String(threshold.value) : "",
+        }));
+        }
+      })
+      .catch(() => {});
+  };
+
+  const tableOptionsFor = (state: DedicatedState) => {
+    if (!state.module) return [];
+    return kpiConfigDefs.filter(d => d.module_type?.includes(state.module))
+      .map(d => ({ table_code: d.table_code, table_name: d.table_name }))
+      .sort((a, b) => a.table_code.localeCompare(b.table_code));
+  };
+
+  const addGroup = (setter: any) => setter((p: any) => {
+    const newGroups = [...p.groups, { id: p.nextGroupId, conditions: [], relation: "AND" as const }];
+    return { ...p, groups: newGroups, nextGroupId: p.nextGroupId + 1, expression: newGroups.map((_: any, i: number) => `s${i}`).join(" + ") };
+  });
+  const removeGroup = (setter: any, groupId: number) => setter((p: any) => {
+    const newGroups = p.groups.filter((g: ConditionGroup) => g.id !== groupId);
+    return { ...p, groups: newGroups, expression: newGroups.map((_: any, i: number) => `s${i}`).join(" + ") };
+  });
+  const toggleGroupRelation = (setter: any, groupId: number) => setter((p: any) => ({
+    ...p, groups: p.groups.map((g: ConditionGroup) => g.id === groupId ? { ...g, relation: g.relation === "AND" ? "OR" as const : "AND" as const } : g)
+  }));
+
+  const addConditionToGroup = (setter: any, groupId: number, column: string, operator: Condition["operator"]) => {
+    if (!column) return;
+    setter((p: any) => ({
+      ...p, groups: p.groups.map((g: ConditionGroup) => {
+        if (g.id !== groupId) return g;
+        return { ...g, conditions: [...g.conditions, { column, operator, values: [] }] };
+      })
+    }));
+  };
+  const removeConditionFromGroup = (setter: any, groupId: number, condIndex: number) => setter((p: any) => ({
+    ...p, groups: p.groups.map((g: ConditionGroup) => g.id === groupId ? { ...g, conditions: g.conditions.filter((_: any, i: number) => i !== condIndex) } : g)
+  }));
+  const updateConditionOperator = (setter: any, groupId: number, condIndex: number, operator: Condition["operator"]) => setter((p: any) => ({
+    ...p, groups: p.groups.map((g: ConditionGroup) => g.id === groupId ? { ...g, conditions: g.conditions.map((c: Condition, i: number) => i === condIndex ? { ...c, operator, values: [] } : c) } : g)
+  }));
+  const setConditionValue = (setter: any, groupId: number, condIndex: number, value: string) => setter((p: any) => ({
+    ...p, groups: p.groups.map((g: ConditionGroup) => g.id === groupId ? { ...g, conditions: g.conditions.map((c: Condition, i: number) => i === condIndex ? { ...c, values: [value] } : c) } : g)
+  }));
+  const toggleConditionValue = (setter: any, groupId: number, condIndex: number, value: string) => setter((p: any) => ({
+    ...p, groups: p.groups.map((g: ConditionGroup) => g.id === groupId ? { ...g, conditions: g.conditions.map((c: Condition, i: number) => i === condIndex ? { ...c, values: c.values.includes(value) ? c.values.filter((v: string) => v !== value) : [...c.values, value] } : c) } : g)
+  }));
+
+  const getColumnInfo = (state: DedicatedState, columnName: string) =>
+    state.columns.find((c: any) => c.name === columnName);
+
+  const saveDedicated = async (state: DedicatedState, setter: any, refresh: () => void) => {
+    if (!state.table) return;
+    const def = kpiConfigDefs.find((d: any) => d.table_code === state.table);
+
+    // If groups is empty but legacy colA exists, auto-create a group
+    let groups = state.groups;
+    if (groups.length === 0 && state.colA && state.valA) {
+      groups = [{ id: 0, conditions: [{ column: state.colA, operator: "eq" as const, values: [state.valA] }], relation: "AND" as const }];
+    }
+
+    const sources = groups
+      .filter((g: ConditionGroup) => g.conditions.length > 0 && g.conditions.some((c: Condition) => c.column && (c.values.length > 0 || c.operator === "in" || c.operator === "not_in")))
+      .map((g: ConditionGroup) => ({
+        table_code: state.table,
+        module_type: state.module,
+        table_name: def?.table_name || state.table,
+        conditions: g.conditions
+          .filter((c: Condition) => c.column)
+          .map((c: Condition) => ({ column: c.column, operator: c.operator, values: c.values })),
+        relation: g.relation,
+      }));
+
+    if (sources.length === 0) return;
+
+    const configValue: any = { sources, expression: state.expression || sources.map((_: any, i: number) => `s${i}`).join(" + ") };
+    if (state.thresholdEnabled && state.thresholdValue) {
+      configValue.threshold = { enabled: true, operator: state.thresholdOperator, value: Number(state.thresholdValue) || 0 };
+    }
+
+    setter((p: any) => ({ ...p, saving: true }));
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch("/api/dashboard/kpi-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: JSON.stringify({ kpi_key: state.kpiKey, config_value: configValue }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "保存失败");
+      setter((p: any) => ({ ...p, open: false, saving: false }));
+      toast.success(`${state.label} 数据源已更新`);
+      refresh();
+    } catch (e: any) {
+      toast.error(e.message || "保存失败");
+      setter((p: any) => ({ ...p, saving: false }));
+    }
+  };
+
+  const resetDedicated = async (state: DedicatedState, setter: any, refresh: () => void) => {
+    setter((p: any) => ({ ...p, saving: true }));
+    try {
+      const token = localStorage.getItem("auth_token");
+      await fetch("/api/dashboard/kpi-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: JSON.stringify({ kpi_key: state.kpiKey, config_value: null }),
+      });
+      setter((p: any) => ({ ...p, open: false, saving: false }));
+      toast.success(`${state.label} 已恢复默认`);
+      refresh();
+    } catch (e: any) {
+      toast.error(e.message || "重置失败");
+      setter((p: any) => ({ ...p, saving: false }));
+    }
+  };
+
+  /* ---- Export helper ---- */
   const handleExportKpi = async (kpiKey: string, label?: string) => {
     try {
       const res = await fetch(`/api/dashboard/kpi-config?kpi_key=${encodeURIComponent(kpiKey)}`);
@@ -466,19 +696,6 @@ export function ProjectDashboard({
     }
   };
 
-  /* task total KPI config (legacy - gradually migrating to unified) */
-  const [taskModalOpen, setTaskModalOpen] = useState(false);
-  const [taskConfig, setTaskConfig] = useState<{
-    table_code: string; module_type: string; table_name: string;
-    conditions?: { column: string; values: string[] };
-  } | null>(null);
-  const [taskSelectedModule, setTaskSelectedModule] = useState("");
-  const [taskSelectedTable, setTaskSelectedTable] = useState("");
-  const [taskSelectedColumn, setTaskSelectedColumn] = useState("");
-  const [taskSelectedValues, setTaskSelectedValues] = useState<string[]>([]);
-  const [taskTableColumns, setTaskTableColumns] = useState<Array<{ name: string; label: string; type: string; options: string[] }>>([]);
-  const [taskSaving, setTaskSaving] = useState(false);
-
   /* AI */
   const [aiWarnings, setAiWarnings] = useState<AIWarning[] | null>(null);
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -513,24 +730,9 @@ export function ProjectDashboard({
     return () => clearInterval(id);
   }, []);
 
-  /* ---- load KPI config ---- */
+  /* ---- load KPI table definitions (shared) ---- */
   useEffect(() => {
     if (!isSuperAdmin) return;
-    // Load requirement_total config
-    fetch("/api/dashboard/kpi-config?kpi_key=requirement_total")
-      .then((r) => r.json())
-      .then((json) => {
-        if (json.data) setKpiConfig(json.data);
-      })
-      .catch(() => {});
-    // Load task_total config
-    fetch("/api/dashboard/kpi-config?kpi_key=task_total")
-      .then((r) => r.json())
-      .then((json) => {
-        if (json.data) setTaskConfig(json.data);
-      })
-      .catch(() => {});
-    // Load table definitions for selector
     fetch("/api/standards")
       .then((r) => r.json())
       .then((json) => {
@@ -541,20 +743,6 @@ export function ProjectDashboard({
       })
       .catch(() => {});
   }, [isSuperAdmin]);
-
-  /* ---- load table columns for task config ---- */
-  useEffect(() => {
-    if (!taskSelectedTable || !taskModalOpen) return;
-    setTaskTableColumns([]);
-    setTaskSelectedColumn("");
-    setTaskSelectedValues([]);
-    fetch(`/api/dashboard/table-columns?table_code=${encodeURIComponent(taskSelectedTable)}`)
-      .then((r) => r.json())
-      .then((json) => {
-        setTaskTableColumns(json.data || []);
-      })
-      .catch(() => {});
-  }, [taskSelectedTable, taskModalOpen]);
 
   /* ---- fetch ---- */
   const fetchData = useCallback(async (ids?: string[]) => {
@@ -598,6 +786,51 @@ export function ProjectDashboard({
       } catch {}
     })();
   }, []);
+
+  /* Check KPI thresholds against current values */
+  useEffect(() => {
+    if (!data) return;
+    const kpiKeys = ["total_projects", "requirement_total", "high_risk_remaining", "task_total", "stakeholders", "procurement_items", "completion_rate", "in_development", "pending_confirmation", "backlog"];
+    const kpiValues: Record<string, number> = {
+      total_projects: data.kpi.total_projects,
+      requirement_total: data.kpi.total_requirements,
+      high_risk_remaining: data.kpi.high_risk_remaining,
+      task_total: data.kpi.total_tasks,
+      stakeholders: data.kpi.stakeholders,
+      procurement_items: data.kpi.procurement_items,
+      completion_rate: data.requirements.stats.completion_rate,
+      in_development: data.requirements.stats.in_development,
+      pending_confirmation: data.requirements.stats.pending_confirmation,
+      backlog: data.requirements.backlog.backlog_count,
+    };
+    const alerts: Record<string, any> = {};
+    let pending = kpiKeys.length;
+    kpiKeys.forEach((key) => {
+      fetch(`/api/dashboard/kpi-config?kpi_key=${encodeURIComponent(key)}`)
+        .then((r) => r.json())
+        .then((json) => {
+          const cfg = json.data;
+          if (cfg?.threshold?.enabled && cfg.threshold.value != null) {
+            const currentVal = kpiValues[key] ?? 0;
+            const threshold = Number(cfg.threshold.value);
+            const op = cfg.threshold.operator || "gt";
+            let triggered = false;
+            switch (op) {
+              case "gt": triggered = currentVal > threshold; break;
+              case "gte": triggered = currentVal >= threshold; break;
+              case "lt": triggered = currentVal < threshold; break;
+              case "lte": triggered = currentVal <= threshold; break;
+              case "eq": triggered = currentVal === threshold; break;
+            }
+            if (triggered) {
+              alerts[key] = { triggered: true, level: "warning" as const, operator: op, threshold, currentValue: currentVal };
+            }
+          }
+        })
+        .catch(() => {})
+        .finally(() => { pending--; if (pending === 0) setKpiAlerts({ ...alerts }); });
+    });
+  }, [data]);
 
   /* ---- handlers ---- */
   const handleProjectToggle = (id: string) => {
@@ -749,7 +982,7 @@ export function ProjectDashboard({
     );
   }, [reqDetails, reqSearch]);
 
-  /* ---- KPI config helpers ---- */
+  /* ---- KPI config helpers (shared) ---- */
   const kpiModuleOptions = useMemo(() => {
     const modules = new Set<string>();
     for (const d of kpiConfigDefs) {
@@ -760,265 +993,15 @@ export function ProjectDashboard({
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [kpiConfigDefs]);
 
-  const kpiTableOptions = useMemo(() => {
-    if (!kpiConfigSelectedModule) return [];
-    return kpiConfigDefs
-      .filter((d) => d.module_type?.includes(kpiConfigSelectedModule))
-      .map((d) => ({ table_code: d.table_code, table_name: d.table_name }))
-      .sort((a, b) => a.table_code.localeCompare(b.table_code));
-  }, [kpiConfigDefs, kpiConfigSelectedModule]);
-
-  const highRiskTableOptions = useMemo(() => {
-    if (!highRiskSelectedModule) return [];
-    return kpiConfigDefs
-      .filter((d) => d.module_type?.includes(highRiskSelectedModule))
-      .map((d) => ({ table_code: d.table_code, table_name: d.table_name }))
-      .sort((a, b) => a.table_code.localeCompare(b.table_code));
-  }, [kpiConfigDefs, highRiskSelectedModule]);
-
-  const taskTableOptions = useMemo(() => {
-    if (!taskSelectedModule) return [];
-    return kpiConfigDefs
-      .filter((d) => d.module_type?.includes(taskSelectedModule))
-      .map((d) => ({ table_code: d.table_code, table_name: d.table_name }))
-      .sort((a, b) => a.table_code.localeCompare(b.table_code));
-  }, [kpiConfigDefs, taskSelectedModule]);
-
-  const handleSaveKpiConfig = async () => {
-    if (!kpiConfigSelectedTable) return;
-    const selectedDef = kpiConfigDefs.find((d) => d.table_code === kpiConfigSelectedTable);
-    const configValue = {
-      table_code: kpiConfigSelectedTable,
-      module_type: kpiConfigSelectedModule,
-      table_name: selectedDef?.table_name || kpiConfigSelectedTable,
-    };
-    setKpiConfigSaving(true);
-    try {
-      const token = localStorage.getItem("auth_token");
-      const res = await fetch("/api/dashboard/kpi-config", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token ? `Bearer ${token}` : "",
-        },
-        body: JSON.stringify({ config_value: configValue }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || "保存失败");
-      setKpiConfig(configValue);
-      setKpiConfigModal(false);
-      toast.success("需求总数数据源已更新");
-      fetchData(selectedIds.size > 0 ? Array.from(selectedIds) : undefined);
-    } catch (e: any) {
-      toast.error(e.message || "保存失败");
-    } finally {
-      setKpiConfigSaving(false);
-    }
-  };
-
-  const handleResetKpiConfig = async () => {
-    setKpiConfigSaving(true);
-    try {
-      const token = localStorage.getItem("auth_token");
-      const res = await fetch("/api/dashboard/kpi-config", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token ? `Bearer ${token}` : "",
-        },
-        body: JSON.stringify({ config_value: null }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || "重置失败");
-      setKpiConfig(null);
-      setKpiConfigModal(false);
-      toast.success("已恢复默认数据源（requirement 模块）");
-      fetchData(selectedIds.size > 0 ? Array.from(selectedIds) : undefined);
-    } catch (e: any) {
-      toast.error(e.message || "重置失败");
-    } finally {
-      setKpiConfigSaving(false);
-    }
-  };
-
-  /* ---- task total KPI config handlers ---- */
-  const handleSaveTaskConfig = async () => {
-    if (!taskSelectedTable || !taskSelectedColumn || taskSelectedValues.length === 0) return;
-    const selectedDef = kpiConfigDefs.find((d) => d.table_code === taskSelectedTable);
-    const configValue = {
-      table_code: taskSelectedTable,
-      module_type: taskSelectedModule,
-      table_name: selectedDef?.table_name || taskSelectedTable,
-      conditions: {
-        column: taskSelectedColumn,
-        values: taskSelectedValues,
-      },
-    };
-    setTaskSaving(true);
-    try {
-      const token = localStorage.getItem("auth_token");
-      const res = await fetch("/api/dashboard/kpi-config", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token ? `Bearer ${token}` : "",
-        },
-        body: JSON.stringify({ kpi_key: "task_total", config_value: configValue }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || "保存失败");
-      setTaskConfig(configValue);
-      setTaskModalOpen(false);
-      toast.success("任务总数数据源已更新");
-      fetchData(selectedIds.size > 0 ? Array.from(selectedIds) : undefined);
-    } catch (e: any) {
-      toast.error(e.message || "保存失败");
-    } finally {
-      setTaskSaving(false);
-    }
-  };
-
-  const handleResetTaskConfig = async () => {
-    setTaskSaving(true);
-    try {
-      const token = localStorage.getItem("auth_token");
-      const res = await fetch("/api/dashboard/kpi-config", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token ? `Bearer ${token}` : "",
-        },
-        body: JSON.stringify({ kpi_key: "task_total", config_value: null }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || "重置失败");
-      setTaskConfig(null);
-      setTaskModalOpen(false);
-      toast.success("已恢复默认任务统计逻辑");
-      fetchData(selectedIds.size > 0 ? Array.from(selectedIds) : undefined);
-    } catch (e: any) {
-      toast.error(e.message || "重置失败");
-    } finally {
-      setTaskSaving(false);
-    }
-  };
-
-  /* ---- high-risk KPI config ---- */
-  // Load table columns when table is selected
-  useEffect(() => {
-    if (!highRiskSelectedTable) return;
-    const def = kpiConfigDefs.find((d) => d.table_code === highRiskSelectedTable);
-    if (!def) return;
-    // Get the full table definition with columns_config
-    fetch(`/api/standards?table_code=${highRiskSelectedTable}`)
-      .then((r) => r.json())
-      .then((json) => {
-        const fullDef = (json.data || []).find((d: any) => d.table_code === highRiskSelectedTable);
-        if (fullDef?.columns_config) {
-          const cols = (fullDef.columns_config as Array<any>).filter((c: any) => c.name && !["id", "sort_order", "created_at", "updated_at", "created_by", "allow_delete", "_readonly", "data_source"].includes(c.name));
-          setHighRiskTableColumns(cols);
-        }
-      })
-      .catch(() => {});
-  }, [highRiskSelectedTable, kpiConfigDefs]);
-
-  // Load column values when a column is selected for include/exclude
-  useEffect(() => {
-    if (!highRiskSelectedTable || !highRiskIncludeColumn) { setHighRiskIncludeValues([]); return; }
-    const col = highRiskTableColumns.find((c) => c.name === highRiskIncludeColumn);
-    setHighRiskIncludeValues(col?.options || []);
-  }, [highRiskIncludeColumn, highRiskSelectedTable, highRiskTableColumns]);
-
-  useEffect(() => {
-    if (!highRiskSelectedTable || !highRiskExcludeColumn) { setHighRiskExcludeValues([]); return; }
-    const col = highRiskTableColumns.find((c) => c.name === highRiskExcludeColumn);
-    setHighRiskExcludeValues(col?.options || []);
-  }, [highRiskExcludeColumn, highRiskSelectedTable, highRiskTableColumns]);
-
-  const handleSaveHighRiskConfig = async () => {
-    if (!highRiskSelectedTable || !highRiskIncludeColumn || !highRiskIncludeValue) return;
-    const selectedDef = kpiConfigDefs.find((d) => d.table_code === highRiskSelectedTable);
-    const configValue = {
-      table_code: highRiskSelectedTable,
-      module_type: highRiskSelectedModule,
-      table_name: selectedDef?.table_name || highRiskSelectedTable,
-      include_column: highRiskIncludeColumn,
-      include_value: highRiskIncludeValue,
-      exclude_column: highRiskExcludeColumn || null,
-      exclude_value: highRiskExcludeValue || null,
-    };
-    setHighRiskSaving(true);
-    try {
-      const token = localStorage.getItem("auth_token");
-      const res = await fetch("/api/dashboard/kpi-config", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token ? `Bearer ${token}` : "",
-        },
-        body: JSON.stringify({ kpi_key: "high_risk_remaining", config_value: configValue }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || "保存失败");
-      setHighRiskConfig(configValue as any);
-      setHighRiskConfigModal(false);
-      toast.success("高风险残留数据源已更新");
-      fetchData(selectedIds.size > 0 ? Array.from(selectedIds) : undefined);
-    } catch (e: any) {
-      toast.error(e.message || "保存失败");
-    } finally {
-      setHighRiskSaving(false);
-    }
-  };
-
-  const handleResetHighRiskConfig = async () => {
-    setHighRiskSaving(true);
-    try {
-      const token = localStorage.getItem("auth_token");
-      await fetch("/api/dashboard/kpi-config", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token ? `Bearer ${token}` : "",
-        },
-        body: JSON.stringify({ kpi_key: "high_risk_remaining", config_value: null }),
-      });
-      setHighRiskConfig(null);
-      setHighRiskConfigModal(false);
-      toast.success("已恢复默认数据源（risk 模块）");
-      fetchData(selectedIds.size > 0 ? Array.from(selectedIds) : undefined);
-    } catch (e: any) {
-      toast.error(e.message || "重置失败");
-    } finally {
-      setHighRiskSaving(false);
-    }
-  };
-
-  // Load high-risk config on mount
-  useEffect(() => {
-    if (!isSuperAdmin) return;
-    fetch("/api/dashboard/kpi-config?kpi_key=high_risk_remaining")
-      .then((r) => r.json())
-      .then((json) => {
-        if (json.data) {
-          setHighRiskConfig(json.data);
-          setHighRiskSelectedModule(json.data.module_type || "");
-          setHighRiskSelectedTable(json.data.table_code || "");
-          setHighRiskIncludeColumn(json.data.include_column || "");
-          setHighRiskIncludeValue(json.data.include_value || "");
-          setHighRiskExcludeColumn(json.data.exclude_column || "");
-          setHighRiskExcludeValue(json.data.exclude_value || "");
-        }
-      })
-      .catch(() => {});
-  }, [isSuperAdmin]);
-
-  // Set module/table values when config is loaded (for opening modal with pre-filled values)
-  useEffect(() => {
-    if (highRiskConfigModal && highRiskConfig && !highRiskSelectedModule) {
-      setHighRiskSelectedModule(highRiskConfig.module_type || "");
-      setHighRiskSelectedTable(highRiskConfig.table_code || "");
-      setHighRiskIncludeColumn(highRiskConfig.include_column || "");
-      setHighRiskIncludeValue(highRiskConfig.include_value || "");
-      setHighRiskExcludeColumn(highRiskConfig.exclude_column || "");
-      setHighRiskExcludeValue(highRiskConfig.exclude_value || "");
-    }
-  }, [highRiskConfigModal]);
+  // ---- dedicated config column loaders (must be before any conditional return) ----
+  useEffect(() => { if (kpiCard.open) loadColumnsForDedicated(kpiCard, setKpiCard); }, [kpiCard.open, kpiCard.table]);
+  useEffect(() => { if (domainCfg.open) loadColumnsForDedicated(domainCfg, setDomainCfg); }, [domainCfg.open, domainCfg.table]);
+  useEffect(() => { if (reqStats.open) loadColumnsForDedicated(reqStats, setReqStats); }, [reqStats.open, reqStats.table]);
+  useEffect(() => { if (warningCfg.open) loadColumnsForDedicated(warningCfg, setWarningCfg); }, [warningCfg.open, warningCfg.table]);
+  useEffect(() => { if (healthRank.open) loadColumnsForDedicated(healthRank, setHealthRank); }, [healthRank.open, healthRank.table]);
+  useEffect(() => { if (weakArea.open) loadColumnsForDedicated(weakArea, setWeakArea); }, [weakArea.open, weakArea.table]);
+  useEffect(() => { if (highRisk.open) loadColumnsForDedicated(highRisk, setHighRisk); }, [highRisk.open, highRisk.table]);
+  useEffect(() => { if (taskTotal.open) loadColumnsForDedicated(taskTotal, setTaskTotal); }, [taskTotal.open, taskTotal.table]);
 
   /* ---- loading / error states ---- */
   if (loading && !data) {
@@ -1043,9 +1026,255 @@ export function ProjectDashboard({
 
   if (!data) return null;
 
+  /* ---- Dedicated KPI dialog handlers ---- */
+
+  const refreshData = () => fetchData(selectedIds.size > 0 ? Array.from(selectedIds) : undefined);
+
+  const renderDedicatedDialog = (state: DedicatedState, setter: any) => {
+    const isMultiValue = (op: Condition["operator"]) => op === "in" || op === "not_in";
+    return (
+      <Dialog open={state.open} onOpenChange={(v) => setter((p: any) => ({ ...p, open: v }))}>
+        <DialogContent style={{ maxWidth: 560, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <DialogHeader>
+            <DialogTitle style={{ fontSize: 15 }}>{state.label} · 数据源配置</DialogTitle>
+            <DialogDescription>
+              设置"{state.label}"指标的数据来源表和筛选条件组。条件组之间通过表达式进行运算。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3" style={{ marginTop: 8, marginBottom: 8, flex: 1, overflowY: "auto", minHeight: 0 }}>
+            {/* Current config */}
+            {state.currentConfig && (
+              <div className="text-xs text-muted-foreground bg-muted/50 rounded px-3 py-2">
+                当前: <strong>{state.currentConfig.table_name || state.currentConfig.table_code}</strong>
+                {state.currentConfig.module_type && (
+                  <>（{MODULE_LABEL_MAP[state.currentConfig.module_type] || state.currentConfig.module_type} 模块）</>
+                )}
+              </div>
+            )}
+
+            {/* Module select */}
+            <div>
+              <Label className="text-xs">选择模块</Label>
+              <select className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                value={state.module}
+                onChange={(e) => setter((p: any) => ({ ...p, module: e.target.value, table: "", columns: [], groups: [], expression: "s0", nextGroupId: 0 }))}>
+                <option value="">-- 选择模块 --</option>
+                {kpiModuleOptions.map((m: any) => (<option key={m.code} value={m.code}>{m.label}</option>))}
+              </select>
+            </div>
+
+            {/* Table select */}
+            {state.module && (
+              <div>
+                <Label className="text-xs">选择数据表</Label>
+                <select className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                  value={state.table}
+                  onChange={(e) => setter((p: any) => ({ ...p, table: e.target.value, columns: [], groups: [], expression: "s0", nextGroupId: 0 }))}>
+                  <option value="">-- 选择数据表 --</option>
+                  {tableOptionsFor(state).map((t: any) => (<option key={t.table_code} value={t.table_code}>{t.table_name}</option>))}
+                </select>
+              </div>
+            )}
+
+            {/* Condition Groups (scrollable) */}
+            {state.table && (
+              <div className="space-y-3" style={{ paddingRight: 4 }}>
+                {state.groups.map((g: ConditionGroup, gi: number) => (
+                  <div key={g.id} className="border rounded-lg p-3" style={{ borderColor: "var(--border)" }}>
+                    {/* Group header */}
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold" style={{ fontFamily: "var(--font-mono)" }}>
+                        条件组 s{gi}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <select className="h-7 rounded border border-input bg-transparent px-2 text-xs"
+                          value={g.relation}
+                          onChange={() => toggleGroupRelation(setter, g.id)}>
+                          <option value="AND">且 (AND)</option>
+                          <option value="OR">或 (OR)</option>
+                        </select>
+                        <button className="text-xs text-red-500 hover:text-red-700" onClick={() => removeGroup(setter, g.id)} title="删除此组">✕</button>
+                      </div>
+                    </div>
+
+                    {/* Conditions */}
+                    {g.conditions.map((c: Condition, ci: number) => {
+                      const colInfo = getColumnInfo(state, c.column);
+                      const hasOptions = colInfo?.options && colInfo.options.length > 0;
+                      return (
+                        <div key={ci} className="mb-2">
+                          {ci > 0 && (
+                            <div className="text-center text-[10px] text-muted-foreground my-1">
+                              —— {g.relation} ——
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {/* Column select */}
+                            <select className="h-8 rounded border border-input bg-transparent px-2 text-xs" style={{ minWidth: 100 }}
+                              value={c.column}
+                              onChange={(e) => {
+                                const newOp = e.target.value ? (c.operator || "eq") : "eq";
+                                setter((p: any) => ({ ...p, groups: p.groups.map((gg: ConditionGroup) => gg.id === g.id ? { ...gg, conditions: gg.conditions.map((cc: Condition, ii: number) => ii === ci ? { ...cc, column: e.target.value, operator: newOp as Condition["operator"], values: [] } : cc) } : gg) }));
+                              }}>
+                              <option value="">-- 列 --</option>
+                              {state.columns.map((col: any) => (<option key={col.name} value={col.name}>{col.name}</option>))}
+                            </select>
+                            {/* Operator select */}
+                            <select className="h-8 rounded border border-input bg-transparent px-1 text-xs" style={{ minWidth: 64 }}
+                              value={c.operator}
+                              onChange={(e) => updateConditionOperator(setter, g.id, ci, e.target.value as Condition["operator"])}>
+                              {Object.entries(OPERATOR_LABEL).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
+                            </select>
+                            {/* Value input */}
+                            {c.column && (
+                              isMultiValue(c.operator) ? (
+                                hasOptions ? (
+                                  <div className="flex flex-wrap gap-1" style={{ maxWidth: 200, maxHeight: 80, overflowY: "auto" }}>
+                                    {colInfo!.options!.map((opt: string) => (
+                                      <label key={opt} className="flex items-center gap-1 text-xs" style={{ cursor: "pointer" }}>
+                                        <input type="checkbox" checked={c.values.includes(opt)}
+                                          onChange={(e) => toggleConditionValue(setter, g.id, ci, opt)} />
+                                        {opt}
+                                      </label>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <input className="h-8 rounded border border-input bg-transparent px-2 text-xs" style={{ width: 120 }}
+                                    placeholder="逗号分隔多个值"
+                                    value={c.values.join(", ")}
+                                    onChange={(e) => setter((p: any) => ({ ...p, groups: p.groups.map((gg: ConditionGroup) => gg.id === g.id ? { ...gg, conditions: gg.conditions.map((cc: Condition, ii: number) => ii === ci ? { ...cc, values: e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean) } : cc) } : gg) }))} />
+                                )
+                              ) : (
+                                hasOptions ? (
+                                  <select className="h-8 rounded border border-input bg-transparent px-2 text-xs" style={{ minWidth: 80 }}
+                                    value={c.values[0] || ""}
+                                    onChange={(e) => setConditionValue(setter, g.id, ci, e.target.value)}>
+                                    <option value="">-- 值 --</option>
+                                    {colInfo!.options!.map((opt: string) => (<option key={opt} value={opt}>{opt}</option>))}
+                                  </select>
+                                ) : (
+                                  <input className="h-8 rounded border border-input bg-transparent px-2 text-xs" style={{ width: 120 }}
+                                    placeholder="输入值..."
+                                    value={c.values[0] || ""}
+                                    onChange={(e) => setConditionValue(setter, g.id, ci, e.target.value)} />
+                                )
+                              )
+                            )}
+                            <button className="text-xs text-red-400 hover:text-red-600 ml-1" onClick={() => removeConditionFromGroup(setter, g.id, ci)}>✕</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Add condition row */}
+                    <ConditionAdder columns={state.columns} onAdd={(col: string, op: Condition["operator"]) => addConditionToGroup(setter, g.id, col, op)} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add group button */}
+            {state.table && (
+              <Button variant="outline" size="sm" onClick={() => addGroup(setter)} className="w-full text-xs">
+                + 添加条件组
+              </Button>
+            )}
+
+            {/* Expression editor */}
+            {state.table && state.groups.length > 0 && (
+              <div>
+                <Label className="text-xs">表达式（s0, s1, ... 对应上方条件组，支持 + - * / 和括号）</Label>
+                <input type="text" className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm" style={{ fontFamily: "var(--font-mono)" }}
+                  value={state.expression}
+                  onChange={(e) => setter((p: any) => ({ ...p, expression: e.target.value }))}
+                  placeholder="s0" />
+              </div>
+            )}
+
+            {/* Formula preview */}
+            {state.table && state.groups.length > 0 && state.groups.some((g: ConditionGroup) => g.conditions.length > 0 && g.conditions.some((c: Condition) => c.column && (c.values.length > 0 || c.operator === "in" || c.operator === "not_in"))) && (
+              <div className="text-xs text-muted-foreground bg-muted/50 rounded px-3 py-2" style={{ maxHeight: 120, overflowY: "auto" }}>
+                <div className="font-semibold mb-1">公式预览:</div>
+                {state.groups.map((g: ConditionGroup, gi: number) => {
+                  const parts = g.conditions.filter((c: Condition) => c.column && (c.values.length > 0 || c.operator === "in" || c.operator === "not_in"))
+                    .map((c: Condition) => {
+                      const opSymbol = c.operator === "eq" ? "=" : c.operator === "gt" ? ">" : c.operator === "lt" ? "<" : c.operator === "gte" ? ">=" : c.operator === "lte" ? "<=" : c.operator === "in" ? "IN" : "NOT IN";
+                      const valStr = c.values.join(", ");
+                      return `${c.column} ${opSymbol} ${isMultiValue(c.operator) ? `(${valStr})` : `"${valStr}"`}`;
+                    });
+                  if (parts.length === 0) return null;
+                  return <div key={g.id} className="mb-1">s{gi} = COUNT({parts.join(` ${g.relation} `)})</div>;
+                })}
+                <div className="font-semibold">= {state.expression || "s0"}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Threshold config */}
+          {state.table && (
+            <div className="border-t pt-3">
+              <div className="flex items-center gap-2 mb-2">
+                <input type="checkbox" id={`threshold-${state.kpiKey}`} checked={state.thresholdEnabled}
+                  onChange={(e) => setter((p: any) => ({ ...p, thresholdEnabled: e.target.checked, thresholdValue: e.target.checked ? p.thresholdValue : "" }))} />
+                <Label className="text-xs font-semibold cursor-pointer" htmlFor={`threshold-${state.kpiKey}`}>⚠️ 预警阀值（可选）</Label>
+              </div>
+              {state.thresholdEnabled && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">当指标值</span>
+                  <select className="h-8 rounded border border-input bg-transparent px-2 text-xs" style={{ minWidth: 70 }}
+                    value={state.thresholdOperator}
+                    onChange={(e) => setter((p: any) => ({ ...p, thresholdOperator: e.target.value }))}>
+                    <option value="gt">大于</option>
+                    <option value="gte">大于等于</option>
+                    <option value="lt">小于</option>
+                    <option value="lte">小于等于</option>
+                    <option value="eq">等于</option>
+                  </select>
+                  <input className="h-8 rounded border border-input bg-transparent px-2 text-xs" style={{ width: 80 }}
+                    type="number" placeholder="阀值"
+                    value={state.thresholdValue}
+                    onChange={(e) => setter((p: any) => ({ ...p, thresholdValue: e.target.value }))} />
+                  <span className="text-xs text-muted-foreground">时预警</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="flex items-center justify-between" style={{ marginTop: 12 }}>
+            <div>
+              {state.currentConfig && (
+                <Button variant="ghost" size="sm" onClick={() => resetDedicated(state, setter, refreshData)} disabled={state.saving} className="text-muted-foreground">
+                  恢复默认
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setter((p: any) => ({ ...p, open: false }))}>取消</Button>
+              <Button size="sm" onClick={() => saveDedicated(state, setter, refreshData)} disabled={state.saving || !state.table}>
+                {state.saving ? "保存中..." : "保存"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
+  // Load column options when a table is selected in the generic dialog
+  const loadColumnsForDedicated = (state: DedicatedState, setter: any) => {
+    if (!state.table || state.columns.length > 0) return;
+    fetch(`/api/dashboard/table-columns?table_code=${encodeURIComponent(state.table)}`)
+      .then((r) => r.json())
+      .then((json) => setter((p: any) => ({ ...p, columns: json.data || [] })))
+      .catch(() => {});
+  };
+
+  // Trigger column loading for generic dialogs
   /* ============================================================
      RENDER
      ============================================================ */
+
   return (
     <div className="db" style={{ padding: "0 14px 24px", background: "var(--bg)", minHeight: "100%" }}>
       {/* ========== Header ========== */}
@@ -1094,43 +1323,55 @@ export function ProjectDashboard({
           value={selectedIds.size === 1 ? (allProjects.find((p) => selectedIds.has(p.id))?.customer_info?.company_name || "未分类") : kpi?.total_projects ?? 0}
           label={selectedIds.size === 1 ? "客户类型" : "项目总数"}
           variant={1}
-          onSettings={isSuperAdmin && selectedIds.size !== 1 ? () => openKpiModal("total_projects", "项目总数") : undefined}
+          onSettings={isSuperAdmin && selectedIds.size !== 1 ? () => openDedicated(setKpiCard, "total_projects", "项目总数") : undefined}
           onExport={isSuperAdmin && selectedIds.size !== 1 ? () => handleExportKpi("total_projects", "项目总数") : undefined}
+          warn={!!kpiAlerts["total_projects"]?.triggered}
+          warnMsg={kpiAlerts["total_projects"]?.triggered ? `当前值 ${kpiAlerts["total_projects"].currentValue} 触发阀值预警` : undefined}
         />
         <KpiCard
           value={kpi?.total_requirements ?? 0}
           label="需求总数"
           variant={2}
-          onSettings={isSuperAdmin ? () => openKpiModal("requirement_total", "需求总数") : undefined}
+          onSettings={isSuperAdmin ? () => openDedicated(setKpiCard, "requirement_total", "需求总数") : undefined}
           onExport={isSuperAdmin ? () => handleExportKpi("requirement_total", "需求总数") : undefined}
+          warn={!!kpiAlerts["requirement_total"]?.triggered}
+          warnMsg={kpiAlerts["requirement_total"]?.triggered ? `当前值 ${kpiAlerts["requirement_total"].currentValue} 触发阀值预警` : undefined}
         />
         <KpiCard
           value={kpi?.high_risk_remaining ?? 0}
           label="高风险残留"
           variant={3}
-          onSettings={isSuperAdmin ? () => openKpiModal("high_risk_remaining", "高风险残留") : undefined}
+          onSettings={isSuperAdmin ? () => openDedicated(setHighRisk, "high_risk_remaining", "高风险残留") : undefined}
           onExport={isSuperAdmin ? () => handleExportKpi("high_risk_remaining", "高风险残留") : undefined}
+          warn={!!kpiAlerts["high_risk_remaining"]?.triggered}
+          warnMsg={kpiAlerts["high_risk_remaining"]?.triggered ? `当前值 ${kpiAlerts["high_risk_remaining"].currentValue} 触发阀值预警` : undefined}
         />
         <KpiCard
           value={kpi?.total_tasks ?? 0}
           label="任务总数"
           variant={4}
-          onSettings={isSuperAdmin ? () => openKpiModal("task_total", "任务总数") : undefined}
+          onSettings={isSuperAdmin ? () => openDedicated(setTaskTotal, "task_total", "任务总数") : undefined}
           onExport={isSuperAdmin ? () => handleExportKpi("task_total", "任务总数") : undefined}
+          warn={!!kpiAlerts["task_total"]?.triggered}
+          warnMsg={kpiAlerts["task_total"]?.triggered ? `当前值 ${kpiAlerts["task_total"].currentValue} 触发阀值预警` : undefined}
         />
         <KpiCard
           value={kpi?.stakeholders ?? 0}
           label="干系人"
           variant={5}
-          onSettings={isSuperAdmin ? () => openKpiModal("stakeholders", "干系人") : undefined}
+          onSettings={isSuperAdmin ? () => openDedicated(setKpiCard, "stakeholders", "干系人") : undefined}
           onExport={isSuperAdmin ? () => handleExportKpi("stakeholders", "干系人") : undefined}
+          warn={!!kpiAlerts["stakeholders"]?.triggered}
+          warnMsg={kpiAlerts["stakeholders"]?.triggered ? `当前值 ${kpiAlerts["stakeholders"].currentValue} 触发阀值预警` : undefined}
         />
         <KpiCard
           value={kpi?.procurement_items ?? 0}
           label="采购项"
           variant={6}
-          onSettings={isSuperAdmin ? () => openKpiModal("procurement_items", "采购项") : undefined}
+          onSettings={isSuperAdmin ? () => openDedicated(setKpiCard, "procurement_items", "采购项") : undefined}
           onExport={isSuperAdmin ? () => handleExportKpi("procurement_items", "采购项") : undefined}
+          warn={!!kpiAlerts["procurement_items"]?.triggered}
+          warnMsg={kpiAlerts["procurement_items"]?.triggered ? `当前值 ${kpiAlerts["procurement_items"].currentValue} 触发阀值预警` : undefined}
         />
       </div>
 
@@ -1162,7 +1403,7 @@ export function ProjectDashboard({
                       <button
                         onClick={() => {
                           setDomainPopoverOpen(false);
-                          openKpiModal(`domain_score_${d.module}`, `${d.icon} ${d.label}`);
+                          openDedicated(setDomainCfg, `domain_score_${d.module}`, `${d.icon} ${d.label}`);
                         }}
                         style={{
                           display: "flex", alignItems: "center", gap: 6, flex: 1,
@@ -1179,7 +1420,7 @@ export function ProjectDashboard({
                           title="设置"
                           onClick={() => {
                             setDomainPopoverOpen(false);
-                            openKpiModal(`domain_score_${d.module}`, `${d.icon} ${d.label}`);
+                            openDedicated(setDomainCfg, `domain_score_${d.module}`, `${d.icon} ${d.label}`);
                           }}
                           style={{
                             width: 22, height: 22, borderRadius: "50%",
@@ -1216,15 +1457,7 @@ export function ProjectDashboard({
               <button
                 className="db-gear"
                 onClick={() =>
-                  setFormulaModal({
-                    open: true,
-                    title: "9 大领域指标 · 计算公式",
-                    formulas: NINE_DOMAINS.map((d) => ({
-                      metric: d.label,
-                      formula: `${d.label} = 已完成数 / 总数 × 100%`,
-                      source: `${d.label}表`,
-                    })),
-                  })
+                  openDedicated(setDomainCfg, "domain_score_non_admin", "9大领域指标")
                 }
               >
                 ⚙
@@ -1250,26 +1483,6 @@ export function ProjectDashboard({
             })}
           </div>
 
-          {/* Warning summary */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
-            {data.warning_summary && data.warning_summary.total > 0 ? (
-              <>
-                <span className="db-warn-pill error" style={{ cursor: "pointer" }}>
-                  ● 严重 {data.warning_summary.errors}
-                </span>
-                <span className="db-warn-pill warning" style={{ cursor: "pointer" }}>
-                  ● 警告 {data.warning_summary.warnings}
-                </span>
-                <span style={{ fontSize: 10, color: "var(--text3)", padding: "4px 6px" }}>
-                  共 {data.warning_summary.total} 条预警 · 阈值{data.warning_summary.threshold} · 趋势{data.warning_summary.trend} · 对比{data.warning_summary.comparison}
-                </span>
-              </>
-            ) : (
-              <span style={{ fontSize: 10, color: "var(--text3)", padding: "4px 0" }}>
-                暂无预警 · 点击「生成新预警」开始 AI 分析
-              </span>
-            )}
-          </div>
 
           {/* Project type distribution */}
           {data.project_type_distribution.length > 0 && (
@@ -1310,7 +1523,7 @@ export function ProjectDashboard({
                           <button
                             onClick={() => {
                               setRadarDomainPopoverOpen(false);
-                              openKpiModal(`domain_score_${d.module}`, `${d.icon} ${d.label}`);
+                              openDedicated(setDomainCfg, `domain_score_${d.module}`, `${d.icon} ${d.label}`);
                             }}
                             style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, fontSize: 12, border: "none", cursor: "pointer", background: "transparent", color: "var(--text)", textAlign: "left", padding: "2px 4px" }}
                           >
@@ -1322,7 +1535,7 @@ export function ProjectDashboard({
                               title="设置"
                               onClick={() => {
                                 setRadarDomainPopoverOpen(false);
-                                openKpiModal(`domain_score_${d.module}`, `${d.icon} ${d.label}`);
+                                openDedicated(setDomainCfg, `domain_score_${d.module}`, `${d.icon} ${d.label}`);
                               }}
                               style={{ width: 22, height: 22, borderRadius: "50%", border: "1px solid var(--border)", background: "var(--card2)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 11 }}
                             >
@@ -1388,14 +1601,7 @@ export function ProjectDashboard({
                 <button
                   className="db-gear"
                   onClick={() =>
-                    setFormulaModal({
-                      open: true,
-                      title: "健康度排行 · 计算公式",
-                      formulas: [
-                        { metric: "综合得分", formula: "= (范围% + 进度% + 质量% + 成本% + 风险关闭% + 采购% + 资源% + 资料%) / 8", source: "各模块管理表" },
-                        { metric: "排序规则", formula: "按综合得分降序排列，取前2名", source: "-" },
-                      ],
-                    })
+                    openDedicated(setHealthRank, "health_ranking", "健康度排行")
                   }
                 >
                   ⚙
@@ -1420,14 +1626,7 @@ export function ProjectDashboard({
               <button
                 className="db-gear"
                 onClick={() =>
-                  setFormulaModal({
-                    open: true,
-                    title: "薄弱环节 · 计算公式",
-                    formulas: [
-                      { metric: "识别规则", formula: "取9领域中双项目均值最低的6项，升序排列", source: "-" },
-                      { metric: "差距计算", formula: "标注最低项目数值与均值差距", source: "-" },
-                    ],
-                  })
+                  openDedicated(setWeakArea, "weak_areas", "薄弱环节")
                 }
               >
                 ⚙
@@ -1458,146 +1657,6 @@ export function ProjectDashboard({
         </div>
       </div>
 
-      {/* ========== Warning Center ========== */}
-      <div className="db-panel" style={{ marginBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 700 }}>
-            ⚠️ 预警中心
-            <span style={{ fontSize: 10, color: "var(--text3)", fontWeight: 400, marginLeft: 8 }}>
-              {data.warning_summary.total > 0
-                ? `共 ${data.warning_summary.total} 条（严重 ${data.warning_summary.errors} · 警告 ${data.warning_summary.warnings}）`
-                : "暂无预警 · 指标正常"}
-            </span>
-          </span>
-          <button
-            className="db-gear"
-            onClick={() =>
-              setFormulaModal({
-                open: true,
-                title: "预警中心 · 触发规则",
-                formulas: [
-                  { metric: "单指标阈值", formula: "基于9大领域完成率、风险数、里程碑、回款率等单一指标的固定阈值判定", source: "各模块管理表" },
-                  { metric: "趋势恶化", formula: "基于连续2个月指标变化趋势判定", source: "需求登记表/风险登记表" },
-                  { metric: "差值对比", formula: "基于项目间综合得分/领域得分差距判定", source: "综合评分" },
-                ],
-              })
-            }
-          >
-            ⚙
-          </button>
-        </div>
-
-        {/* Warning KPI cards row */}
-        <div className="r4" style={{ marginBottom: 10 }}>
-          <div className="rt rt-k4" style={{ cursor: "pointer" }}>
-            <div className="rt-val" style={{ color: data.warning_summary.threshold > 0 ? "#ef4444" : "var(--text)" }}>
-              {data.warning_summary.threshold}
-            </div>
-            <div className="rt-label">📏 单指标阈值预警</div>
-          </div>
-          <div className="rt rt-k3" style={{ cursor: "pointer" }}>
-            <div className="rt-val" style={{ color: data.warning_summary.trend > 0 ? "#f59e0b" : "var(--text)" }}>
-              {data.warning_summary.trend}
-            </div>
-            <div className="rt-label">📈 趋势恶化预警</div>
-          </div>
-          <div className="rt rt-k1" style={{ cursor: "pointer" }}>
-            <div className="rt-val" style={{ color: data.warning_summary.comparison > 0 ? "#3d6cb9" : "var(--text)" }}>
-              {data.warning_summary.comparison}
-            </div>
-            <div className="rt-label">📊 差值对比预警</div>
-          </div>
-          <div className="rt rt-k2" style={{ cursor: "pointer" }}>
-            <div className="rt-val" style={{ color: data.warning_summary.errors > 0 ? "#ef4444" : data.warning_summary.total > 0 ? "#f59e0b" : "#10b981" }}>
-              {data.warning_summary.errors}
-            </div>
-            <div className="rt-label">🔴 严重 / {data.warning_summary.warnings} 警告</div>
-          </div>
-        </div>
-
-        {/* Warning bar chart + detail list */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10 }}>
-          {/* Left: Warning bar chart */}
-          <div className="r3-panel" style={{ padding: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6 }}>预警分布</div>
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart
-                data={[
-                  { name: "阈值", error: data.warnings.filter((w) => w.category === "threshold" && w.level === "error").length, warning: data.warnings.filter((w) => w.category === "threshold" && w.level === "warning").length },
-                  { name: "趋势", error: data.warnings.filter((w) => w.category === "trend" && w.level === "error").length, warning: data.warnings.filter((w) => w.category === "trend" && w.level === "warning").length },
-                  { name: "对比", error: data.warnings.filter((w) => w.category === "comparison" && w.level === "error").length, warning: data.warnings.filter((w) => w.category === "comparison" && w.level === "warning").length },
-                ]}
-                margin={{ top: 4, right: 4, left: -8, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                <Tooltip contentStyle={{ fontSize: 11 }} />
-                <Bar dataKey="error" name="严重" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={24} stackId="a" />
-                <Bar dataKey="warning" name="警告" fill="#f59e0b" radius={[0, 0, 0, 0]} barSize={24} stackId="a" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Right: Top warnings list */}
-          <div style={{
-            background: "var(--card2)",
-            borderRadius: 10,
-            padding: 12,
-            maxHeight: 220,
-            overflowY: "auto",
-          }}>
-            <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 8 }}>最新预警明细</div>
-            {(data.warnings || []).length > 0 ? (
-              data.warnings.slice(0, 8).map((w, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "6px 10px",
-                    marginBottom: 3,
-                    borderRadius: 6,
-                    background: "#fff",
-                    borderLeft: `3px solid ${w.level === "error" ? "#ef4444" : "#f59e0b"}`,
-                    fontSize: 11,
-                  }}
-                >
-                  <span style={{
-                    width: 7, height: 7, borderRadius: "50%",
-                    background: w.level === "error" ? "#ef4444" : "#f59e0b",
-                    flexShrink: 0,
-                  }} />
-                  <span style={{ fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {w.item}
-                  </span>
-                  <span style={{ fontSize: 10, color: "var(--text3)", whiteSpace: "nowrap" }}>
-                    {w.current_value}
-                  </span>
-                  <span style={{
-                    fontSize: 9,
-                    padding: "1px 6px",
-                    borderRadius: 8,
-                    background: w.level === "error" ? "#fef2f2" : "#fff7ed",
-                    color: w.level === "error" ? "#dc2626" : "#d97706",
-                    whiteSpace: "nowrap",
-                  }}>
-                    {w.level === "error" ? "严重" : "警告"}
-                  </span>
-                  <span style={{ fontSize: 9, color: "var(--text3)", whiteSpace: "nowrap" }}>
-                    {w.project_name}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <div style={{ textAlign: "center", padding: "30px 0", color: "var(--text3)", fontSize: 11 }}>
-                ✅ 当前各项指标正常，无预警触发
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
 
       {/* ========== Divider ========== */}
       <div className="dv">
@@ -1606,73 +1665,65 @@ export function ProjectDashboard({
         <div className="dl" />
       </div>
 
-      {/* ========== Requirement Stats Row ========== */}
-      <div className="r4">
-        <div className="rt rt-k1" style={{ position: "relative" }}>
+      {/* ========== Requirement Stats Row (7 items) ========== */}
+      <div className="r4" style={{ gridTemplateColumns: "repeat(7, 1fr)" }}>
+        <div className="rt rt-k1" style={{ position: "relative", borderTop: "3px solid #3b82f6" }}>
           <div className="rt-val">{data.requirements.stats.total}</div>
           <div className="rt-label">需求总数</div>
           {isSuperAdmin && (
             <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 4 }}>
               <button className="tk-gear" title="导出 CSV" onClick={(e) => { e.stopPropagation(); handleExportKpi("requirement_total", "需求总数"); }}>📥</button>
-              <button className="tk-gear" onClick={(e) => { e.stopPropagation(); openKpiModal("requirement_total", "需求总数"); }}>⚙</button>
+              <button className="tk-gear" onClick={(e) => { e.stopPropagation(); openDedicated(setReqStats, "requirement_total", "需求总数"); }}>⚙</button>
             </div>
           )}
         </div>
-        <div className="rt rt-k2" style={{ position: "relative" }}>
+        <div className="rt rt-k2" style={{ position: "relative", borderTop: "3px solid #10b981" }}>
           <div className="rt-val">{data.requirements.stats.completion_rate}%</div>
           <div className="rt-label">完成率</div>
           {isSuperAdmin && (
             <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 4 }}>
               <button className="tk-gear" title="导出 Excel" onClick={(e) => { e.stopPropagation(); handleExportKpi("completion_rate", "完成率"); }}>📥</button>
-              <button className="tk-gear" onClick={(e) => { e.stopPropagation(); openKpiModal("completion_rate", "完成率"); }}>⚙</button>
+              <button className="tk-gear" onClick={(e) => { e.stopPropagation(); openDedicated(setReqStats, "completion_rate", "完成率"); }}>⚙</button>
             </div>
           )}
         </div>
-        <div className="rt rt-k3" style={{ position: "relative" }}>
+        <div className="rt rt-k3" style={{ position: "relative", borderTop: "3px solid #f59e0b" }}>
           <div className="rt-val">{data.requirements.stats.in_development}</div>
           <div className="rt-label">开发中</div>
           {isSuperAdmin && (
             <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 4 }}>
               <button className="tk-gear" title="导出 Excel" onClick={(e) => { e.stopPropagation(); handleExportKpi("in_development", "开发中"); }}>📥</button>
-              <button className="tk-gear" onClick={(e) => { e.stopPropagation(); openKpiModal("in_development", "开发中"); }}>⚙</button>
+              <button className="tk-gear" onClick={(e) => { e.stopPropagation(); openDedicated(setReqStats, "in_development", "开发中"); }}>⚙</button>
             </div>
           )}
         </div>
-        <div className="rt rt-k4" style={{ position: "relative" }}>
+        <div className="rt rt-k4" style={{ position: "relative", borderTop: "3px solid #ef4444" }}>
           <div className="rt-val">{data.requirements.stats.pending_confirmation}</div>
           <div className="rt-label">待确认</div>
           {isSuperAdmin && (
             <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 4 }}>
               <button className="tk-gear" title="导出 Excel" onClick={(e) => { e.stopPropagation(); handleExportKpi("pending_confirmation", "待确认"); }}>📥</button>
-              <button className="tk-gear" onClick={(e) => { e.stopPropagation(); openKpiModal("pending_confirmation", "待确认"); }}>⚙</button>
+              <button className="tk-gear" onClick={(e) => { e.stopPropagation(); openDedicated(setReqStats, "pending_confirmation", "待确认"); }}>⚙</button>
             </div>
           )}
         </div>
-      </div>
-
-      {/* ========== Backlog Analysis Row ========== */}
-      <div className="r4">
-        <div className="blc blc-backlog" style={{ position: "relative" }}>
-          <div className="blc-val">{data.requirements.backlog.backlog_count}</div>
-          <div className="blc-label">积压需求</div>
+        <div className="rt rt-k1" style={{ position: "relative", borderTop: "3px solid #8b5cf6" }}>
+          <div className="rt-val">{data.requirements.backlog.backlog_count}</div>
+          <div className="rt-label">积压需求</div>
           {isSuperAdmin && (
             <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 4 }}>
               <button className="tk-gear" title="导出 CSV" onClick={(e) => { e.stopPropagation(); handleExportKpi("backlog", "积压需求"); }}>📥</button>
-              <button className="tk-gear" onClick={(e) => { e.stopPropagation(); openKpiModal("backlog", "积压需求"); }}>⚙</button>
+              <button className="tk-gear" onClick={(e) => { e.stopPropagation(); openDedicated(setReqStats, "backlog", "积压需求"); }}>⚙</button>
             </div>
           )}
         </div>
-        <div className="blc blc-pending">
-          <div className="blc-val">{data.requirements.backlog.pending_confirmation}</div>
-          <div className="blc-label">待确认</div>
+        <div className="rt rt-k2" style={{ position: "relative", borderTop: "3px solid #ec4899" }}>
+          <div className="rt-val">{data.requirements.detail_list.filter((r) => r.priority === "中").length}</div>
+          <div className="rt-label">中优先级</div>
         </div>
-        <div className="blc blc-cycle">
-          <div className="blc-val">{data.requirements.backlog.avg_processing_days}d</div>
-          <div className="blc-label">平均处理周期</div>
-        </div>
-        <div className="blc blc-velocity">
-          <div className="blc-val">{data.requirements.backlog.completion_velocity}/月</div>
-          <div className="blc-label">完成速率</div>
+        <div className="rt rt-k3" style={{ position: "relative", borderTop: "3px solid #06b6d4" }}>
+          <div className="rt-val">{data.requirements.status_distribution.find((s) => s.status === "已完成")?.count || 0}</div>
+          <div className="rt-label">已完成</div>
         </div>
       </div>
 
@@ -1797,19 +1848,7 @@ export function ProjectDashboard({
           <button
             className="db-gear"
             onClick={() =>
-              setFormulaModal({
-                open: true,
-                title: "需求追踪 · 计算公式",
-                formulas: [
-                  { metric: "需求总数", formula: "COUNT(需求登记表)", source: "需求登记表" },
-                  { metric: "完成率", formula: "状态='已完成' / 总数 × 100%", source: "需求登记表" },
-                  { metric: "开发中", formula: "COUNT(状态='开发中')", source: "需求登记表" },
-                  { metric: "待确认", formula: "COUNT(状态='待确认')", source: "需求登记表" },
-                  { metric: "积压需求", formula: "等同于开发中数量", source: "需求登记表" },
-                  { metric: "平均处理周期", formula: "AVG(完成日期 - 提出日期)", source: "需求登记表" },
-                  { metric: "完成速率", formula: "已完成数 / 活跃月数", source: "需求登记表" },
-                ],
-              })
+              openDedicated(setReqStats, "requirement_detail", "需求明细")
             }
           >
             ⚙
@@ -2018,35 +2057,6 @@ export function ProjectDashboard({
         </DialogContent>
       </Dialog>
 
-      {/* Formula modal */}
-      <Dialog open={formulaModal.open} onOpenChange={(v) => setFormulaModal((p) => ({ ...p, open: v }))}>
-        <DialogContent className="max-w-lg max-h-[75vh] flex flex-col" style={{ borderRadius: 14 }}>
-          <DialogHeader>
-            <DialogTitle style={{ fontSize: 15 }}>{formulaModal.title}</DialogTitle>
-          </DialogHeader>
-          <div className="overflow-y-auto flex-1">
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: "var(--card2)" }}>
-                  <th style={{ padding: "8px 12px", textAlign: "left", borderBottom: "1px solid var(--border)", fontWeight: 600 }}>指标</th>
-                  <th style={{ padding: "8px 12px", textAlign: "left", borderBottom: "1px solid var(--border)", fontWeight: 600 }}>公式</th>
-                  <th style={{ padding: "8px 12px", textAlign: "left", borderBottom: "1px solid var(--border)", fontWeight: 600 }}>数据来源</th>
-                </tr>
-              </thead>
-              <tbody>
-                {formulaModal.formulas.map((f, i) => (
-                  <tr key={i}>
-                    <td style={{ padding: "7px 12px", borderBottom: "1px solid #f0f1f5", fontWeight: 500 }}>{f.metric}</td>
-                    <td style={{ padding: "7px 12px", borderBottom: "1px solid #f0f1f5", fontFamily: "var(--font-mono)", fontSize: 11 }}>{f.formula}</td>
-                    <td style={{ padding: "7px 12px", borderBottom: "1px solid #f0f1f5", color: "var(--text3)", fontSize: 11 }}>{f.source}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* AI analysis dialog */}
       <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
         <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col" style={{ borderRadius: 14 }}>
@@ -2096,411 +2106,16 @@ export function ProjectDashboard({
         </DialogContent>
       </Dialog>
 
-      {/* KPI config modal */}
-      <Dialog open={kpiConfigModal} onOpenChange={setKpiConfigModal}>
-        <DialogContent className="max-w-md" style={{ borderRadius: 14 }}>
-          <DialogHeader>
-            <DialogTitle style={{ fontSize: 15 }}>需求总数 · 数据源配置</DialogTitle>
-          </DialogHeader>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {kpiConfig && (
-              <div style={{ fontSize: 12, color: "var(--text2)", background: "var(--card2)", padding: "8px 12px", borderRadius: 8 }}>
-                当前: <strong>{kpiConfig.table_name || kpiConfig.table_code}</strong>（{MODULE_LABEL_MAP[kpiConfig.module_type] || kpiConfig.module_type} 模块）
-              </div>
-            )}
+      {renderDedicatedDialog(highRisk, setHighRisk)}
+      {renderDedicatedDialog(taskTotal, setTaskTotal)}
 
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>选择模块</label>
-              <select
-                value={kpiConfigSelectedModule}
-                onChange={(e) => {
-                  setKpiConfigSelectedModule(e.target.value);
-                  setKpiConfigSelectedTable("");
-                }}
-                style={{
-                  width: "100%", padding: "8px 12px", fontSize: 13,
-                  border: "1px solid var(--border)", borderRadius: 6,
-                  background: "var(--card)", color: "var(--text)",
-                }}
-              >
-                <option value="">-- 请选择模块 --</option>
-                {kpiModuleOptions.map((m) => (
-                  <option key={m.code} value={m.code}>{m.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {kpiConfigSelectedModule && (
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>选择数据表</label>
-                <select
-                  value={kpiConfigSelectedTable}
-                  onChange={(e) => setKpiConfigSelectedTable(e.target.value)}
-                  style={{
-                    width: "100%", padding: "8px 12px", fontSize: 13,
-                    border: "1px solid var(--border)", borderRadius: 6,
-                    background: "var(--card)", color: "var(--text)",
-                  }}
-                >
-                  <option value="">-- 请选择表 --</option>
-                  {kpiTableOptions.map((t) => (
-                    <option key={t.table_code} value={t.table_code}>
-                      {t.table_code} ({t.table_name})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-              {kpiConfig && (
-                <Button variant="outline" size="sm" onClick={handleResetKpiConfig} disabled={kpiConfigSaving}>
-                  恢复默认
-                </Button>
-              )}
-              <Button
-                size="sm"
-                onClick={handleSaveKpiConfig}
-                disabled={!kpiConfigSelectedTable || kpiConfigSaving}
-              >
-                {kpiConfigSaving ? "保存中..." : "保存"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* 高风险残留 · 数据源配置 */}
-      <Dialog open={highRiskConfigModal} onOpenChange={setHighRiskConfigModal}>
-        <DialogContent style={{ maxWidth: 480 }}>
-          <DialogHeader>
-            <DialogTitle style={{ fontSize: 15 }}>高风险残留 · 数据源配置</DialogTitle>
-            <DialogDescription>
-              设置如何计算"高风险残留"：先筛选出符合条件A的行，减去其中同时符合条件B的行。
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3" style={{ marginTop: 8, marginBottom: 8 }}>
-            {/* Current config */}
-            {highRiskConfig && (
-              <div className="text-xs text-muted-foreground bg-muted/50 rounded px-3 py-2">
-                当前: <strong>{highRiskConfig.table_name || highRiskConfig.table_code}</strong>
-                （{MODULE_LABEL_MAP[highRiskConfig.module_type] || highRiskConfig.module_type} 模块）
-              </div>
-            )}
-
-            {/* Module select */}
-            <div>
-              <Label className="text-xs">选择模块</Label>
-              <select
-                className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-                value={highRiskSelectedModule}
-                onChange={(e) => {
-                  setHighRiskSelectedModule(e.target.value);
-                  setHighRiskSelectedTable("");
-                  setHighRiskIncludeColumn("");
-                  setHighRiskExcludeColumn("");
-                }}
-              >
-                <option value="">-- 选择模块 --</option>
-                {kpiModuleOptions.map((m) => (
-                  <option key={m.code} value={m.code}>{m.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Table select */}
-            {highRiskSelectedModule && (
-              <div>
-                <Label className="text-xs">选择数据表</Label>
-                <select
-                  className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-                  value={highRiskSelectedTable}
-                  onChange={(e) => {
-                    setHighRiskSelectedTable(e.target.value);
-                    setHighRiskIncludeColumn("");
-                    setHighRiskExcludeColumn("");
-                  }}
-                >
-                  <option value="">-- 选择数据表 --</option>
-                  {highRiskTableOptions.map((t) => (
-                    <option key={t.table_code} value={t.table_code}>{t.table_name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Column selects */}
-            {highRiskSelectedTable && highRiskTableColumns.length > 0 && (
-              <>
-                <div className="border-t pt-3">
-                  <Label className="text-xs font-semibold text-orange-600">筛选条件 A（高风险项）</Label>
-                  <p className="text-[10px] text-muted-foreground mb-2">选择列 + 值，统计符合条件的行数</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <select
-                      className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-                      value={highRiskIncludeColumn}
-                      onChange={(e) => { setHighRiskIncludeColumn(e.target.value); setHighRiskIncludeValue(""); }}
-                    >
-                      <option value="">-- 选择列 --</option>
-                      {highRiskTableColumns.map((c) => (
-                        <option key={c.name} value={c.name}>{c.name}</option>
-                      ))}
-                    </select>
-                    <select
-                      className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-                      value={highRiskIncludeValue}
-                      onChange={(e) => setHighRiskIncludeValue(e.target.value)}
-                      disabled={!highRiskIncludeColumn}
-                    >
-                      <option value="">-- 选择值 --</option>
-                      {highRiskIncludeValues.map((v) => (
-                        <option key={v} value={v}>{v}</option>
-                      ))}
-                      {highRiskIncludeValues.length === 0 && highRiskIncludeColumn && (
-                        <option value="">(无预设选项，可手动输入)</option>
-                      )}
-                    </select>
-                  </div>
-                  {highRiskIncludeColumn && highRiskIncludeValues.length === 0 && (
-                    <Input
-                      className="h-8 text-sm mt-2"
-                      placeholder="手动输入筛选值..."
-                      value={highRiskIncludeValue}
-                      onChange={(e) => setHighRiskIncludeValue(e.target.value)}
-                    />
-                  )}
-                </div>
-
-                <div className="border-t pt-3">
-                  <Label className="text-xs font-semibold text-blue-600">排除条件 B（已完成项，可选）</Label>
-                  <p className="text-[10px] text-muted-foreground mb-2">从 A 的结果中减去同时满足 B 的行（可留空）</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <select
-                      className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-                      value={highRiskExcludeColumn}
-                      onChange={(e) => { setHighRiskExcludeColumn(e.target.value); setHighRiskExcludeValue(""); }}
-                    >
-                      <option value="">-- 选择列（可选）--</option>
-                      {highRiskTableColumns.map((c) => (
-                        <option key={c.name} value={c.name}>{c.name}</option>
-                      ))}
-                    </select>
-                    <select
-                      className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-                      value={highRiskExcludeValue}
-                      onChange={(e) => setHighRiskExcludeValue(e.target.value)}
-                      disabled={!highRiskExcludeColumn}
-                    >
-                      <option value="">-- 选择值 --</option>
-                      {highRiskExcludeValues.map((v) => (
-                        <option key={v} value={v}>{v}</option>
-                      ))}
-                      {highRiskExcludeValues.length === 0 && highRiskExcludeColumn && (
-                        <option value="">(无预设选项，可手动输入)</option>
-                      )}
-                    </select>
-                  </div>
-                  {highRiskExcludeColumn && highRiskExcludeValues.length === 0 && (
-                    <Input
-                      className="h-8 text-sm mt-2"
-                      placeholder="手动输入排除值..."
-                      value={highRiskExcludeValue}
-                      onChange={(e) => setHighRiskExcludeValue(e.target.value)}
-                    />
-                  )}
-                </div>
-              </>
-            )}
-
-            {/* Formula preview */}
-            {highRiskIncludeColumn && highRiskIncludeValue && (
-              <div className="text-xs text-muted-foreground bg-muted/50 rounded px-3 py-2">
-                <div>
-                  公式: <strong className="text-orange-600">COUNT({`${highRiskIncludeColumn} = "${highRiskIncludeValue}"`})</strong>
-                  {highRiskExcludeColumn && highRiskExcludeValue && (
-                    <> - <strong className="text-blue-600">COUNT({`${highRiskIncludeColumn} = "${highRiskIncludeValue}" AND ${highRiskExcludeColumn} = "${highRiskExcludeValue}"`})</strong></>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="flex items-center justify-between" style={{ marginTop: 12 }}>
-            <div>
-              {highRiskConfig && (
-                <Button variant="ghost" size="sm" onClick={handleResetHighRiskConfig} disabled={highRiskSaving} className="text-muted-foreground">
-                  恢复默认
-                </Button>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setHighRiskConfigModal(false)}>取消</Button>
-              <Button size="sm" onClick={handleSaveHighRiskConfig} disabled={highRiskSaving || !highRiskSelectedTable || !highRiskIncludeColumn || !highRiskIncludeValue}>
-                {highRiskSaving ? "保存中..." : "保存"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* 任务总数 · 数据源配置 */}
-      <Dialog open={taskModalOpen} onOpenChange={setTaskModalOpen}>
-        <DialogContent className="max-w-md" style={{ borderRadius: 14 }}>
-          <DialogHeader>
-            <DialogTitle style={{ fontSize: 15 }}>任务总数 · 数据源配置</DialogTitle>
-          </DialogHeader>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {taskConfig && (
-              <div style={{ fontSize: 12, color: "var(--text2)", background: "var(--card2)", padding: "8px 12px", borderRadius: 8 }}>
-                当前: <strong>{taskConfig.table_name || taskConfig.table_code}</strong>
-                {taskConfig.conditions && <>（{taskConfig.conditions.column} IN ({taskConfig.conditions.values.join(", ")})）</>}
-              </div>
-            )}
-
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>选择模块</label>
-              <select
-                value={taskSelectedModule}
-                onChange={(e) => {
-                  setTaskSelectedModule(e.target.value);
-                  setTaskSelectedTable("");
-                  setTaskSelectedColumn("");
-                  setTaskSelectedValues([]);
-                }}
-                style={{
-                  width: "100%", padding: "8px 12px", fontSize: 13,
-                  border: "1px solid var(--border)", borderRadius: 6,
-                  background: "var(--card)", color: "var(--text)",
-                }}
-              >
-                <option value="">-- 请选择模块 --</option>
-                {kpiModuleOptions.map((m) => (
-                  <option key={m.code} value={m.code}>{m.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {taskSelectedModule && (
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>选择数据表</label>
-                <select
-                  value={taskSelectedTable}
-                  onChange={(e) => {
-                    setTaskSelectedTable(e.target.value);
-                    setTaskSelectedColumn("");
-                    setTaskSelectedValues([]);
-                  }}
-                  style={{
-                    width: "100%", padding: "8px 12px", fontSize: 13,
-                    border: "1px solid var(--border)", borderRadius: 6,
-                    background: "var(--card)", color: "var(--text)",
-                  }}
-                >
-                  <option value="">-- 请选择表 --</option>
-                  {taskTableOptions.map((t) => (
-                    <option key={t.table_code} value={t.table_code}>
-                      {t.table_code} ({t.table_name})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {taskSelectedTable && taskTableColumns.length > 0 && (
-              <>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>选择筛选列</label>
-                  <select
-                    value={taskSelectedColumn}
-                    onChange={(e) => {
-                      setTaskSelectedColumn(e.target.value);
-                      setTaskSelectedValues([]);
-                    }}
-                    style={{
-                      width: "100%", padding: "8px 12px", fontSize: 13,
-                      border: "1px solid var(--border)", borderRadius: 6,
-                      background: "var(--card)", color: "var(--text)",
-                    }}
-                  >
-                    <option value="">-- 请选择列 --</option>
-                    {taskTableColumns.map((col) => (
-                      <option key={col.name} value={col.name}>
-                        {col.label || col.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {taskSelectedColumn && (
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>
-                      选择筛选值（多选）
-                    </label>
-                    <div style={{
-                      maxHeight: 160, overflowY: "auto",
-                      border: "1px solid var(--border)", borderRadius: 6,
-                      padding: 8, background: "var(--card)",
-                    }}>
-                      {taskTableColumns
-                        .find((c) => c.name === taskSelectedColumn)
-                        ?.options.map((opt) => (
-                          <label
-                            key={opt}
-                            style={{
-                              display: "flex", alignItems: "center", gap: 8,
-                              padding: "4px 0", fontSize: 13, cursor: "pointer",
-                            }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={taskSelectedValues.includes(opt)}
-                              onChange={(e) => {
-                                setTaskSelectedValues((prev) =>
-                                  e.target.checked
-                                    ? [...prev, opt]
-                                    : prev.filter((v) => v !== opt)
-                                );
-                              }}
-                            />
-                            {opt}
-                          </label>
-                        ))}
-                    </div>
-                    {taskSelectedValues.length > 0 && (
-                      <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 4 }}>
-                        已选: {taskSelectedValues.join(", ")}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-              {taskConfig && (
-                <Button variant="outline" size="sm" onClick={handleResetTaskConfig} disabled={taskSaving}>
-                  恢复默认
-                </Button>
-              )}
-              <Button
-                size="sm"
-                onClick={handleSaveTaskConfig}
-                disabled={!taskSelectedTable || !taskSelectedColumn || taskSelectedValues.length === 0 || taskSaving}
-              >
-                {taskSaving ? "保存中..." : "保存"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Unified KPI config modal */}
-      <KpiConfigModal
-        open={kpiModal.open}
-        onOpenChange={(v) => setKpiModal((p) => ({ ...p, open: v }))}
-        kpiKey={kpiModal.key}
-        kpiLabel={kpiModal.label}
-        onSaved={() => fetchData(selectedIds.size > 0 ? Array.from(selectedIds) : undefined)}
-      />
+      {/* Generic dedicated KPI config dialogs */}
+      {renderDedicatedDialog(kpiCard, setKpiCard)}
+      {renderDedicatedDialog(domainCfg, setDomainCfg)}
+      {renderDedicatedDialog(reqStats, setReqStats)}
+      {renderDedicatedDialog(warningCfg, setWarningCfg)}
+      {renderDedicatedDialog(healthRank, setHealthRank)}
+      {renderDedicatedDialog(weakArea, setWeakArea)}
     </div>
   );
 }

@@ -29,6 +29,8 @@ const AboutPage = dynamic(() => import("@/components/about-page"), { ssr: false,
 const TaskCenter = dynamic(() => import("@/components/task-center"), { ssr: false, loading: () => <LoadingFallback /> });
 const CaseCenter = dynamic(() => import("@/components/case-center"), { ssr: false, loading: () => <LoadingFallback /> });
 const ProjectDashboard = dynamic(() => import("@/components/project-dashboard").then(m => ({ default: m.ProjectDashboard })), { ssr: false, loading: () => <LoadingFallback /> });
+const StageLayout = dynamic(() => import("@/components/project-detail-stage/StageLayout").then(m => ({ default: m.StageLayout })), { ssr: false, loading: () => <LoadingFallback /> });
+const LayoutSelector = dynamic(() => import("@/components/project-detail-stage/LayoutSelector").then(m => ({ default: m.LayoutSelector })), { ssr: false });
 
 import {
   FolderKanban,
@@ -108,10 +110,19 @@ const mockStandards = [
 export default function HomePage() {
   const { user, isLoading, isAuthenticated, logout: authLogout } = useAuth();
   const [projectTypes, setProjectTypes] = useState<{ code: string; name: string }[]>([]);
-  const [projectStages, setProjectStages] = useState<{ code: string; name: string }[]>([]);
+  const [projectStages, setProjectStages] = useState<{ code: string; name: string; sort_order?: number }[]>([]);
   const [procurementModules, setProcurementModules] = useState<{ code: string; name: string }[]>([]);
-  const [activeItem, setActiveItem] = useState("project-board");
+  const [customerTypes, setCustomerTypes] = useState<{ code: string; name: string }[]>([]);
+  const [activeItem, setActiveItem] = useState("projects");
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<"management" | "stage" | null>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("project_detail_layout_mode");
+      if (saved === "management" || saved === "stage") return saved;
+    }
+    return null;
+  });
+  const [layoutSelectorOpen, setLayoutSelectorOpen] = useState(false);
   const [projects, setProjects] = useState(mockProjects);
   const [users, setUsers] = useState<{ id: string; username: string; name: string; phone?: string; email?: string; department?: string; position?: string; avatar?: string; role?: "super_admin" | "sub_admin" | "user"; is_active: boolean; created_at: string }[]>([]);
   const [standards, setStandards] = useState<TableDefinition[]>([]);
@@ -127,18 +138,18 @@ export default function HomePage() {
     project_schema: string;
     status: string;
     created_at: string;
-    customer_info?: {
-      company_name?: string;
-      contact_person?: string;
-      contact_phone?: string;
-      contact_email?: string;
-    };
-    channel_info?: Array<{
-      company_name: string;
-      contact_person?: string;
-      contact_phone?: string;
-    }>;
-    procurement_modules?: string[];
+    project_status?: string | null;
+    customer_info?: { company_name?: string; contact_person?: string; contact_phone?: string; contact_email?: string; contact_persons?: Array<{ name?: string; phone?: string }> } | null;
+    customer_location?: { province?: string; city?: string; district?: string; town?: string; village?: string } | null;
+    customer_type?: string[] | null;
+    deployment_mode?: string | null;
+    channel_info?: Array<{ company_name?: string; contact_person?: string; contact_phone?: string }> | null;
+    role_sales?: string | null;
+    role_presales?: string | null;
+    role_market_product?: string | null;
+    role_project_manager?: string | null;
+    members?: Array<{ name?: string; role?: string; role_type?: string; phone?: string; email?: string }> | null;
+    procurement_modules?: Array<string | { code?: string; module_code?: string; module_name?: string; name?: string; quantity?: number }>;
     description?: string;
   } | null>(null);
 
@@ -207,7 +218,11 @@ export default function HomePage() {
         const stagesRes = await fetch("/api/dicts?type=project_stages");
         if (stagesRes.ok) {
           const stagesData = await stagesRes.json();
-          setProjectStages((stagesData.data || []).filter((item: any) => item.code));
+          setProjectStages(
+            (stagesData.data || [])
+              .filter((item: any) => item.code)
+              .sort((a: any, b: any) => (a.sort_order ?? 99) - (b.sort_order ?? 99))
+          );
         }
 
         // 获取采购模块（来源于产品模块数据）
@@ -220,6 +235,15 @@ export default function HomePage() {
             name: item.module_name || item.product_name || item.code
           }));
           setProcurementModules(modules);
+        }
+
+        // 获取客户类型
+        const ctRes = await fetch("/api/dicts?type=customer_types");
+        if (ctRes.ok) {
+          const ctData = await ctRes.json();
+          setCustomerTypes(
+            (ctData.data || []).map((item: any) => ({ code: item.code, name: item.name || item.code }))
+          );
         }
 
         // 获取用户列表
@@ -255,10 +279,11 @@ export default function HomePage() {
   // 刷新基础数据的方法
   const refreshBaseData = async () => {
     try {
-      const [typesRes, stagesRes, modulesRes, projectsRes] = await Promise.all([
+      const [typesRes, stagesRes, modulesRes, ctRes, projectsRes] = await Promise.all([
         fetch("/api/dicts?type=project_types"),
         fetch("/api/dicts?type=project_stages"),
         fetch("/api/dicts?type=product_module_types"),
+        fetch("/api/dicts?type=customer_types"),
         fetch("/api/projects"),
       ]);
 
@@ -268,7 +293,11 @@ export default function HomePage() {
       }
       if (stagesRes.ok) {
         const stagesData = await stagesRes.json();
-        setProjectStages((stagesData.data || []).filter((item: any) => item.code));
+        setProjectStages(
+          (stagesData.data || [])
+            .filter((item: any) => item.code)
+            .sort((a: any, b: any) => (a.sort_order ?? 99) - (b.sort_order ?? 99))
+        );
       }
       if (modulesRes.ok) {
         const modulesData = await modulesRes.json();
@@ -278,6 +307,10 @@ export default function HomePage() {
           name: item.module_name || item.product_name || item.code
         }));
         setProcurementModules(modules);
+      }
+      if (ctRes.ok) {
+        const ctData = await ctRes.json();
+        setCustomerTypes((ctData.data || []).map((item: any) => ({ code: item.code, name: item.name || item.code })));
       }
       if (projectsRes.ok) {
         const projectsData = await projectsRes.json();
@@ -340,9 +373,10 @@ export default function HomePage() {
       // 从前端状态中移除
       setProjects((prev) => prev.filter((p) => p.id !== id));
       
-      toast.success(result.deletedSchema 
-        ? `项目删除成功，已清理 Schema: ${result.deletedSchema}` 
-        : "项目删除成功");
+      const parts = ["项目删除成功"];
+      if (result.deletedSchema) parts.push(`已清理 Schema: ${result.deletedSchema}`);
+      if (result.uploadsCleaned) parts.push("已清理上传文件目录");
+      toast.success(parts.join("，"));
     } catch (error: any) {
       console.error("Delete error:", error);
       toast.error("删除失败: " + error.message);
@@ -372,7 +406,20 @@ export default function HomePage() {
     procurement_modules?: string[];
     description?: string;
   }) => {
-    setViewingProject(project as typeof viewingProject);
+    const typedProject = project as typeof viewingProject;
+    setViewingProject(typedProject);
+    // 如果用户从未选择过布局，弹出选择器
+    if (layoutMode === null) {
+      setLayoutSelectorOpen(true);
+    }
+  };
+
+  const handleSetLayoutMode = (mode: "management" | "stage") => {
+    setLayoutMode(mode);
+    setLayoutSelectorOpen(false);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("project_detail_layout_mode", mode);
+    }
   };
 
   const handleUserCreate = async (data: any) => {
@@ -491,7 +538,7 @@ export default function HomePage() {
 
   const handleStandardDelete = async (id: string) => {
     try {
-      const res = await fetch(`/api/standards/${id}`, {
+      const res = await fetch(`/api/standards/${id}?id=${id}`, {
         method: "DELETE",
       });
       
@@ -504,6 +551,26 @@ export default function HomePage() {
       toast.success("数据表删除成功");
     } catch (error: any) {
       toast.error("删除失败: " + error.message);
+    }
+  };
+
+  const handleStandardDuplicate = async (def: any) => {
+    try {
+      const res = await fetch("/api/standards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...def, id: undefined }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "复制失败");
+      }
+      toast.success(`已复制为 ${def.table_code}`);
+      const refreshRes = await fetch("/api/standards");
+      const refreshData = await refreshRes.json();
+      setStandards((refreshData.data || []).filter((d: any) => !String(d.table_code).startsWith("task_")));
+    } catch (error: any) {
+      toast.error("复制失败: " + error.message);
     }
   };
 
@@ -581,6 +648,9 @@ export default function HomePage() {
                     procurement_modules: project.procurement_modules as string[] | undefined,
                     description: project.description,
                   });
+                  if (layoutMode === null) {
+                    setLayoutSelectorOpen(true);
+                  }
                   setActiveItem("projects");
                 }
               }}
@@ -589,13 +659,30 @@ export default function HomePage() {
         );
       case "projects":
         if (viewingProject) {
+          if (layoutMode === "stage") {
+            return (
+              <ContentErrorBoundary>
+                <StageLayout
+                  project={viewingProject}
+                  projectTypes={projectTypes}
+                  projectStages={projectStages}
+                  procurementModuleDict={procurementModules}
+                  customerTypeDict={customerTypes}
+                  onBack={() => { setViewingProject(null); }}
+                  onSwitchLayout={handleSetLayoutMode}
+                />
+              </ContentErrorBoundary>
+            );
+          }
+          // layoutMode === "management" or null (shows management behind selector)
           return (
             <ContentErrorBoundary>
               <ProjectDetail
-                project={viewingProject}
+                project={viewingProject as any}
                 projectTypes={projectTypes}
                 projectStages={projectStages}
-                onBack={() => setViewingProject(null)}
+                onBack={() => { setViewingProject(null); setLayoutSelectorOpen(false); }}
+                onSwitchLayout={handleSetLayoutMode}
               />
             </ContentErrorBoundary>
           );
@@ -629,6 +716,7 @@ export default function HomePage() {
               onCreate={handleStandardCreate}
               onUpdate={handleStandardUpdate}
               onDelete={handleStandardDelete}
+              onDuplicate={handleStandardDuplicate}
               onReorder={handleStandardReorder}
             />
           </ContentErrorBoundary>
@@ -723,6 +811,11 @@ case "messages":
       <ChangePasswordDialog
         open={showChangePassword}
         onOpenChange={setShowChangePassword}
+      />
+
+      <LayoutSelector
+        open={layoutSelectorOpen}
+        onSelect={handleSetLayoutMode}
       />
     </div>
   );

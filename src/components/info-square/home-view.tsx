@@ -146,6 +146,13 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
         fetch("/api/knowledge/stats"),
         fetch("/api/knowledge/posts?status=draft&page_size=999"),
       ]);
+
+      // Check HTTP status before parsing JSON to avoid "Unexpected token '<'" errors
+      if (!catRes.ok) throw new Error(`Categories API returned ${catRes.status}`);
+      if (!postsRes.ok) throw new Error(`Posts API returned ${postsRes.status}`);
+      if (!statsRes.ok) throw new Error(`Stats API returned ${statsRes.status}`);
+      if (!draftsRes.ok) throw new Error(`Drafts API returned ${draftsRes.status}`);
+
       const catJson = await catRes.json();
       const cats = (catJson.data || []) as Category[];
       setCategories(cats);

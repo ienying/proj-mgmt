@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
+import { rmSync, existsSync } from "fs";
+import path from "path";
 
 function mapColumnTypeToSQL(type: string): string {
   const typeMap: Record<string, string> = {
@@ -541,6 +543,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     const projectSchema = (project as Record<string, unknown>)?.project_schema as string;
+    let uploadsCleaned = false;
 
     // 删除项目成员
     const { error: membersError } = await client.rpc("execute_sql", {
@@ -560,6 +563,11 @@ export async function DELETE(request: NextRequest) {
       } catch (schemaError) {
         console.error("删除项目 Schema 失败:", schemaError);
       }
+      // 删除项目上传的文件目录
+      try {
+        const uploadDir = path.join(process.cwd(), "public", "uploads", projectSchema);
+        if (existsSync(uploadDir)) { rmSync(uploadDir, { recursive: true, force: true }); uploadsCleaned = true; }
+      } catch {}
     }
 
     // 删除项目主表记录
@@ -572,9 +580,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
-      deletedSchema: projectSchema || null
+      deletedSchema: projectSchema || null,
+      uploadsCleaned,
     });
   } catch (error: unknown) {
     const message =

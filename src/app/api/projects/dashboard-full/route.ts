@@ -18,6 +18,7 @@ interface KpiCondition {
 interface KpiSource {
   table_code: string;
   conditions: KpiCondition[];
+  relation?: "AND" | "OR";  // how conditions within this source combine
 }
 interface KpiConfigValue {
   sources: KpiSource[];
@@ -46,7 +47,10 @@ function buildSourceSQL(schema: string, source: KpiSource): string {
       case "not_in": conditions.push(`${col} NOT IN (${vals.join(", ")})`); break;
     }
   }
-  if (conditions.length > 0) sql += " WHERE " + conditions.join(" AND ");
+  if (conditions.length > 0) {
+    const joinOp = source.relation === "OR" ? " OR " : " AND ";
+    sql += " WHERE " + conditions.join(joinOp);
+  }
   return sql;
 }
 
@@ -129,6 +133,7 @@ export async function GET(request: NextRequest) {
                   operator: String(c.operator || "in"),
                   values: Array.isArray(c.values) ? c.values.map(String) : [],
                 })),
+                relation: (s.relation === "OR" ? "OR" : "AND") as "AND" | "OR",
               };
             }
             // Legacy format: include[] + exclude[]

@@ -335,28 +335,159 @@ export async function testAIConnection(
   }
 }
 
+// ==================== AI 助手 - 会话表结构 ====================
+export async function ensureConvTables() {
+  const client = await createServerClient();
+
+  // 角色功能权限开关表
+  try {
+    await client.rpc("execute_sql", {
+      p_sql: `
+        CREATE TABLE IF NOT EXISTS design_public.role_feature_permissions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          role TEXT NOT NULL,
+          feature_key TEXT NOT NULL,
+          enabled BOOLEAN DEFAULT false,
+          UNIQUE(role, feature_key)
+        )
+      `,
+    });
+  } catch { /* 表可能已存在 */ }
+
+  // AI 会话表
+  try {
+    await client.rpc("execute_sql", {
+      p_sql: `
+        CREATE TABLE IF NOT EXISTS design_public.ai_conversations (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id TEXT NOT NULL,
+          title TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `,
+    });
+  } catch { /* 表可能已存在 */ }
+
+  // AI 消息表
+  try {
+    await client.rpc("execute_sql", {
+      p_sql: `
+        CREATE TABLE IF NOT EXISTS design_public.ai_messages (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          conversation_id UUID REFERENCES design_public.ai_conversations(id) ON DELETE CASCADE,
+          role TEXT NOT NULL,
+          content TEXT NOT NULL,
+          intent TEXT,
+          structured_data JSONB,
+          action_type TEXT,
+          action_status TEXT DEFAULT 'none',
+          execution_result JSONB,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `,
+    });
+  } catch { /* 表可能已存在 */ }
+}
+
+// ==================== 角色功能权限 ====================
+const DEFAULT_FEATURE_PERMISSIONS: Record<string, Record<string, boolean>> = {
+  ai_assistant: { super_admin: true, sub_admin: true, user: false },
+};
+
+export async function getRoleFeaturePermission(role: string, featureKey: string): Promise<boolean> {
+  try {
+    const client = await createServerClient();
+    await ensureConvTables();
+    const { data } = await client.rpc("dp_select", {
+      p_table: "design_public.role_feature_permissions",
+    });
+    const rows = (data as Record<string, unknown>[]) || [];
+    const record = rows.find((r) => r.role === role && r.feature_key === featureKey);
+    if (record) return record.enabled === true;
+    // Fallback to defaults
+    return DEFAULT_FEATURE_PERMISSIONS[featureKey]?.[role] ?? false;
+  } catch {
+    return DEFAULT_FEATURE_PERMISSIONS[featureKey]?.[role] ?? false;
+  }
+}
+
+export async function getFeaturePermissions(): Promise<Record<string, Record<string, boolean>>> {
+  try {
+    const client = await createServerClient();
+    await ensureConvTables();
+    const { data } = await client.rpc("dp_select", {
+      p_table: "design_public.role_feature_permissions",
+    });
+    const rows = (data as Record<string, unknown>[]) || [];
+
+    // 以默认值打底
+    const result: Record<string, Record<string, boolean>> = JSON.parse(JSON.stringify(DEFAULT_FEATURE_PERMISSIONS));
+    for (const r of rows) {
+      const role = String(r.role || "");
+      const featureKey = String(r.feature_key || "");
+      if (!result[featureKey]) result[featureKey] = {};
+      result[featureKey][role] = r.enabled === true;
+    }
+    return result;
+  } catch {
+    return JSON.parse(JSON.stringify(DEFAULT_FEATURE_PERMISSIONS));
+  }
+}
+
+export async function setFeaturePermission(role: string, featureKey: string, enabled: boolean): Promise<void> {
+  const client = await createServerClient();
+  await ensureConvTables();
+
+  const { data } = await client.rpc("dp_select", {
+    p_table: "design_public.role_feature_permissions",
+  });
+  const rows = (data as Record<string, unknown>[]) || [];
+  const existing = rows.find((r) => r.role === role && r.feature_key === featureKey);
+
+  if (existing) {
+    await client.rpc("dp_update", {
+      p_table: "design_public.role_feature_permissions",
+      p_id: existing.id as string,
+      p_data: { enabled },
+    });
+  } else {
+    await client.rpc("dp_insert", {
+      p_table: "design_public.role_feature_permissions",
+      p_data: { role, feature_key: featureKey, enabled },
+    });
+  }
+}
+
 // ==================== 大模型调用 ====================
 export async function chatCompletion(
-  messages: Array<{ role: string; content: string }>,
-  options?: { model?: string; maxTokens?: number }
+  messages: Array<{ role: string; content: string; tool_calls?: any; tool_call_id?: string }>,
+  options?: { model?: string; maxTokens?: number; tools?: any[] }
 ) {
   const settings = await getAISettings();
   if (!settings) throw new Error("API Key 未配置");
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 60000);
+
+  const body: any = {
+    model: options?.model || settings.model,
+    messages,
+    max_tokens: options?.maxTokens || 4096,
+    temperature: 0.3,
+  };
+  if (options?.tools?.length) {
+    body.tools = options.tools;
+    body.tool_choice = "auto";
+  }
+
   const res = await fetch(`${settings.baseUrl}/v1/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${settings.apiKey}`,
     },
-    body: JSON.stringify({
-      model: options?.model || settings.model,
-      messages,
-      max_tokens: options?.maxTokens || 4096,
-      temperature: 0.3,
-    }),
+    body: JSON.stringify(body),
     signal: controller.signal,
   });
   clearTimeout(timer);
@@ -367,7 +498,10 @@ export async function chatCompletion(
   }
 
   const json = await res.json();
-  const content = json.choices?.[0]?.message?.content || "";
+  const choice = json.choices?.[0];
+  const message = choice?.message || {};
+  const content = message.content || "";
+  const toolCalls = message.tool_calls || null;
   const tokens = json.usage?.total_tokens || 0;
-  return { content, tokens };
+  return { content, toolCalls, tokens };
 }

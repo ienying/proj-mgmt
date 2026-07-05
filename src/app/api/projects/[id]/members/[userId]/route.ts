@@ -20,7 +20,7 @@ export async function DELETE(
     }
 
     const member = (members as Record<string, unknown>[]).find(
-      (m: Record<string, unknown>) => m.project_id === projectId && m.user_id === userId
+      (m: Record<string, unknown>) => m.project_id === projectId && (m.user_id === userId || m.id === userId)
     );
 
     if (!member) {
