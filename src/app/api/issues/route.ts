@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "问题类别不能为空" }, { status: 400 });
     }
     if (!product_module_id) {
-      return NextResponse.json({ error: "对应产品模块不能为空" }, { status: 400 });
+      return NextResponse.json({ error: "对应产品目录不能为空" }, { status: 400 });
     }
     if (!urgency_id) {
       return NextResponse.json({ error: "紧急程度不能为空" }, { status: 400 });

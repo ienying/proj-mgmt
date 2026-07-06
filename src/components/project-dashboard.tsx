@@ -486,7 +486,7 @@ export function ProjectDashboard({
       .then((json) => {
         if (json.data) {
           const cfg = json.data;
-          let module = "", table = "", expression = "s0", nextId = 0;
+          let mod = "", table = "", expression = "s0", nextId = 0;
           let groups: ConditionGroup[] = [];
 
           if (cfg.sources && Array.isArray(cfg.sources) && cfg.sources.length > 0) {
@@ -501,11 +501,11 @@ export function ProjectDashboard({
               relation: (s.relation === "OR" ? "OR" : "AND") as "AND" | "OR",
             }));
             expression = cfg.expression || groups.map((_, i) => `s${i}`).join(" + ");
-            module = cfg.sources[0]?.module_type || "";
+            mod = cfg.sources[0]?.module_type || "";
             table = cfg.sources[0]?.table_code || "";
           } else if (cfg.include_column || cfg.exclude_column) {
             // Legacy format: {include_column, include_value, exclude_column, exclude_value}
-            module = cfg.module_type || "";
+            mod = cfg.module_type || "";
             table = cfg.table_code || "";
             const hasA = cfg.include_column && cfg.include_value;
             const hasB = cfg.exclude_column && cfg.exclude_value;
@@ -529,13 +529,13 @@ export function ProjectDashboard({
             expression = groups.length === 2 ? "s0 - s1" : groups.length === 1 ? "s0" : "";
           } else if (cfg.table_code) {
             // Very old format: just {table_code, module_type, table_name}
-            module = cfg.module_type || "";
+            mod = cfg.module_type || "";
             table = cfg.table_code || "";
           }
           // Parse threshold
         const threshold = cfg.threshold as { enabled?: boolean; operator?: string; value?: number } | undefined;
         setter((p: any) => ({
-          ...p, currentConfig: cfg, module, table, groups, expression, nextGroupId: nextId,
+          ...p, currentConfig: cfg, module: mod, table, groups, expression, nextGroupId: nextId,
           thresholdEnabled: threshold?.enabled || false,
           thresholdOperator: (threshold?.operator as DedicatedState["thresholdOperator"]) || "gt",
           thresholdValue: threshold?.value != null ? String(threshold.value) : "",

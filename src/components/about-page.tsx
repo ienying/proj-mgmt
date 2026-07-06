@@ -152,7 +152,7 @@ const FEATURE_MODULES = [
     desc: "客户画像与产品案例库，积累和展示项目成果。",
     highlights: [
       "用户画像：客户档案/项目履历/沟通记录管理",
-      "产品案例：按产品模块归档项目案例",
+      "产品案例：按产品目录归档项目案例",
       "支持案例详情展示与成果沉淀",
     ],
   },
@@ -166,7 +166,7 @@ const FEATURE_MODULES = [
     highlights: [
       "用户管理：创建用户/角色分配/重置密码/启用禁用",
       "角色权限面板：超级管理员/子管理员/普通用户",
-      "基础数据：产品模块/项目类型/项目阶段/模块管理",
+      "基础数据：产品目录/项目类型/项目阶段/模块管理",
       "工单配置：问题类别/紧急程度/保修情况/外部接收设置",
       "信息广场分类维护",
     ],
@@ -1977,7 +1977,7 @@ function GuideContent({ onNavigate }: { onNavigate: (viewId: string) => void }) 
             </div>
             <div className="bg-cyan-50 rounded-lg p-3">
               <p className="text-xs font-medium text-cyan-700">产品案例</p>
-              <p className="text-xs text-cyan-600 mt-1">按产品模块归档项目案例，支持展示案例详情和成果</p>
+              <p className="text-xs text-cyan-600 mt-1">按产品目录归档项目案例，支持展示案例详情和成果</p>
             </div>
           </div>
           <button

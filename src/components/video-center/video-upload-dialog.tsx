@@ -330,7 +330,7 @@ export default function VideoUploadDialog({
 
           {/* Searchable Module dropdown */}
           <div>
-            <Label>产品模块</Label>
+            <Label>产品目录</Label>
             <Popover open={moduleOpen} onOpenChange={setModuleOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -342,14 +342,14 @@ export default function VideoUploadDialog({
                   )}
                   disabled={uploading}
                 >
-                  {moduleName || "选择产品模块（可选）"}
+                  {moduleName || "选择产品目录（可选）"}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                 <Command shouldFilter={false}>
                   <CommandInput
-                    placeholder="搜索产品模块..."
+                    placeholder="搜索产品目录..."
                     value={moduleSearch}
                     onValueChange={setModuleSearch}
                   />

@@ -225,7 +225,7 @@ export default function HomePage() {
           );
         }
 
-        // 获取采购模块（来源于产品模块数据）
+        // 获取采购模块（来源于产品目录数据）
         const modulesRes = await fetch("/api/dicts?type=product_module_types");
         if (modulesRes.ok) {
           const modulesData = await modulesRes.json();

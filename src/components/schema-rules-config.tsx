@@ -146,7 +146,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
     }
   };
 
-  // 加载产品模块
+  // 加载产品目录
   const loadProductModules = async () => {
     try {
       const response = await fetch("/api/dicts?type=product_module_types");
@@ -155,7 +155,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
         setProductModules(data.data || []);
       }
     } catch (error) {
-      console.error("加载产品模块失败:", error);
+      console.error("加载产品目录失败:", error);
     }
   };
 
@@ -445,18 +445,18 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                   <Card>
                     <CardHeader className="pb-3">
                       <CardTitle className="text-sm">
-                        {formData.rule_type === 'module' ? '产品模块' : '匹配条件'}
+                        {formData.rule_type === 'module' ? '产品目录' : '匹配条件'}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       {formData.rule_type === 'module' ? (
                         <>
                           <p className="text-xs text-muted-foreground">
-                            选择产品模块后，当新建项目采购了这些模块时，会自动复制对应的规范表
+                            选择产品目录后，当新建项目采购了这些模块时，会自动复制对应的规范表
                           </p>
-                          {/* 产品模块选择 */}
+                          {/* 产品目录选择 */}
                           <Input
-                            placeholder="搜索产品模块..."
+                            placeholder="搜索产品目录..."
                             className="h-8 text-xs"
                             value={moduleSearch}
                             onChange={(e) => setModuleSearch(e.target.value)}
@@ -496,7 +496,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                             ))}
                             {productModules.filter(m => !moduleSearch || m.module_name.includes(moduleSearch) || m.product_name?.includes(moduleSearch)).length === 0 && (
                               <p className="text-xs text-muted-foreground text-center py-4">
-                                {productModules.length === 0 ? '暂无产品模块，请先在基础数据中添加' : '未找到匹配的产品模块'}
+                                {productModules.length === 0 ? '暂无产品目录，请先在基础数据中添加' : '未找到匹配的产品目录'}
                               </p>
                             )}
                           </div>

@@ -455,7 +455,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
     if (!form.project_id && !form.project_name.trim()) { alert("请选择所属项目"); return; }
     if (!form.handler_id) { alert("请选择指定处理人"); return; }
     if (!form.category_id && !form.sub_category_id) { alert("请选择问题类别"); return; }
-    if (form.product_module_ids.length === 0 && !form.product_module_id) { alert("请选择对应产品模块"); return; }
+    if (form.product_module_ids.length === 0 && !form.product_module_id) { alert("请选择对应产品目录"); return; }
     if (!form.urgency_id) { alert("请选择紧急程度"); return; }
 
     try {
@@ -665,7 +665,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
             {issue.product_module_names && issue.product_module_names.length > 0 ? (
               <span className="flex items-center gap-1"><Package className="w-3 h-3 text-black" />{issue.product_module_names.join('、')}</span>
             ) : issue.product_module_id ? (
-              <span className="flex items-center gap-1"><Package className="w-3 h-3 text-black" />产品模块</span>
+              <span className="flex items-center gap-1"><Package className="w-3 h-3 text-black" />产品目录</span>
             ) : null}
           </div>
           {issue.description && (
@@ -963,9 +963,9 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                     )}
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-black mb-1.5 block">对应产品模块 <span className="text-red-500">*</span></label>
+                    <label className="text-xs font-semibold text-black mb-1.5 block">对应产品目录 <span className="text-red-500">*</span></label>
                     <Select value={form.product_module_id} onValueChange={v => setForm(f => ({ ...f, product_module_id: v }))}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="选择产品模块" /></SelectTrigger>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="选择产品目录" /></SelectTrigger>
                       <SelectContent>
                         {productModules.map(m => <SelectItem key={m.id} value={m.id}>{m.module_name}{m.product_name ? ` (${m.product_name})` : ""}</SelectItem>)}
                       </SelectContent>
@@ -1571,7 +1571,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         </div>
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">对应产品模块 <span className="text-red-500">*</span></label>
+            <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">对应产品目录 <span className="text-red-500">*</span></label>
             <div className="flex flex-wrap gap-1.5 items-center border border-[#d5dfe8] p-2 min-h-[42px]">
               {form.product_module_ids.map((mid, idx) => {
                 const mod = productModules.find(m => m.id === mid);
@@ -1590,11 +1590,11 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
               })}
               <Popover>
                 <PopoverTrigger asChild>
-                  <button className="text-xs text-[#7b8fa1] hover:text-[#0d2137] px-1">+ 添加产品模块</button>
+                  <button className="text-xs text-[#7b8fa1] hover:text-[#0d2137] px-1">+ 添加产品目录</button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[320px] p-0 rounded-none" align="start">
                   <Command>
-                    <CommandInput placeholder="搜索产品模块..." />
+                    <CommandInput placeholder="搜索产品目录..." />
                     <CommandList>
                       <CommandEmpty>无匹配模块</CommandEmpty>
                       <CommandGroup>

@@ -319,10 +319,10 @@ export default function VideoDetailDrawer({
                       <Input id="edit-title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
                     </div>
                     <div>
-                      <Label htmlFor="edit-module">产品模块</Label>
+                      <Label htmlFor="edit-module">产品目录</Label>
                       <Select value={editModule} onValueChange={setEditModule}>
                         <SelectTrigger id="edit-module">
-                          <SelectValue placeholder="选择产品模块" />
+                          <SelectValue placeholder="选择产品目录" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">不选择模块</SelectItem>

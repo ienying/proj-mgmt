@@ -260,10 +260,10 @@ export async function GET(request: NextRequest) {
             });
             const rows = (batchRows as Array<{ tbl: string; cnt: string }>) || [];
             for (const row of rows) {
-              const module = moduleMap.get(row.tbl) || "other";
+              const mod = moduleMap.get(row.tbl) || "other";
               const count = Number(row.cnt) || 0;
-              if (moduleCounts.hasOwnProperty(module)) {
-                moduleCounts[module] += count;
+              if (moduleCounts.hasOwnProperty(mod)) {
+                moduleCounts[mod] += count;
               }
             }
           } catch {

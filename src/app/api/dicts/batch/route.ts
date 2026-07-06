@@ -50,7 +50,7 @@ export async function GET(request: Request) {
 
       let result: unknown[] = (data as any[]) || [];
 
-      // 产品模块关联类别名称
+      // 产品目录关联类别名称
       if (type === "product_module_types" && Array.isArray(result)) {
         const categoriesRes = await supabase.rpc("dp_select", {
           p_table: "product_categories",

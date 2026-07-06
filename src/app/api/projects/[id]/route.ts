@@ -30,7 +30,7 @@ async function syncProcurementModuleRecords(
 ) {
   if (!procurementModules || procurementModules.length === 0) return;
 
-  // 获取产品模块详情
+  // 获取产品目录详情
   const { data: moduleTypes } = await client.rpc("dp_select", {
     p_table: "product_module_types",
   });
@@ -298,7 +298,7 @@ async function syncProjectSchema(
 
   // 同步采购模块记录
   if (procurementModules && procurementModules.length > 0) {
-    // 获取产品模块详情（含排序信息和属性）
+    // 获取产品目录详情（含排序信息和属性）
     const { data: moduleTypes } = await client.rpc("dp_select", {
       p_table: "product_module_types",
     });

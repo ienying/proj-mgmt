@@ -40,6 +40,7 @@ import {
   AlertTriangle,
   Search,
   Download,
+  HardHat,
   Upload,
   Copy,
   ClipboardList,
@@ -73,6 +74,14 @@ interface ChannelCompany {
   contact_person: string;
   contact_phone: string;
   remark: string;
+}
+
+interface ConstructionUnit {
+  id: string;
+  company_name: string;
+  contact_person: string;
+  contact_phone: string;
+  construction_content: string;
 }
 
 interface ProjectMember {
@@ -422,6 +431,9 @@ export function ProjectForm({
   // 渠道信息
   const [channelCompanies, setChannelCompanies] = useState<ChannelCompany[]>([]);
 
+  // 施工方
+  const [constructionUnits, setConstructionUnits] = useState<ConstructionUnit[]>([]);
+
   // 项目成员
   const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
 
@@ -495,7 +507,7 @@ export function ProjectForm({
         { label: "软件金额(元)" },
         { label: "硬件金额(元)" },
         { label: "对接厂商(多个用、分隔)" },
-        { label: "对接产品模块(多个用、分隔)" },
+        { label: "对接产品目录(多个用、分隔)" },
       ];
 
       const ws1 = wb.addWorksheet("项目信息");
@@ -824,6 +836,17 @@ export function ProjectForm({
         setChannelCompanies(ch.map(c => ({ id: c.id || "", company_name: c.company_name || "", contact_person: c.contact_person || "", contact_phone: c.contact_phone || "", remark: c.remark || "" })));
       }
 
+      // 施工方
+      const cu = d.construction_units_info as Array<Record<string, string>> | null;
+      if (cu && cu.length > 0) {
+        setConstructionUnits(cu.map(c => ({
+          id: c.id || "", company_name: c.company_name || "",
+          contact_person: c.contact_person || "",
+          contact_phone: c.contact_phone || "",
+          construction_content: c.construction_content || "",
+        })));
+      }
+
       // 学校照片
       const sp = d.school_photos;
       if (Array.isArray(sp)) {
@@ -900,6 +923,7 @@ export function ProjectForm({
       setLongitude(""); setLatitude(""); setSchoolPhotos([]);
       setSelectedCustomerTypes([]); setDeploymentMode("");
       setChannelCompanies([{ id: "", company_name: "", contact_person: "", contact_phone: "", remark: "" }]);
+      setConstructionUnits([]);
       setSelectedModules([]); setProcurementAmount(""); setSoftwareAmount(""); setHardwareAmount("");
       setHasIntegration(false); setIntegrationList([]);
     setHasCustomDev(false); setCustomDevItems([]);
@@ -1074,6 +1098,30 @@ export function ProjectForm({
   // 删除渠道公司
   const removeChannelCompany = (id: string) => {
     setChannelCompanies(channelCompanies.filter((cc) => cc.id !== id));
+  };
+
+  // 添加工单位
+  const addConstructionUnit = () => {
+    setConstructionUnits([
+      ...constructionUnits,
+      {
+        id: Date.now().toString(),
+        company_name: "",
+        contact_person: "",
+        contact_phone: "",
+        construction_content: "",
+      },
+    ]);
+  };
+
+  // 更新施工单位
+  const updateConstructionUnit = (id: string, field: keyof ConstructionUnit, value: string) => {
+    setConstructionUnits(constructionUnits.map((cu) => (cu.id === id ? { ...cu, [field]: value } : cu)));
+  };
+
+  // 删除施工单位
+  const removeConstructionUnit = (id: string) => {
+    setConstructionUnits(constructionUnits.filter((cu) => cu.id !== id));
   };
 
   // 添加项目成员（使用 callback 避免异步加载覆盖）
@@ -1328,6 +1376,7 @@ export function ProjectForm({
       deployment_mode: deploymentMode || null,
       channel_info: channelCompanies.filter((cc) => cc.company_name),
       implementation_unit: implementationUnit || null,
+      construction_units_info: constructionUnits.filter((cu) => cu.company_name),
       members: projectMembers.filter((pm) => pm.name),
       procurement_modules: selectedModules,
       procurement_amount: procurementAmount ? parseFloat(procurementAmount) : null,
@@ -1424,6 +1473,7 @@ export function ProjectForm({
   // 有效数据统计
   const validContacts = contactPersons.filter((cp) => cp.name || cp.phone);
   const validChannels = channelCompanies.filter((cc) => cc.company_name);
+  const validConstructionUnits = constructionUnits.filter((cu) => cu.company_name);
   const validMembers = projectMembers.filter((pm) => pm.name);
 
   if (!open) return null;
@@ -1677,12 +1727,12 @@ export function ProjectForm({
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>项目描述</Label>
+                <Label>项目描述（工前会议纪要）</Label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="请输入项目描述"
-                  className="w-full min-h-[80px] p-3 border rounded-md resize-none text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="请输入项目描述或工前会议纪要..."
+                  className="w-full min-h-[200px] p-3 border rounded-md resize-y text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </Section>
@@ -1943,6 +1993,59 @@ export function ProjectForm({
               ))}
               {channelCompanies.length === 0 && (
                 <div className="text-center py-6 text-slate-400 text-sm">暂无渠道公司，点击上方按钮添加</div>
+              )}
+            </Section>
+
+            {/* 实施单位 */}
+            <Section
+              title="实施单位"
+              icon={<HardHat className="h-4 w-4 text-amber-600" />}
+              count={validConstructionUnits.length}
+            >
+              <Button type="button" variant="outline" size="sm" onClick={addConstructionUnit}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> 添加实施单位
+              </Button>
+              {constructionUnits.map((cu) => (
+                <div key={cu.id} className="p-3 border rounded-lg relative group">
+                  <button
+                    type="button"
+                    className="absolute right-2 top-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                    onClick={() => removeConstructionUnit(cu.id)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="grid grid-cols-3 gap-3 items-center">
+                    <Input
+                      value={cu.company_name}
+                      onChange={(e) => updateConstructionUnit(cu.id, "company_name", e.target.value)}
+                      placeholder="实施单位名称"
+                      className="h-8 text-sm"
+                    />
+                    <Input
+                      value={cu.contact_person}
+                      onChange={(e) => updateConstructionUnit(cu.id, "contact_person", e.target.value)}
+                      placeholder="负责人"
+                      className="h-8 text-sm"
+                    />
+                    <Input
+                      value={cu.contact_phone}
+                      onChange={(e) => updateConstructionUnit(cu.id, "contact_phone", e.target.value)}
+                      placeholder="联系电话"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="mt-2">
+                    <Input
+                      value={cu.construction_content}
+                      onChange={(e) => updateConstructionUnit(cu.id, "construction_content", e.target.value)}
+                      placeholder="负责内容"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                </div>
+              ))}
+              {constructionUnits.length === 0 && (
+                <div className="text-center py-6 text-slate-400 text-sm">暂无实施单位，点击上方按钮添加</div>
               )}
             </Section>
 
@@ -2260,7 +2363,7 @@ export function ProjectForm({
                       </button>
                     </div>
                     <div className="p-4 space-y-3">
-                      {/* 第一行：对接厂商 / 产品模块 / 是否在合同内 / 对接类型 */}
+                      {/* 第一行：对接厂商 / 产品目录 / 是否在合同内 / 对接类型 */}
                       <div className="grid grid-cols-4 gap-3">
                         <div className="space-y-1">
                           <label className="text-xs text-slate-500">对接厂商 *</label>
@@ -2272,7 +2375,7 @@ export function ProjectForm({
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-xs text-slate-500">产品模块</label>
+                          <label className="text-xs text-slate-500">产品目录</label>
                           <Popover>
                             <PopoverTrigger asChild>
                               <Button variant="outline" role="combobox" className="w-full justify-between text-sm font-normal h-8">
@@ -2282,7 +2385,7 @@ export function ProjectForm({
                             </PopoverTrigger>
                             <PopoverContent className="w-[280px] p-0" align="start">
                               <Command>
-                                <CommandInput placeholder="搜索产品模块..." className="h-9" />
+                                <CommandInput placeholder="搜索产品目录..." className="h-9" />
                                 <CommandList className="max-h-[200px]">
                                   <CommandEmpty className="py-2 text-center text-sm">未找到</CommandEmpty>
                                   <CommandGroup>
@@ -2571,7 +2674,7 @@ export function ProjectForm({
                         <div className="p-4 space-y-3">
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
-                              <label className="text-xs text-slate-500">产品模块</label>
+                              <label className="text-xs text-slate-500">产品目录</label>
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <Button variant="outline" role="combobox" className="w-full justify-between text-sm font-normal h-8">
@@ -2581,7 +2684,7 @@ export function ProjectForm({
                                 </PopoverTrigger>
                                 <PopoverContent className="w-[280px] p-0" align="start">
                                   <Command>
-                                    <CommandInput placeholder="搜索产品模块..." className="h-9" />
+                                    <CommandInput placeholder="搜索产品目录..." className="h-9" />
                                     <CommandList className="max-h-[200px]">
                                       <CommandEmpty className="py-2 text-center text-sm">未找到</CommandEmpty>
                                       <CommandGroup>
@@ -2972,7 +3075,7 @@ export function ProjectForm({
             </div>
             <div className="px-6 py-4">
               <p className="text-sm text-slate-500 mb-3">
-                以下模块名称在系统中未找到，无法自动匹配。可复制后去「基础数据 → 产品模块」中添加。
+                以下模块名称在系统中未找到，无法自动匹配。可复制后去「基础数据 → 产品目录」中添加。
               </p>
               <div className="bg-slate-50 rounded-lg p-3 max-h-48 overflow-y-auto mb-4">
                 <div className="space-y-1 font-mono text-xs">

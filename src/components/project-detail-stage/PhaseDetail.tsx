@@ -117,13 +117,11 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
         }),
       });
       if (res.ok) {
-        setTableRecords((prev) => {
-          const updated = [...(prev[tableCode] || [])];
-          updated[rowIdx] = { ...updated[rowIdx], [colName]: valueToSave };
-          const newRecs = { ...prev, [tableCode]: updated };
-          onRecordsUpdate?.(tableCode, updated);
-          return newRecs;
-        });
+        const currentRecords = tableRecords[tableCode] || [];
+        const updated = [...currentRecords];
+        updated[rowIdx] = { ...updated[rowIdx], [colName]: valueToSave };
+        setTableRecords((prev) => ({ ...prev, [tableCode]: updated }));
+        onRecordsUpdate?.(tableCode, updated);
       }
     } catch {}
     setEditingCell(null);
@@ -140,11 +138,10 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       });
       if (res.ok) {
         const data = await res.json();
-        setTableRecords((prev) => {
-          const updated = [...(prev[tableCode] || []), data.data || data];
-          onRecordsUpdate?.(tableCode, updated);
-          return { ...prev, [tableCode]: updated };
-        });
+        const currentRecords = tableRecords[tableCode] || [];
+        const updated = [...currentRecords, data.data || data];
+        setTableRecords((prev) => ({ ...prev, [tableCode]: updated }));
+        onRecordsUpdate?.(tableCode, updated);
       }
     } catch {}
   };
@@ -157,11 +154,10 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
     try {
       const res = await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(tableCode)}&rowId=${row.id}`, { method: "DELETE" });
       if (res.ok) {
-        setTableRecords((prev) => {
-          const updated = (prev[tableCode] || []).filter((_, i) => i !== rowIdx);
-          onRecordsUpdate?.(tableCode, updated);
-          return { ...prev, [tableCode]: updated };
-        });
+        const currentRecords = tableRecords[tableCode] || [];
+        const updated = currentRecords.filter((_, i) => i !== rowIdx);
+        setTableRecords((prev) => ({ ...prev, [tableCode]: updated }));
+        onRecordsUpdate?.(tableCode, updated);
       }
     } catch {}
   };
@@ -226,12 +222,11 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
         return;
       }
 
-      setTableRecords((prev) => {
-        const updated = [...(prev[tableCode] || [])];
-        updated[rowIdx] = { ...updated[rowIdx], [colName]: fileKey };
-        onRecordsUpdate?.(tableCode, updated);
-        return { ...prev, [tableCode]: updated };
-      });
+      const currentRecords = tableRecords[tableCode] || [];
+      const updated = [...currentRecords];
+      updated[rowIdx] = { ...updated[rowIdx], [colName]: fileKey };
+      setTableRecords((prev) => ({ ...prev, [tableCode]: updated }));
+      onRecordsUpdate?.(tableCode, updated);
     } catch (e) {
       console.error("上传异常:", e);
     }
@@ -260,7 +255,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       if (!tableRecords[tableCode] && projectSchema) {
         setLoadingTable(tableCode);
         try {
-          // 预加载产品模块字典（用于 procurement_module 类型）
+          // 预加载产品目录字典（用于 procurement_module 类型）
           if (productModules.length === 0) {
             fetch("/api/dicts?type=product_module_types")
               .then((r) => r.json())

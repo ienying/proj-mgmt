@@ -146,9 +146,9 @@ function exportToExcel(data: DictItem[], productCategories: DictItem[], productV
     ];
 
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "产品模块");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "产品目录");
 
-    XLSX.writeFile(workbook, "产品模块导出.xlsx");
+    XLSX.writeFile(workbook, "产品目录导出.xlsx");
   });
 }
 
@@ -337,7 +337,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
 
   // 保存数据
   const handleSubmit = async () => {
-    // 产品模块需要验证 product_name 或 module_name
+    // 产品目录需要验证 product_name 或 module_name
     if (activeTab === "product-modules") {
       if (!editingData.product_name?.trim() && !editingData.module_name?.trim()) return;
     } else {
@@ -357,7 +357,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           is_enabled: editingData.is_enabled,
         };
         
-        // 产品模块额外字段
+        // 产品目录额外字段
         if (activeTab === "product-modules") {
           updateData.name = editingData.product_name || editingData.name;
           updateData.module_name = editingData.module_name;
@@ -403,8 +403,10 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           is_enabled: editingData.is_enabled ?? true,
         };
         
-        // 产品模块额外字段
+        // 产品目录额外字段
         if (activeTab === "product-modules") {
+          insertData.code = `PM_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          insertData.name = editingData.product_name || editingData.module_name;
           insertData.module_name = editingData.module_name;
           insertData.product_name = editingData.product_name;
           insertData.tech_specs = editingData.tech_specs;
@@ -835,7 +837,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
             基础数据维护
           </h3>
           <p className="text-sm text-muted-foreground">
-            管理项目类型、项目阶段、产品模块等基础数据
+            管理项目类型、项目阶段、产品目录等基础数据
           </p>
         </div>
       </div>
@@ -872,7 +874,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           </TabsTrigger>
           <TabsTrigger value="product-modules" className="gap-1.5 text-xs">
             <Package className="w-3.5 h-3.5" />
-            产品模块
+            产品目录
           </TabsTrigger>
           <TabsTrigger value="dev-integration-types" className="gap-1.5 text-xs">
             <Wrench className="w-3.5 h-3.5" />
@@ -1014,7 +1016,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           />
         </TabsContent>
 
-        {/* 产品模块 */}
+        {/* 产品目录 */}
         <TabsContent value="product-modules" className="mt-4">
           <div className="mb-4 flex gap-2 justify-end">
             <Button
@@ -1716,7 +1718,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
               Excel 导入
             </DialogTitle>
             <DialogDescription>
-              上传 Excel 文件导入产品模块数据
+              上传 Excel 文件导入产品目录数据
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto py-4">
@@ -1755,8 +1757,8 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
                             { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
                           ];
                           const wb = XLSX.utils.book_new();
-                          XLSX.utils.book_append_sheet(wb, ws, "产品模块");
-                          XLSX.writeFile(wb, "产品模块导入模板.xlsx");
+                          XLSX.utils.book_append_sheet(wb, ws, "产品目录");
+                          XLSX.writeFile(wb, "产品目录导入模板.xlsx");
                         });
                       }}
                     >
@@ -2109,13 +2111,13 @@ function DataTable({
       if (statusFilter === "disabled" && isEnabled) return false;
     }
 
-    // 类别筛选（产品模块）
+    // 类别筛选（产品目录）
     if (activeTab === "product-modules" && categoryFilter) {
       const itemCategory = item.category;
       if (itemCategory !== categoryFilter) return false;
     }
 
-    // 厂商筛选（产品模块）
+    // 厂商筛选（产品目录）
     if (activeTab === "product-modules" && vendorFilter) {
       const itemVendor = item.vendor;
       if (itemVendor !== vendorFilter) return false;
@@ -2247,7 +2249,7 @@ function DataTable({
               <option value="disabled">仅禁用</option>
             </select>
 
-            {/* 类别筛选（仅产品模块） */}
+            {/* 类别筛选（仅产品目录） */}
             {activeTab === "product-modules" && (
               <select
                 value={categoryFilter}
@@ -2261,7 +2263,7 @@ function DataTable({
               </select>
             )}
 
-            {/* 厂商筛选（仅产品模块） */}
+            {/* 厂商筛选（仅产品目录） */}
             {activeTab === "product-modules" && (
               <select
                 value={vendorFilter}
@@ -2695,6 +2697,18 @@ function DataTable({
                       </option>
                     ))}
                   </select>
+                </div>
+                {/* 第六行：描述（占两列） */}
+                <div className="col-span-2 space-y-1.5">
+                  <Label>描述</Label>
+                  <Textarea
+                    value={editingData.description || ""}
+                    onChange={(e) =>
+                      setEditingData((prev) => ({ ...prev, description: e.target.value }))
+                    }
+                    placeholder="请输入描述（可选）"
+                    rows={2}
+                  />
                 </div>
               </div>
             ) : (

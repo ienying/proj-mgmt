@@ -270,13 +270,13 @@ export function ProductCases() {
         </div>
       )}
 
-      {/* 产品模块使用排名 */}
+      {/* 产品目录使用排名 */}
       {moduleRanking.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-medium flex items-center gap-1.5">
               <TrendingUp className="w-4 h-4 text-muted-foreground" />
-              产品模块使用排名
+              产品目录使用排名
             </h3>
             <div className="flex items-center gap-1 text-xs">
               <Button

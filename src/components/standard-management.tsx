@@ -170,7 +170,7 @@ const COLUMN_TYPES = [
   { code: "attachment", name: "附件" },
   { code: "calc", name: "计算" },
   { code: "video", name: "视频" },
-  { code: "procurement_module", name: "产品模块" },
+  { code: "procurement_module", name: "产品目录" },
   { code: "procurement_record", name: "采购模块记录" },
   { code: "user", name: "用户" },
 ];
@@ -438,7 +438,7 @@ function PreviewPanel({
   );
 }
 
-// 产品模块下拉选择字段组件（用于规范管理数据编辑）
+// 产品目录下拉选择字段组件（用于规范管理数据编辑）
 function ProductModuleField({
   col,
   value,
@@ -501,7 +501,7 @@ function ProductModuleField({
               <span key={v} className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">{v}</span>
             ))
           ) : (
-            <span className="text-muted-foreground">选择产品模块...</span>
+            <span className="text-muted-foreground">选择产品目录...</span>
           )}
         </span>
         <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
@@ -759,7 +759,7 @@ export function StandardManagement({
     fetchModuleTypes();
   }, []);
 
-  // 加载产品模块名称列表
+  // 加载产品目录名称列表
   useEffect(() => {
     const fetchModuleNames = async () => {
       try {
@@ -1233,7 +1233,7 @@ export function StandardManagement({
         "单选": "select", "select": "select",
         "多选": "multiple_select", "multiple_select": "multiple_select",
         "多行文本": "textarea", "textarea": "textarea",
-        "产品模块": "procurement_module", "procurement_module": "procurement_module",
+        "产品目录": "procurement_module", "procurement_module": "procurement_module",
         "附件": "attachment", "attachment": "attachment",
         "视频": "video", "video": "video",
         "采购模块记录": "procurement_record", "procurement_record": "procurement_record",
@@ -2304,9 +2304,9 @@ export function StandardManagement({
                                               <option value="dev_integration_types">开发对接类型</option>
                                               <option value="custom_dev_types">定制开发类型</option>
                                             </optgroup>
-                                            <optgroup label="产品模块">
+                                            <optgroup label="产品目录">
                                               <option value="procurement_project">项目采购模块</option>
-                                              <option value="procurement_system">系统产品模块</option>
+                                              <option value="procurement_system">系统产品目录</option>
                                             </optgroup>
                                             <optgroup label="用户数据">
                                               <option value="departments">部门</option>
@@ -2490,7 +2490,7 @@ export function StandardManagement({
                                               className="h-6 text-xs px-2"
                                               onClick={() => updateColumn(index, "display_mode", "system")}
                                             >
-                                              系统产品模块
+                                              系统产品目录
                                             </Button>
                                           </div>
                                         </div>
@@ -3293,7 +3293,7 @@ export function StandardManagement({
                                               </optgroup>
                                               <optgroup label="产品">
                                                 <option value="procurement_project">项目采购模块</option>
-                                                <option value="procurement_system">系统产品模块</option>
+                                                <option value="procurement_system">系统产品目录</option>
                                               </optgroup>
                                               <optgroup label="用户">
                                                 <option value="departments">部门</option>
@@ -3392,7 +3392,7 @@ export function StandardManagement({
                                             <Label className="text-xs text-muted-foreground">数据来源</Label>
                                             <div className="flex gap-1 flex-wrap">
                                               <Button type="button" variant={col.display_mode !== "system" ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "display_mode", "project")}>项目采购模块</Button>
-                                              <Button type="button" variant={col.display_mode === "system" ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "display_mode", "system")}>系统产品模块</Button>
+                                              <Button type="button" variant={col.display_mode === "system" ? "default" : "outline"} size="sm" className="h-6 text-xs px-2" onClick={() => drawerUpdateColumn(ci, "display_mode", "system")}>系统产品目录</Button>
                                             </div>
                                           </div>
                                           <div className="space-y-1">

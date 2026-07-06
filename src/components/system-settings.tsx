@@ -409,7 +409,7 @@ export default function SystemSettings({
   const [productModuleCount, setProductModuleCount] = useState(0);
   
   useEffect(() => {
-    // 获取产品模块数量
+    // 获取产品目录数量
     fetch("/api/dicts?type=product_module_types")
       .then((res) => res.json())
       .then((data) => {

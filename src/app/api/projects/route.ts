@@ -97,6 +97,7 @@ export async function POST(request: NextRequest) {
       login_password,
       integration_list,
       custom_dev_info,
+      construction_units_info,
     } = body;
 
     // 0. 检查项目编号是否重复
@@ -148,6 +149,7 @@ export async function POST(request: NextRequest) {
       role_market_product: body.role_market_product || null,
       role_project_manager: body.role_project_manager || null,
       custom_dev_info: custom_dev_info || [],
+      construction_units_info: construction_units_info || [],
       status: "active",
       created_by: body.created_by || "system",
     };
@@ -453,7 +455,7 @@ async function copyTableDefinitionsToSchema(
 
     // 6. 为含有采购模块记录类型的表自动生成采购模块记录行
     if (procurementModules && procurementModules.length > 0) {
-      // 获取产品模块详情（含排序信息和属性）
+      // 获取产品目录详情（含排序信息和属性）
       const { data: moduleTypes } = await client.rpc("dp_select", {
         p_table: "product_module_types",
       });

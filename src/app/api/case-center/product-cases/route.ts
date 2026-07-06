@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
       ORDER BY school_count DESC
     `;
 
-    // 1.1 产品模块使用排名（按模块聚合所有状态的学校数）
+    // 1.1 产品目录使用排名（按模块聚合所有状态的学校数）
     const moduleRankingBaseConditions: string[] = [];
     if (departmentCode) {
       moduleRankingBaseConditions.push(`cd.department_code = '${departmentCode.replace(/'/g, "''")}'`);

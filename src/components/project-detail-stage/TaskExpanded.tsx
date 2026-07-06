@@ -46,6 +46,24 @@ export function TaskExpanded({ taskKey, onClose }: TaskExpandedProps) {
     return () => document.removeEventListener("click", handler);
   }, [configOpen]);
 
+  const handleExport = useCallback(() => {
+    if (!data) return;
+    const BOM = "﻿";
+    let csv = BOM + "任务名称,步骤说明,步骤输入,步骤输出,执行角色,状态\n";
+    data.rows.forEach((r, i) => {
+      csv += `"${i === 0 ? data.name : ""}","${r.desc}","${r.input}","${r.output}","${r.role}","${r.label}"\n`;
+    });
+    const blob = new Blob([csv], { type: "application/vnd.ms-excel;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${data.name}_任务明细.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [data]);
+
   if (!data) return null;
 
   const totalSteps = data.rows.length;
@@ -63,23 +81,6 @@ export function TaskExpanded({ taskKey, onClose }: TaskExpandedProps) {
   const toggleField = (field: keyof VisibleFields) => {
     setVisibleFields((prev) => ({ ...prev, [field]: !prev[field] }));
   };
-
-  const handleExport = useCallback(() => {
-    const BOM = "﻿";
-    let csv = BOM + "任务名称,步骤说明,步骤输入,步骤输出,执行角色,状态\n";
-    data.rows.forEach((r, i) => {
-      csv += `"${i === 0 ? data.name : ""}","${r.desc}","${r.input}","${r.output}","${r.role}","${r.label}"\n`;
-    });
-    const blob = new Blob([csv], { type: "application/vnd.ms-excel;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${data.name}_任务明细.xls`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, [data]);
 
   const selectedRow = selectedRowIdx !== null ? data.rows[selectedRowIdx] : null;
 

@@ -273,7 +273,7 @@ function ProcurementModuleSelect({
         <span className="truncate">
           {currentValues.length > 0
             ? (isMultiple ? currentValues.join(", ") : currentValues[0])
-            : `选择${isSystem ? "系统产品模块" : "项目采购模块"}...`}
+            : `选择${isSystem ? "系统产品目录" : "项目采购模块"}...`}
         </span>
         <ChevronDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
       </Button>
@@ -297,7 +297,7 @@ function ProcurementModuleSelect({
           <div className="max-h-[200px] overflow-y-auto p-1">
             {filtered.length === 0 ? (
               <div className="text-xs text-muted-foreground text-center py-3">
-                {search ? "无匹配模块" : isSystem ? "暂无系统产品模块" : "当前项目无采购模块"}
+                {search ? "无匹配模块" : isSystem ? "暂无系统产品目录" : "当前项目无采购模块"}
               </div>
             ) : (
               filtered.map((mod: string) => {
@@ -517,7 +517,7 @@ export function ProjectDetail({
     return {};
   });
   const [editValue, setEditValue] = useState<string>("");
-  // 产品模块列表（系统产品模块名称，用于采购模块选择类型）
+  // 产品目录列表（系统产品目录名称，用于采购模块选择类型）
   const [productModuleNames, setProductModuleNames] = useState<string[]>([]);
   const [dictCache, setDictCache] = useState<Record<string, string[]>>({});
   const getOpts = (col: ColumnConfig) => {
@@ -625,7 +625,7 @@ export function ProjectDetail({
     loadTableDefinitionsAndData();
   }, [project.project_schema]);
 
-  // 加载产品模块名称列表
+  // 加载产品目录名称列表
   useEffect(() => {
     const fetchModuleNames = async () => {
       try {
@@ -843,7 +843,7 @@ export function ProjectDetail({
     const procurementModules = project.procurement_modules || [];
     if (procurementModules.length === 0) return;
 
-    // 获取产品模块详情（含排序信息）
+    // 获取产品目录详情（含排序信息）
     let moduleDetails: Array<{ code: string; sort_order: number }> = [];
     try {
       const modRes = await fetch("/api/dicts?type=product_module_types");

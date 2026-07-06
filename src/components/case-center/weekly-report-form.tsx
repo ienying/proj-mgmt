@@ -293,7 +293,7 @@ export function WeeklyReportForm({ customerId, customerName, currentUser, onClos
             <Label className="text-xs">应用落地宣传</Label>
             <div className="grid grid-cols-3 gap-2">
               <Input className="h-8 text-xs" placeholder="宣传主题" value={promotionTheme} onChange={(e) => setPromotionTheme(e.target.value)} />
-              <Input className="h-8 text-xs" placeholder="产品模块" value={promotionModule} onChange={(e) => setPromotionModule(e.target.value)} />
+              <Input className="h-8 text-xs" placeholder="产品目录" value={promotionModule} onChange={(e) => setPromotionModule(e.target.value)} />
               <Input className="h-8 text-xs" placeholder="说明" value={promotionDesc} onChange={(e) => setPromotionDesc(e.target.value)} />
             </div>
           </div>
