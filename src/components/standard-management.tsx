@@ -803,6 +803,7 @@ export function StandardManagement({
   const [syncMode, setSyncMode] = useState<'structure' | 'data' | 'both'>('both');
   const [syncDataMode, setSyncDataMode] = useState<'overwrite' | 'append'>('overwrite');
   const [syncing, setSyncing] = useState(false);
+  const [showAllProjects, setShowAllProjects] = useState(false);
 
   // 引用关系对话框状态
   const [refDialogOpen, setRefDialogOpen] = useState(false);
@@ -922,6 +923,7 @@ export function StandardManagement({
     setSyncMode(mode);
     setSyncDataMode('overwrite');
     setSyncing(false);
+    setShowAllProjects(false); // 每次打开重置为默认模式
     // 加载包含此表的项目
     try {
       const res = await fetch(`/api/standards/sync?tableCode=${encodeURIComponent(def.table_code)}`);
@@ -933,6 +935,33 @@ export function StandardManagement({
       setSyncProjects([]);
     }
     setSyncDialogOpen(true);
+  };
+
+  // 切换"显示所有项目"开关时重新加载项目列表
+  const handleToggleShowAll = async (showAll: boolean) => {
+    setShowAllProjects(showAll);
+    if (!syncTableDef) return;
+    try {
+      const params = new URLSearchParams({ tableCode: syncTableDef.table_code });
+      if (showAll) params.set("showAll", "true");
+      const res = await fetch(`/api/standards/sync?${params.toString()}`);
+      const result = await res.json();
+      const projects = result.data || [];
+      setSyncProjects(projects);
+      // 保留已选中的项目，新项目也默认选中
+      setSelectedProjectIds(prev => {
+        const newIds = projects.map((p: { project_id: string }) => p.project_id);
+        // 保留之前选中且仍然在列表中的项目
+        const kept = prev.filter(id => newIds.includes(id));
+        // 如果之前全选了，切换后也全选
+        if (kept.length === 0 || prev.length === 0) return newIds;
+        // 新增的项目也加入选中
+        const added = newIds.filter((id: string) => !prev.includes(id));
+        return [...kept, ...added];
+      });
+    } catch {
+      setSyncProjects([]);
+    }
   };
 
   const toggleProjectSelect = (projectId: string) => {
@@ -4078,14 +4107,29 @@ export function StandardManagement({
                 <Label className="text-sm font-medium">
                   选择项目（共 {syncProjects.length} 个）
                 </Label>
-                <Button variant="outline" size="sm" onClick={toggleRecordSelectAll}>
-                  {selectedProjectIds.length === syncProjects.length && syncProjects.length > 0 ? "取消全选" : "全选"}
-                </Button>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={showAllProjects}
+                      onCheckedChange={handleToggleShowAll}
+                      id="show-all-projects"
+                    />
+                    <label
+                      htmlFor="show-all-projects"
+                      className="text-xs text-muted-foreground cursor-pointer select-none"
+                    >
+                      显示所有项目
+                    </label>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={toggleRecordSelectAll}>
+                    {selectedProjectIds.length === syncProjects.length && syncProjects.length > 0 ? "取消全选" : "全选"}
+                  </Button>
+                </div>
               </div>
               <div className="max-h-48 overflow-y-auto space-y-1 border rounded-md p-2">
                 {syncProjects.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">
-                    没有包含该表的项目 Schema
+                    {showAllProjects ? "没有可用的项目" : "没有包含该表的项目 Schema，可开启「显示所有项目」后选择"}
                   </p>
                 ) : (
                   syncProjects.map((p) => (
@@ -4100,6 +4144,9 @@ export function StandardManagement({
                         className="rounded"
                       />
                       <span className="text-sm">{p.project_name}</span>
+                      {(p as { has_table?: boolean }).has_table === false && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">新表</span>
+                      )}
                       <span className="text-xs text-muted-foreground ml-auto font-mono">{p.schema}</span>
                     </label>
                   ))

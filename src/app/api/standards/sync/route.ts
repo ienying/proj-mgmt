@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
     const supabase = await createServerClient();
     const { searchParams } = new URL(request.url);
     const tableCode = searchParams.get("tableCode");
+    const showAll = searchParams.get("showAll") === "true";
 
     if (!tableCode) {
       return NextResponse.json({ error: "缺少 tableCode 参数" }, { status: 400 });
@@ -25,10 +26,29 @@ export async function GET(request: NextRequest) {
       const schema = project.project_schema;
       if (!schema) continue;
 
-      // 检查该 Schema 中是否存在此表
+      if (showAll) {
+        // 显示所有项目模式：不过滤，全部列出，同时标注是否已有该表
+        const { data: tableCheck, error: checkError } = await supabase.rpc("execute_sql", {
+          p_sql: `SELECT EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = '${schema}' AND table_name = '${tableCode}'
+          ) as exists`,
+        });
+        const hasTable = !checkError && (tableCheck?.[0]?.exists === true);
+        results.push({
+          project_id: project.id,
+          project_name: project.project_name,
+          project_code: project.project_code,
+          schema: schema,
+          has_table: hasTable,
+        });
+        continue;
+      }
+
+      // 默认模式：检查该 Schema 中是否存在此表
       const { data: tableExists, error: checkError } = await supabase.rpc("execute_sql", {
         p_sql: `SELECT EXISTS (
-          SELECT 1 FROM information_schema.tables 
+          SELECT 1 FROM information_schema.tables
           WHERE table_schema = '${schema}' AND table_name = '${tableCode}'
         ) as exists`,
       });
@@ -42,6 +62,7 @@ export async function GET(request: NextRequest) {
           project_name: project.project_name,
           project_code: project.project_code,
           schema: schema,
+          has_table: true,
         });
       }
     }
@@ -105,6 +126,47 @@ export async function POST(request: NextRequest) {
       const result = { project: project.project_name as string, schema: false, data: false, errors: [] as string[] };
 
       try {
+        // 0. 确保表存在：如果项目 Schema 中不存在此表，则先创建
+        const { data: tableCheck } = await supabase.rpc("execute_sql", {
+          p_sql: `SELECT EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = '${schema}' AND table_name = '${tableCode}'
+          ) AS exists_flag`,
+        });
+        const tableExistsInProject =
+          (tableCheck as Array<Record<string, unknown>>)?.[0]?.exists_flag === true;
+
+        if (!tableExistsInProject && syncSchema) {
+          // 表不存在且需要同步结构 → 自动建表
+          const createColDefs = (columnsConfig as Array<Record<string, unknown>>).map((col) => {
+            const colName = (col.key || col.name) as string;
+            const sqlType = mapColumnTypeForCreate((col.type as string) || "text");
+            return `"${colName}" ${sqlType}`;
+          });
+
+          // 添加标准列
+          createColDefs.push("id UUID PRIMARY KEY DEFAULT gen_random_uuid()");
+          createColDefs.push("sort_order INT DEFAULT 0");
+          createColDefs.push("created_at TIMESTAMP WITH TIME ZONE DEFAULT now()");
+          createColDefs.push("updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()");
+          createColDefs.push("created_by VARCHAR(36)");
+          createColDefs.push("allow_delete BOOLEAN DEFAULT true");
+          createColDefs.push('"_readonly" BOOLEAN DEFAULT false');
+          createColDefs.push("data_source TEXT DEFAULT 'standard'");
+
+          const createSQL = `CREATE TABLE IF NOT EXISTS ${schema}."${tableCode}" (${createColDefs.join(", ")})`;
+
+          const { error: createError } = await supabase.rpc("execute_sql", {
+            p_sql: createSQL,
+          });
+
+          if (createError) {
+            result.errors.push(`建表失败: ${createError.message}`);
+            results.push(result);
+            continue; // 建表失败则跳过后续同步
+          }
+        }
+
         // 1. 同步列结构
         if (syncSchema) {
           const { data: existingCols, error: colError } = await supabase.rpc("execute_sql", {
@@ -245,4 +307,24 @@ function mapColumnType(type: string): string {
     textarea: "TEXT",
   };
   return typeMap[type] || "TEXT";
+}
+
+// 建表时的类型映射（与 ensure-table 保持一致）
+function mapColumnTypeForCreate(type: string): string {
+  switch (type) {
+    case "text":
+    case "textarea":
+      return "TEXT";
+    case "number":
+      return "NUMERIC";
+    case "date":
+      return "DATE";
+    case "select":
+    case "procurement_record":
+      return "VARCHAR(255)";
+    case "video":
+      return "JSONB";
+    default:
+      return "TEXT";
+  }
 }
