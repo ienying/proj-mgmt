@@ -849,3 +849,19 @@ CREATE TABLE IF NOT EXISTS design_case_center.weekly_reports (
 CREATE INDEX IF NOT EXISTS idx_customer_modules_customer ON design_case_center.customer_modules(customer_id);
 CREATE INDEX IF NOT EXISTS idx_customer_modules_status ON design_case_center.customer_modules(status);
 CREATE INDEX IF NOT EXISTS idx_customer_modules_module ON design_case_center.customer_modules(module_code);
+
+-- ============================================
+-- Module Migration Audit Log (产品目录迁移审计)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS design_public.module_migration_log (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source_code       VARCHAR(255) NOT NULL,
+  source_name       VARCHAR(255),
+  target_code       VARCHAR(255) NOT NULL,
+  target_name       VARCHAR(255),
+  operator          VARCHAR(100),
+  affected_projects INTEGER DEFAULT 0,
+  affected_records  INTEGER DEFAULT 0,
+  created_at        TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);

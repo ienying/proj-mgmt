@@ -55,6 +55,7 @@ import {
   CheckSquare,
   Hammer,
   Wrench,
+  AlertTriangle,
 } from "lucide-react";
 import {
   DndContext,
@@ -233,6 +234,20 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
   const [importData, setImportData] = useState<any[]>([]);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ success: number; failed: number; failedRows: any[] } | null>(null);
+
+  // 产品目录迁移相关状态
+  const [migrateDialogOpen, setMigrateDialogOpen] = useState(false);
+  const [migrateSource, setMigrateSource] = useState<{ id: string; code: string; name: string } | null>(null);
+  const [migrateRefData, setMigrateRefData] = useState<{ project_count: number; record_count: number; projects: Array<{ id: string; project_name: string; project_code: string; project_schema: string }> } | null>(null);
+  const [migrateTargetCode, setMigrateTargetCode] = useState<string>("");
+  const [migrating, setMigrating] = useState(false);
+  // 批量迁移
+  const [batchMigrateDialogOpen, setBatchMigrateDialogOpen] = useState(false);
+  const [batchMigrateItems, setBatchMigrateItems] = useState<Array<{ id: string; code: string; name: string; refData: { project_count: number; record_count: number; projects: Array<{ id: string; project_name: string; project_code: string; project_schema: string }> } }>>([]);
+  const [batchMigrateDirectDelete, setBatchMigrateDirectDelete] = useState<Array<{ id: string; code: string; name: string }>>([]);
+  const [batchMigrateTargets, setBatchMigrateTargets] = useState<Record<string, string>>({});
+  const [showMigrateConfirm, setShowMigrateConfirm] = useState(false);
+  const [showBatchMigrateConfirm, setShowBatchMigrateConfirm] = useState(false);
 
   // 只刷新当前选中类型的数据
   const loadCurrentTypeData = async () => {
@@ -448,6 +463,61 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
 
   // 批量删除数据
   const handleBatchDelete = async (ids: string[]) => {
+    // 产品目录：先检查引用
+    if (activeTab === "product-modules") {
+      const mods = productModules.filter((m) => ids.includes(m.id));
+      const codes = mods.filter((m) => m.code).map((m) => m.code!);
+      if (codes.length > 0) {
+        try {
+          const res = await fetch("/api/dicts/product-module/references-batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ codes }),
+          });
+          const result = await res.json();
+          const refData = result.data || {};
+
+          const needMigrate: typeof batchMigrateItems = [];
+          const directDelete: typeof batchMigrateDirectDelete = [];
+
+          for (const mod of mods) {
+            if (!mod.code) continue;
+            const ref = refData[mod.code];
+            if (ref && ref.project_count > 0) {
+              needMigrate.push({ id: mod.id, code: mod.code, name: mod.module_name || mod.name, refData: ref });
+            } else {
+              directDelete.push({ id: mod.id, code: mod.code, name: mod.module_name || mod.name });
+            }
+          }
+
+          if (needMigrate.length > 0) {
+            setBatchMigrateItems(needMigrate);
+            setBatchMigrateDirectDelete(directDelete);
+            setBatchMigrateTargets({});
+            setBatchMigrateDialogOpen(true);
+            return;
+          }
+
+          // 全部可直接删除，走原逻辑
+          if (directDelete.length > 0 && !confirm(`确定要删除选中的 ${directDelete.length} 个产品目录吗？`)) return;
+
+          const res2 = await fetch("/api/dicts/batch-delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: currentType, ids: directDelete.map((d) => d.id) }),
+          });
+          const result2 = await res2.json();
+          if (!res2.ok) throw new Error(result2.error || "批量删除失败");
+          toast.success(`成功删除 ${result2.deleted?.length || directDelete.length} 条数据`);
+          await loadCurrentTypeData();
+          return;
+        } catch (e) {
+          console.error("检查引用失败:", e);
+          // 走原逻辑
+        }
+      }
+    }
+
     try {
       const res = await fetch("/api/dicts/batch-delete", {
         method: "POST",
@@ -472,6 +542,25 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
 
   // 删除数据
   const handleDelete = async (id: string) => {
+    // 产品目录：先检查引用
+    if (activeTab === "product-modules") {
+      const mod = productModules.find((m) => m.id === id);
+      if (mod && mod.code) {
+        try {
+          const res = await fetch(`/api/dicts/product-module/references?code=${encodeURIComponent(mod.code)}`);
+          const ref = await res.json();
+          if (ref.project_count > 0) {
+            setMigrateSource({ id: mod.id, code: mod.code!, name: mod.module_name || mod.name });
+            setMigrateRefData(ref);
+            setMigrateTargetCode("");
+            setMigrateDialogOpen(true);
+            return;
+          }
+        } catch {
+          // 检查失败则走原有删除逻辑
+        }
+      }
+    }
     if (!confirm("确定要删除这条数据吗？")) return;
 
     try {
@@ -483,6 +572,63 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
       console.error("删除失败:", error);
       toast.error("删除失败");
     }
+  };
+
+  // 单个迁移并删除
+  const handleMigrate = async () => {
+    if (!migrateSource || !migrateTargetCode) return;
+    setMigrating(true);
+    try {
+      const res = await fetch("/api/dicts/product-module/migrate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_code: migrateSource.code, target_code: migrateTargetCode }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "迁移失败");
+      toast.success(`迁移完成：已更新 ${result.updated_projects} 个项目，${result.updated_records} 条记录`);
+    } catch (e) {
+      toast.error("迁移失败: " + (e instanceof Error ? e.message : "未知错误"));
+    } finally {
+      setMigrating(false);
+      setMigrateDialogOpen(false);
+      setShowMigrateConfirm(false);
+    }
+    await loadCurrentTypeData();
+  };
+
+  // 批量迁移并删除
+  const handleBatchMigrate = async () => {
+    setMigrating(true);
+    try {
+      const migrations = batchMigrateItems
+        .filter((item) => batchMigrateTargets[item.code])
+        .map((item) => ({ source_code: item.code, target_code: batchMigrateTargets[item.code] }));
+      const directDelete = batchMigrateDirectDelete.map((d) => d.code);
+
+      const res = await fetch("/api/dicts/product-module/migrate-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ migrations, direct_delete: directDelete }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "批量迁移失败");
+
+      const okCount = result.results?.filter((r: { status: string }) => r.status === "ok" || r.status === "deleted").length || 0;
+      const errCount = result.results?.filter((r: { status: string }) => r.status === "error").length || 0;
+      if (errCount > 0) {
+        toast.warning(`迁移完成：${okCount} 个成功，${errCount} 个失败`);
+      } else {
+        toast.success(`批量迁移完成：${okCount} 个模块已处理`);
+      }
+    } catch (e) {
+      toast.error("批量迁移失败: " + (e instanceof Error ? e.message : "未知错误"));
+    } finally {
+      setMigrating(false);
+      setBatchMigrateDialogOpen(false);
+      setShowBatchMigrateConfirm(false);
+    }
+    await loadCurrentTypeData();
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -2003,6 +2149,196 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
               </Button>
             )}
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 单个迁移对话框 */}
+      <Dialog open={migrateDialogOpen} onOpenChange={setMigrateDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>无法直接删除「{migrateSource?.name}」</DialogTitle>
+            <DialogDescription>
+              {migrateRefData && (
+                <>该模块被 {migrateRefData.project_count} 个项目使用，共关联 {migrateRefData.record_count} 条数据记录。<br />请先将引用迁移到另一个模块，再执行删除。</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {!showMigrateConfirm ? (
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">源模块（只读）</Label>
+                <Input value={`${migrateSource?.code || ""}   ${migrateSource?.name || ""}`} disabled className="bg-muted" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">迁移到</Label>
+                <select
+                  value={migrateTargetCode}
+                  onChange={(e) => setMigrateTargetCode(e.target.value)}
+                  className="w-full rounded-md border border-input px-3 py-2 text-sm"
+                >
+                  <option value="">请选择替代模块...</option>
+                  {productModules
+                    .filter((m) => m.code !== migrateSource?.code)
+                    .map((m) => (
+                      <option key={m.code} value={m.code}>
+                        {m.module_name || m.name} ({m.code})
+                      </option>
+                    ))}
+                </select>
+              </div>
+              {migrateTargetCode && migrateRefData && (
+                <div className="bg-blue-50 p-3 rounded-md text-sm space-y-1">
+                  <p className="font-medium text-blue-800">影响范围</p>
+                  <p className="text-blue-700">• 将 {migrateRefData.project_count} 个项目的 procurement_modules 替换</p>
+                  <p className="text-blue-700">• 将 {migrateRefData.record_count} 条记录中的 _module_code 替换</p>
+                  <details className="mt-2">
+                    <summary className="text-blue-600 cursor-pointer text-xs">查看受影响项目详情</summary>
+                    <div className="mt-1 space-y-0.5 max-h-32 overflow-y-auto">
+                      {migrateRefData.projects.map((p) => (
+                        <p key={p.id} className="text-xs text-blue-500">{p.project_code} {p.project_name}</p>
+                      ))}
+                    </div>
+                  </details>
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { setMigrateDialogOpen(false); setMigrateTargetCode(""); }}>
+                  取消
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={!migrateTargetCode}
+                  onClick={() => setShowMigrateConfirm(true)}
+                >
+                  迁移并删除
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <div className="flex items-start gap-3 p-4 bg-red-50 rounded-md">
+                <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                <div className="text-sm text-red-800">
+                  <p className="font-medium mb-2">此操作不可撤销</p>
+                  <p>将执行以下操作：</p>
+                  <ol className="list-decimal ml-4 mt-1 space-y-1">
+                    <li>把 {migrateRefData?.project_count || 0} 个项目中的模块引用：<br />
+                      「{migrateSource?.name} ({migrateSource?.code})」替换为「{productModules.find((m) => m.code === migrateTargetCode)?.module_name || productModules.find((m) => m.code === migrateTargetCode)?.name || migrateTargetCode} ({migrateTargetCode})」
+                    </li>
+                    <li>更新 {migrateRefData?.record_count || 0} 条采购数据记录</li>
+                    <li>删除产品目录「{migrateSource?.name}」</li>
+                  </ol>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowMigrateConfirm(false)}>取消</Button>
+                <Button variant="destructive" onClick={handleMigrate} disabled={migrating}>
+                  {migrating ? "迁移中..." : "确认执行"}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 批量迁移对话框 */}
+      <Dialog open={batchMigrateDialogOpen} onOpenChange={setBatchMigrateDialogOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>批量删除 - 部分模块被项目引用</DialogTitle>
+            <DialogDescription>
+              以下模块被项目引用，请选择替代模块后再执行删除。
+            </DialogDescription>
+          </DialogHeader>
+          {!showBatchMigrateConfirm ? (
+            <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto">
+              {batchMigrateDirectDelete.length > 0 && (
+                <div className="bg-green-50 p-3 rounded-md">
+                  <p className="text-sm font-medium text-green-800 mb-1">以下 {batchMigrateDirectDelete.length} 个模块可直接删除（无引用）</p>
+                  <div className="flex flex-wrap gap-1">
+                    {batchMigrateDirectDelete.map((d) => (
+                      <span key={d.code} className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded">{d.name}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="bg-amber-50 p-3 rounded-md">
+                <p className="text-sm font-medium text-amber-800 mb-2">以下 {batchMigrateItems.length} 个模块被引用，需先迁移</p>
+                <div className="space-y-3">
+                  {batchMigrateItems.map((item) => (
+                    <div key={item.code} className="bg-white p-3 rounded border border-amber-200">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium">{item.name}</span>
+                        <span className="text-xs text-amber-600">{item.code}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        被 {item.refData.project_count} 个项目引用，关联 {item.refData.record_count} 条记录
+                      </p>
+                      <select
+                        value={batchMigrateTargets[item.code] || ""}
+                        onChange={(e) => setBatchMigrateTargets((prev) => ({ ...prev, [item.code]: e.target.value }))}
+                        className="w-full rounded-md border border-input px-2 py-1.5 text-xs"
+                      >
+                        <option value="">请选择替代模块...</option>
+                        {productModules
+                          .filter((m) => m.code !== item.code)
+                          .map((m) => (
+                            <option key={m.code} value={m.code}>
+                              {m.module_name || m.name} ({m.code})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => {
+                  setBatchMigrateDialogOpen(false);
+                  setBatchMigrateTargets({});
+                }}>
+                  取消
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={batchMigrateItems.some((item) => !batchMigrateTargets[item.code])}
+                  onClick={() => setShowBatchMigrateConfirm(true)}
+                >
+                  批量迁移并删除
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <div className="flex items-start gap-3 p-4 bg-red-50 rounded-md">
+                <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                <div className="text-sm text-red-800">
+                  <p className="font-medium mb-2">此操作不可撤销</p>
+                  <p>将执行以下操作：</p>
+                  <ul className="list-disc ml-4 mt-1 space-y-1">
+                    {batchMigrateItems.filter((item) => batchMigrateTargets[item.code]).map((item) => {
+                      const target = productModules.find((m) => m.code === batchMigrateTargets[item.code]);
+                      return (
+                        <li key={item.code}>
+                          迁移「{item.name} ({item.code})」→「{target?.module_name || target?.name || batchMigrateTargets[item.code]}」
+                          （{item.refData.project_count} 个项目，{item.refData.record_count} 条记录）
+                        </li>
+                      );
+                    })}
+                    {batchMigrateDirectDelete.map((d) => (
+                      <li key={d.code}>直接删除「{d.name}」</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowBatchMigrateConfirm(false)}>取消</Button>
+                <Button variant="destructive" onClick={handleBatchMigrate} disabled={migrating}>
+                  {migrating ? "执行中..." : "确认执行"}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
