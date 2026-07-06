@@ -2191,14 +2191,24 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
                   <p className="font-medium text-blue-800">影响范围</p>
                   <p className="text-blue-700">• 将 {migrateRefData.project_count} 个项目的 procurement_modules 替换</p>
                   <p className="text-blue-700">• 将 {migrateRefData.record_count} 条记录中的 _module_code 替换</p>
-                  <details className="mt-2">
-                    <summary className="text-blue-600 cursor-pointer text-xs">查看受影响项目详情</summary>
-                    <div className="mt-1 space-y-0.5 max-h-32 overflow-y-auto">
-                      {migrateRefData.projects.map((p) => (
-                        <p key={p.id} className="text-xs text-blue-500">{p.project_code} {p.project_name}</p>
-                      ))}
-                    </div>
-                  </details>
+                  <div className="mt-3 border rounded-md overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-blue-100/50">
+                          <th className="text-left px-3 py-1.5 font-medium text-blue-800 w-[180px]">项目编号</th>
+                          <th className="text-left px-3 py-1.5 font-medium text-blue-800">项目名称</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {migrateRefData.projects.map((p) => (
+                          <tr key={p.id} className="border-t border-blue-100">
+                            <td className="px-3 py-1.5 text-blue-600 font-mono text-[11px]">{p.project_code}</td>
+                            <td className="px-3 py-1.5 text-blue-700">{p.project_name}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
               <DialogFooter>
