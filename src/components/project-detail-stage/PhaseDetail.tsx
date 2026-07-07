@@ -72,10 +72,11 @@ interface PhaseDetailProps {
   projectSchema?: string;
   projectStages?: { code: string; name: string; detail_description?: string; sort_order?: number }[];
   currentStageCode?: string;
+  existingTableSet?: Set<string> | null;
   onRecordsUpdate?: (tableCode: string, records: Array<Record<string, unknown>>) => void;
 }
 
-export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema, projectStages = [], currentStageCode, onRecordsUpdate }: PhaseDetailProps) {
+export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema, projectStages = [], currentStageCode, existingTableSet, onRecordsUpdate }: PhaseDetailProps) {
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [tableRecords, setTableRecords] = useState<Record<string, Array<Record<string, unknown>>>>({});
   const [loadingTable, setLoadingTable] = useState<string | null>(null);
@@ -764,7 +765,119 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       {/* 整行展开：表数据详情 — 参考 index-v54.html TaskExpanded 布局 */}
       {expandedTable && expandedDef && (
         <div style={{ borderTop: "1px solid var(--s-border)" }}>
-          {loadingTable === expandedTable ? (
+          {existingTableSet && !existingTableSet.has(expandedTable) ? (
+            /* 表在全局定义中存在，但项目 Schema 中尚未创建 */
+            (() => {
+              const currentStageName = projectStages.find((s) => s.code === currentStageCode)?.name || currentStageCode || "未知阶段";
+              const tableStageNames = (expandedDef.apply_project_stages || [])
+                .map((code: string) => projectStages.find((s) => s.code === code)?.name || code)
+                .join("、") || "未知阶段";
+              const isCurrentStageTable = currentStageCode && (expandedDef.apply_project_stages || []).includes(currentStageCode);
+
+              if (isCurrentStageTable) {
+                // 场景A：表属于当前阶段但不存于 Schema → 规则未配置或未匹配
+                return (
+                  <div className="px-16 py-12">
+                    <div className="flex items-start gap-4">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "var(--s-surface2)" }}>
+                        <svg className="w-5 h-5" style={{ color: "var(--s-orange)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--s-text)" }}>
+                          该表尚未在项目 Schema 中创建
+                        </h3>
+                        <p className="text-xs leading-relaxed mb-3" style={{ color: "var(--s-text-secondary)" }}>
+                          项目当前处于 <span className="font-semibold" style={{ color: "var(--s-orange)" }}>「{currentStageName}」</span>，
+                          该数据表 <span className="font-semibold" style={{ color: "var(--s-blue)" }}>「{expandedDef.table_name}」</span> 也属于
+                          <span className="font-semibold" style={{ color: "var(--s-blue)" }}>「{tableStageNames}」</span>，
+                          但项目创建时未匹配到对应的 Schema 规则，未生成该规范表。
+                        </p>
+                        <p className="text-xs leading-relaxed" style={{ color: "var(--s-text-muted)" }}>
+                          请前往「系统配置 → 项目 Schema 规则配置」添加对应规则，再编辑项目切换类型/阶段即可自动同步。
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-6 pt-4 border-t border-[var(--s-border)]">
+                      <button onClick={() => { setExpandedTable(null); setSelectedRecord(null); }}
+                        className="text-[10px] text-[var(--s-text-muted)] hover:text-[var(--s-orange)] cursor-pointer uppercase tracking-[1px]"
+                        style={{ fontFamily: "var(--font-mono, monospace)" }}>▲ 收起详情</button>
+                    </div>
+                  </div>
+                );
+              }
+
+              // 场景B：表属于其他阶段 → 项目尚未推进到该阶段
+              return (
+                <div className="px-16 py-12">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "var(--s-surface2)" }}>
+                      <svg className="w-5 h-5" style={{ color: "var(--s-text-muted)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--s-text)" }}>
+                        当前项目不在这个阶段
+                      </h3>
+                      <p className="text-xs leading-relaxed mb-3" style={{ color: "var(--s-text-secondary)" }}>
+                        项目当前处于 <span className="font-semibold" style={{ color: "var(--s-orange)" }}>「{currentStageName}」</span>，
+                        该数据表 <span className="font-semibold" style={{ color: "var(--s-blue)" }}>「{expandedDef.table_name}」</span> 属于
+                        <span className="font-semibold" style={{ color: "var(--s-blue)" }}>「{tableStageNames}」</span>。
+                      </p>
+                      <p className="text-xs leading-relaxed" style={{ color: "var(--s-text-muted)" }}>
+                        切换项目阶段后，系统将自动同步该阶段的规范表，届时即可查看和编辑数据。
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-6 pt-4 border-t border-[var(--s-border)]">
+                    <button onClick={() => { setExpandedTable(null); setSelectedRecord(null); }}
+                      className="text-[10px] text-[var(--s-text-muted)] hover:text-[var(--s-orange)] cursor-pointer uppercase tracking-[1px]"
+                      style={{ fontFamily: "var(--font-mono, monospace)" }}>▲ 收起详情</button>
+                  </div>
+                </div>
+              );
+            })()
+          ) : currentStageCode && (expandedDef.apply_project_stages || []).length > 0 && !(expandedDef.apply_project_stages || []).includes(currentStageCode) ? (
+            /* 场景C：表在 Schema 中存在，但不适用于当前项目阶段 → 提示阶段未到 */
+            (() => {
+              const currentStageName = projectStages.find((s) => s.code === currentStageCode)?.name || currentStageCode || "未知阶段";
+              const tableStageNames = (expandedDef.apply_project_stages || [])
+                .map((code: string) => projectStages.find((s) => s.code === code)?.name || code)
+                .join("、") || "未知阶段";
+              return (
+                <div className="px-16 py-12">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "var(--s-surface2)" }}>
+                      <svg className="w-5 h-5" style={{ color: "var(--s-text-muted)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--s-text)" }}>
+                        当前项目不在这个阶段
+                      </h3>
+                      <p className="text-xs leading-relaxed mb-3" style={{ color: "var(--s-text-secondary)" }}>
+                        项目当前处于 <span className="font-semibold" style={{ color: "var(--s-orange)" }}>「{currentStageName}」</span>，
+                        该数据表 <span className="font-semibold" style={{ color: "var(--s-blue)" }}>「{expandedDef.table_name}」</span> 属于
+                        <span className="font-semibold" style={{ color: "var(--s-blue)" }}>「{tableStageNames}」</span>，
+                        暂不支持在当前阶段进行编辑。
+                      </p>
+                      <p className="text-xs leading-relaxed" style={{ color: "var(--s-text-muted)" }}>
+                        请切换到对应的项目阶段后再编辑此表数据。
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-6 pt-4 border-t border-[var(--s-border)]">
+                    <button onClick={() => { setExpandedTable(null); setSelectedRecord(null); }}
+                      className="text-[10px] text-[var(--s-text-muted)] hover:text-[var(--s-orange)] cursor-pointer uppercase tracking-[1px]"
+                      style={{ fontFamily: "var(--font-mono, monospace)" }}>▲ 收起详情</button>
+                  </div>
+                </div>
+              );
+            })()
+          ) : loadingTable === expandedTable ? (
             <div className="px-16 py-8 text-xs text-[var(--s-text-muted)]">加载中...</div>
           ) : tableRecords[expandedTable]?.length > 0 ? (
             <div className="px-16 py-8">

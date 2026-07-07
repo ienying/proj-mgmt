@@ -64,6 +64,7 @@ export const projects = pgTable("projects", {
   customer_info: jsonb("customer_info"),
   channel_info: jsonb("channel_info"),
   procurement_modules: jsonb("procurement_modules"),
+  module_quantities: jsonb("module_quantities").default(sql`'{}'::jsonb`),
   implementation_unit: varchar("implementation_unit", { length: 255 }),
   construction_units_info: jsonb("construction_units_info").default(sql`'[]'::jsonb`),
   custom_dev_info: jsonb("custom_dev_info").default(sql`'[]'::jsonb`),
