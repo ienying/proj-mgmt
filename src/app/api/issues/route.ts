@@ -106,6 +106,8 @@ export async function POST(request: NextRequest) {
       urgency_id,
       warranty_status_id,
       description,
+      repro_steps,
+      custom_fields,
       is_first_report,
       has_similar_history,
       remarks,
@@ -121,14 +123,8 @@ export async function POST(request: NextRequest) {
     if (!project_id && (!project_name || !project_name.trim())) {
       return NextResponse.json({ error: "所属项目不能为空" }, { status: 400 });
     }
-    if (!handler_id) {
-      return NextResponse.json({ error: "指定处理人不能为空" }, { status: 400 });
-    }
     if (!category_id) {
       return NextResponse.json({ error: "问题类别不能为空" }, { status: 400 });
-    }
-    if (!product_module_id) {
-      return NextResponse.json({ error: "对应产品目录不能为空" }, { status: 400 });
     }
     if (!urgency_id) {
       return NextResponse.json({ error: "紧急程度不能为空" }, { status: 400 });
@@ -152,6 +148,8 @@ export async function POST(request: NextRequest) {
       urgency_id,
       warranty_status_id: warranty_status_id || null,
       description: description || "",
+      repro_steps: repro_steps || "",
+      custom_fields: custom_fields || {},
       is_first_report: is_first_report !== undefined ? is_first_report : true,
       has_similar_history: has_similar_history || false,
       remarks: remarks || null,

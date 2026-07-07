@@ -106,3 +106,4 @@ data/
 # Production deployment
 .env.production
 .backups/
+public/uploads/

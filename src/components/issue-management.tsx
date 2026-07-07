@@ -15,6 +15,7 @@ import {
   Building2, Package, AlertCircle, QrCode, Copy, Check, ChevronsUpDown
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import * as XLSX from "xlsx";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,8 @@ interface Issue {
   urgency_id: string;
   warranty_status_id: string | null;
   description: string;
+  repro_steps?: string;
+  custom_fields?: Record<string, string>;
   is_first_report: boolean;
   has_similar_history: boolean;
   remarks: string | null;
@@ -111,6 +114,16 @@ interface ProductModule {
   category: string;
 }
 
+interface FormFieldDef {
+  key: string;
+  label: string;
+  type: "text" | "textarea" | "richtext" | "select" | "date" | "datetime" | "number" | "file" | "product_catalog";
+  required: boolean;
+  placeholder?: string;
+  options?: { label: string; value: string }[];
+  sort_order: number;
+}
+
 interface ProjectItem {
   id: string;
   project_name: string;
@@ -164,7 +177,7 @@ interface IssueManagementProps {
 /* ─── 主组件 ─── */
 export default function IssueManagement({ currentUser }: IssueManagementProps) {
   // Tab 状态
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState("issues");
 
   // 数据状态
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -215,20 +228,34 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
     urgency_id: undefined as string | undefined,
     warranty_status_id: undefined as string | undefined,
     description: "",
+    repro_steps: "",
+    custom_fields: {} as Record<string, string>,
     is_first_report: true,
     has_similar_history: false,
     remarks: "",
     expected_handle_time: "",
   });
   const [formFiles, setFormFiles] = useState<File[]>([]);
+  const [customFieldFiles, setCustomFieldFiles] = useState<Record<string, File[]>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ fileName: string; percent: number; loaded: number; total: number } | null>(null);
+  const cancelUploadRef = useRef<XMLHttpRequest | null>(null);
+  const [previewMedia, setPreviewMedia] = useState<{ url: string; name: string; type: "image" | "video" } | null>(null);
+  const [videoLoading, setVideoLoading] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 当前用户的待办任务实例（用于判断外部工单）
   const [userTodos, setUserTodos] = useState<Record<string, unknown>[]>([]);
 
+  // 分配人员 ID 集合
+  const [dispatcherIds, setDispatcherIds] = useState<Set<string>>(new Set());
+  const isDispatcher = dispatcherIds.has(currentUser.id);
+
   // 处理过程
   const [processingNotes, setProcessingNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
+  const [processingNotesHistory, setProcessingNotesHistory] = useState<Array<{ id: string; content: string; operator_name: string; created_at: string }>>([]);
 
   // 发布到信息广场
   const [showPublishDialog, setShowPublishDialog] = useState(false);
@@ -301,6 +328,12 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
           name: dd.name as string,
         })));
       }
+      const dispRes = await fetch("/api/issue-config/dispatchers");
+      if (dispRes.ok) {
+        const d = await dispRes.json();
+        const ids = new Set<string>((d.data || []).filter((r: Record<string, unknown>) => r.is_enabled).map((r: Record<string, unknown>) => String(r.user_id)));
+        setDispatcherIds(ids);
+      }
     } catch (e) {
       console.error("加载字典失败:", e);
     }
@@ -329,7 +362,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
 
   const loadNotifications = useCallback(async () => {
     try {
-      const res = await fetch("/api/issues/notifications");
+      const res = await fetch(`/api/issues/notifications?user_id=${currentUser.id}`);
       if (res.ok) { const d = await res.json(); setNotifications(d.data || []); }
     } catch (e) {
       console.error("加载知会抄送失败:", e);
@@ -357,11 +390,33 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
     loadUserTodos();
   }, [loadDicts, loadIssues, loadRecords, loadNotifications, loadUserTodos]);
 
-  // 查看工单时加载处理过程
+  // 切换 Tab 时自动刷新数据
+  useEffect(() => {
+    loadIssues();
+    loadRecords();
+    loadNotifications();
+    loadUserTodos();
+  }, [activeTab]);
+
+  // 查看工单时加载处理过程历史和附件
+  const [issueAttachments, setIssueAttachments] = useState<Array<{ file_name: string; file_url_signed?: string }>>([]);
   useEffect(() => {
     if (selectedIssue) {
-      // 从 remarks 或 processing_notes 字段加载已有的处理过程
-      setProcessingNotes((selectedIssue as any).processing_notes || "");
+      setProcessingNotes("");
+      setProcessingNotesHistory([]);
+      setIssueAttachments([]);
+      fetch(`/api/issues/processing-notes?issue_id=${selectedIssue.id}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.data) setProcessingNotesHistory(d.data);
+        })
+        .catch(() => {});
+      fetch(`/api/issues/attachments?issue_id=${selectedIssue.id}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.data) setIssueAttachments(d.data);
+        })
+        .catch(() => {});
     }
   }, [selectedIssue?.id]);
 
@@ -392,7 +447,9 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
   });
 
   const filteredIssues = issues.filter(i => {
-    if (issueStatusFilter !== "all" && i.status !== issueStatusFilter) return false;
+    if (issueStatusFilter === "unassigned") {
+      if (i.handler_id || i.status !== "pending") return false;
+    } else if (issueStatusFilter !== "all" && i.status !== issueStatusFilter) return false;
     if (searchKeyword) {
       const kw = searchKeyword.toLowerCase();
       return i.title.toLowerCase().includes(kw) ||
@@ -431,6 +488,104 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
     major: issues.filter(i => i.is_major).length,
   };
 
+  // 部门统计
+  const deptStats = useMemo(() => {
+    const map = new Map<string, number>();
+    issues.forEach(i => {
+      const dept = i.department || "未知";
+      map.set(dept, (map.get(dept) || 0) + 1);
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [issues]);
+
+  // 报修人统计（Top 10）
+  const reporterStats = useMemo(() => {
+    const map = new Map<string, { dept: string; count: number }>();
+    issues.forEach(i => {
+      const name = i.reporter_name || "未知";
+      const prev = map.get(name);
+      map.set(name, { dept: i.department || "未知", count: (prev?.count || 0) + 1 });
+    });
+    return Array.from(map.entries())
+      .map(([name, v]) => ({ name, dept: v.dept, count: v.count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  }, [issues]);
+
+  // 类别 × 状态交叉表
+  const categoryStatusMatrix = useMemo(() => {
+    const topCats = categories.filter(c => !c.parent_id && c.is_enabled);
+    const matrix = topCats.map(cat => {
+      const catIds = [cat.id, ...categories.filter(cc => cc.parent_id === cat.id).map(cc => cc.id)];
+      const related = issues.filter(i => catIds.includes(i.category_id));
+      const row: Record<string, unknown> = { name: cat.name, total: related.length };
+      related.forEach(i => {
+        const key = `s_${i.status}`;
+        row[key] = ((row[key] as number) || 0) + 1;
+      });
+      return row;
+    });
+    return matrix.filter(m => (m.total as number) > 0).sort((a, b) => (b.total as number) - (a.total as number));
+  }, [issues, categories]);
+
+  // Excel 导出
+  const handleExportStats = useCallback(() => {
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: 概览
+    const overviewData: (string | number)[][] = [
+      ["工单数据统计"],
+      [""],
+      ["已完结", statsData.completed],
+      ["处理中", statsData.processing],
+      ["待受理", statsData.pending],
+      ["重大问题", statsData.major],
+      ["总计", statsData.total],
+      [""],
+      ["状态分布"],
+      ...Object.entries(STATUS_MAP).map(([key, info]) => {
+        const count = issues.filter(i => i.status === key).length;
+        const pct = statsData.total > 0 ? Math.round(count / statsData.total * 100) : 0;
+        return [info.label, count, `${pct}%`];
+      }),
+    ];
+    const ws1 = XLSX.utils.aoa_to_sheet(overviewData);
+    ws1["!cols"] = [{ wch: 16 }, { wch: 10 }, { wch: 10 }];
+    XLSX.utils.book_append_sheet(wb, ws1, "概览");
+
+    // Sheet 2: 部门统计
+    const deptData: (string | number)[][] = [["部门", "工单数量", "占比"]];
+    deptStats.forEach(([dept, count]) => {
+      const pct = statsData.total > 0 ? Math.round(count / statsData.total * 100) : 0;
+      deptData.push([dept, count, `${pct}%`]);
+    });
+    const ws2 = XLSX.utils.aoa_to_sheet(deptData);
+    ws2["!cols"] = [{ wch: 20 }, { wch: 10 }, { wch: 10 }];
+    XLSX.utils.book_append_sheet(wb, ws2, "部门统计");
+
+    // Sheet 3: 报修人统计
+    const reporterData: (string | number)[][] = [["报修人", "部门", "发起数量"]];
+    reporterStats.forEach(r => reporterData.push([r.name, r.dept, r.count]));
+    const ws3 = XLSX.utils.aoa_to_sheet(reporterData);
+    ws3["!cols"] = [{ wch: 16 }, { wch: 20 }, { wch: 10 }];
+    XLSX.utils.book_append_sheet(wb, ws3, "报修人统计");
+
+    // Sheet 4: 类别处理情况
+    const statusKeys = ["pending", "accepted", "processing", "completed", "rejected"];
+    const headerRow: (string | number)[] = ["类别", "总计", ...statusKeys.map(k => STATUS_MAP[k]?.label || k)];
+    const matrixData: (string | number)[][] = [headerRow];
+    categoryStatusMatrix.forEach(row => {
+      const r = [row.name as string, row.total as number];
+      statusKeys.forEach(k => r.push((row[`s_${k}`] as number) || 0));
+      matrixData.push(r);
+    });
+    const ws4 = XLSX.utils.aoa_to_sheet(matrixData);
+    ws4["!cols"] = [{ wch: 20 }, { wch: 8 }, ...statusKeys.map(() => ({ wch: 10 }))];
+    XLSX.utils.book_append_sheet(wb, ws4, "类别处理情况");
+
+    XLSX.writeFile(wb, "工单统计报表.xlsx");
+  }, [statsData, issues, deptStats, reporterStats, categoryStatusMatrix]);
+
   // 发起问题
   const resetForm = () => {
     setForm({
@@ -444,20 +599,32 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
       product_module_ids: [],
       product_module_names: [],
       is_major: false, urgency_id: undefined, warranty_status_id: undefined,
-      description: "", is_first_report: true, has_similar_history: false,
+      description: "", repro_steps: "", custom_fields: {}, is_first_report: true, has_similar_history: false,
       remarks: "", expected_handle_time: "",
     });
     setFormFiles([]);
+    setCustomFieldFiles({});
   };
 
   const handleSubmit = async () => {
+    if (submitting) return;
     if (!form.title.trim()) { alert("请输入问题标题"); return; }
     if (!form.project_id && !form.project_name.trim()) { alert("请选择所属项目"); return; }
-    if (!form.handler_id) { alert("请选择指定处理人"); return; }
     if (!form.category_id && !form.sub_category_id) { alert("请选择问题类别"); return; }
-    if (form.product_module_ids.length === 0 && !form.product_module_id) { alert("请选择对应产品目录"); return; }
     if (!form.urgency_id) { alert("请选择紧急程度"); return; }
+    // 校验自定义必填字段
+    const catId = form.sub_category_id || form.category_id;
+    if (catId) {
+      const cat = categories.find(c => c.id === catId);
+      const catFields: FormFieldDef[] = (cat as any)?.form_fields || [];
+      for (const f of catFields) {
+        if (f.required && (!form.custom_fields[f.key] || !form.custom_fields[f.key].trim())) {
+          alert(`请填写「${f.label}」`); return;
+        }
+      }
+    }
 
+    setSubmitting(true);
     try {
       const categoryId = form.sub_category_id || form.category_id;
       const body = {
@@ -472,57 +639,178 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         handler_name: form.handler_name || null,
         handler_phone: form.handler_phone || null,
         category_id: categoryId,
-        product_module_id: form.product_module_ids.length > 0 ? form.product_module_ids[0] : (form.product_module_id || null),
-        product_module_ids: form.product_module_ids.length > 0 ? form.product_module_ids : (form.product_module_id ? [form.product_module_id] : []),
-        product_module_names: form.product_module_names.length > 0 ? form.product_module_names : [],
         is_major: form.is_major,
         urgency_id: form.urgency_id,
         warranty_status_id: form.warranty_status_id || null,
         description: form.description,
+        repro_steps: form.repro_steps,
+        custom_fields: form.custom_fields,
         is_first_report: form.is_first_report,
         has_similar_history: form.has_similar_history,
         remarks: form.remarks || null,
         expected_handle_time: form.expected_handle_time || null,
         creator_id: currentUser.id,
+        notify_users: form.notify_users.map(nu => ({ user_id: nu.id, user_name: nu.name })),
       };
 
+      toast.loading("正在提交工单...", { id: "submit-progress" });
       const res = await fetch("/api/issues", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+      toast.dismiss("submit-progress");
 
       if (res.ok) {
         const result = await res.json();
         const issueId = result.data?.id;
 
-        for (const file of formFiles) {
-          const formData = new FormData();
-          formData.append("file", file);
-          formData.append("issue_id", issueId);
-          formData.append("file_type", file.type.startsWith("video") ? "video" : "image");
-          await fetch("/api/issues/attachments", { method: "POST", body: formData });
+        // 收集所有待上传附件
+        const allUploads: { fieldKey: string; file: File }[] = [];
+        for (const [fieldKey, files] of Object.entries(customFieldFiles)) {
+          for (const file of files) allUploads.push({ fieldKey, file });
         }
+        const totalFiles = allUploads.length;
 
-        for (const nu of form.notify_users) {
-          await fetch("/api/issues/notifications", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ issue_id: issueId, user_id: nu.id, user_name: nu.name }),
+        // 上传自定义字段附件（带进度条 + 取消）
+        const uploadedUrls: Record<string, string[]> = {};
+        for (let i = 0; i < allUploads.length; i++) {
+          const { file, fieldKey } = allUploads[i];
+          if (!uploadedUrls[fieldKey]) uploadedUrls[fieldKey] = [];
+          const uploaded = await new Promise<boolean>((resolve) => {
+            const xhr = new XMLHttpRequest();
+            cancelUploadRef.current = xhr;
+            const fData = new FormData();
+            fData.append("file", file);
+            fData.append("issue_id", issueId);
+            fData.append("file_type", file.type.startsWith("video") ? "video" : "image");
+            xhr.upload.onprogress = (e) => {
+              if (e.lengthComputable) {
+                setUploadProgress({ fileName: file.name, percent: Math.round(e.loaded / e.total * 100), loaded: e.loaded, total: e.total });
+              }
+            };
+            xhr.onload = () => {
+              try {
+                const resp = JSON.parse(xhr.responseText);
+                const url = resp?.data?.file_url_signed || resp?.data?.file_url || "";
+                uploadedUrls[fieldKey].push(url);
+              } catch { uploadedUrls[fieldKey].push(""); }
+              resolve(true);
+            };
+            xhr.onerror = () => resolve(false);
+            xhr.onabort = () => resolve(false);
+            xhr.open("POST", "/api/issues/attachments");
+            xhr.send(fData);
           });
+          if (!uploaded) {
+            toast.error(`附件上传失败或已取消: ${file.name}`);
+            setUploadProgress(null);
+            return;
+          }
         }
+        // 更新 custom_fields 中的文件 URL
+        const updatedCustomFields = { ...form.custom_fields };
+        for (const fk of Object.keys(uploadedUrls)) {
+          const existing = parseCustomFieldValue(updatedCustomFields[fk]);
+          const existingUrls: string[] = Array.isArray(existing.urls) ? existing.urls as string[] : [];
+          existing.urls = [...existingUrls, ...uploadedUrls[fk]];
+          updatedCustomFields[fk] = JSON.stringify(existing);
+        }
+        // 更新工单的 custom_fields（等待完成）
+        await fetch(`/api/issues/${issueId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ custom_fields: updatedCustomFields }),
+        });
+        cancelUploadRef.current = null;
+        setUploadProgress(null);
 
         setShowCreateDialog(false);
         resetForm();
         loadIssues();
         loadRecords();
         loadNotifications();
+        toast.success("工单提交成功！");
       } else {
         const err = await res.json();
         alert("创建失败: " + (err.error || "未知错误"));
       }
     } catch (e) {
       alert("创建失败: " + String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const cancelUpload = () => {
+    if (cancelUploadRef.current) {
+      cancelUploadRef.current.abort();
+      cancelUploadRef.current = null;
+      setUploadProgress(null);
+      setSubmitting(false);
+    }
+  };
+
+  // 认领工单（抢单）
+  const handleClaim = async (issue: Issue) => {
+    if (!confirm(`确定认领工单「${issue.title}」吗？认领后该工单将进入您的待办列表。`)) return;
+    try {
+      const body: Record<string, string> = {
+        status: "accepted",
+        action_type: "claim",
+        operator_id: currentUser.id,
+        operator_name: currentUser.name,
+        handler_id: currentUser.id,
+        handler_name: currentUser.name,
+        handler_phone: currentUser.phone || "",
+        comment: "认领工单",
+      };
+      const res = await fetch(`/api/issues/${issue.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        toast.success("工单已认领，进入您的待办列表");
+        await Promise.all([loadIssues(), loadRecords()]);
+      } else {
+        const err = await res.json();
+        alert("认领失败: " + (err.error || "未知错误"));
+      }
+    } catch (e) {
+      alert("认领失败: " + String(e));
+    }
+  };
+
+  // 直接指定处理人（行内快速分配）
+  const handleDirectAssign = async (issue: Issue, userId: string, userName: string, userPhone: string) => {
+    try {
+      const body: Record<string, string> = {
+        status: "accepted",
+        action_type: "assign",
+        operator_id: currentUser.id,
+        operator_name: currentUser.name,
+        handler_id: userId,
+        handler_name: userName,
+        handler_phone: userPhone,
+        to_user_id: userId,
+        to_user_name: userName,
+        comment: `${currentUser.name} 指定处理人`,
+      };
+      const res = await fetch(`/api/issues/${issue.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        toast.success(`已指定 ${userName} 为处理人`);
+        await Promise.all([loadIssues(), loadRecords()]);
+      } else {
+        const err = await res.json();
+        alert("指定失败: " + (err.error || "未知错误"));
+      }
+    } catch (e) {
+      alert("指定失败: " + String(e));
     }
   };
 
@@ -616,9 +904,211 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: notifId }),
       });
-      loadNotifications();
+      // 立即更新本地状态
+      setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, is_read: true } : n));
+      setSelectedNotifIds(prev => { const n = new Set(prev); n.delete(notifId); return n; });
     } catch (e) {
       console.error("标记已读失败:", e);
+    }
+  };
+
+  // 解析 custom_fields 值（兼容字符串和已解析对象）
+  const parseCustomFieldValue = (val: unknown): Record<string, unknown> => {
+    if (!val) return {};
+    if (typeof val === "string") {
+      try { return JSON.parse(val); } catch { return {}; }
+    }
+    if (typeof val === "object") return val as Record<string, unknown>;
+    return {};
+  };
+
+  // 自定义字段渲染器
+  const renderCustomField = (field: FormFieldDef, value: string, onChange: (v: string) => void) => {
+    const placeholder = field.placeholder || `请输入${field.label}`;
+    switch (field.type) {
+      case "text":
+        return <Input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />;
+      case "textarea":
+        return <Textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={3} />;
+      case "richtext":
+        return (
+          <div className="min-h-[200px] border border-[#d5dfe8]">
+            <RichTextEditor className="!rounded-none" value={value} onChange={onChange} placeholder={placeholder} />
+          </div>
+        );
+      case "select":
+        return (
+          <Select value={value} onValueChange={onChange}>
+            <SelectTrigger><SelectValue placeholder={`请选择${field.label}`} /></SelectTrigger>
+            <SelectContent>
+              {(field.options || []).map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        );
+      case "date":
+        return <Input type="date" value={value} onChange={e => onChange(e.target.value)} />;
+      case "datetime":
+        return <Input type="datetime-local" value={value} onChange={e => onChange(e.target.value)} />;
+      case "number":
+        return <Input type="number" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />;
+      case "product_catalog": {
+        const selectedIds = value ? value.split(",").filter(Boolean) : [];
+        return (
+          <div>
+            <div className="flex flex-wrap gap-1.5 items-center border border-[#d5dfe8] p-2 min-h-[42px]">
+              {selectedIds.map((mid, idx) => {
+                const mod = productModules.find(m => m.id === mid);
+                return (
+                  <span key={mid} className="inline-flex items-center gap-1 border border-[#d5dfe8] text-[#0d2137] text-xs px-2.5 py-1">
+                    {mod?.module_name || mid}
+                    <button type="button" className="hover:text-red-500 ml-0.5" onClick={() => {
+                      const newIds = selectedIds.filter((_, i) => i !== idx);
+                      onChange(newIds.join(","));
+                    }}>×</button>
+                  </span>
+                );
+              })}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button type="button" className="text-xs text-[#7b8fa1] hover:text-[#0d2137] px-1">+ 添加产品目录</button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[320px] p-0 rounded-none" align="start">
+                  <Command>
+                    <CommandInput placeholder="搜索产品目录..." />
+                    <CommandList>
+                      <CommandEmpty>无匹配模块</CommandEmpty>
+                      <CommandGroup>
+                        {productModules.filter(m => m.module_name && !selectedIds.includes(m.id)).map(m => (
+                          <CommandItem key={m.id} value={m.module_name} onSelect={() => {
+                            onChange([...selectedIds, m.id].join(","));
+                          }}>{m.module_name}{m.product_name ? <span className="ml-2 text-xs text-[#7b8fa1]">{m.product_name}</span> : ""}{m.category ? <span className="ml-2 text-xs text-[#7b8fa1]">· {m.category}</span> : ""}</CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+        );
+      }
+      case "file":
+        return (
+          <div>
+            <div className="border border-dashed border-[#d5dfe8] bg-[#f4f7fb] p-3 flex items-center gap-3 cursor-pointer"
+              onClick={() => {
+                const input = document.createElement("input");
+                input.type = "file"; input.multiple = true;
+                input.onchange = (ev) => {
+                  const files = Array.from((ev.target as HTMLInputElement).files || []);
+                  setCustomFieldFiles(prev => ({ ...prev, [field.key]: [...(prev[field.key] || []), ...files] }));
+                  const existing = value ? JSON.parse(value) : { names: [] };
+                  const newNames = [...existing.names, ...files.map(f => f.name)];
+                  onChange(JSON.stringify({ names: newNames }));
+                };
+                input.click();
+              }}>
+              <Upload className="w-5 h-5 text-[#7b8fa1]" />
+              <span className="text-xs text-[#7b8fa1] flex-1">点击上传文件（支持图片/视频/压缩包/文档）</span>
+            </div>
+            {(() => {
+              const meta = parseCustomFieldValue(value);
+              const metaNames: string[] = Array.isArray(meta.names) ? meta.names as string[] : [];
+              const files = customFieldFiles[field.key] || [];
+              if (metaNames.length === 0 && files.length === 0) return null;
+              return (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {metaNames.map((name: string, idx: number) => (
+                    <div key={idx} className="flex items-center gap-1 border border-[#d5dfe8] px-2.5 py-1 text-xs text-[#0d2137]">
+                      <ImageIcon className="w-3 h-3 text-[#2563eb]" /> {name}
+                      <X className="w-3 h-3 cursor-pointer text-[#7b8fa1] hover:text-red-500" onClick={(ev) => {
+                        ev.stopPropagation();
+                        const newNames = metaNames.filter((_: string, i: number) => i !== idx);
+                        onChange(JSON.stringify({ names: newNames }));
+                        setCustomFieldFiles(prev => {
+                          const prevFiles = prev[field.key] || [];
+                          return { ...prev, [field.key]: prevFiles.filter((_: File, i: number) => i !== idx) };
+                        });
+                      }} />
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        );
+      default:
+        return <Input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />;
+    }
+  };
+
+  // 渲染自定义字段值（详情展示用）
+  const renderCustomFieldValue = (field: FormFieldDef, value: string) => {
+    if (!value) return <span className="text-[#7b8fa1] text-sm">—</span>;
+    switch (field.type) {
+      case "richtext":
+        return <div className="prose prose-sm max-w-none text-[#0d2137]" dangerouslySetInnerHTML={{ __html: value }} />;
+      case "select": {
+        const opt = (field.options || []).find(o => o.value === value);
+        return <span className="text-sm text-[#0d2137]">{opt?.label || value}</span>;
+      }
+      case "date":
+        return <span className="text-sm text-[#0d2137]">{value}</span>;
+      case "datetime":
+        return <span className="text-sm text-[#0d2137]">{value.replace("T", " ")}</span>;
+      case "product_catalog": {
+        const ids = value ? value.split(",").filter(Boolean) : [];
+        if (ids.length === 0) return <span className="text-[#7b8fa1] text-sm">—</span>;
+        return (
+          <span className="text-sm text-[#0d2137]">
+            {ids.map(id => productModules.find(m => m.id === id)?.module_name || id).join("、")}
+          </span>
+        );
+      }
+      case "file": {
+        const meta = parseCustomFieldValue(value);
+        const names: string[] = Array.isArray(meta.names) ? meta.names as string[] : [];
+        const urls: string[] = Array.isArray(meta.urls) ? meta.urls as string[] : [];
+        if (names.length === 0) return <span className="text-[#7b8fa1] text-sm">—</span>;
+        const isImage = (n: string) => /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(n);
+        const isVideo = (n: string) => /\.(mp4|webm|mov|avi|mkv)$/i.test(n);
+        // 从已加载的附件中匹配 URL
+        const getFileUrl = (name: string, idx: number) => {
+          if (urls[idx]) return urls[idx];
+          const att = issueAttachments.find(a => a.file_name === name);
+          return att?.file_url_signed || "";
+        };
+        return (
+          <div className="flex flex-wrap gap-2">
+            {names.map((name: string, idx: number) => {
+              const fileUrl = getFileUrl(name, idx);
+              if (!fileUrl) return (
+                <span key={idx} className="inline-flex items-center gap-1 border border-[#d5dfe8] px-2.5 py-1 text-xs text-[#7b8fa1]">
+                  <ImageIcon className="w-3 h-3" /> {name}
+                </span>
+              );
+              const canPreview = isImage(name) || isVideo(name);
+              return (
+                <button key={idx} type="button" onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (canPreview) {
+                    setVideoLoading(isVideo(name));
+                    setPreviewMedia({ url: fileUrl, name, type: isVideo(name) ? "video" : "image" });
+                  } else {
+                    window.open(fileUrl, "_blank");
+                  }
+                }}
+                  className="inline-flex items-center gap-1 border border-[#d5dfe8] px-2.5 py-1 text-xs text-[#2563eb] hover:bg-gray-50 cursor-pointer">
+                  {isVideo(name) ? <Video className="w-3 h-3" /> : <ImageIcon className="w-3 h-3" />} {name}
+                </button>
+              );
+            })}
+          </div>
+        );
+      }
+      default:
+        return <span className="text-sm text-[#0d2137] whitespace-pre-wrap">{value}</span>;
     }
   };
 
@@ -737,7 +1227,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
               <FileText className="w-5 h-5" /> 发起问题
             </DialogTitle>
             <DialogDescription className="text-gray-300 mt-1">
-              {createStep === 1 ? "填写问题基本信息" : "填写问题详细描述和辅助举证"}
+              {createStep === 1 ? "选择问题类型和基本信息" : "填写详细内容"}
             </DialogDescription>
           </div>
 
@@ -764,13 +1254,76 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
               onClick={() => createStep > 1 && setCreateStep(2)}
             >
               <span className={`w-5 h-5 rounded-none flex items-center justify-center text-[10px] font-bold ${createStep === 2 ? "bg-gray-700 text-white" : "bg-gray-300 text-white"}`}>2</span>
-              详细描述
+              详情
             </button>
           </div>
 
           {createStep === 1 ? (
             /* ===== 第一步：基本信息 ===== */
             <div className="space-y-6">
+              {/* 问题类型（首先选择） */}
+              <section>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-1 h-5 bg-red-500 rounded-full" />
+                  <h3 className="text-sm font-bold text-black">问题类型 <span className="text-red-500 text-xs ml-1">首先选择类别，表单将根据类别动态调整</span></h3>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-black mb-1.5 block">问题类别（大类）<span className="text-red-500">*</span></label>
+                    <Select value={form.category_id} onValueChange={v => setForm(f => ({ ...f, category_id: v, sub_category_id: undefined }))}>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="选择大类" /></SelectTrigger>
+                      <SelectContent>
+                        {topCategories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-black mb-1.5 block">问题子类</label>
+                    {subCategories.length > 0 ? (
+                      <Select value={form.sub_category_id} onValueChange={v => setForm(f => ({ ...f, sub_category_id: v }))}>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="选择子类" /></SelectTrigger>
+                        <SelectContent>
+                          {subCategories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input disabled placeholder="请先选择大类" className="bg-gray-100" />
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-black mb-1.5 block">紧急程度 <span className="text-red-500">*</span></label>
+                    <Select value={form.urgency_id} onValueChange={v => setForm(f => ({ ...f, urgency_id: v }))}>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="选择" /></SelectTrigger>
+                      <SelectContent>
+                        {urgencyList.filter(u => u.is_enabled).map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-black mb-1.5 block">是否重大问题</label>
+                    <div className="flex gap-6 items-center h-9">
+                      <label className="flex items-center gap-1.5 text-sm cursor-pointer text-black">
+                        <input type="radio" checked={form.is_major} onChange={() => setForm(f => ({ ...f, is_major: true }))} /> 是
+                      </label>
+                      <label className="flex items-center gap-1.5 text-sm cursor-pointer text-black">
+                        <input type="radio" checked={!form.is_major} onChange={() => setForm(f => ({ ...f, is_major: false }))} /> 否
+                      </label>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-black mb-1.5 block">保修情况</label>
+                    <Select value={form.warranty_status_id} onValueChange={v => setForm(f => ({ ...f, warranty_status_id: v }))}>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="选择" /></SelectTrigger>
+                      <SelectContent>
+                        {warrantyList.filter(w => w.is_enabled).map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </section>
+
+              <hr className="border-gray-100" />
+
               {/* 基本信息 */}
               <section>
                 <div className="flex items-center gap-2 mb-4">
@@ -784,19 +1337,41 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                   </div>
                   <div className="col-span-2">
                     <label className="text-xs font-semibold text-black mb-1.5 block">所属项目 <span className="text-red-500">*</span></label>
-                    <div className="flex gap-2">
-                      <Input value={form.project_name} onChange={e => setForm(f => ({ ...f, project_name: e.target.value, project_id: undefined }))}
-                        placeholder="输入或选择项目" className="flex-1" />
-                      <Select value={form.project_id} onValueChange={v => {
-                        const proj = projects.find(p => p.id === v);
-                        setForm(f => ({ ...f, project_id: v, project_name: proj?.project_name || "" }));
-                      }}>
-                        <SelectTrigger className="w-48"><SelectValue placeholder="选择已有项目" /></SelectTrigger>
-                        <SelectContent>
-                          {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.project_name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="flex h-9 w-full items-center justify-between rounded-none border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]">
+                          <span className={form.project_name ? "text-black" : "text-black/40"}>
+                            {form.project_name || "搜索或输入项目名称..."}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[400px] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="搜索项目名称..." onValueChange={(v: string) => {
+                            if (v && !projects.some(p => p.project_name === v)) {
+                              setForm(f => ({ ...f, project_name: v, project_id: undefined }));
+                            }
+                          }} />
+                          <CommandList>
+                            <CommandEmpty>无匹配项目，将使用输入的名称</CommandEmpty>
+                            <CommandGroup>
+                              {projects.filter(p => !form.project_name || p.project_name.includes(form.project_name) || p.project_code.includes(form.project_name)).map(p => (
+                                <CommandItem key={p.id} value={p.project_name} onSelect={() => {
+                                  setForm(f => ({ ...f, project_id: p.id, project_name: p.project_name }));
+                                }}>
+                                  <div className="flex items-center gap-2">
+                                    <Building2 className="w-3.5 h-3.5 text-black/40" />
+                                    <span>{p.project_name}</span>
+                                    <span className="text-xs text-black/40">{p.project_code}</span>
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-black mb-1.5 block">报修部门</label>
@@ -852,7 +1427,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <label className="text-xs font-semibold text-black mb-1.5 block">指定处理人 <span className="text-red-500">*</span></label>
+                    <label className="text-xs font-semibold text-black mb-1.5 block">指定处理人 <span className="text-black font-normal">可选，不选则进入工单池</span></label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <button className="flex h-9 w-full items-center justify-between rounded-none border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]">
@@ -930,163 +1505,58 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                   </div>
                 </div>
               </section>
-
-              <hr className="border-gray-100" />
-
-              {/* 分类信息 */}
-              <section>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-1 h-5 bg-amber-500 rounded-full" />
-                  <h3 className="text-sm font-bold text-black">分类信息</h3>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-xs font-semibold text-black mb-1.5 block">问题类别（大类）<span className="text-red-500">*</span></label>
-                    <Select value={form.category_id} onValueChange={v => setForm(f => ({ ...f, category_id: v, sub_category_id: undefined }))}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="选择大类" /></SelectTrigger>
-                      <SelectContent>
-                        {topCategories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-black mb-1.5 block">问题子类</label>
-                    {subCategories.length > 0 ? (
-                      <Select value={form.sub_category_id} onValueChange={v => setForm(f => ({ ...f, sub_category_id: v }))}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="选择子类" /></SelectTrigger>
-                        <SelectContent>
-                          {subCategories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Input disabled placeholder="请先选择大类" className="bg-gray-100" />
-                    )}
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-black mb-1.5 block">对应产品目录 <span className="text-red-500">*</span></label>
-                    <Select value={form.product_module_id} onValueChange={v => setForm(f => ({ ...f, product_module_id: v }))}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="选择产品目录" /></SelectTrigger>
-                      <SelectContent>
-                        {productModules.map(m => <SelectItem key={m.id} value={m.id}>{m.module_name}{m.product_name ? ` (${m.product_name})` : ""}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-black mb-1.5 block">是否重大问题</label>
-                    <div className="flex gap-6 items-center h-9">
-                      <label className="flex items-center gap-1.5 text-sm cursor-pointer text-black">
-                        <input type="radio" checked={form.is_major} onChange={() => setForm(f => ({ ...f, is_major: true }))} /> 是
-                      </label>
-                      <label className="flex items-center gap-1.5 text-sm cursor-pointer text-black">
-                        <input type="radio" checked={!form.is_major} onChange={() => setForm(f => ({ ...f, is_major: false }))} /> 否
-                      </label>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-black mb-1.5 block">紧急程度 <span className="text-red-500">*</span></label>
-                    <Select value={form.urgency_id} onValueChange={v => setForm(f => ({ ...f, urgency_id: v }))}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="选择" /></SelectTrigger>
-                      <SelectContent>
-                        {urgencyList.filter(u => u.is_enabled).map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-black mb-1.5 block">保修情况</label>
-                    <Select value={form.warranty_status_id} onValueChange={v => setForm(f => ({ ...f, warranty_status_id: v }))}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="选择" /></SelectTrigger>
-                      <SelectContent>
-                        {warrantyList.filter(w => w.is_enabled).map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </section>
             </div>
           ) : (
             /* ===== 第二步：问题详情 ===== */
             <div className="space-y-6">
-              {/* 详细描述 */}
-              <section>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-1 h-5 bg-blue-500 rounded-full" />
-                  <h3 className="text-sm font-bold text-black">问题现象详细描述 <span className="text-red-500 text-xs">*</span></h3>
-                </div>
-                <div className="min-h-[350px] border border-gray-200 rounded-none">
-                  <RichTextEditor className="!rounded-none" value={form.description} onChange={v => setForm(f => ({ ...f, description: v }))}
-                    placeholder="什么时候开始、做了什么操作、出现什么报错、是否多人受影响" />
-                </div>
-              </section>
-
-              <hr className="border-gray-100" />
-
-              {/* 辅助举证 */}
-              <section>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-1 h-5 bg-orange-500 rounded-full" />
-                  <h3 className="text-sm font-bold text-black">辅助举证</h3>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-black mb-1.5 block">问题截图/照片/视频上传 <span className="text-black font-normal">提升处理效率</span></label>
-                  <div className="border border-dashed border-gray-300 rounded-none p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors"
-                    onClick={() => fileInputRef.current?.click()}>
-                    <Upload className="w-6 h-6 mx-auto mb-1 text-black" />
-                    <p className="text-xs text-black">点击上传文件</p>
-                    <input ref={fileInputRef} type="file" className="hidden" multiple accept="image/*,video/*"
-                      onChange={e => {
-                        const files = Array.from(e.target.files || []);
-                        setFormFiles(prev => [...prev, ...files]);
-                        e.target.value = "";
-                      }} />
+              {/* 自定义字段（根据类别动态展示） */}
+              {(() => {
+                const catId = form.sub_category_id || form.category_id;
+                const cat = catId ? categories.find(c => c.id === catId) : null;
+                const fields: FormFieldDef[] = (cat as any)?.form_fields || [];
+                if (fields.length === 0) return (
+                  <div className="text-center py-12 text-black/40 text-sm border border-dashed border-gray-200">
+                    当前类别未配置自定义表单字段，可在系统设置中配置
                   </div>
-                  {formFiles.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {formFiles.map((f, idx) => (
-                        <div key={idx} className="flex items-center gap-1 bg-gray-50 rounded-none px-2.5 py-1.5 text-xs border border-gray-200">
-                          {f.type.startsWith("image") ? <ImageIcon className="w-3 h-3 text-blue-400" /> : <Video className="w-3 h-3 text-purple-400" />}
-                          <span className="max-w-[120px] truncate text-black">{f.name}</span>
-                          <X className="w-3 h-3 cursor-pointer text-black hover:text-red-500" onClick={() => setFormFiles(prev => prev.filter((_, i) => i !== idx))} />
+                );
+                return (
+                  <section>
+                    <div className="space-y-4">
+                      {[...fields].sort((a, b) => a.sort_order - b.sort_order).map(f => (
+                        <div key={f.key}>
+                          <label className="text-xs font-semibold text-black mb-1.5 block">
+                            {f.label} {f.required && <span className="text-red-500">*</span>}
+                          </label>
+                          {renderCustomField(f, form.custom_fields[f.key] || "", v => setForm(ff => ({ ...ff, custom_fields: { ...ff.custom_fields, [f.key]: v } })))}
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-4 mt-3">
-                  <div>
-                    <label className="text-xs font-semibold text-black mb-1.5 block">是否初次报修</label>
-                    <div className="flex gap-4 items-center h-9">
-                      <label className="flex items-center gap-1.5 text-sm cursor-pointer text-black">
-                        <input type="radio" checked={form.is_first_report} onChange={() => setForm(f => ({ ...f, is_first_report: true }))} /> 是
-                      </label>
-                      <label className="flex items-center gap-1.5 text-sm cursor-pointer text-black">
-                        <input type="radio" checked={!form.is_first_report} onChange={() => setForm(f => ({ ...f, is_first_report: false }))} /> 否
-                      </label>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-black mb-1.5 block">历史是否同类问题</label>
-                    <div className="flex gap-4 items-center h-9">
-                      <label className="flex items-center gap-1.5 text-sm cursor-pointer text-black">
-                        <input type="radio" checked={form.has_similar_history} onChange={() => setForm(f => ({ ...f, has_similar_history: true }))} /> 是
-                      </label>
-                      <label className="flex items-center gap-1.5 text-sm cursor-pointer text-black">
-                        <input type="radio" checked={!form.has_similar_history} onChange={() => setForm(f => ({ ...f, has_similar_history: false }))} /> 否
-                      </label>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <label className="text-xs font-semibold text-black mb-1.5 block">备注补充说明</label>
-                  <Textarea value={form.remarks} onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))}
-                    placeholder="其他需要补充的信息" rows={2} />
-                </div>
-              </section>
+                  </section>
+                );
+              })()}
+
             </div>
           )}
 
           </div>{/* end scroll area */}
 
           <DialogFooter className="shrink-0 px-6 py-3 border-t bg-gray-50">
+            {/* 上传进度条 */}
+            {uploadProgress && (
+              <div className="w-full mb-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold">正在上传: {uploadProgress.fileName}</span>
+                  <span className="text-xs text-black/60">{uploadProgress.percent}%</span>
+                </div>
+                <div className="h-1.5 bg-gray-200 mb-1">
+                  <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${uploadProgress.percent}%` }} />
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] text-black/40">{Math.round(uploadProgress.loaded / 1024)}KB / {Math.round(uploadProgress.total / 1024)}KB</span>
+                  <button className="text-xs text-red-500 hover:text-red-700" onClick={cancelUpload}>取消上传</button>
+                </div>
+              </div>
+            )}
             {createStep === 1 ? (
               <>
                 <Button variant="outline" className="rounded-none" onClick={() => { setShowCreateDialog(false); resetForm(); }}>取消</Button>
@@ -1096,7 +1566,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
               <>
                 <Button variant="outline" className="rounded-none" onClick={() => setCreateStep(1)}>上一步</Button>
                 <Button variant="outline" className="rounded-none" onClick={() => { setShowCreateDialog(false); resetForm(); setCreateStep(1); }}>取消</Button>
-                <Button onClick={handleSubmit} className="bg-gray-900 hover:bg-gray-800 text-white px-6 rounded-none">提交</Button>
+                <Button onClick={handleSubmit} disabled={submitting} className="bg-gray-900 hover:bg-gray-800 text-white px-6 rounded-none">{submitting ? "提交中..." : "提交"}</Button>
               </>
             )}
           </DialogFooter>
@@ -1138,9 +1608,37 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
             {si.description && (
               <div>
                 <span className="text-black block mb-1 font-semibold">问题描述:</span>
-                <div className="bg-gray-50 rounded-none p-3 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: si.description }} />
+                <div className="border border-gray-200 bg-gray-50 rounded-none p-3 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: si.description }} />
               </div>
             )}
+            {si.repro_steps && (
+              <div>
+                <span className="text-black block mb-1 font-semibold">复现步骤:</span>
+                <div className="border border-gray-200 bg-gray-50 rounded-none p-3 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: si.repro_steps }} />
+              </div>
+            )}
+            {si.custom_fields && Object.keys(si.custom_fields).length > 0 && (() => {
+              const cat = categories.find(c => c.id === si.category_id);
+              const fields: FormFieldDef[] = (cat as any)?.form_fields || [];
+              if (fields.length === 0) return null;
+              return (
+                <div>
+                  <span className="text-black block mb-1 font-semibold">补充信息:</span>
+                  <div className="bg-gray-50 rounded-none p-3 space-y-2">
+                    {[...fields].sort((a, b) => a.sort_order - b.sort_order).map(f => {
+                      const val = si.custom_fields?.[f.key];
+                      if (!val) return null;
+                      return (
+                        <div key={f.key}>
+                          <span className="text-xs text-black/60">{f.label}:</span>
+                          <div className="mt-0.5">{renderCustomFieldValue(f, val)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
             <div className="grid grid-cols-2 gap-3 text-black">
               <div>初次报修: {si.is_first_report ? "是" : "否"}</div>
               <div>同类问题: {si.has_similar_history ? "是" : "否"}</div>
@@ -1226,12 +1724,32 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
           {(actionType === "transfer" || actionType === "assign") && (
             <div>
               <label className="text-xs font-semibold text-black mb-1.5 block">转交给 <span className="text-red-500">*</span></label>
-              <Select value={actionToUser} onValueChange={setActionToUser}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="选择处理人" /></SelectTrigger>
-                <SelectContent>
-                  {users.filter(u => u.name && u.id !== currentUser.id).map(u => <SelectItem key={u.id} value={u.id}>{u.name}{u.department ? ` (${u.department})` : ""}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className="flex h-9 w-full items-center justify-between rounded-none border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]">
+                    <span className={actionToUser ? "text-black" : "text-black/40"}>
+                      {actionToUser ? users.find(u => u.id === actionToUser)?.name || actionToUser : "搜索选择处理人"}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[280px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="搜索用户名..." />
+                    <CommandList>
+                      <CommandEmpty>无匹配用户</CommandEmpty>
+                      <CommandGroup>
+                        {users.filter(u => u.name && u.id !== currentUser.id).map(u => (
+                          <CommandItem key={u.id} value={u.name} onSelect={() => setActionToUser(u.id)}>
+                            {u.name}
+                            {u.department && <span className="ml-2 text-xs text-black/60">{u.department}</span>}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           )}
           <div>
@@ -1262,53 +1780,6 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
     const recentIssues = [...issues].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5);
     return (
       <div className="space-y-6">
-        {/* 四个快捷入口卡片 */}
-        <div className="grid grid-cols-4 gap-3">
-          {[
-            {
-              key: "create",
-              label: "工单提报",
-              desc: "快速提交新的工单问题",
-              icon: "📝",
-              action: () => { resetForm(); setActiveTab("create_ticket"); },
-            },
-            {
-              key: "stats",
-              label: "数据分析",
-              desc: "查看工单统计与趋势分析",
-              icon: "📊",
-              action: () => setActiveTab("stats"),
-            },
-            {
-              key: "issues",
-              label: "工单查询",
-              desc: "搜索和筛选全部工单记录",
-              icon: "🔍",
-              action: () => setActiveTab("issues"),
-            },
-            {
-              key: "my_reports",
-              label: "我的工单",
-              desc: "查看我提交的全部工单",
-              icon: "📋",
-              action: () => setActiveTab("my_reports"),
-            },
-          ].map(card => (
-            <button
-              key={card.key}
-              onClick={card.action}
-              className="bg-white border-2 border-[#d5dfe8] p-6 text-center transition-all duration-150 hover:border-[#0d9488] hover:bg-[#edf8f7] cursor-pointer group"
-            >
-              <div className="text-2xl mb-3">{card.icon}</div>
-              <h3 className="text-sm font-extrabold text-[#0d2137] mb-3">{card.label}</h3>
-              <div className="h-1 bg-[#e0e8f2] mb-2">
-                <div className="h-full bg-[#0d9488] w-0 group-hover:w-full transition-all duration-500" />
-              </div>
-              <p className="text-[11px] text-[#7b8fa1] font-semibold">{card.desc}</p>
-            </button>
-          ))}
-        </div>
-
         {/* 最近工单 - 表格风格 */}
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -1331,7 +1802,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
               <thead>
                 <tr className="bg-[#f4f7fb] border-b-2 border-[#0f2840]">
                   <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px]">标题</th>
-                  <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[80px]">类型</th>
+                  <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[120px]">类型</th>
                   <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[80px]">状态</th>
                   <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[80px]">提交人</th>
                   <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[110px]">时间</th>
@@ -1400,22 +1871,81 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2 flex flex-col gap-1">
-              <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">所属项目</label>
-              <input type="text" className="border border-[#d5dfe8] h-[42px] px-3 text-sm text-[#0d2137] bg-white placeholder:text-[#7b8fa1] focus:outline-none focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20 transition-colors"
-                placeholder="输入或选择项目" value={form.project_name}
-                onChange={e => setForm(f => ({ ...f, project_name: e.target.value, project_id: undefined }))} />
+              <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">所属项目 <span className="text-red-500">*</span></label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className="flex h-[42px] w-full items-center justify-between border border-[#d5dfe8] bg-white px-3 text-sm focus:outline-none focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20 transition-colors">
+                    <span className={form.project_name ? "text-[#0d2137]" : "text-[#7b8fa1]"}>
+                      {form.project_name || "搜索或输入项目名称..."}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0 rounded-none" align="start">
+                  <Command>
+                    <CommandInput placeholder="搜索项目名称..." />
+                    <CommandList>
+                      <CommandEmpty>无匹配项目，将使用输入的名称</CommandEmpty>
+                      <CommandGroup>
+                        {projects.map(p => (
+                          <CommandItem key={p.id} value={p.project_name} onSelect={() => {
+                            setForm(f => ({ ...f, project_id: p.id, project_name: p.project_name }));
+                          }}>
+                            <div className="flex items-center gap-2">
+                              <Building2 className="w-3.5 h-3.5 text-[#7b8fa1]" />
+                              <span>{p.project_name}</span>
+                              <span className="text-xs text-[#7b8fa1]">{p.project_code}</span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">选择已有项目</label>
-              <Select value={form.project_id} onValueChange={v => {
-                const proj = projects.find(p => p.id === v);
-                setForm(f => ({ ...f, project_id: v, project_name: proj?.project_name || "" }));
-              }}>
-                <SelectTrigger className="!w-full !h-[42px] border border-[#d5dfe8] rounded-none text-sm bg-white focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20"><SelectValue placeholder="选择已有项目" /></SelectTrigger>
-                <SelectContent>
-                  {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.project_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+          </div>
+        </div>
+
+        {/* 问题类型 */}
+        <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b border-[#d5dfe8] pb-3 mb-4 mt-6">问题类型 <span className="text-red-500 normal-case tracking-normal">首先选择</span></div>
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">问题类别（大类） <span className="text-red-500">*</span></label>
+            <Select value={form.category_id} onValueChange={v => setForm(f => ({ ...f, category_id: v, sub_category_id: undefined }))}>
+              <SelectTrigger className="!w-full !h-[42px] border border-[#d5dfe8] rounded-none text-sm bg-white focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20"><SelectValue placeholder="选择大类" /></SelectTrigger>
+              <SelectContent>
+                {topCategories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">紧急程度 <span className="text-red-500">*</span></label>
+            <Select value={form.urgency_id} onValueChange={v => setForm(f => ({ ...f, urgency_id: v }))}>
+              <SelectTrigger className="!w-full !h-[42px] border border-[#d5dfe8] rounded-none text-sm bg-white focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20"><SelectValue placeholder="选择" /></SelectTrigger>
+              <SelectContent>
+                {urgencyList.filter(u => u.is_enabled).map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">保修情况</label>
+            <Select value={form.warranty_status_id} onValueChange={v => setForm(f => ({ ...f, warranty_status_id: v }))}>
+              <SelectTrigger className="!w-full !h-[42px] border border-[#d5dfe8] rounded-none text-sm bg-white focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20"><SelectValue placeholder="选择" /></SelectTrigger>
+              <SelectContent>
+                {warrantyList.filter(w => w.is_enabled).map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">是否重大问题</label>
+            <div className="flex h-[42px]">
+              <button type="button" className={`px-8 border border-[#d5dfe8] text-sm font-semibold transition-all ${!form.is_major ? "bg-gray-400 text-white border-gray-400" : "bg-white text-[#3d5468] hover:bg-gray-50"}`}
+                onClick={() => setForm(f => ({ ...f, is_major: false }))}>否</button>
+              <button type="button" className={`px-8 border border-l-0 border-[#d5dfe8] text-sm font-semibold transition-all ${form.is_major ? "bg-red-500 text-white border-red-500" : "bg-white text-[#3d5468] hover:bg-gray-50"}`}
+                onClick={() => setForm(f => ({ ...f, is_major: true }))}>是</button>
             </div>
           </div>
         </div>
@@ -1465,7 +1995,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         </div>
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">指定处理人 <span className="text-red-500">*</span></label>
+            <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">指定处理人 <span className="text-[#7b8fa1] font-normal normal-case tracking-normal">可选，不选则进入工单池</span></label>
             <Popover>
               <PopoverTrigger asChild>
                 <button className="flex h-[42px] w-full items-center justify-between border border-[#d5dfe8] bg-white px-3 text-sm focus:outline-none focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20 transition-colors">
@@ -1538,143 +2068,57 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
           </div>
         </div>
 
-        {/* 详细描述 */}
-        <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b-2 border-[#0f2840] pb-3 mb-4 mt-6">详细描述</div>
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">问题类别（大类） <span className="text-red-500">*</span></label>
-            <Select value={form.category_id} onValueChange={v => setForm(f => ({ ...f, category_id: v, sub_category_id: undefined }))}>
-              <SelectTrigger className="!w-full !h-[42px] border border-[#d5dfe8] rounded-none text-sm bg-white focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20"><SelectValue placeholder="选择大类" /></SelectTrigger>
-              <SelectContent>
-                {topCategories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">紧急程度 <span className="text-red-500">*</span></label>
-            <Select value={form.urgency_id} onValueChange={v => setForm(f => ({ ...f, urgency_id: v }))}>
-              <SelectTrigger className="!w-full !h-[42px] border border-[#d5dfe8] rounded-none text-sm bg-white focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20"><SelectValue placeholder="选择" /></SelectTrigger>
-              <SelectContent>
-                {urgencyList.filter(u => u.is_enabled).map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">保修情况</label>
-            <Select value={form.warranty_status_id} onValueChange={v => setForm(f => ({ ...f, warranty_status_id: v }))}>
-              <SelectTrigger className="!w-full !h-[42px] border border-[#d5dfe8] rounded-none text-sm bg-white focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20"><SelectValue placeholder="选择" /></SelectTrigger>
-              <SelectContent>
-                {warrantyList.filter(w => w.is_enabled).map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">对应产品目录 <span className="text-red-500">*</span></label>
-            <div className="flex flex-wrap gap-1.5 items-center border border-[#d5dfe8] p-2 min-h-[42px]">
-              {form.product_module_ids.map((mid, idx) => {
-                const mod = productModules.find(m => m.id === mid);
-                return (
-                  <span key={mid} className="inline-flex items-center gap-1 border border-[#d5dfe8] text-[#0d2137] text-xs px-2.5 py-1">
-                    {mod?.module_name || mid}
-                    <button type="button" className="hover:text-red-500 ml-0.5" onClick={() => {
-                      setForm(f => ({
-                        ...f,
-                        product_module_ids: f.product_module_ids.filter((_, i) => i !== idx),
-                        product_module_names: f.product_module_names.filter((_, i) => i !== idx),
-                      }));
-                    }}>×</button>
-                  </span>
-                );
-              })}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button className="text-xs text-[#7b8fa1] hover:text-[#0d2137] px-1">+ 添加产品目录</button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[320px] p-0 rounded-none" align="start">
-                  <Command>
-                    <CommandInput placeholder="搜索产品目录..." />
-                    <CommandList>
-                      <CommandEmpty>无匹配模块</CommandEmpty>
-                      <CommandGroup>
-                        {productModules.filter(m => m.module_name && !form.product_module_ids.includes(m.id)).map(m => (
-                          <CommandItem key={m.id} value={m.module_name} onSelect={() => {
-                            setForm(f => ({
-                              ...f,
-                              product_module_ids: [...f.product_module_ids, m.id],
-                              product_module_names: [...f.product_module_names, m.module_name],
-                            }));
-                          }}>{m.module_name}{m.product_name ? <span className="ml-2 text-xs text-[#7b8fa1]">{m.product_name}</span> : ""}{m.category ? <span className="ml-2 text-xs text-[#7b8fa1]">· {m.category}</span> : ""}</CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+        {/* 自定义字段（根据类别动态展示） */}
+        {(() => {
+          const catId = form.sub_category_id || form.category_id;
+          const cat = catId ? categories.find(c => c.id === catId) : null;
+          const fields: FormFieldDef[] = (cat as any)?.form_fields || [];
+          if (fields.length === 0) return (
+            <div className="text-center py-8 text-[#7b8fa1] text-xs border border-dashed border-[#d5dfe8] mb-4">
+              当前类别未配置自定义表单字段，可在系统设置中配置
             </div>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">是否重大问题</label>
-            <div className="flex h-[42px]">
-              <button
-                type="button"
-                className={`px-8 border border-[#d5dfe8] text-sm font-semibold transition-all ${!form.is_major ? "bg-gray-400 text-white border-gray-400" : "bg-white text-[#3d5468] hover:bg-gray-50"}`}
-                onClick={() => setForm(f => ({ ...f, is_major: false }))}
-              >否</button>
-              <button
-                type="button"
-                className={`px-8 border border-l-0 border-[#d5dfe8] text-sm font-semibold transition-all ${form.is_major ? "bg-red-500 text-white border-red-500" : "bg-white text-[#3d5468] hover:bg-gray-50"}`}
-                onClick={() => setForm(f => ({ ...f, is_major: true }))}
-              >是</button>
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-col gap-1 mb-4">
-          <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">问题现象详细描述 <span className="text-red-500">*</span></label>
-          <div className="border border-[#d5dfe8] min-h-[200px]">
-            <RichTextEditor className="!rounded-none" value={form.description} onChange={v => setForm(f => ({ ...f, description: v }))}
-              placeholder="请详细描述问题现象、复现步骤、影响范围等..." />
-          </div>
-        </div>
-
-        {/* 辅助举证 */}
-        <div className="flex flex-col gap-1 mb-4">
-          <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">辅助举证</label>
-          <div className="border border-dashed border-[#d5dfe8] bg-[#f4f7fb] p-4 flex items-center gap-3"
-            onClick={() => fileInputRef.current?.click()}>
-            <span className="text-xs text-[#7b8fa1] flex-1">📎 支持图片 / 视频 / 压缩包（zip, rar, 7z, tar, gz），提升处理效率</span>
-            <button type="button" className="px-3 py-1.5 border border-[#d5dfe8] bg-white text-[11px] font-semibold text-[#3d5468] hover:bg-[#0d2137] hover:text-white transition-colors">选择文件</button>
-            <input ref={fileInputRef} type="file" className="hidden" multiple accept="image/*,video/*,.zip,.rar,.7z,.tar,.gz,.tgz"
-              onChange={e => {
-                const files = Array.from(e.target.files || []);
-                setFormFiles(prev => [...prev, ...files]);
-                e.target.value = "";
-              }} />
-          </div>
-          {formFiles.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2">
-              {formFiles.map((f, idx) => (
-                <div key={idx} className="flex items-center gap-1.5 border border-[#d5dfe8] px-3 py-1.5 text-xs">
-                  {f.type.startsWith("image") ? <ImageIcon className="w-3 h-3 text-[#2563eb]" /> : <Video className="w-3 h-3 text-purple-400" />}
-                  <span className="max-w-[120px] truncate text-[#0d2137]">{f.name}</span>
-                  <X className="w-3 h-3 cursor-pointer text-[#7b8fa1] hover:text-red-500" onClick={() => setFormFiles(prev => prev.filter((_, i) => i !== idx))} />
+          );
+          return (
+            <div className="mb-4 space-y-3">
+              {[...fields].sort((a, b) => a.sort_order - b.sort_order).map(f => (
+                <div key={f.key} className="flex flex-col gap-1">
+                  <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px]">
+                    {f.label} {f.required && <span className="text-red-500">*</span>}
+                  </label>
+                  {renderCustomField(f, form.custom_fields[f.key] || "", v => setForm(ff => ({ ...ff, custom_fields: { ...ff.custom_fields, [f.key]: v } })))}
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          );
+        })()}
+
+        {/* 上传进度条 */}
+        {uploadProgress && (
+          <div className="mt-4 p-4 border border-[#d5dfe8] bg-white">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-[#3d5468] font-semibold">正在上传: {uploadProgress.fileName}</span>
+              <span className="text-xs text-[#7b8fa1]">{uploadProgress.percent}%</span>
+            </div>
+            <div className="h-2 bg-[#e0e8f2] mb-2">
+              <div className="h-full bg-[#2563eb] transition-all duration-300" style={{ width: `${uploadProgress.percent}%` }} />
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-[10px] text-[#7b8fa1]">{Math.round(uploadProgress.loaded / 1024)}KB / {Math.round(uploadProgress.total / 1024)}KB</span>
+              <button className="text-xs text-red-500 hover:text-red-700 font-semibold" onClick={cancelUpload}>取消上传</button>
+            </div>
+          </div>
+        )}
 
         {/* 操作按钮 */}
         <div className="flex gap-2.5 mt-7">
           <button
-            className="px-6 py-2.5 border-2 border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:border-[#2563eb] transition-colors"
+            className="px-6 py-2.5 border-2 border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:border-[#2563eb] transition-colors disabled:opacity-50"
             onClick={handleSubmit}
-          >提交工单</button>
-          <button className="px-6 py-2.5 border border-[#d5dfe8] bg-white text-[#3d5468] text-xs font-bold uppercase tracking-[1px] hover:bg-[#0d2137] hover:text-white transition-colors">存为草稿</button>
+            disabled={submitting}
+          >{submitting ? "提交中..." : "提交工单"}</button>
           <button
             className="px-6 py-2.5 text-xs font-bold uppercase tracking-[1px] text-[#7b8fa1] hover:text-[#0d2137] transition-colors"
-            onClick={() => { resetForm(); setActiveTab("dashboard"); }}
+            onClick={() => { resetForm(); setActiveTab("issues"); }}
           >取消</button>
         </div>
       </div>
@@ -1695,24 +2139,24 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
       <div className="flex gap-2 mb-5 items-center">
         <div className="relative flex-1 min-w-[200px]">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b8fa1] text-sm">⌕</span>
-          <input type="text" className="w-full border-2 border-[#0f2840] pl-8 pr-3 py-2 text-[13px] bg-white placeholder:text-[#7b8fa1] focus:outline-none focus:border-[#2563eb]"
+          <input type="text" className="w-full border border-[#d5dfe8] pl-8 pr-3 py-2 text-[13px] bg-white placeholder:text-[#7b8fa1] focus:outline-none focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20 transition-colors"
             placeholder="搜索我的工单..." />
         </div>
-        <button className="px-4 py-2 border-2 border-[#0f2840] bg-white text-xs font-bold text-[#3d5468] uppercase tracking-[0.5px] hover:bg-[#0d2137] hover:text-white transition-colors">状态 ▾</button>
-        <button className="px-4 py-2 border-2 border-[#0f2840] bg-white text-xs font-bold text-[#3d5468] uppercase tracking-[0.5px] hover:bg-[#0d2137] hover:text-white transition-colors">类型 ▾</button>
+        <button className="px-4 py-2 border border-[#d5dfe8] bg-white text-xs font-bold text-[#3d5468] uppercase tracking-[0.5px] hover:bg-[#0d2137] hover:text-white transition-colors">状态 ▾</button>
+        <button className="px-4 py-2 border border-[#d5dfe8] bg-white text-xs font-bold text-[#3d5468] uppercase tracking-[0.5px] hover:bg-[#0d2137] hover:text-white transition-colors">类型 ▾</button>
         <button
           onClick={() => { resetForm(); setActiveTab("create_ticket"); }}
-          className="px-4 py-2 border-2 border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold uppercase tracking-[0.5px] hover:bg-[#2563eb] hover:border-[#2563eb] transition-colors"
+          className="px-4 py-2 border border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold uppercase tracking-[0.5px] hover:bg-[#2563eb] hover:border-[#2563eb] transition-colors"
         >发起工单</button>
       </div>
       {myReports.length === 0 ? (
-        <div className="border-2 border-[#0f2840] p-16 text-center text-[#7b8fa1] text-sm">暂无工单记录</div>
+        <div className="border border-[#d5dfe8] p-16 text-center text-[#7b8fa1] text-sm">暂无工单记录</div>
       ) : (
-        <table className="w-full border-collapse border-2 border-[#0f2840]">
+        <table className="w-full border-collapse border border-[#d5dfe8]">
           <thead>
-            <tr className="bg-[#f4f7fb] border-b-2 border-[#0f2840]">
+            <tr className="bg-[#f4f7fb] border-b border-[#d5dfe8]">
               <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px]">标题</th>
-              <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[80px]">类型</th>
+              <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[120px]">类型</th>
               <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[80px]">状态</th>
               <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[80px]">处理人</th>
               <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[110px]">提交时间</th>
@@ -1730,7 +2174,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                   </div>
                 </td>
                 <td className="px-3 py-2.5">
-                  <span className="inline-block px-2 py-0.5 border border-[#0f2840] text-[10px] font-semibold uppercase tracking-[0.3px] text-[#3d5468]">
+                  <span className="inline-block px-2 py-0.5 border border-[#d5dfe8] text-[10px] font-semibold uppercase tracking-[0.3px] text-[#3d5468]">
                     {getCategoryName(i.category_id) || "—"}
                   </span>
                 </td>
@@ -1768,14 +2212,15 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b8fa1] text-sm">⌕</span>
           <input
             type="text"
-            className="w-full border-2 border-[#0f2840] pl-8 pr-3 py-2 text-[13px] text-[#0d2137] bg-white placeholder:text-[#7b8fa1] focus:outline-none focus:border-[#2563eb] transition-colors"
+            className="w-full border border-[#d5dfe8] pl-8 pr-3 py-2 text-[13px] text-[#0d2137] bg-white placeholder:text-[#7b8fa1] focus:outline-none focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]/20 transition-colors"
             placeholder="输入编号、标题、提交人..."
             value={searchKeyword}
             onChange={e => setSearchKeyword(e.target.value)}
           />
         </div>
         {[
-          { key: "all", label: "状态 ▾" },
+          { key: "all", label: "全部" },
+          { key: "unassigned", label: "待分配" },
           { key: "pending", label: "待受理" },
           { key: "accepted", label: "已受理" },
           { key: "processing", label: "处理中" },
@@ -1783,10 +2228,10 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
           { key: "rejected", label: "已驳回" },
         ].map(s => (
           <button key={s.key}
-            className={`px-4 py-2 border-2 text-xs font-bold uppercase tracking-[0.5px] transition-colors
+            className={`px-4 py-2 border text-xs font-bold uppercase tracking-[0.5px] transition-colors
               ${issueStatusFilter === s.key
                 ? "border-[#0d2137] bg-[#0d2137] text-white"
-                : "border-[#0f2840] bg-white text-[#3d5468] hover:bg-[#0d2137] hover:text-white"}`}
+                : "border-[#d5dfe8] bg-white text-[#3d5468] hover:bg-[#0d2137] hover:text-white"}`}
             onClick={() => setIssueStatusFilter(s.key)}>
             {s.label}
           </button>
@@ -1795,16 +2240,19 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
 
       {/* 表格 */}
       {filteredIssues.length === 0 ? (
-        <div className="border-2 border-[#0f2840] p-16 text-center text-[#7b8fa1] text-sm">暂无匹配的工单</div>
+        <div className="border border-[#d5dfe8] p-16 text-center text-[#7b8fa1] text-sm">暂无匹配的工单</div>
       ) : (
-        <table className="w-full border-collapse border-2 border-[#0f2840]">
+        <table className="w-full border-collapse border border-[#d5dfe8]">
           <thead>
-            <tr className="bg-[#f4f7fb] border-b-2 border-[#0f2840]">
+            <tr className="bg-[#f4f7fb] border-b border-[#d5dfe8]">
               <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px]">标题</th>
-              <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px]">类型</th>
+              <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[120px]">类型</th>
               <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[80px]">状态</th>
               <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[80px]">提交人</th>
               <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[110px]">时间</th>
+              {issueStatusFilter === "unassigned" && (
+                <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[120px]">操作</th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -1823,7 +2271,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                     </div>
                   </td>
                   <td className="px-3 py-2.5">
-                    <span className="inline-block px-2 py-0.5 border border-[#0f2840] text-[10px] font-semibold uppercase tracking-[0.3px] text-[#3d5468]">{getCategoryName(i.category_id) || "—"}</span>
+                    <span className="inline-block px-2 py-0.5 border border-[#d5dfe8] text-[10px] font-semibold uppercase tracking-[0.3px] text-[#3d5468]">{getCategoryName(i.category_id) || "—"}</span>
                   </td>
                   <td className="px-3 py-2.5">
                     <span className="inline-block px-2 py-0.5 border text-[10px] font-semibold uppercase tracking-[0.3px]"
@@ -1836,6 +2284,50 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                   </td>
                   <td className="px-3 py-2.5 text-[13px] text-[#0d2137]">{i.reporter_name}</td>
                   <td className="px-3 py-2.5 text-[13px] text-[#7b8fa1]">{fmtDate(i.created_at)}</td>
+                  {issueStatusFilter === "unassigned" && (
+                    <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
+                      <div className="flex gap-1.5">
+                        <button
+                          className="px-2.5 py-1 border-2 border-[#0d9488] text-[10px] font-bold text-[#0d9488] uppercase tracking-[0.5px] hover:bg-[#0d9488] hover:text-white transition-colors"
+                          onClick={() => handleClaim(i)}
+                        >认领</button>
+                        {isDispatcher && (
+                          <>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button
+                                  className="px-2.5 py-1 border-2 border-[#2563eb] text-[10px] font-bold text-[#2563eb] uppercase tracking-[0.5px] hover:bg-[#2563eb] hover:text-white transition-colors"
+                                  onClick={e => e.stopPropagation()}
+                                >指定</button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[240px] p-0 rounded-none" align="end" onClick={e => e.stopPropagation()}>
+                                <Command>
+                                  <CommandInput placeholder="搜索处理人..." />
+                                  <CommandList>
+                                    <CommandEmpty>无匹配用户</CommandEmpty>
+                                    <CommandGroup>
+                                      {users.filter(u => u.name && u.id !== currentUser.id).map(u => (
+                                        <CommandItem key={u.id} value={u.name} onSelect={() => {
+                                          handleDirectAssign(i, u.id, u.name, u.phone || "");
+                                        }}>
+                                          {u.name}
+                                          {u.department && <span className="ml-2 text-xs text-black/40">{u.department}</span>}
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                            <button
+                              className="px-2.5 py-1 border-2 border-[#0f2840] text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.5px] hover:bg-[#0d2137] hover:text-white transition-colors"
+                              onClick={() => { setSelectedIssue(i); setActionType("assign"); setShowActionDialog(true); }}
+                            >分配</button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -1856,13 +2348,13 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         </div>
       </div>
       {myHandleIssues.length === 0 ? (
-        <div className="border-2 border-[#0f2840] p-16 text-center text-[#7b8fa1] text-sm">暂无需要处理的问题，所有问题已处理完毕</div>
+        <div className="border border-[#d5dfe8] p-16 text-center text-[#7b8fa1] text-sm">暂无需要处理的问题，所有问题已处理完毕</div>
       ) : (
-        <table className="w-full border-collapse border-2 border-[#0f2840]">
+        <table className="w-full border-collapse border border-[#d5dfe8]">
           <thead>
-            <tr className="bg-[#f4f7fb] border-b-2 border-[#0f2840]">
+            <tr className="bg-[#f4f7fb] border-b border-[#d5dfe8]">
               <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px]">标题</th>
-              <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[80px]">类型</th>
+              <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[120px]">类型</th>
               <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[80px]">优先级</th>
               <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[80px]">状态</th>
               <th className="text-left px-3 py-2.5 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[110px]">提交时间</th>
@@ -1882,12 +2374,12 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                     </div>
                   </td>
                   <td className="px-3 py-2.5">
-                    <span className="inline-block px-2 py-0.5 border border-[#0f2840] text-[10px] font-semibold uppercase tracking-[0.3px] text-[#3d5468]">
+                    <span className="inline-block px-2 py-0.5 border border-[#d5dfe8] text-[10px] font-semibold uppercase tracking-[0.3px] text-[#3d5468]">
                       {getCategoryName(i.category_id) || "—"}
                     </span>
                   </td>
                   <td className="px-3 py-2.5">
-                    <span className={`inline-block px-2 py-0.5 border text-[10px] font-semibold uppercase tracking-[0.3px] ${URGENCY_COLORS[urgCode] ? "border-[#2563eb] text-[#2563eb]" : "border-[#0f2840] text-[#3d5468]"}`}>
+                    <span className={`inline-block px-2 py-0.5 border text-[10px] font-semibold uppercase tracking-[0.3px] ${URGENCY_COLORS[urgCode] ? "border-[#2563eb] text-[#2563eb]" : "border-[#d5dfe8] text-[#3d5468]"}`}>
                       {(URGENCY_COLORS[urgCode] ? getUrgencyName(i.urgency_id) : "—") || "—"}
                     </span>
                   </td>
@@ -1997,6 +2489,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
     const si = selectedIssue;
     const issueRecords = records.filter(r => r.issue_id === si.id).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     const statusInfo = STATUS_MAP[si.status] || STATUS_MAP.pending;
+    const unreadNotif = notifications.find(n => n.issue_id === si.id && n.user_id === currentUser.id && !n.is_read);
     return (
       <div className="bg-white max-w-[960px] mx-auto p-10">
         {/* 标题 */}
@@ -2015,6 +2508,12 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
             style={{ borderColor: statusInfo.dotColor, color: statusInfo.dotColor }}>
             {statusInfo.label}
           </span>
+          {unreadNotif && (
+            <button className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold shrink-0"
+              onClick={() => markNotificationRead(unreadNotif.id)}>
+              标记已读
+            </button>
+          )}
         </div>
 
         {/* 基本信息 */}
@@ -2063,75 +2562,125 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         </div>
 
         {/* 问题描述 */}
-        <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b-2 border-[#0f2840] pb-3 mb-4 mt-6">问题描述</div>
+        <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b border-[#d5dfe8] pb-3 mb-4 mt-6">问题描述</div>
         {si.description ? (
-          <div className="border-2 border-[#0f2840] p-4 prose prose-sm max-w-none text-[#0d2137] mb-4" dangerouslySetInnerHTML={{ __html: si.description }} />
+          <div className="border border-[#d5dfe8] p-4 prose prose-sm max-w-none text-[#0d2137] mb-4" dangerouslySetInnerHTML={{ __html: si.description }} />
         ) : (
           <div className="text-sm text-[#7b8fa1] mb-4">暂无描述</div>
         )}
+
+        {/* 复现步骤 */}
+        <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b border-[#d5dfe8] pb-3 mb-4 mt-6">复现步骤</div>
+        {si.repro_steps ? (
+          <div className="border border-[#d5dfe8] p-4 prose prose-sm max-w-none text-[#0d2137] mb-4" dangerouslySetInnerHTML={{ __html: si.repro_steps }} />
+        ) : (
+          <div className="text-sm text-[#7b8fa1] mb-4">暂无复现步骤</div>
+        )}
+
+        {/* 自定义字段 */}
+        {si.custom_fields && Object.keys(si.custom_fields).length > 0 && (() => {
+          const cat = categories.find(c => c.id === si.category_id);
+          const fields: FormFieldDef[] = (cat as any)?.form_fields || [];
+          if (fields.length === 0) return null;
+          return (
+            <>
+              <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b border-[#d5dfe8] pb-3 mb-4 mt-6">补充信息</div>
+              <div className="space-y-3 mb-4">
+                {[...fields].sort((a, b) => a.sort_order - b.sort_order).map(f => {
+                  const val = si.custom_fields?.[f.key];
+                  if (!val) return null;
+                  return (
+                    <div key={f.key} className="flex flex-col gap-1">
+                      <label className="text-[11px] font-bold text-[#7b8fa1] uppercase tracking-[1px]">{f.label}</label>
+                      {renderCustomFieldValue(f, val)}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          );
+        })()}
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 mb-6 text-sm text-[#0d2137]">
           <div>初次报修: {si.is_first_report ? "是" : "否"}</div>
           <div>同类问题: {si.has_similar_history ? "是" : "否"}</div>
           {si.remarks && <div className="col-span-2">备注: {si.remarks}</div>}
         </div>
 
-        {/* 处理过程（处理人填写） */}
-        {si.status === "processing" && si.handler_id === currentUser.id && (
+        {/* 处理过程记录 */}
+        {(processingNotesHistory.length > 0 || (si.status === "processing" && si.handler_id === currentUser.id)) && (
           <div className="mt-6">
             <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b border-[#d5dfe8] pb-3 mb-4">处理过程记录</div>
-            <p className="text-[11px] text-[#7b8fa1] mb-2">记录你的处理步骤、排查方法和解决方案，完成后可发布到信息广场</p>
-            <div className="min-h-[200px] border border-[#d5dfe8] mb-3">
-              <RichTextEditor
-                className="!rounded-none"
-                value={processingNotes}
-                onChange={setProcessingNotes}
-                placeholder="详细记录处理过程：排查了哪些问题、尝试了什么方法、最终如何解决的..."
-              />
-            </div>
-            <button
-              className="px-4 py-2 border-2 border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:border-[#2563eb] transition-colors"
-              onClick={async () => {
-                setSavingNotes(true);
-                try {
-                  const res = await fetch(`/api/issues/${si.id}`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ processing_notes: processingNotes }),
-                  });
-                  if (res.ok) {
-                    toast.success("处理过程已保存");
-                    // 同步刷新列表和当前查看的工单
-                    await loadIssues();
-                    // 更新当前查看的工单对象，使处理过程立即可见
-                    setSelectedIssue(prev => prev ? { ...prev, processing_notes: processingNotes } as Issue : prev);
-                  } else {
-                    alert("保存失败");
-                  }
-                } catch (e) {
-                  alert("保存失败");
-                } finally {
-                  setSavingNotes(false);
-                }
-              }}
-              disabled={savingNotes}
-            >
-              {savingNotes ? "保存中..." : "保存处理过程"}
-            </button>
-          </div>
-        )}
 
-        {/* 已保存的处理过程（工单完结后始终展示） */}
-        {(si.status === "completed" || si.status === "closed") && ((si as any).processing_notes || processingNotes) && (
-          <div className="mt-6">
-            <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b border-[#d5dfe8] pb-3 mb-4">处理过程记录</div>
-            <div className="border border-[#d5dfe8] p-4 prose prose-sm max-w-none text-[#0d2137]" dangerouslySetInnerHTML={{ __html: (si as any).processing_notes || processingNotes }} />
-          </div>
-        )}
-        {/* 非处理人查看时也展示 */}
-        {si.status !== "completed" && si.status !== "closed" && si.handler_id !== currentUser.id && ((si as any).processing_notes || processingNotes) && (
-          <div className="mt-6">
-            <div className="text-xs font-extrabold text-[#0d2137] uppercase tracking-[1px] border-b border-[#d5dfe8] pb-3 mb-4">处理过程记录</div>
-            <div className="border border-[#d5dfe8] p-4 prose prose-sm max-w-none text-[#0d2137]" dangerouslySetInnerHTML={{ __html: (si as any).processing_notes || processingNotes }} />
+            {/* 处理人可新增记录 */}
+            {si.status === "processing" && si.handler_id === currentUser.id && (
+              <div>
+                <p className="text-[11px] text-[#7b8fa1] mb-2">新增处理记录（保存后将追加到历史，不可修改）</p>
+                <div className="min-h-[200px] border border-[#d5dfe8] mb-3">
+                  <RichTextEditor
+                    className="!rounded-none"
+                    value={processingNotes}
+                    onChange={setProcessingNotes}
+                    placeholder="详细记录处理过程：排查了哪些问题、尝试了什么方法、最终如何解决的..."
+                  />
+                </div>
+                <button
+                  className="px-4 py-2 border border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] transition-colors"
+                  onClick={async () => {
+                    if (!processingNotes || !processingNotes.replace(/<[^>]*>/g, "").trim()) {
+                      alert("请输入处理过程内容"); return;
+                    }
+                    setSavingNotes(true);
+                    try {
+                      const res = await fetch("/api/issues/processing-notes", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          issue_id: si.id,
+                          operator_id: currentUser.id,
+                          operator_name: currentUser.name,
+                          content: processingNotes,
+                        }),
+                      });
+                      if (res.ok) {
+                        toast.success("处理记录已保存");
+                        setProcessingNotes("");
+                        // 刷新历史
+                        const r = await fetch(`/api/issues/processing-notes?issue_id=${si.id}`);
+                        const d = await r.json();
+                        if (d.data) setProcessingNotesHistory(d.data);
+                      } else {
+                        const err = await res.json();
+                        alert("保存失败: " + (err.error || "未知错误"));
+                      }
+                    } catch (e) {
+                      alert("保存失败");
+                    } finally {
+                      setSavingNotes(false);
+                    }
+                  }}
+                  disabled={savingNotes}
+                >
+                  {savingNotes ? "保存中..." : "保存处理记录"}
+                </button>
+              </div>
+            )}
+
+            {/* 历史记录（只读） */}
+            {processingNotesHistory.length > 0 && (
+              <div className="space-y-3 mt-4">
+                {processingNotesHistory.map((note, idx) => (
+                  <div key={note.id} className="border border-[#d5dfe8]">
+                    <div className="flex items-center justify-between bg-[#f4f7fb] px-3 py-1.5 border-b border-[#d5dfe8]">
+                      <span className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[0.5px]">
+                        记录 #{processingNotesHistory.length - idx} — 处理人 {note.operator_name}
+                      </span>
+                      <span className="text-[10px] text-[#7b8fa1]">{new Date(note.created_at).toLocaleString("zh-CN")}</span>
+                    </div>
+                    <div className="p-4 prose prose-sm max-w-none text-[#0d2137]" dangerouslySetInnerHTML={{ __html: note.content }} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -2157,55 +2706,91 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
           </>
         )}
 
-        {/* 操作按钮 - 仅处理人可见 */}
-        {si.status !== "completed" && si.status !== "closed" && si.handler_id === currentUser.id && (
-          <div className="flex gap-2.5 mt-7 border-t-2 border-[#d5dfe8] pt-6">
-            {si.status === "pending" && (
-              <button className="px-6 py-2.5 border-2 border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:border-[#2563eb] transition-colors"
-                onClick={() => { setActionType("accept"); setShowActionDialog(true); }}>受理</button>
-            )}
-            {si.status === "accepted" && (
-              <button className="px-6 py-2.5 border-2 border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:border-[#2563eb] transition-colors"
-                onClick={() => handleDirectAction("process")}>开始处理</button>
-            )}
-            {si.status === "processing" && (
+        {/* 底部操作栏 */}
+        {si.status !== "completed" && si.status !== "closed" && (
+          <div className="flex gap-2.5 mt-7 border-t-2 border-[#d5dfe8] pt-6 items-center">
+            <button className="px-6 py-2.5 text-xs font-bold uppercase tracking-[1px] text-[#7b8fa1] hover:text-[#0d2137] transition-colors"
+              onClick={() => setActiveTab("issues")}>返回</button>
+
+            {/* 待分配：认领/指定/分配 */}
+            {si.status === "pending" && !si.handler_id && (
               <>
                 <button className="px-6 py-2.5 border-2 border-[#0d9488] text-[#0d9488] bg-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#0d9488] hover:text-white transition-colors"
-                  onClick={() => { setActionType("complete"); setShowActionDialog(true); }}>完结</button>
-                <button className="px-6 py-2.5 border-2 border-[#2563eb] text-[#2563eb] bg-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:text-white transition-colors"
-                  onClick={() => { setActionType("transfer"); setShowActionDialog(true); }}>转交</button>
+                  onClick={() => handleClaim(si)}>认领</button>
+                {isDispatcher && (
+                  <>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="px-6 py-2.5 border-2 border-[#2563eb] text-[#2563eb] bg-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:text-white transition-colors">指定</button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[240px] p-0 rounded-none" align="start">
+                        <Command>
+                          <CommandInput placeholder="搜索处理人..." />
+                          <CommandList>
+                            <CommandEmpty>无匹配用户</CommandEmpty>
+                            <CommandGroup>
+                              {users.filter(u => u.name && u.id !== currentUser.id).map(u => (
+                                <CommandItem key={u.id} value={u.name} onSelect={() => handleDirectAssign(si, u.id, u.name, u.phone || "")}>
+                                  {u.name}{u.department && <span className="ml-2 text-xs text-black/40">{u.department}</span>}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    <button className="px-6 py-2.5 border-2 border-[#0f2840] text-[#3d5468] bg-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#0d2137] hover:text-white transition-colors"
+                      onClick={() => { setActionType("assign"); setShowActionDialog(true); }}>分配</button>
+                  </>
+                )}
               </>
             )}
-            {(si.status === "pending" || si.status === "accepted") && (
-              <button className="px-6 py-2.5 border-2 border-[#2563eb] text-[#2563eb] bg-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:text-white transition-colors"
-                onClick={() => { setActionType("transfer"); setShowActionDialog(true); }}>转交</button>
+
+            {/* 处理人操作 */}
+            {si.handler_id === currentUser.id && (
+              <>
+                {si.status === "pending" && (
+                  <button className="px-6 py-2.5 border-2 border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:border-[#2563eb] transition-colors"
+                    onClick={() => { setActionType("accept"); setShowActionDialog(true); }}>受理</button>
+                )}
+                {si.status === "accepted" && (
+                  <button className="px-6 py-2.5 border-2 border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:border-[#2563eb] transition-colors"
+                    onClick={() => handleDirectAction("process")}>开始处理</button>
+                )}
+                {si.status === "processing" && (
+                  <>
+                    <button className="px-6 py-2.5 border-2 border-[#0d9488] text-[#0d9488] bg-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#0d9488] hover:text-white transition-colors"
+                      onClick={() => { setActionType("complete"); setShowActionDialog(true); }}>完结</button>
+                    <button className="px-6 py-2.5 border-2 border-[#2563eb] text-[#2563eb] bg-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:text-white transition-colors"
+                      onClick={() => { setActionType("transfer"); setShowActionDialog(true); }}>转交</button>
+                  </>
+                )}
+                {(si.status === "pending" || si.status === "accepted") && (
+                  <button className="px-6 py-2.5 border-2 border-[#2563eb] text-[#2563eb] bg-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:text-white transition-colors"
+                    onClick={() => { setActionType("transfer"); setShowActionDialog(true); }}>转交</button>
+                )}
+                {si.status === "processing" && (
+                  <button className="px-6 py-2.5 border-2 border-red-500 text-red-500 bg-white text-xs font-bold uppercase tracking-[1px] hover:bg-red-500 hover:text-white transition-colors"
+                    onClick={() => { setActionType("reject"); setShowActionDialog(true); }}>驳回</button>
+                )}
+                {si.status === "rejected" && (
+                  <button className="px-6 py-2.5 border-2 border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:border-[#2563eb] transition-colors"
+                    onClick={() => { setActionType("reopen"); setShowActionDialog(true); }}>重新打开</button>
+                )}
+              </>
             )}
-            {si.status === "processing" && (
-              <button className="px-6 py-2.5 border-2 border-red-500 text-red-500 bg-white text-xs font-bold uppercase tracking-[1px] hover:bg-red-500 hover:text-white transition-colors"
-                onClick={() => { setActionType("reject"); setShowActionDialog(true); }}>驳回</button>
-            )}
-            {si.status === "rejected" && (
-              <button className="px-6 py-2.5 border-2 border-[#0d2137] bg-[#0d2137] text-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#2563eb] hover:border-[#2563eb] transition-colors"
-                onClick={() => { setActionType("reopen"); setShowActionDialog(true); }}>重新打开</button>
-            )}
-          </div>
-        )}
-        {/* 返回和删除按钮 - 始终可见 */}
-        {(si.status !== "completed" && si.status !== "closed") && (
-          <div className="flex gap-2.5 mt-2">
+
             {si.status === "pending" && si.creator_id === currentUser.id && (
-              <button className="px-6 py-2.5 border-2 border-red-500 text-red-500 bg-white text-xs font-bold uppercase tracking-[1px] hover:bg-red-500 hover:text-white transition-colors"
+              <button className="px-6 py-2.5 border-2 border-red-500 text-red-500 bg-white text-xs font-bold uppercase tracking-[1px] hover:bg-red-500 hover:text-white transition-colors ml-auto"
                 onClick={() => {
                   if (confirm(`确定要删除工单「${si.title}」吗？此操作不可恢复。`)) {
                     fetch(`/api/issues/${si.id}`, { method: "DELETE" }).then(r => {
-                      if (r.ok) { toast.success("工单已删除"); setActiveTab("dashboard"); loadIssues(); }
+                      if (r.ok) { toast.success("工单已删除"); setActiveTab("issues"); loadIssues(); }
                       else alert("删除失败");
                     });
                   }
                 }}>删除</button>
             )}
-            <button className="px-6 py-2.5 text-xs font-bold uppercase tracking-[1px] text-[#7b8fa1] hover:text-[#0d2137] transition-colors"
-              onClick={() => setActiveTab("dashboard")}>返回</button>
           </div>
         )}
         {si.status !== "completed" && si.status !== "closed" ? null : (
@@ -2213,10 +2798,11 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
             <button
               className="px-6 py-2.5 border-2 border-[#0d9488] bg-[#0d9488] text-white text-xs font-bold uppercase tracking-[1px] hover:bg-[#0d9488]/80 transition-colors"
               onClick={async () => {
-                // 预填发布内容：问题描述（HTML） + 处理过程记录（富文本HTML）
+                // 预填发布内容：问题描述（HTML） + 复现步骤 + 处理过程记录（富文本HTML）
                 const descHtml = si.description || "";
-                const processHtml = processingNotes || (si as any).processing_notes || "";
-                const combined = `${descHtml}${processHtml ? `<hr/><h2>处理过程记录</h2>${processHtml}` : ""}`;
+                const reproHtml = si.repro_steps ? `<h2>复现步骤</h2>${si.repro_steps}` : "";
+                const processHtml = processingNotesHistory.map((n, i) => `<h3>记录 #${processingNotesHistory.length - i} — ${n.operator_name} (${new Date(n.created_at).toLocaleString("zh-CN")})</h3>${n.content}`).join("");
+                const combined = `${descHtml}${reproHtml}${processHtml ? `<hr/><h2>处理过程记录</h2>${processHtml}` : ""}`;
                 setPublishTitle(si.title);
                 setPublishContent(combined);
                 setPublishCategory("");
@@ -2235,7 +2821,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
               }}
             >发布到信息广场</button>
             <button className="px-6 py-2.5 text-xs font-bold uppercase tracking-[1px] text-[#7b8fa1] hover:text-[#0d2137] transition-colors"
-              onClick={() => setActiveTab("dashboard")}>返回</button>
+              onClick={() => setActiveTab("issues")}>返回</button>
           </div>
         )}
       </div>
@@ -2286,7 +2872,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
           </div>
           <div>
             <label className="text-[11px] font-bold text-[#3d5468] uppercase tracking-[1px] mb-1.5 block">发布内容（可二次编辑）</label>
-            <div className="min-h-[250px] border-2 border-[#0f2840]">
+            <div className="min-h-[250px] border border-[#d5dfe8]">
               <RichTextEditor
                 className="!rounded-none"
                 value={publishContent}
@@ -2340,18 +2926,31 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
   );
 
   // 知会抄送
+  const myNotifications = notifications.filter(n => n.user_id === currentUser.id);
+  const [selectedNotifIds, setSelectedNotifIds] = useState<Set<string>>(new Set());
+  const batchMarkRead = async () => {
+    for (const id of selectedNotifIds) {
+      await fetch("/api/issues/notifications", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+    }
+    setSelectedNotifIds(new Set());
+    loadNotifications();
+    toast.success(`已标记 ${selectedNotifIds.size} 条为已读`);
+  };
   const renderNotify = () => (
     <div className="space-y-3">
       <span className="text-sm text-black flex items-center gap-1.5">
         <Bell className="w-4 h-4 text-black" />
-        共 <span className="font-semibold text-black">{notifications.length}</span> 条知会
-        {notifications.filter(n => !n.is_read).length > 0 && (
+        共 <span className="font-semibold text-black">{myNotifications.length}</span> 条知会
+        {myNotifications.filter(n => !n.is_read).length > 0 && (
           <span className="ml-1 px-1.5 py-0.5 rounded-none text-[10px] bg-gray-900 text-white">
-            {notifications.filter(n => !n.is_read).length} 条未读
+            {myNotifications.filter(n => !n.is_read).length} 条未读
           </span>
         )}
       </span>
-      {notifications.length === 0 ? (
+      {myNotifications.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-black">
           <div className="w-16 h-16 rounded-none bg-gray-100 flex items-center justify-center mb-3">
             <Bell className="w-8 h-8 text-black/30" />
@@ -2361,7 +2960,25 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         </div>
       ) : (
         <div className="space-y-2">
-          {notifications.map(n => {
+          {/* 批量操作栏 */}
+          {myNotifications.some(n => !n.is_read) && (
+            <div className="flex items-center gap-2 mb-1">
+              <label className="flex items-center gap-1 text-xs cursor-pointer">
+                <input type="checkbox" checked={selectedNotifIds.size === myNotifications.filter(n => !n.is_read).length && myNotifications.filter(n => !n.is_read).length > 0}
+                  onChange={() => {
+                    const unreadIds = myNotifications.filter(n => !n.is_read).map(n => n.id);
+                    if (selectedNotifIds.size === unreadIds.length) setSelectedNotifIds(new Set());
+                    else setSelectedNotifIds(new Set(unreadIds));
+                  }} /> 全选未读
+              </label>
+              {selectedNotifIds.size > 0 && (
+                <button className="text-xs text-blue-600 hover:text-blue-800 font-semibold" onClick={batchMarkRead}>
+                  标记已读 ({selectedNotifIds.size})
+                </button>
+              )}
+            </div>
+          )}
+          {myNotifications.map(n => {
             const issue = issues.find(i => i.id === n.issue_id);
             if (!issue) return null;
             return (
@@ -2369,6 +2986,14 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                 !n.is_read ? "border-gray-900 bg-gray-50" : "border-gray-200"
               }`}>
                 <div className="p-3 flex items-center gap-3">
+                  {!n.is_read && (
+                    <input type="checkbox" className="shrink-0" checked={selectedNotifIds.has(n.id)}
+                      onChange={() => {
+                        const next = new Set(selectedNotifIds);
+                        if (next.has(n.id)) next.delete(n.id); else next.add(n.id);
+                        setSelectedNotifIds(next);
+                      }} />
+                  )}
                   <div className={`w-9 h-9 rounded-none flex items-center justify-center shrink-0 ${
                     !n.is_read ? "bg-gray-900 text-white" : "bg-gray-100 text-black"
                   }`}>
@@ -2398,31 +3023,39 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
     </div>
   );
 
-  // 数据统计 - 海报风格
+  // 数据统计
   const renderStats = () => (
     <div className="space-y-4">
       <div className="bg-white max-w-[900px] mx-auto p-8">
         {/* 标题 */}
-        <div className="flex items-start gap-5 mb-12">
-          <div className="w-2 bg-[#2563eb] shrink-0 self-stretch min-h-[60px]" />
-          <div>
-            <div className="text-xs font-semibold text-[#7b8fa1] uppercase tracking-[2px] mb-1">TICKET REPORT · 本周</div>
-            <h2 className="text-3xl font-black tracking-[-0.5px] text-[#0d2137] leading-tight">
-              工单数据统计<br />
-              已完结 <span className="text-[#0d9488] font-black">{statsData.completed}</span>
-            </h2>
+        <div className="flex items-start justify-between gap-5 mb-12">
+          <div className="flex items-start gap-5">
+            <div className="w-2 bg-[#2563eb] shrink-0 self-stretch min-h-[60px]" />
+            <div>
+              <div className="text-xs font-semibold text-[#7b8fa1] uppercase tracking-[2px] mb-1">TICKET REPORT</div>
+              <h2 className="text-3xl font-black tracking-[-0.5px] text-[#0d2137] leading-tight">
+                工单数据统计<br />
+                已完结 <span className="text-[#0d9488] font-black">{statsData.completed}</span>
+              </h2>
+            </div>
           </div>
+          <button
+            onClick={handleExportStats}
+            className="px-4 py-2 border border-[#d5dfe8] bg-white text-xs font-bold text-[#3d5468] uppercase tracking-[0.5px] hover:bg-[#0d2137] hover:text-white transition-colors shrink-0"
+          >
+            📥 导出 Excel
+          </button>
         </div>
 
         {/* 统计数字 */}
-        <div className="border-2 border-[#0f2840] flex mb-10">
+        <div className="border border-[#d5dfe8] flex mb-10">
           {[
             { label: "已完结", value: statsData.completed, color: "#0d9488" },
             { label: "处理中", value: statsData.processing, color: "#2563eb" },
             { label: "待受理", value: statsData.pending, color: "#2563eb" },
             { label: "重大问题", value: statsData.major, color: "#7b8fa1" },
           ].map((s, i) => (
-            <div key={s.label} className={`flex-1 p-7 text-center ${i < 3 ? "border-r-2 border-[#0f2840]" : ""}`}>
+            <div key={s.label} className={`flex-1 p-7 text-center ${i < 3 ? "border-r border-[#d5dfe8]" : ""}`}>
               <div className="text-5xl font-black tracking-[-2px] leading-none" style={{ color: s.color }}>{s.value}</div>
               <div className="text-xs font-bold text-[#7b8fa1] uppercase tracking-[1.5px] mt-2">{s.label}</div>
             </div>
@@ -2430,7 +3063,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         </div>
 
         {/* 状态分布 */}
-        <div className="text-[11px] font-extrabold text-white bg-[#0f2840] inline-block px-4 py-2.5 uppercase tracking-[2px] mb-5">状态分布</div>
+        <div className="text-[11px] font-extrabold text-white bg-[#0d2137] inline-block px-4 py-2.5 uppercase tracking-[2px] mb-5">状态分布</div>
         <div className="space-y-1.5 mb-10">
           {Object.entries(STATUS_MAP).map(([key, info]) => {
             const count = issues.filter(i => i.status === key).length;
@@ -2447,46 +3080,86 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
           })}
         </div>
 
-        {/* 类别统计 */}
-        <div className="text-[11px] font-extrabold text-white bg-[#0f2840] inline-block px-4 py-2.5 uppercase tracking-[2px] mb-5">类别统计</div>
-        <div className="grid grid-cols-4 gap-2.5 mb-10">
-          {categories.filter(c => !c.parent_id).slice(0, 8).map(cat => {
-            const count = issues.filter(i => {
-              const catIds = categories.filter(cc => cc.parent_id === cat.id).map(cc => cc.id);
-              return i.category_id === cat.id || catIds.includes(i.category_id);
-            }).length;
-            const pct = count > 0 && statsData.total > 0 ? Math.round(count / statsData.total * 100) : 0;
-            const isActive = count > 0;
-            return (
-              <div key={cat.id} className={`border-2 p-4 text-center transition-all ${isActive ? "border-[#0d9488] bg-[#edf8f7]" : "border-[#d5dfe8] bg-[#f7f9fc]"}`}>
-                <div className="text-xl mb-2">{isActive ? "✅" : "📋"}</div>
-                <div className="text-[13px] font-extrabold text-[#0d2137] mb-3">{cat.name}</div>
-                <div className="h-1 bg-[#e0e8f2] mb-1.5">
-                  <div className={`h-full transition-all duration-800 ${isActive ? "bg-[#0d9488]" : "bg-[#d9d3c8]"}`} style={{ width: `${Math.max(pct, 2)}%` }} />
+        {/* 部门统计 */}
+        <div className="text-[11px] font-extrabold text-white bg-[#0d2137] inline-block px-4 py-2.5 uppercase tracking-[2px] mb-5">部门统计</div>
+        {deptStats.length === 0 ? (
+          <div className="text-sm text-[#7b8fa1] mb-10">暂无数据</div>
+        ) : (
+          <div className="space-y-1.5 mb-10">
+            {deptStats.map(([dept, count]) => {
+              const pct = statsData.total > 0 ? (count / statsData.total * 100) : 0;
+              return (
+                <div key={dept} className="flex items-center gap-4 py-2">
+                  <span className="w-24 text-right text-[13px] font-bold text-[#3d5468] shrink-0 truncate">{dept}</span>
+                  <div className="flex-1 h-5 bg-[#e0e8f2]">
+                    <div className="h-full bg-[#2563eb] transition-all duration-800" style={{ width: `${Math.max(pct, 1)}%` }} />
+                  </div>
+                  <span className="w-16 text-[13px] font-extrabold text-[#0d2137] shrink-0">{count} 件</span>
                 </div>
-                <div className="text-[11px] font-semibold text-[#7b8fa1]">
-                  {count > 0 ? `已完成 ${count} · ${count}/${statsData.total}` : "暂无工单"}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
 
-        {/* 重大问题 */}
-        {issues.filter(i => i.is_major).length > 0 && (
-          <div>
-            <div className="text-[11px] font-extrabold text-white bg-[#0f2840] inline-block px-4 py-2.5 uppercase tracking-[2px] mb-5 text-red-400">重大问题</div>
-            <div className="space-y-2">
-              {issues.filter(i => i.is_major).map(i => (
-                <div key={i.id} className="flex items-center gap-3 text-sm border-l-2 border-l-red-400 pl-4 py-2">
-                  <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-                  <span className="flex-1 truncate text-[#0d2137] font-medium">{i.title}</span>
-                  <span className="text-xs font-bold px-2 py-1 border border-[#0f2840] text-[#3d5468] uppercase">
-                    {(STATUS_MAP[i.status] || STATUS_MAP.pending).label}
-                  </span>
-                </div>
-              ))}
-            </div>
+        {/* 报修人统计 */}
+        <div className="text-[11px] font-extrabold text-white bg-[#0d2137] inline-block px-4 py-2.5 uppercase tracking-[2px] mb-5">报修人发起数量（Top 10）</div>
+        {reporterStats.length === 0 ? (
+          <div className="text-sm text-[#7b8fa1] mb-10">暂无数据</div>
+        ) : (
+          <div className="mb-10">
+            <table className="w-full border-collapse border border-[#d5dfe8]">
+              <thead>
+                <tr className="bg-[#f4f7fb] border-b border-[#d5dfe8]">
+                  <th className="text-left px-3 py-2 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px]">报修人</th>
+                  <th className="text-left px-3 py-2 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px]">部门</th>
+                  <th className="text-right px-3 py-2 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[80px]">数量</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reporterStats.map((r, idx) => (
+                  <tr key={idx} className="border-b border-[#d5dfe8]">
+                    <td className="px-3 py-1.5 text-[13px] text-[#0d2137] font-medium">{r.name}</td>
+                    <td className="px-3 py-1.5 text-[13px] text-[#7b8fa1]">{r.dept}</td>
+                    <td className="px-3 py-1.5 text-[13px] text-[#0d2137] font-bold text-right">{r.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* 类别处理情况 */}
+        <div className="text-[11px] font-extrabold text-white bg-[#0d2137] inline-block px-4 py-2.5 uppercase tracking-[2px] mb-5">类别处理情况</div>
+        {categoryStatusMatrix.length === 0 ? (
+          <div className="text-sm text-[#7b8fa1] mb-10">暂无数据</div>
+        ) : (
+          <div className="mb-10 overflow-x-auto">
+            <table className="w-full border-collapse border border-[#d5dfe8]">
+              <thead>
+                <tr className="bg-[#f4f7fb] border-b border-[#d5dfe8]">
+                  <th className="text-left px-3 py-2 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px]">类别</th>
+                  <th className="text-center px-2 py-2 text-[10px] font-bold text-[#3d5468] uppercase tracking-[0.8px] w-[50px]">总计</th>
+                  {["pending", "accepted", "processing", "completed", "rejected"].map(k => (
+                    <th key={k} className="text-center px-2 py-2 text-[10px] font-bold uppercase tracking-[0.8px] w-[52px]" style={{ color: STATUS_MAP[k]?.dotColor || "#8c8c8c" }}>
+                      {(STATUS_MAP[k] || STATUS_MAP.pending).label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {categoryStatusMatrix.map((row, idx) => (
+                  <tr key={idx} className="border-b border-[#d5dfe8]">
+                    <td className="px-3 py-1.5 text-[13px] text-[#0d2137] font-medium">{row.name as string}</td>
+                    <td className="px-2 py-1.5 text-[13px] text-[#0d2137] font-bold text-center">{row.total as number}</td>
+                    {["pending", "accepted", "processing", "completed", "rejected"].map(k => (
+                      <td key={k} className="px-2 py-1.5 text-[13px] text-center text-[#3d5468]">
+                        {(row[`s_${k}`] as number) || 0}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 
@@ -2496,7 +3169,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
             <span>元素科技</span>
             <strong className="text-[#3d5468]">400-xxx-xxxx</strong>
           </div>
-          <div className="text-[11px] text-[#7b8fa1] font-semibold">2026-07-04 · 工单系统</div>
+          <div className="text-[11px] text-[#7b8fa1] font-semibold">工单系统</div>
         </div>
       </div>
     </div>
@@ -2508,7 +3181,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
     issues: issues.length,
     my_handle: myHandleIssues.length,
     todo: myHandleIssues.filter(i => i.status === "pending" || i.status === "accepted").length,
-    notify: notifications.filter(n => !n.is_read).length,
+    notify: notifications.filter(n => !n.is_read && n.user_id === currentUser.id).length,
     stats: 0,
   }), [myReports, issues, myHandleIssues, notifications]);
 
@@ -2533,11 +3206,10 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         <div className="flex-1 py-4 space-y-0">
           <p className="text-[9px] font-bold text-[#0d2137] uppercase tracking-[1.5px] px-4 pb-2">工单系统</p>
           {[
-            { key: "create_ticket" as const, label: "工单提报", icon: <FileText className="w-3.5 h-3.5" />, count: tabCounts.my_reports },
-            { key: "my_handle" as const, label: "需我处理", icon: <Inbox className="w-3.5 h-3.5" />, count: tabCounts.my_handle },
-            { key: "stats" as const, label: "数据统计", icon: <BarChart3 className="w-3.5 h-3.5" />, count: 0 },
             { key: "issues" as const, label: "工单查询", icon: <Search className="w-3.5 h-3.5" />, count: tabCounts.issues },
+            { key: "my_handle" as const, label: "需我处理", icon: <Inbox className="w-3.5 h-3.5" />, count: tabCounts.my_handle },
             { key: "my_reports" as const, label: "我的工单", icon: <ClipboardList className="w-3.5 h-3.5" />, count: tabCounts.my_reports },
+            { key: "stats" as const, label: "数据统计", icon: <BarChart3 className="w-3.5 h-3.5" />, count: 0 },
           ].map(item => (
             <button
               key={item.key}
@@ -2559,7 +3231,6 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
 
           <div className="mx-4 h-px bg-[#d5dfe8] my-2" />
 
-          <p className="text-[9px] font-bold text-[#0d2137] uppercase tracking-[1.5px] px-4 pb-2">快捷入口</p>
           <button
             onClick={() => { resetForm(); setActiveTab("create_ticket"); }}
             className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-all duration-150 text-left border-l-2 border-l-transparent text-[#0d2137] hover:bg-black/[0.03]"
@@ -2575,18 +3246,16 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
             扫码提报
           </button>
           <button
-            onClick={() => setActiveTab("todo")}
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-all duration-150 text-left border-l-2 border-l-transparent text-[#0d2137] hover:bg-black/[0.03]"
-          >
-            <CheckCircle className="w-3.5 h-3.5 shrink-0 opacity-70" />
-            待办中心
-          </button>
-          <button
             onClick={() => setActiveTab("notify")}
             className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-all duration-150 text-left border-l-2 border-l-transparent text-[#0d2137] hover:bg-black/[0.03]"
           >
             <Bell className="w-3.5 h-3.5 shrink-0 opacity-70" />
             知会抄送
+            {tabCounts.notify > 0 && (
+              <span className="ml-auto text-[10px] px-2 py-0.5 font-semibold bg-black/[0.05] text-[#0d2137]">
+                {tabCounts.notify > 99 ? "99+" : tabCounts.notify}
+              </span>
+            )}
           </button>
         </div>
 
@@ -2674,6 +3343,45 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
       {renderDetailDialog()}
       {renderActionDialog()}
       {renderPublishDialog()}
+
+      {/* 文件预览弹窗 */}
+      <Dialog open={!!previewMedia} onOpenChange={() => { setPreviewMedia(null); setVideoLoading(false); }}>
+        <DialogContent className="sm:max-w-[80vw] sm:max-h-[85vh] p-0 rounded-none" onClick={e => e.stopPropagation()}>
+          <DialogTitle className="sr-only">{previewMedia?.name || "文件预览"}</DialogTitle>
+          {previewMedia && (
+            <div className="flex flex-col">
+              <div className="flex items-center px-4 py-2 bg-gray-50 border-b">
+                <span className="text-xs font-semibold text-black truncate">{previewMedia.name}</span>
+              </div>
+              <div className="flex items-center justify-center p-4 bg-black min-h-[200px] relative">
+                {previewMedia.type === "video" ? (
+                  <>
+                    {videoLoading && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/80 z-10">
+                        <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span className="text-white text-xs">加载中...</span>
+                      </div>
+                    )}
+                    <video ref={videoRef} src={previewMedia.url} controls className="max-w-full max-h-[70vh]" autoPlay
+                      onWaiting={() => setVideoLoading(true)}
+                      onCanPlay={() => setVideoLoading(false)}
+                      onPlaying={() => setVideoLoading(false)}
+                      onLoadStart={() => setVideoLoading(true)}>
+                      您的浏览器不支持视频播放
+                    </video>
+                  </>
+                ) : (
+                  <img src={previewMedia.url} alt={previewMedia.name} className="max-w-full max-h-[70vh] object-contain" />
+                )}
+              </div>
+              <div className="flex items-center justify-end px-4 py-2 bg-gray-50 border-t">
+                <a href={previewMedia.url} download target="_blank" rel="noreferrer"
+                  className="text-xs text-blue-600 hover:text-blue-800 font-semibold" onClick={e => e.stopPropagation()}>下载文件</a>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

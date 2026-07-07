@@ -1,14 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
 import { S3Storage } from "coze-coding-dev-sdk";
+import fs from "fs";
+import path from "path";
 
-const storage = new S3Storage({
+const useS3 = !!(process.env.COZE_BUCKET_NAME && process.env.COZE_BUCKET_ENDPOINT_URL);
+
+const storage = useS3 ? new S3Storage({
   endpointUrl: process.env.COZE_BUCKET_ENDPOINT_URL,
   accessKey: "",
   secretKey: "",
   bucketName: process.env.COZE_BUCKET_NAME,
   region: "cn-beijing",
-});
+}) : null;
+
+function getLocalDir() {
+  const dir = path.join(process.cwd(), "public", "uploads", "issue-attachments");
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
 
 // GET /api/issues/attachments?issue_id=xxx
 export async function GET(request: NextRequest) {
@@ -30,22 +40,25 @@ export async function GET(request: NextRequest) {
       attachments = attachments.filter((a) => String(a.issue_id) === issueId);
     }
 
-    // Generate presigned URLs for attachments
+    // Generate presigned URLs for S3 files, or local URLs
     const enriched = await Promise.all(
       attachments.map(async (a) => {
         const fileKey = a.file_url as string;
-        if (fileKey && !fileKey.startsWith("http")) {
+        if (!fileKey) return { ...a, file_url_signed: "" };
+        if (fileKey.startsWith("http") || fileKey.startsWith("/")) {
+          return { ...a, file_url_signed: fileKey };
+        }
+        // S3 file (key without leading slash)
+        if (useS3 && storage) {
           try {
-            const url = await storage.generatePresignedUrl({
-              key: fileKey,
-              expireTime: 86400,
-            });
+            const url = await storage.generatePresignedUrl({ key: fileKey, expireTime: 86400 });
             return { ...a, file_url_signed: url };
           } catch {
             return { ...a, file_url_signed: "" };
           }
         }
-        return { ...a, file_url_signed: fileKey };
+        // Local file
+        return { ...a, file_url_signed: `/uploads/issue-attachments/${encodeURIComponent(fileKey)}` };
       })
     );
 
@@ -69,17 +82,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    // Upload to object storage
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_") || "file";
-    const fileName = `issue-attachments/${Date.now()}_${safeName}`;
+    const safeName = file.name.replace(/[^a-zA-Z0-9._一-鿿-]/g, "_") || "file";
+    const timestamp = Date.now();
+    let fileKey = "";
+    let signedUrl = "";
 
-    const fileKey = await storage.uploadFile({
-      fileContent: buffer,
-      fileName,
-      contentType: file.type || "application/octet-stream",
-    });
+    if (useS3 && storage) {
+      // S3 upload
+      const fileName = `issue-attachments/${timestamp}_${safeName}`;
+      fileKey = await storage.uploadFile({
+        fileContent: buffer,
+        fileName,
+        contentType: file.type || "application/octet-stream",
+      });
+      signedUrl = await storage.generatePresignedUrl({ key: fileKey, expireTime: 86400 });
+    } else {
+      // Local disk fallback
+      const localDir = getLocalDir();
+      const fileName = `${timestamp}_${safeName}`;
+      const filePath = path.join(localDir, fileName);
+      fs.writeFileSync(filePath, buffer);
+      fileKey = fileName;
+      signedUrl = `/uploads/issue-attachments/${encodeURIComponent(fileName)}`;
+    }
 
     // Insert attachment record
     const { data, error } = await client.rpc("dp_insert", {
@@ -87,7 +114,7 @@ export async function POST(request: NextRequest) {
       p_data: {
         issue_id: issueId,
         file_type: fileType,
-        file_url: fileKey, // Store key, not URL
+        file_url: fileKey,
         file_name: file.name,
         file_size: file.size,
       },
@@ -96,12 +123,6 @@ export async function POST(request: NextRequest) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-
-    // Generate signed URL for immediate access
-    const signedUrl = await storage.generatePresignedUrl({
-      key: fileKey,
-      expireTime: 86400,
-    });
 
     return NextResponse.json({
       data: { ...(typeof data === "object" && data !== null ? data : {}), file_url_signed: signedUrl },

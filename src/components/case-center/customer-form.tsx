@@ -163,7 +163,11 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
 
   // 校区管理
   const [campusMode, setCampusMode] = useState<string>("single");
-  const [campuses, setCampuses] = useState<Array<{ name: string; type: string; address: string }>>([]);
+  const [campuses, setCampuses] = useState<Array<{
+    name: string; type: string; address: string;
+    hardware: Record<string, string>;
+    network: Record<string, string>;
+  }>>([]);
 
   // 硬件/网络信息
   const [hardwareInfo, setHardwareInfo] = useState<Record<string, string>>({});
@@ -554,7 +558,13 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
         setHardwareInfo(typeof c.hardware_info === "object" && c.hardware_info !== null ? c.hardware_info as Record<string, string> : {});
         setNetworkInfo(typeof c.network_info === "object" && c.network_info !== null ? c.network_info as Record<string, string> : {});
         setCampusMode((c.campus_mode as string) || "single");
-        setCampuses(Array.isArray(c.campuses) ? c.campuses as Array<{ name: string; type: string; address: string }> : []);
+        setCampuses(Array.isArray(c.campuses) ? (c.campuses as Array<Record<string, unknown>>).map((cam) => ({
+          name: (cam.name as string) || "",
+          type: (cam.type as string) || "中职",
+          address: (cam.address as string) || "",
+          hardware: (cam.hardware as Record<string, string>) || {},
+          network: (cam.network as Record<string, string>) || {},
+        })) : []);
 
         const loadedTypes: string[] = Array.isArray(c.customer_types) ? c.customer_types as string[] : (c.school_type ? [c.school_type as string] : ["中职"]);
         const deptNames: string[] = [];
@@ -1031,96 +1041,95 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
           </CardHeader>
           <CardContent className="space-y-4">
             {/* 学校名称（搜索下拉） */}
-            <div className="flex items-start gap-4">
-              <div className="space-y-1.5 w-[300px]">
-                <Label className="text-xs">学校名称 *</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      className="h-9 w-full justify-between text-xs font-normal"
-                    >
-                      {schoolName || "搜索选择项目学校..."}
-                      <Search className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[300px] p-0" align="start">
-                    <Command>
-                      <CommandInput
-                        placeholder="搜索学校名称..."
-                        className="h-8 text-xs"
-                      />
-                      <CommandList className="max-h-[200px]">
-                        <CommandEmpty className="text-xs py-2 text-center">未找到匹配学校</CommandEmpty>
-                        <CommandGroup>
-                          {projectList.map((p) => (
-                            <CommandItem
-                              key={p.id}
-                              value={p.project_name}
-                              onSelect={() => {
-                                setSchoolName(p.project_name);
-                                if (p.customer_type && !isEdit) {
-                                  setCustomerTypes([p.customer_type]);
-                                }
-                                setProvince(p.customer_location.province || "");
-                                setCity(p.customer_location.city || "");
-                                setDistrict(p.customer_location.district || "");
-                                setTown(p.customer_location.town || "");
-                                setVillage(p.customer_location.village || "");
-                                setLongitude(p.longitude || "");
-                                setLatitude(p.latitude || "");
-                                setLocationSynced(true);
-                                setSyncedProjectName(p.project_name);
-                              }}
-                              className="text-xs"
-                            >
-                              <Check className={cn("mr-2 h-3.5 w-3.5", schoolName === p.project_name ? "opacity-100" : "opacity-0")} />
-                              {p.project_name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-                {!isEdit && (
-                  <p className="text-[11px] text-muted-foreground">来源于已建项目，自动带出位置信息</p>
-                )}
-              </div>
-
-              {/* 客户类型（多选） */}
-              <div className="space-y-1.5 flex-1">
-                <Label className="text-xs">客户类型</Label>
-                <div className="flex flex-wrap gap-1.5">
-                  {CUSTOMER_TYPE_OPTIONS.map((t) => {
-                    const selected = customerTypes.includes(t.code);
-                    const isMulti = MULTI_SELECT_CUSTOMER_TYPES.includes(t.code);
-                    return (
-                      <Badge
-                        key={t.code}
-                        variant={selected ? "default" : "outline"}
-                        className={cn(
-                          "cursor-pointer text-xs py-1 px-2 transition-colors",
-                          selected ? "hover:bg-primary/80" : "hover:bg-muted"
-                        )}
-                        onClick={() => toggleCustomerType(t.code)}
-                      >
-                        {t.name}
-                        {isMulti && selected && customerTypes.filter((ct) => MULTI_SELECT_CUSTOMER_TYPES.includes(ct)).length > 1 && (
-                          <span className="ml-1 opacity-70">({customerTypes.filter((ct) => MULTI_SELECT_CUSTOMER_TYPES.includes(ct)).indexOf(t.code) + 1})</span>
-                        )}
-                      </Badge>
-                    );
-                  })}
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  幼儿园/小学/初中/中职/高中 支持多选，其余单选
-                </p>
-              </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">学校名称 *</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="h-9 w-[300px] justify-between text-xs font-normal"
+                  >
+                    {schoolName || "搜索选择项目学校..."}
+                    <Search className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0" align="start">
+                  <Command>
+                    <CommandInput
+                      placeholder="搜索学校名称..."
+                      className="h-8 text-xs"
+                    />
+                    <CommandList className="max-h-[200px]">
+                      <CommandEmpty className="text-xs py-2 text-center">未找到匹配学校</CommandEmpty>
+                      <CommandGroup>
+                        {projectList.map((p) => (
+                          <CommandItem
+                            key={p.id}
+                            value={p.project_name}
+                            onSelect={() => {
+                              setSchoolName(p.project_name);
+                              if (p.customer_type && !isEdit) {
+                                setCustomerTypes([p.customer_type]);
+                              }
+                              setProvince(p.customer_location.province || "");
+                              setCity(p.customer_location.city || "");
+                              setDistrict(p.customer_location.district || "");
+                              setTown(p.customer_location.town || "");
+                              setVillage(p.customer_location.village || "");
+                              setLongitude(p.longitude || "");
+                              setLatitude(p.latitude || "");
+                              setLocationSynced(true);
+                              setSyncedProjectName(p.project_name);
+                            }}
+                            className="text-xs"
+                          >
+                            <Check className={cn("mr-2 h-3.5 w-3.5", schoolName === p.project_name ? "opacity-100" : "opacity-0")} />
+                            {p.project_name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {!isEdit && (
+                <p className="text-[11px] text-muted-foreground">来源于已建项目，自动带出位置信息</p>
+              )}
             </div>
 
-            {/* 校区模式 */}
+            {/* 客户类型（多选） */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">客户类型</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {CUSTOMER_TYPE_OPTIONS.map((t) => {
+                  const selected = customerTypes.includes(t.code);
+                  const isMulti = MULTI_SELECT_CUSTOMER_TYPES.includes(t.code);
+                  return (
+                    <Badge
+                      key={t.code}
+                      variant={selected ? "default" : "outline"}
+                      className={cn(
+                        "cursor-pointer text-xs py-1 px-2 transition-colors",
+                        selected ? "hover:bg-primary/80" : "hover:bg-muted"
+                      )}
+                      onClick={() => toggleCustomerType(t.code)}
+                    >
+                      {t.name}
+                      {isMulti && selected && customerTypes.filter((ct) => MULTI_SELECT_CUSTOMER_TYPES.includes(ct)).length > 1 && (
+                        <span className="ml-1 opacity-70">({customerTypes.filter((ct) => MULTI_SELECT_CUSTOMER_TYPES.includes(ct)).indexOf(t.code) + 1})</span>
+                      )}
+                    </Badge>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                幼儿园/小学/初中/中职/高中 支持多选，其余单选
+              </p>
+            </div>
+
+            {/* 校区模式（教育局隐藏） */}
+            {!customerTypes.includes("教育局") && (
             <div className="space-y-3">
               <div className="flex items-center gap-4">
                 <div className="space-y-1.5">
@@ -1147,57 +1156,109 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                       variant="ghost"
                       size="sm"
                       className="h-6 text-xs"
-                      onClick={() => setCampuses((prev) => [...prev, { name: "", type: "中职", address: "" }])}
+                      onClick={() => setCampuses((prev) => [...prev, { name: "", type: "中职", address: "", hardware: {}, network: {} }])}
                     >
                       <Plus className="w-3 h-3 mr-0.5" />
                       添加校区
                     </Button>
                   </div>
                   {campuses.map((campus, ci) => (
-                    <div key={ci} className="flex items-center gap-2 p-2 border rounded-md bg-muted/20">
-                      <Input
-                        className="flex-1 h-8 text-xs"
-                        placeholder="校区名称"
-                        value={campus.name}
-                        onChange={(e) => {
-                          const updated = [...campuses];
-                          updated[ci] = { ...updated[ci], name: e.target.value };
-                          setCampuses(updated);
-                        }}
-                      />
-                      <Select
-                        value={campus.type}
-                        onValueChange={(v) => {
-                          const updated = [...campuses];
-                          updated[ci] = { ...updated[ci], type: v };
-                          setCampuses(updated);
-                        }}
-                      >
-                        <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {CUSTOMER_TYPE_OPTIONS.map((t) => (
-                            <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        className="w-40 h-8 text-xs"
-                        placeholder="地址"
-                        value={campus.address}
-                        onChange={(e) => {
-                          const updated = [...campuses];
-                          updated[ci] = { ...updated[ci], address: e.target.value };
-                          setCampuses(updated);
-                        }}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 shrink-0"
-                        onClick={() => setCampuses((prev) => prev.filter((_, i) => i !== ci))}
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                      </Button>
+                    <div key={ci} className="p-3 border rounded-md bg-muted/20 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          className="flex-1 h-8 text-xs"
+                          placeholder="校区名称"
+                          value={campus.name}
+                          onChange={(e) => {
+                            const updated = [...campuses];
+                            updated[ci] = { ...updated[ci], name: e.target.value };
+                            setCampuses(updated);
+                          }}
+                        />
+                        <Select
+                          value={campus.type}
+                          onValueChange={(v) => {
+                            const updated = [...campuses];
+                            updated[ci] = { ...updated[ci], type: v };
+                            setCampuses(updated);
+                          }}
+                        >
+                          <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {CUSTOMER_TYPE_OPTIONS.map((t) => (
+                              <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          className="w-40 h-8 text-xs"
+                          placeholder="地址"
+                          value={campus.address}
+                          onChange={(e) => {
+                            const updated = [...campuses];
+                            updated[ci] = { ...updated[ci], address: e.target.value };
+                            setCampuses(updated);
+                          }}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => setCampuses((prev) => prev.filter((_, i) => i !== ci))}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                        </Button>
+                      </div>
+                      {/* 校区硬件信息 */}
+                      <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                        {["总人数","教师人数","学生人数","班级数量","教室数量","功能教室数量","总面积","宿舍楼栋数","校区数量","校门数量","食堂数量","二级学院数"].map((key) => (
+                          <div key={key} className="space-y-0.5">
+                            <Label className="text-[10px]">{key}</Label>
+                            <Input
+                              className="h-7 text-[10px]"
+                              placeholder={key}
+                              value={campus.hardware?.[key] || ""}
+                              onChange={(e) => {
+                                const updated = [...campuses];
+                                updated[ci] = {
+                                  ...updated[ci],
+                                  hardware: { ...updated[ci].hardware, [key]: e.target.value },
+                                };
+                                setCampuses(updated);
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      {/* 校区网络信息 */}
+                      <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                        {[
+                          { key: "带宽", label: "网络带宽" },
+                          { key: "服务器数量", label: "服务器(台)" },
+                          { key: "虚拟化平台", label: "虚拟化平台" },
+                          { key: "存储", label: "存储品牌容量" },
+                          { key: "数据库", label: "数据库类型版本" },
+                          { key: "公网IP", label: "公网IP及带宽" },
+                          { key: "内网IP段", label: "内网IP段" },
+                        ].map(({ key, label }) => (
+                          <div key={key} className="space-y-0.5">
+                            <Label className="text-[10px]">{label}</Label>
+                            <Input
+                              className="h-7 text-[10px]"
+                              placeholder={label}
+                              value={campus.network?.[key] || ""}
+                              onChange={(e) => {
+                                const updated = [...campuses];
+                                updated[ci] = {
+                                  ...updated[ci],
+                                  network: { ...updated[ci].network, [key]: e.target.value },
+                                };
+                                setCampuses(updated);
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ))}
                   {campuses.length === 0 && (
@@ -1206,6 +1267,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                 </div>
               )}
             </div>
+            )}
 
             {/* 位置信息（同步自项目管理页面创建新项目的数据） */}
             <div className="space-y-3">
@@ -1280,7 +1342,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="学校简要描述..."
-                className="min-h-[80px] text-xs"
+                className="min-h-[140px] text-xs"
               />
             </div>
           </CardContent>
@@ -1526,7 +1588,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                       <div className="space-y-1.5">
                         <Label className="text-xs">日常核心工作</Label>
                         <Textarea
-                          className="h-20 text-xs"
+                          className="h-36 text-xs"
                           value={dept.daily_work}
                           onChange={(e) => updateDepartment(code, "daily_work", e.target.value)}
                         />
@@ -1534,7 +1596,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                       <div className="space-y-1.5">
                         <Label className="text-xs">业务流程（怎么做的）</Label>
                         <Textarea
-                          className="h-20 text-xs"
+                          className="h-36 text-xs"
                           value={dept.workflow}
                           onChange={(e) => updateDepartment(code, "workflow", e.target.value)}
                         />
@@ -1542,7 +1604,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                       <div className="space-y-1.5">
                         <Label className="text-xs">当前痛点</Label>
                         <Textarea
-                          className="h-20 text-xs"
+                          className="h-36 text-xs"
                           value={dept.pain_points}
                           onChange={(e) => updateDepartment(code, "pain_points", e.target.value)}
                         />
@@ -1550,7 +1612,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                       <div className="space-y-1.5">
                         <Label className="text-xs">在用工具/系统</Label>
                         <Textarea
-                          className="h-20 text-xs"
+                          className="h-36 text-xs"
                           value={dept.tools}
                           onChange={(e) => updateDepartment(code, "tools", e.target.value)}
                         />
@@ -1558,7 +1620,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                       <div className="space-y-1.5 md:col-span-2">
                         <Label className="text-xs">信息化期望</Label>
                         <Textarea
-                          className="h-20 text-xs"
+                          className="h-36 text-xs"
                           value={dept.expectations}
                           onChange={(e) => updateDepartment(code, "expectations", e.target.value)}
                         />
@@ -1566,7 +1628,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                       <div className="space-y-1.5 md:col-span-2">
                         <Label className="text-xs">科室总结</Label>
                         <Textarea
-                          className="h-20 text-xs"
+                          className="h-36 text-xs"
                           value={dept.department_summary}
                           onChange={(e) => updateDepartment(code, "department_summary", e.target.value)}
                         />
@@ -1734,7 +1796,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                               <div className="space-y-1">
                                 <Label className="text-[11px]">当前替代做法</Label>
                                 <Textarea
-                                  className="min-h-[70px] text-xs"
+                                  className="min-h-[90px] text-xs"
                                   value={mod.current_practice}
                                   onChange={(e) => updateModule(code, mi, "current_practice", e.target.value)}
                                 />
@@ -1748,7 +1810,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                                   {mod.status === "已落地" ? "落地效果" : mod.status === "未落地" ? "未落地原因" : "备注"}
                                 </Label>
                                 <Textarea
-                                  className="min-h-[70px] text-xs"
+                                  className="min-h-[90px] text-xs"
                                   value={mod.status === "已落地" ? mod.effect : mod.status === "未落地" ? mod.issues : mod.current_practice}
                                   onChange={(e) => {
                                     if (mod.status === "已落地") updateModule(code, mi, "effect", e.target.value);
@@ -1760,7 +1822,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                               <div className="space-y-1">
                                 <Label className="text-[11px]">问题</Label>
                                 <Textarea
-                                  className="min-h-[70px] text-xs"
+                                  className="min-h-[90px] text-xs"
                                   value={mod.issues}
                                   onChange={(e) => updateModule(code, mi, "issues", e.target.value)}
                                 />

@@ -95,38 +95,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 3. 查询所有启用的接收人
-    const { data: receivers } = await client.rpc("dp_select", {
-      p_table: "issue_mgmt_external_receivers",
-    });
-    const receiverList = (receivers || []) as Record<string, unknown>[];
-
-    // 4. 为每个启用的接收人创建待办任务
-    for (const receiver of receiverList) {
-      if (!receiver.is_enabled) continue;
-
-      await client.rpc("dp_insert", {
-        p_table: "todo_task_instances",
-        p_data: {
-          def_id: null,
-          name: title,
-          description: description
-            ? String(description).replace(/<[^>]*>/g, "").slice(0, 200)
-            : "",
-          assignee_id: receiver.user_id,
-          assignee_name: receiver.user_name || "",
-          project_id: null,
-          project_name: project_name || null,
-          priority: "medium",
-          status: "pending",
-          due_date: null,
-          is_read: false,
-          source_type: "issue",
-          source_id: issueId,
-        },
-      });
-    }
-
+    // 外部工单不自动推送给接收人，直接进入工单池等待分配或认领
     return NextResponse.json({
       data: { id: issueId },
       success: true,

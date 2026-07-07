@@ -26,8 +26,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Edit, Trash2, ChevronRight, ChevronDown, AlertTriangle, Clock, ShieldCheck, Users, ChevronsUpDown } from "lucide-react";
+import { Plus, Edit, Trash2, ChevronRight, ChevronDown, AlertTriangle, Clock, ShieldCheck, Users, ChevronsUpDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
@@ -58,6 +59,16 @@ interface FormDataType {
 
 type DictType = "category" | "urgency" | "warranty";
 
+interface FormFieldDef {
+  key: string;
+  label: string;
+  type: "text" | "textarea" | "richtext" | "select" | "date" | "datetime" | "number" | "file" | "product_catalog";
+  required: boolean;
+  placeholder?: string;
+  options?: { label: string; value: string }[];
+  sort_order: number;
+}
+
 const URL_MAP: Record<DictType, string> = {
   category: "/api/issue-dicts/categories",
   urgency: "/api/issue-dicts/urgency",
@@ -87,6 +98,39 @@ export default function IssueConfigPanel() {
   });
 
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [formDesignerOpen, setFormDesignerOpen] = useState(false);
+  const [formDesignerCategory, setFormDesignerCategory] = useState<CategoryItem | null>(null);
+  const [formDesignerFields, setFormDesignerFields] = useState<FormFieldDef[]>([]);
+  const [formDesignerSaving, setFormDesignerSaving] = useState(false);
+
+  const openFormDesigner = (cat: CategoryItem) => {
+    setFormDesignerCategory(cat);
+    setFormDesignerFields(Array.isArray((cat as any).form_fields) ? [...(cat as any).form_fields] : []);
+    setFormDesignerOpen(true);
+  };
+
+  const saveFormFields = async () => {
+    if (!formDesignerCategory) return;
+    setFormDesignerSaving(true);
+    try {
+      const res = await fetch(`/api/issue-config/category-form-fields?category_id=${formDesignerCategory.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ form_fields: formDesignerFields }),
+      });
+      if (res.ok) {
+        setFormDesignerOpen(false);
+        fetchCategories();
+      } else {
+        const err = await res.json();
+        alert("保存失败: " + (err.error || "未知错误"));
+      }
+    } catch (e) {
+      alert("保存失败");
+    } finally {
+      setFormDesignerSaving(false);
+    }
+  };
 
   const fetchCategories = useCallback(async () => {
     try {
@@ -227,9 +271,10 @@ export default function IssueConfigPanel() {
     </TableHeader>
   );
 
-  const renderActions = (type: DictType, item: CommonDictItem | CategoryItem) => (
+  const renderActions = (type: DictType, item: CommonDictItem | CategoryItem, extra?: React.ReactNode) => (
     <TableCell className="text-right">
       <div className="flex items-center justify-end gap-1">
+        {extra}
         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openDialog(type, item)}>
           <Edit className="h-3.5 w-3.5" />
         </Button>
@@ -300,7 +345,11 @@ export default function IssueConfigPanel() {
                         onCheckedChange={(checked: boolean) => toggleEnabled("category", category, checked)}
                       />
                     </TableCell>
-                    {renderActions("category", category)}
+                    {renderActions("category", category,
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-700" title="表单设计" onClick={() => openFormDesigner(category)}>
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>
+                      </Button>
+                    )}
                   </TableRow>
                   {category.children &&
                     expandedCategories.has(category.id) &&
@@ -320,7 +369,11 @@ export default function IssueConfigPanel() {
                             onCheckedChange={(checked: boolean) => toggleEnabled("category", child, checked)}
                           />
                         </TableCell>
-                        {renderActions("category", child)}
+                        {renderActions("category", child,
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-700" title="表单设计" onClick={() => openFormDesigner(child)}>
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>
+                          </Button>
+                        )}
                       </TableRow>
                     ))}
                 </React.Fragment>
@@ -420,6 +473,9 @@ export default function IssueConfigPanel() {
         </div>
       </div>
 
+      {/* 工单分配人员 */}
+      <DispatchersConfig />
+
       {/* 外部工单接收人配置 */}
       <ExternalReceiversConfig />
 
@@ -495,6 +551,385 @@ export default function IssueConfigPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 表单设计器弹窗 */}
+      <FormDesignerDialog
+        open={formDesignerOpen}
+        onOpenChange={setFormDesignerOpen}
+        categoryName={formDesignerCategory?.name || ""}
+        fields={formDesignerFields}
+        onChange={setFormDesignerFields}
+        onSave={saveFormFields}
+        saving={formDesignerSaving}
+      />
+    </div>
+  );
+}
+
+// ==========================================
+// 表单设计器弹窗
+// ==========================================
+const FIELD_TYPE_LABELS: Record<string, string> = {
+  text: "单行文本", textarea: "多行文本", richtext: "富文本",
+  select: "下拉选择", date: "日期", datetime: "日期时间", number: "数字", file: "文件上传", product_catalog: "产品目录",
+};
+
+function FormDesignerDialog({
+  open, onOpenChange, categoryName, fields, onChange, onSave, saving,
+}: {
+  open: boolean; onOpenChange: (v: boolean) => void; categoryName: string;
+  fields: FormFieldDef[]; onChange: (f: FormFieldDef[]) => void; onSave: () => void; saving: boolean;
+}) {
+  const [editingField, setEditingField] = useState<FormFieldDef | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+
+  const addField = (type: string) => {
+    const newField: FormFieldDef = {
+      key: `field_${Date.now()}`, label: "", type: type as FormFieldDef["type"],
+      required: false, placeholder: "", sort_order: fields.length + 1,
+      ...(type === "select" ? { options: [] } : {}),
+    };
+    setEditingField(newField);
+    setEditOpen(true);
+  };
+
+  const saveField = () => {
+    if (!editingField) return;
+    if (!editingField.label.trim()) { alert("请输入字段名称"); return; }
+    const exists = fields.find(f => f.key === editingField.key);
+    if (exists) {
+      onChange(fields.map(f => f.key === editingField.key ? editingField : f));
+    } else {
+      onChange([...fields, editingField]);
+    }
+    setEditOpen(false);
+    setEditingField(null);
+  };
+
+  const removeField = (key: string) => {
+    onChange(fields.filter(f => f.key !== key).map((f, i) => ({ ...f, sort_order: i + 1 })));
+  };
+
+  const moveField = (key: string, direction: "up" | "down") => {
+    const idx = fields.findIndex(f => f.key === key);
+    if (idx < 0) return;
+    if (direction === "up" && idx === 0) return;
+    if (direction === "down" && idx === fields.length - 1) return;
+    const newFields = [...fields];
+    const swap = direction === "up" ? idx - 1 : idx + 1;
+    [newFields[idx], newFields[swap]] = [newFields[swap], newFields[idx]];
+    onChange(newFields.map((f, i) => ({ ...f, sort_order: i + 1 })));
+  };
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[1000px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <svg className="h-5 w-5 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>
+              表单设计器 —「{categoryName}」
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-2">
+            {/* 左侧：固定字段 */}
+            <div className="border border-border rounded-lg p-3">
+              <h4 className="text-xs font-semibold text-slate-500 uppercase mb-2">固定字段（系统内置）</h4>
+              <div className="space-y-1">
+                {["问题标题", "所属项目", "报修人", "报修部门", "处理人", "告知对象", "问题类别", "产品目录", "紧急程度", "保修情况", "是否重大问题", "期望处理时间"].map(name => (
+                  <div key={name} className="text-xs text-slate-400 flex items-center gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-slate-300" /> {name}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* 右侧：自定义字段 */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-xs font-semibold text-slate-500 uppercase">自定义字段</h4>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+                      <Plus className="h-3 w-3" /> 添加字段
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[180px] p-1" align="end">
+                    <div className="space-y-0.5">
+                      {Object.entries(FIELD_TYPE_LABELS).map(([type, label]) => (
+                        <button key={type} className="w-full text-left px-2 py-1.5 text-xs hover:bg-accent rounded"
+                          onClick={() => { addField(type); }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              {fields.length === 0 ? (
+                <div className="text-xs text-slate-400 py-4 text-center border border-dashed border-border rounded-lg">
+                  暂未添加自定义字段
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {[...fields].sort((a, b) => a.sort_order - b.sort_order).map((f, idx) => (
+                    <div key={f.key} className="flex items-center gap-1 bg-slate-50 border border-border rounded px-2 py-1.5">
+                      <div className="flex flex-col gap-0.5">
+                        <button className="h-3 w-3 text-slate-400 hover:text-slate-700" onClick={() => moveField(f.key, "up")} disabled={idx === 0}>
+                          <ChevronRight className="h-3 w-3 rotate-[-90deg]" />
+                        </button>
+                        <button className="h-3 w-3 text-slate-400 hover:text-slate-700" onClick={() => moveField(f.key, "down")} disabled={idx === fields.length - 1}>
+                          <ChevronRight className="h-3 w-3 rotate-90" />
+                        </button>
+                      </div>
+                      <span className="flex-1 text-xs font-medium truncate">{f.label || "(未命名)"}</span>
+                      <Badge variant="secondary" className="text-[10px] h-4 px-1">{FIELD_TYPE_LABELS[f.type] || f.type}</Badge>
+                      {f.required && <span className="text-red-500 text-[10px]">*</span>}
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { setEditingField({ ...f }); setEditOpen(true); }}>
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500" onClick={() => removeField(f.key)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
+            <Button onClick={onSave} disabled={saving}>{saving ? "保存中..." : "保存表单"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 字段编辑弹窗 */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>{editingField?.label ? `编辑 — ${editingField.label}` : "添加字段"}</DialogTitle>
+          </DialogHeader>
+          {editingField && (
+            <div className="space-y-3 py-2">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">字段标签 <span className="text-red-500">*</span></label>
+                <Input value={editingField.label} onChange={e => setEditingField({ ...editingField, label: e.target.value })} placeholder="如：受影响版本" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">字段 Key</label>
+                <Input value={editingField.key} onChange={e => setEditingField({ ...editingField, key: e.target.value })} placeholder="如：affected_version" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">字段类型</label>
+                <Select value={editingField.type} onValueChange={v => setEditingField({ ...editingField, type: v as FormFieldDef["type"], options: v === "select" ? editingField.options || [] : undefined })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(FIELD_TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-xs font-medium">是否必填</label>
+                <Switch checked={editingField.required} onCheckedChange={v => setEditingField({ ...editingField, required: v })} />
+              </div>
+              {["text", "textarea", "richtext"].includes(editingField.type) && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">Placeholder</label>
+                  <Input value={editingField.placeholder || ""} onChange={e => setEditingField({ ...editingField, placeholder: e.target.value })} placeholder="输入提示文字..." />
+                </div>
+              )}
+              {editingField.type === "select" && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">选项列表</label>
+                  <div className="space-y-1">
+                    {(editingField.options || []).map((opt, i) => (
+                      <div key={i} className="flex items-center gap-1">
+                        <Input className="flex-1 h-7 text-xs" value={opt.label} onChange={e => {
+                          const opts = [...(editingField.options || [])];
+                          opts[i] = { ...opts[i], label: e.target.value, value: e.target.value };
+                          setEditingField({ ...editingField, options: opts });
+                        }} placeholder="选项名" />
+                        <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500" onClick={() => {
+                          setEditingField({ ...editingField, options: (editingField.options || []).filter((_, j) => j !== i) });
+                        }}><X className="h-3 w-3" /></Button>
+                      </div>
+                    ))}
+                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => {
+                      setEditingField({ ...editingField, options: [...(editingField.options || []), { label: "", value: "" }] });
+                    }}><Plus className="h-3 w-3 mr-1" />添加选项</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>取消</Button>
+            <Button onClick={saveField}>确定</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// ==========================================
+// 工单分配人员配置
+// ==========================================
+function DispatchersConfig() {
+  const [dispatchers, setDispatchers] = useState<Array<{ id: string; user_id: string; user_name: string; is_enabled: boolean }>>([]);
+  const [users, setUsers] = useState<Array<{ id: string; name: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [addOpen, setAddOpen] = useState(false);
+
+  const loadDispatchers = async () => {
+    try {
+      const res = await fetch("/api/issue-config/dispatchers");
+      const json = await res.json();
+      if (json.data) setDispatchers(json.data);
+    } catch (e) {
+      console.error("加载分配人员失败", e);
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const res = await fetch("/api/users");
+      const json = await res.json();
+      if (json.data) {
+        setUsers((json.data || []).map((u: Record<string, unknown>) => ({
+          id: u.id as string,
+          name: u.name as string,
+        })));
+      }
+    } catch (e) {
+      console.error("加载用户失败", e);
+    }
+  };
+
+  useEffect(() => {
+    Promise.all([loadDispatchers(), loadUsers()]).finally(() => setLoading(false));
+  }, []);
+
+  const handleAdd = async (userId: string) => {
+    const user = users.find((u) => u.id === userId);
+    if (!user) return;
+    try {
+      await fetch("/api/issue-config/dispatchers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: user.id, user_name: user.name }),
+      });
+      loadDispatchers();
+    } catch (e) {
+      console.error("添加分配人员失败", e);
+    }
+  };
+
+  const handleToggle = async (r: { id: string; is_enabled: boolean }) => {
+    try {
+      await fetch(`/api/issue-config/dispatchers?id=${r.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_enabled: !r.is_enabled }),
+      });
+      loadDispatchers();
+    } catch (e) {
+      console.error("切换状态失败", e);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("确定删除该分配人员吗？")) return;
+    try {
+      await fetch(`/api/issue-config/dispatchers?id=${id}`, { method: "DELETE" });
+      loadDispatchers();
+    } catch (e) {
+      console.error("删除分配人员失败", e);
+    }
+  };
+
+  if (loading) return null;
+
+  return (
+    <div className="bg-card border border-border rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Users className="w-4 h-4 text-blue-500" />
+          <h3 className="text-sm font-semibold text-slate-900">工单分配人员</h3>
+          <span className="text-xs text-slate-400">{dispatchers.length} 人</span>
+        </div>
+        <Popover open={addOpen} onOpenChange={setAddOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+              <Plus className="h-3 w-3" /> 添加分配人员
+              <ChevronsUpDown className="h-3 w-3 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[240px] p-0" align="end">
+            <Command>
+              <CommandInput placeholder="搜索用户名..." />
+              <CommandList>
+                <CommandEmpty>无匹配用户</CommandEmpty>
+                <CommandGroup>
+                  {users
+                    .filter((u) => !dispatchers.some((d) => d.user_id === u.id))
+                    .map((u) => (
+                      <CommandItem key={u.id} value={u.name} onSelect={() => {
+                        handleAdd(u.id);
+                        setAddOpen(false);
+                      }}>
+                        {u.name}
+                      </CommandItem>
+                    ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
+      <p className="text-xs text-slate-400 mb-3">
+        配置可分配工单的人员。分配人员可在工单查询-待分配中将未分配的工单指派给具体处理人。
+      </p>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[200px]">分配人员</TableHead>
+            <TableHead className="w-[80px]">启用</TableHead>
+            <TableHead className="text-right w-[80px]">操作</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {dispatchers.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={3} className="text-center text-slate-400 py-4">
+                暂未配置分配人员，请添加
+              </TableCell>
+            </TableRow>
+          ) : (
+            dispatchers.map((d) => (
+              <TableRow key={d.id}>
+                <TableCell className="font-medium">{d.user_name}</TableCell>
+                <TableCell>
+                  <Switch
+                    checked={d.is_enabled}
+                    onCheckedChange={() => handleToggle(d)}
+                  />
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-red-600 hover:text-red-700"
+                    onClick={() => handleDelete(d.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -617,7 +1052,7 @@ function ExternalReceiversConfig() {
           </Popover>
         </div>
         <p className="text-xs text-slate-400 mb-3">
-          外部用户扫码提交的工单将同时推送至所有启用的接收人待办事项中，一人受理后其他人待办自动取消。
+          外部用户扫码提交的工单将进入工单池（待分配），由分配人员统一分派或由处理人认领。此处配置的接收人列表可用于后续通知推送。
         </p>
         <Table>
           <TableHeader>
