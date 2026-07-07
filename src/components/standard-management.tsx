@@ -90,6 +90,7 @@ export interface TableDefinition {
   stage_progress_column?: string;
   stage_progress_target?: string;
   stage_summary_fields?: string;
+  stage_role_column?: string;
   stage_plan_start_col?: string;
   stage_plan_end_col?: string;
   stage_actual_start_col?: string;
@@ -1027,6 +1028,7 @@ export function StandardManagement({
     apply_project_stages: [],
     stage_desc_column: "",
     stage_display_mode: "both",
+    stage_role_column: "",
     sort_order: 0,
     is_active: true,
     allow_add: true,
@@ -2091,6 +2093,28 @@ export function StandardManagement({
                           )}
                         </div>
                       )}
+                    </div>
+                  </SectionPanel>
+
+                  {/* 阶段式布局-阶段统计 */}
+                  <SectionPanel title="阶段式布局-阶段统计" icon={Settings}>
+                    <div className="pt-2 space-y-2">
+                      <div>
+                        <Label className="text-[11px]">角色列</Label>
+                        <p className="text-[9px] text-muted-foreground mb-1">选择后，阶段详情中的人力将以此列的去重值统计</p>
+                        <select
+                          value={formData.stage_role_column || ""}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, stage_role_column: e.target.value }))}
+                          className="w-full h-7 px-1.5 rounded border border-input bg-background text-[11px]"
+                        >
+                          <option value="">不统计人力</option>
+                          {(formData.columns_config || []).map((col, ci) => (
+                            <option key={`rc_${ci}`} value={col.name}>
+                              {col.name || "(未命名)"}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </SectionPanel>
 

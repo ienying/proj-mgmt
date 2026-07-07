@@ -105,6 +105,9 @@ interface ProjectStage {
 interface ProcurementModule {
   code: string;
   name: string;
+  product_name?: string;
+  vendor?: string;
+  model_spec?: string;
 }
 
 interface MemberRole {
@@ -1506,7 +1509,7 @@ export function ProjectManagement({
           projectTypes={projectTypes}
           projectStages={projectStages}
           memberRoles={memberRoles.map(r => r.name).filter(Boolean)}
-          productModules={procurementModules.map(m => ({ module_code: m.code, module_name: m.name, product_name: m.name }))}
+          productModules={procurementModules.map(m => ({ module_code: m.code, module_name: m.name, product_name: m.product_name || m.name, vendor: m.vendor || "", model_spec: m.model_spec || "" }))}
           users={users}
         />
         {/* 主内容区 */}

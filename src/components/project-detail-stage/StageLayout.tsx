@@ -290,6 +290,28 @@ export function StageLayout({
             onBack={handleCloseSubContent}
           />
         )
+      ) : tableDefs.length === 0 ? (
+        <div className="flex items-center justify-center" style={{ minHeight: "60vh" }}>
+          <div className="text-center max-w-lg px-6">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center" style={{ backgroundColor: "var(--s-surface2)" }}>
+              <svg className="w-8 h-8" style={{ color: "var(--s-text-muted)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+              </svg>
+            </div>
+            <h2 className="text-lg font-semibold mb-2" style={{ color: "var(--s-text)" }}>当前项目暂无规范数据表</h2>
+            <p className="text-sm mb-3" style={{ color: "var(--s-text-secondary)" }}>
+              项目创建时未匹配到任何 Schema 规则，项目 Schema 中未生成规范表。如需添加，请联系管理人员进行配置。
+            </p>
+            <details className="text-left mb-4">
+              <summary className="text-xs cursor-pointer" style={{ color: "var(--s-text-muted)" }}>管理人员操作步骤</summary>
+              <ol className="text-xs mt-2 ml-4 space-y-1 list-decimal" style={{ color: "var(--s-text-muted)" }}>
+                <li>前往 系统设置 → 项目 Schema 规则配置 添加规则</li>
+                <li>编辑本项目，切换项目类型/阶段后保存</li>
+                <li>系统将自动同步规范表到本项目</li>
+              </ol>
+            </details>
+          </div>
+        </div>
       ) : (
         <div
           className="relative"
@@ -344,6 +366,8 @@ export function StageLayout({
               }
               tableDefs={tableDefs}
               projectSchema={project.project_schema}
+              projectStages={projectStages}
+              currentStageCode={project.project_stage}
               onRecordsUpdate={(code, records) => {
                 setAllTableRecords((prev) => ({ ...prev, [code]: records }));
               }}

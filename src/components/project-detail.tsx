@@ -767,9 +767,7 @@ export function ProjectDetail({
         } catch {
           // 查不到就不过滤
         }
-        const visibleDefs = existingTableSet.size > 0
-          ? definitions.filter((def: TableDefinition) => existingTableSet.has(def.table_code))
-          : definitions;
+        const visibleDefs = definitions.filter((def: TableDefinition) => existingTableSet.has(def.table_code));
 
         setTableDefinitions(visibleDefs);
 
@@ -4000,6 +3998,7 @@ export function ProjectDetail({
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col min-h-0">
         {/* 模块 Tab 导航 */}
+        {(!loading && tableDefinitions.length === 0) ? null : (
         <div className="bg-white border-b border-slate-200/80 px-6">
           <div className="flex items-center gap-1.5 overflow-x-auto py-2.5 scrollbar-thin">
             {enabledModules.map((module) => {
@@ -4034,8 +4033,32 @@ export function ProjectDetail({
             })}
           </div>
         </div>
+        )}
 
         {/* 左侧概览+统计 + 中间数据区 */}
+        {!loading && tableDefinitions.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center max-w-lg px-6">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-100 flex items-center justify-center">
+                <svg className="w-8 h-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                </svg>
+              </div>
+              <h2 className="text-lg font-semibold text-slate-700 mb-2">当前项目暂无规范数据表</h2>
+              <p className="text-sm text-slate-500 mb-3">
+                项目创建时未匹配到任何 Schema 规则，项目 Schema 中未生成规范表。如需添加，请联系管理人员进行配置。
+              </p>
+              <details className="text-left mb-4">
+                <summary className="text-xs text-slate-400 cursor-pointer">管理人员操作步骤</summary>
+                <ol className="text-xs text-slate-400 mt-2 ml-4 space-y-1 list-decimal">
+                  <li>前往 系统设置 → 项目 Schema 规则配置 添加规则</li>
+                  <li>编辑本项目，切换项目类型/阶段后保存</li>
+                  <li>系统将自动同步规范表到本项目</li>
+                </ol>
+              </details>
+            </div>
+          </div>
+        ) : (
         <div className="flex-1 flex min-h-0">
           {/* 左侧：统计 */}
           <div className="w-60 bg-white border-r border-slate-200/80 overflow-y-auto flex flex-col shrink-0">
@@ -4156,6 +4179,7 @@ export function ProjectDetail({
             })()}
           </div>
         </div>
+        )}
       </div>
 
       {/* 新增记录对话框 */}

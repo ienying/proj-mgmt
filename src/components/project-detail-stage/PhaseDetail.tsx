@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { phaseDetails } from "./mock-data";
 
 // Docx/PPTX 客户端预览组件（使用 CDN 加载 mammoth.js）
 function DocxPreview({ src, fn }: { src: string; fn: string }) {
@@ -71,10 +70,12 @@ interface PhaseDetailProps {
   stageCode?: string;
   tableDefs?: TableDef[];
   projectSchema?: string;
+  projectStages?: { code: string; name: string; detail_description?: string; sort_order?: number }[];
+  currentStageCode?: string;
   onRecordsUpdate?: (tableCode: string, records: Array<Record<string, unknown>>) => void;
 }
 
-export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema, onRecordsUpdate }: PhaseDetailProps) {
+export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema, projectStages = [], currentStageCode, onRecordsUpdate }: PhaseDetailProps) {
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [tableRecords, setTableRecords] = useState<Record<string, Array<Record<string, unknown>>>>({});
   const [loadingTable, setLoadingTable] = useState<string | null>(null);
@@ -233,15 +234,6 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
     setUploadingCell(null);
   };
 
-  // 筛选属于当前阶段 + 显示位置为 phase/both 的表
-  const phaseTables = stageCode
-    ? tableDefs.filter(
-        (def) =>
-          def.apply_project_stages?.includes(stageCode) &&
-          (!def.stage_display_mode || def.stage_display_mode === "phase" || def.stage_display_mode === "both")
-      )
-    : [];
-
   const handleTableClick = useCallback(
     async (tableCode: string) => {
       if (expandedTable === tableCode) {
@@ -295,6 +287,15 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       prev?.tableCode === tableCode && prev?.rowIdx === rowIdx ? null : { tableCode, rowIdx }
     );
   };
+
+  // 筛选属于当前阶段 + 显示位置为 phase/both 的表
+  const phaseTables = stageCode
+    ? tableDefs.filter(
+        (def) =>
+          def.apply_project_stages?.includes(stageCode) &&
+          (!def.stage_display_mode || def.stage_display_mode === "phase" || def.stage_display_mode === "both")
+      )
+    : [];
 
   const expandedDef = expandedTable ? phaseTables.find((t) => t.table_code === expandedTable) : null;
   // 解析汇总字段：{column, label, hide}
@@ -581,17 +582,56 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
     );
   };
 
-  // 静态阶段详情
-  const detail = phaseDetails[phaseKey];
-  if (!detail) {
+  // 根据 stageCode 从 projectStages 查找阶段信息，降级用 phaseKey 兼容
+  const stageInfo = stageCode
+    ? projectStages.find((s) => s.code === stageCode)
+    : null;
+
+  // 如果没有任何阶段数据，显示建设中
+  if (!stageInfo && projectStages.length === 0 && phaseKey) {
     return (
       <div className="phase-section" style={{ borderBottom: "1px solid var(--s-border)" }}>
         <div className="px-16 py-12 text-center text-[var(--s-text-muted)] text-sm">
-          该阶段详情正在建设中...
+          暂无阶段数据
         </div>
       </div>
     );
   }
+
+  // 阶段名称：优先取真实数据，降级显示
+  const phaseName = stageInfo?.name || "";
+
+  // 阶段描述
+  const phaseDescription = stageInfo?.detail_description || "";
+
+  // 状态：根据索引推算
+  const currentIdx = currentStageCode
+    ? projectStages.findIndex((s) => s.code === currentStageCode)
+    : -1;
+  const thisIdx = stageCode
+    ? projectStages.findIndex((s) => s.code === stageCode)
+    : -1;
+  const statusLabel = thisIdx < currentIdx ? "已完成" : thisIdx === currentIdx ? "进行中" : "待开始";
+  const statusClass = thisIdx < currentIdx ? "done" : thisIdx === currentIdx ? "active" : "pending";
+
+  // 人力统计：遍历所有标记了 stage_role_column 的表
+  const roleSet = new Set<string>();
+  for (const def of phaseTables as TableDef[]) {
+    const roleCol = (def as unknown as Record<string, unknown>).stage_role_column as string | undefined;
+    if (!roleCol) continue;
+    const records = tableRecords[def.table_code] || [];
+    for (const row of records) {
+      const v = row[roleCol];
+      if (v && String(v).trim()) roleSet.add(String(v).trim());
+    }
+  }
+  const manpower = roleSet.size;
+
+  // meta items 数据
+  const metaItems = [
+    { value: String(phaseTables.length), label: "数据表" },
+    { value: manpower > 0 ? `${manpower}人` : "-", label: "人力" },
+  ];
 
   return (
     <div className="phase-section" style={{ borderBottom: "1px solid var(--s-border)" }}>
@@ -601,20 +641,21 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
         <div className="px-16 py-12 flex flex-col gap-6" style={{ borderRight: "1px solid var(--s-border)" }}>
           <div
             className={`text-[10px] uppercase tracking-[2px] flex items-center gap-2.5 ${
-              detail.statusClass === "done" ? "text-[var(--s-green)]" :
-              detail.statusClass === "active" ? "text-[var(--s-text-muted)]" : "text-[var(--s-text-muted)]"
+              statusClass === "done" ? "text-[var(--s-green)]" :
+              statusClass === "active" ? "text-[var(--s-text-muted)]" : "text-[var(--s-text-muted)]"
             }`}
             style={{ fontFamily: "var(--font-mono, monospace)" }}
           >
             <span className={`w-2 h-2 ${
-              detail.statusClass === "done" ? "bg-[var(--s-green)]" :
-              detail.statusClass === "active" ? "bg-[var(--s-orange)]" : "bg-[var(--s-text-muted)]"
+              statusClass === "done" ? "bg-[var(--s-green)]" :
+              statusClass === "active" ? "bg-[var(--s-orange)]" : "bg-[var(--s-text-muted)]"
             }`} />
-            {detail.statusLabel}
+            {statusLabel}
           </div>
-          <h3 className="text-[32px] font-bold tracking-[-0.5px] leading-[1.2] text-[var(--s-text)]">{detail.name}</h3>
-          <p className="text-[15px] text-[var(--s-text-secondary)] leading-[1.75] max-w-[580px]">{detail.description}</p>
-          <div className="text-[11px] text-[var(--s-text-muted)]" style={{ fontFamily: "var(--font-mono, monospace)" }}>{detail.dateRange}</div>
+          <h3 className="text-[32px] font-bold tracking-[-0.5px] leading-[1.2] text-[var(--s-text)]">{phaseName}</h3>
+          {phaseDescription && (
+            <p className="text-[15px] text-[var(--s-text-secondary)] leading-[1.75] max-w-[580px]">{phaseDescription}</p>
+          )}
           {/* 动态日期（从表数据计算） */}
           {(() => {
             if (phaseTables.length === 0) return null;
@@ -670,10 +711,10 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
             );
           })()}
           <div className="flex gap-px" style={{ backgroundColor: "var(--s-border)" }}>
-            {detail.metaItems.map((item, i) => (
+            {metaItems.map((item, i) => (
               <div key={i} className="bg-[var(--s-bg)] px-5 py-4 flex items-center gap-2 text-[11px] uppercase tracking-[0.5px]"
                 style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
-                <span className={`text-xl font-bold tracking-[-0.5px] ${item.accent ? "text-[var(--s-orange)]" : "text-[var(--s-text)]"}`}
+                <span className="text-xl font-bold tracking-[-0.5px] text-[var(--s-text)]"
                   style={{ fontFamily: "sans-serif" }}>{item.value}</span>
                 {item.label}
               </div>

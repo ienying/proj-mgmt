@@ -548,7 +548,7 @@ export const phases: PhaseNode[] = [
   { index: 2, key: "phase2", label: "部署", title: "环境部署与平台搭建", dateRange: "04.01–04.30", status: "done" },
   { index: 3, key: "phase3", label: "开发", title: "核心系统开发与集成", dateRange: "05.01–06.30", status: "done" },
   { index: 4, key: "phase4", label: "试运行", title: "用户培训与试运行", dateRange: "07.01–08.15", status: "active" },
-  { index: 5, key: "phase5", label: "上线", title: "正式上线与全面切换", dateRange: "08.16–09.15", status: "pending" },
+  { index: 5, key: "phase5", label: "售后", title: "交付后持续售后保障", dateRange: "验收后—3年", status: "active" },
   { index: 6, key: "phase6", label: "验收", title: "项目验收与交付", dateRange: "09.16–10.15", status: "pending" },
 ];
 
@@ -616,6 +616,18 @@ export const phaseDetails: Record<string, PhaseDetailData> = {
       { value: "10人", label: "投入人力" },
     ],
   },
+  phase5: {
+    statusLabel: "进行中",
+    statusClass: "active",
+    name: "交付后持续售后保障阶段",
+    description: "项目竣工验收完成后，开展软硬件质保运维、故障处理、定期巡检、技术答疑、补丁更新等售后保障工作，保障系统稳定运行，管理售后问题台账与备件、维保记录。",
+    dateRange: "验收后 — 3年",
+    metaItems: [
+      { value: "8", label: "交付物" },
+      { value: "3年", label: "周期" },
+      { value: "1人", label: "投入人力" },
+    ],
+  },
   phase6: {
     statusLabel: "待开始",
     statusClass: "pending",
@@ -660,6 +672,15 @@ export const phaseTasks: Record<string, { key: string; name: string; dotStatus: 
     { key: "p4t1", name: "教师培训", dotStatus: "done" },
     { key: "p4t2", name: "学生家长培训", dotStatus: "active" },
     { key: "p4t3", name: "试运行优化", dotStatus: "active" },
+  ],
+  phase5: [
+    { key: "p5t0", name: "软硬件质保运维", dotStatus: "active" },
+    { key: "p5t1", name: "故障处理与响应", dotStatus: "active" },
+    { key: "p5t2", name: "定期巡检", dotStatus: "active" },
+    { key: "p5t3", name: "技术答疑", dotStatus: "active" },
+    { key: "p5t4", name: "补丁更新", dotStatus: "active" },
+    { key: "p5t5", name: "售后问题台账", dotStatus: "active" },
+    { key: "p5t6", name: "备件与维保记录", dotStatus: "active" },
   ],
   phase6: [
     { key: "p6t0", name: "文档整理", dotStatus: "pending" },

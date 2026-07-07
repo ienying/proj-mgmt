@@ -87,6 +87,7 @@ interface DictItem {
   created_at: string;
   module_name?: string;
   product_name?: string;
+  model_spec?: string;
   tech_specs?: string;
   bidding_instructions?: string;
   remarks?: string;
@@ -119,6 +120,7 @@ function exportToExcel(data: DictItem[], productCategories: DictItem[], productV
       编码: item.code || "",
       产品名称: item.product_name || "",
       模块名称: item.module_name || "",
+      型号规格: item.model_spec || "",
       技术规格及配置要求: item.tech_specs || "",
       控标性说明: item.bidding_instructions || "",
       备注: item.remarks || "",
@@ -136,6 +138,7 @@ function exportToExcel(data: DictItem[], productCategories: DictItem[], productV
       { wch: 15 }, // 编码
       { wch: 20 }, // 产品名称
       { wch: 20 }, // 模块名称
+      { wch: 15 }, // 型号规格
       { wch: 40 }, // 技术规格
       { wch: 30 }, // 控标性说明
       { wch: 25 }, // 备注
@@ -377,6 +380,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           updateData.name = editingData.product_name || editingData.name;
           updateData.module_name = editingData.module_name;
           updateData.product_name = editingData.product_name;
+          updateData.model_spec = editingData.model_spec;
           updateData.tech_specs = editingData.tech_specs;
           updateData.bidding_instructions = editingData.bidding_instructions;
           updateData.remarks = editingData.remarks;
@@ -384,6 +388,11 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           updateData.category = editingData.category;
           updateData.vendor = editingData.vendor;
           updateData.scope = editingData.scope;
+        }
+
+        // 项目阶段额外字段
+        if (activeTab === "project-stages") {
+          updateData.detail_description = editingData.detail_description || null;
         }
 
         // 项目状态/事项状态额外字段
@@ -418,12 +427,18 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
           is_enabled: editingData.is_enabled ?? true,
         };
         
+        // 项目阶段额外字段
+        if (activeTab === "project-stages") {
+          insertData.detail_description = editingData.detail_description || null;
+        }
+
         // 产品目录额外字段
         if (activeTab === "product-modules") {
           insertData.code = `PM_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           insertData.name = editingData.product_name || editingData.module_name;
           insertData.module_name = editingData.module_name;
           insertData.product_name = editingData.product_name;
+          insertData.model_spec = editingData.model_spec;
           insertData.tech_specs = editingData.tech_specs;
           insertData.bidding_instructions = editingData.bidding_instructions;
           insertData.remarks = editingData.remarks;
@@ -1888,6 +1903,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
                             {
                               产品名称: "示例产品",
                               模块名称: "示例模块",
+                              型号规格: "",
                               技术规格及配置要求: "",
                               控标性说明: "",
                               备注: "",
@@ -1899,8 +1915,8 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
                           ];
                           const ws = XLSX.utils.json_to_sheet(templateData);
                           ws["!cols"] = [
-                            { wch: 20 }, { wch: 20 }, { wch: 30 }, { wch: 20 },
-                            { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+                            { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 30 },
+                            { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
                           ];
                           const wb = XLSX.utils.book_new();
                           XLSX.utils.book_append_sheet(wb, ws, "产品目录");
@@ -1939,6 +1955,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
                           const mappedData = jsonData.map((row: any) => ({
                             product_name: row["产品名称"] || "",
                             module_name: row["模块名称"] || "",
+                            model_spec: row["型号规格"] || "",
                             tech_specs: row["技术规格及配置要求"] || "",
                             bidding_instructions: row["控标性说明"] || "",
                             remarks: row["备注"] || "",
@@ -1983,6 +2000,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
                         <TableHead className="w-12">序号</TableHead>
                         <TableHead>产品名称</TableHead>
                         <TableHead>模块名称</TableHead>
+                        <TableHead>型号规格</TableHead>
                         <TableHead>类别</TableHead>
                         <TableHead>厂商</TableHead>
                         <TableHead>范围</TableHead>
@@ -1994,6 +2012,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
                           <TableCell className="text-center">{index + 1}</TableCell>
                           <TableCell>{row.product_name}</TableCell>
                           <TableCell>{row.module_name}</TableCell>
+                          <TableCell>{row.model_spec}</TableCell>
                           <TableCell>{row.category}</TableCell>
                           <TableCell>{row.vendor}</TableCell>
                           <TableCell>{row.scope}</TableCell>
@@ -2032,6 +2051,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
                           const exportData = importResult.failedRows.map((row: any) => ({
                             产品名称: row.product_name || "",
                             模块名称: row.module_name || "",
+                            型号规格: row.model_spec || "",
                             技术规格及配置要求: row.tech_specs || "",
                             控标性说明: row.bidding_instructions || "",
                             备注: row.remarks || "",
@@ -2043,7 +2063,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
                           }));
                           const ws = XLSX.utils.json_to_sheet(exportData);
                           ws["!cols"] = [
-                            { wch: 20 }, { wch: 20 }, { wch: 30 },
+                            { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 30 },
                             { wch: 20 }, { wch: 20 }, { wch: 20 },
                             { wch: 15 }, { wch: 15 }, { wch: 15 },
                             { wch: 25 },
@@ -2110,6 +2130,7 @@ export function BaseDataManagement({ refreshTrigger }: BaseDataManagementProps) 
                             code: code,
                             product_name: row.product_name,
                             module_name: row.module_name,
+                            model_spec: row.model_spec || "",
                             tech_specs: row.tech_specs || "",
                             bidding_instructions: row.bidding_instructions || "",
                             remarks: row.remarks || "",
@@ -2684,6 +2705,7 @@ function DataTable({
                   <>
                     <TableHead>产品名称</TableHead>
                     <TableHead>模块名称</TableHead>
+                    <TableHead>型号规格</TableHead>
                     <TableHead>技术规格及配置要求</TableHead>
                     <TableHead>控标性说明</TableHead>
                     <TableHead>备注</TableHead>
@@ -2708,7 +2730,7 @@ function DataTable({
                     <TableHead>名称</TableHead>
                     <TableHead>编码</TableHead>
                     <TableHead className="w-16">排序</TableHead>
-                    <TableHead>描述</TableHead>
+                    <TableHead className="max-w-[200px]">{activeTab === "project-stages" ? "详情描述" : "描述"}</TableHead>
                     {data[0] && "category" in data[0] && (
                       <TableHead>类别</TableHead>
                     )}
@@ -2740,6 +2762,7 @@ function DataTable({
                     <>
                       <TableCell className="font-medium">{item.product_name || "-"}</TableCell>
                       <TableCell className="text-muted-foreground">{item.module_name || "-"}</TableCell>
+                      <TableCell className="text-muted-foreground">{item.model_spec || "-"}</TableCell>
                       <TableCell className="text-muted-foreground max-w-[150px] truncate">{item.tech_specs || "-"}</TableCell>
                       <TableCell className="text-muted-foreground max-w-[100px] truncate">{item.bidding_instructions || "-"}</TableCell>
                       <TableCell className="text-muted-foreground max-w-[100px] truncate">{item.remarks || "-"}</TableCell>
@@ -2796,8 +2819,8 @@ function DataTable({
                       <TableCell className="font-mono text-sm text-muted-foreground text-center">
                         {item.sort_order ?? "-"}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {item.description || "-"}
+                      <TableCell className="text-muted-foreground max-w-[200px] truncate">
+                        {activeTab === "project-stages" ? (item.detail_description || "-") : (item.description || "-")}
                       </TableCell>
                       {item && "category" in item && (
                         <TableCell className="text-muted-foreground">
@@ -2943,6 +2966,16 @@ function DataTable({
                       setEditingData((prev) => ({ ...prev, module_name: e.target.value }))
                     }
                     placeholder="请输入模块名称"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>型号规格</Label>
+                  <Input
+                    value={editingData.model_spec || ""}
+                    onChange={(e) =>
+                      setEditingData((prev) => ({ ...prev, model_spec: e.target.value }))
+                    }
+                    placeholder="请输入型号规格"
                   />
                 </div>
                 {/* 第二行：技术规格及配置要求（占两列） */}
@@ -3092,6 +3125,20 @@ function DataTable({
                     placeholder="数字越大越靠后"
                   />
                 </div>
+                {activeTab === "project-stages" && (
+                  <div className="space-y-2">
+                    <Label>详情描述</Label>
+                    <p className="text-[10px] text-muted-foreground">阶段式布局中的阶段详情描述文字</p>
+                    <Textarea
+                      value={String(editingData.detail_description || "")}
+                      onChange={(e) =>
+                        setEditingData((prev) => ({ ...prev, detail_description: e.target.value }))
+                      }
+                      placeholder="输入阶段详情描述（可选）"
+                      rows={3}
+                    />
+                  </div>
+                )}
                 {(activeTab === "project-statuses" || activeTab === "todo-statuses") && (
                   <div className="space-y-2">
                     <Label>颜色</Label>
@@ -3159,17 +3206,19 @@ function DataTable({
                     </div>
                   </>
                 )}
-                <div className="space-y-2">
-                  <Label>描述</Label>
-                  <Textarea
-                    value={editingData.description || ""}
-                    onChange={(e) =>
-                      setEditingData((prev) => ({ ...prev, description: e.target.value }))
-                    }
-                    placeholder="请输入描述（可选）"
-                    rows={3}
-                  />
-                </div>
+                {activeTab !== "project-stages" && (
+                  <div className="space-y-2">
+                    <Label>描述</Label>
+                    <Textarea
+                      value={editingData.description || ""}
+                      onChange={(e) =>
+                        setEditingData((prev) => ({ ...prev, description: e.target.value }))
+                      }
+                      placeholder="请输入描述（可选）"
+                      rows={3}
+                    />
+                  </div>
+                )}
               </>
             )}
           </div>

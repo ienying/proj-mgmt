@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import type { StageLayoutProps } from "./types";
 import type { LayoutMode } from "./types";
 
@@ -21,12 +22,29 @@ function s(v: unknown): string {
 }
 
 export function HeroSection({ project, projectTypes, projectStages, customerTypeDict, onBack, onSwitchLayout, tableDefs = [], tableRecords = {} }: HeroSectionProps) {
+  // 加载部署模式和项目状态字典
+  const [deploymentModes, setDeploymentModes] = useState<{ code: string; name: string }[]>([]);
+  const [projectStatuses, setProjectStatuses] = useState<{ code: string; name: string }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/dicts?type=deployment_modes")
+      .then((r) => r.json())
+      .then((d) => setDeploymentModes(d.data || []))
+      .catch(() => {});
+    fetch("/api/dicts?type=project_statuses")
+      .then((r) => r.json())
+      .then((d) => setProjectStatuses(d.data || []))
+      .catch(() => {});
+  }, []);
+
   // 类型名称
   const typeName =
     projectTypes.find((t) => t.code === project.project_type)?.name || project.project_type || "—";
 
-  // 状态显示
-  const statusLabel = project.project_status || project.status || "实施中";
+  // 状态显示：查字典翻译 code → name
+  const rawStatus = project.project_status || project.status || "";
+  const statusLabel =
+    projectStatuses.find((s) => s.code === rawStatus)?.name || rawStatus || "实施中";
 
   // 客户名称：公司名·市
   const ci = project.customer_info || {};
@@ -57,10 +75,11 @@ export function HeroSection({ project, projectTypes, projectStages, customerType
         .join(" · ")
     : "—";
 
-  // 业务部署模式
-  const deployMode = project.deployment_mode || "—";
+  // 业务部署模式（查字典翻译 code → name）
+  const deployModeRaw = project.deployment_mode || "";
+  const deployMode = deploymentModes.find((m) => m.code === deployModeRaw)?.name || deployModeRaw || "—";
 
-  // 编号 / 负责人（销售）
+  // 负责人（销售）
   const salesPerson = s(project.role_sales) || "—";
 
   // 团队成员：核心角色 + 项目成员
@@ -287,16 +306,16 @@ export function HeroSection({ project, projectTypes, projectStages, customerType
             )}
           </span>
         </div>
-        {/* 编号 / 负责人 */}
+        {/* 负责人 */}
         <div className="flex-1 p-5 flex flex-col gap-2.5" style={{ backgroundColor: "var(--s-bg)" }}>
           <span
             className="text-[9px] uppercase tracking-[1.5px]"
             style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}
           >
-            编号 / 负责人
+            负责人
           </span>
           <span className="text-sm font-semibold" style={{ color: "var(--s-text)" }}>
-            {project.project_code}{salesPerson !== "—" ? ` · ${salesPerson}` : ""}
+            {salesPerson}
           </span>
         </div>
         {/* 团队 */}

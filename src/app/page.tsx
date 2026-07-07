@@ -111,7 +111,7 @@ export default function HomePage() {
   const { user, isLoading, isAuthenticated, logout: authLogout } = useAuth();
   const [projectTypes, setProjectTypes] = useState<{ code: string; name: string }[]>([]);
   const [projectStages, setProjectStages] = useState<{ code: string; name: string; sort_order?: number }[]>([]);
-  const [procurementModules, setProcurementModules] = useState<{ code: string; name: string }[]>([]);
+  const [procurementModules, setProcurementModules] = useState<{ code: string; name: string; product_name?: string; vendor?: string; model_spec?: string }[]>([]);
   const [customerTypes, setCustomerTypes] = useState<{ code: string; name: string }[]>([]);
   const [activeItem, setActiveItem] = useState("projects");
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -232,7 +232,10 @@ export default function HomePage() {
           // 转换为 { code, name } 格式，只显示模块名称
           const modules = (modulesData.data || []).map((item: any) => ({
             code: item.code,
-            name: item.module_name || item.product_name || item.code
+            name: item.module_name || item.product_name || item.code,
+            product_name: item.product_name || "",
+            vendor: item.vendor || "",
+            model_spec: item.model_spec || "",
           }));
           setProcurementModules(modules);
         }
@@ -304,7 +307,10 @@ export default function HomePage() {
         // 转换为 { code, name } 格式，只显示模块名称
         const modules = (modulesData.data || []).map((item: any) => ({
           code: item.code,
-          name: item.module_name || item.product_name || item.code
+          name: item.module_name || item.product_name || item.code,
+          product_name: item.product_name || "",
+          vendor: item.vendor || "",
+          model_spec: item.model_spec || "",
         }));
         setProcurementModules(modules);
       }

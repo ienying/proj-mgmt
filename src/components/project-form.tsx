@@ -157,7 +157,7 @@ interface ProjectFormProps {
   projectTypes: { code: string; name: string }[];
   projectStages: { code: string; name: string }[];
   memberRoles: string[];
-  productModules: { module_code: string; module_name: string; product_name: string }[];
+  productModules: { module_code: string; module_name: string; product_name: string; vendor?: string; model_spec?: string }[];
   users: { id: string; name: string; phone?: string; position?: string; email?: string }[];
   initialData?: Record<string, unknown> | null; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
@@ -439,6 +439,7 @@ export function ProjectForm({
 
   // 采购模块
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
+  const [moduleQuantities, setModuleQuantities] = useState<Record<string, string>>({});
 
   // 采购金额
   const [procurementAmount, setProcurementAmount] = useState("");
@@ -805,6 +806,11 @@ export function ProjectForm({
       if (Array.isArray(pm)) {
         setSelectedModules(pm as string[]);
       }
+      // 模块数量
+      const mq = d.module_quantities;
+      if (mq && typeof mq === "object") {
+        setModuleQuantities(mq as Record<string, string>);
+      }
 
       // 采购金额
       setProcurementAmount(d.procurement_amount != null ? String(d.procurement_amount) : "");
@@ -1147,6 +1153,16 @@ export function ProjectForm({
     setSelectedModules((prev) =>
       prev.includes(moduleCode) ? prev.filter((m) => m !== moduleCode) : [...prev, moduleCode]
     );
+    // 选中时默认数量为 1，取消选择时清理数量
+    if (selectedModules.includes(moduleCode)) {
+      setModuleQuantities((prev) => {
+        const next = { ...prev };
+        delete next[moduleCode];
+        return next;
+      });
+    } else {
+      setModuleQuantities((prev) => ({ ...prev, [moduleCode]: "1" }));
+    }
   };
 
   // 验证项目编号格式（仅小写英文+数字）
@@ -1379,6 +1395,7 @@ export function ProjectForm({
       construction_units_info: constructionUnits.filter((cu) => cu.company_name),
       members: projectMembers.filter((pm) => pm.name),
       procurement_modules: selectedModules,
+      module_quantities: moduleQuantities,
       procurement_amount: procurementAmount ? parseFloat(procurementAmount) : null,
       software_amount: softwareAmount ? parseFloat(softwareAmount) : null,
       hardware_amount: hardwareAmount ? parseFloat(hardwareAmount) : null,
@@ -2264,23 +2281,46 @@ export function ProjectForm({
                   return (
                     <div className="grid grid-cols-3 gap-3">
                       {filtered.map((module) => (
-                        <label
+                        <div
                           key={module.module_code}
-                          className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                          className={`border rounded-lg transition-colors ${
                             selectedModules.includes(module.module_code)
                               ? "border-blue-500 bg-blue-50"
                               : "hover:bg-slate-50"
                           }`}
                         >
-                          <Checkbox
-                            checked={selectedModules.includes(module.module_code)}
-                            onCheckedChange={() => toggleModule(module.module_code)}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm truncate">{module.module_name}</div>
-                            <div className="text-xs text-slate-400 truncate">{module.product_name}</div>
-                          </div>
-                        </label>
+                          <label
+                            className="flex items-center gap-3 px-3 pt-3 pb-2 cursor-pointer"
+                          >
+                            <Checkbox
+                              checked={selectedModules.includes(module.module_code)}
+                              onCheckedChange={() => toggleModule(module.module_code)}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm truncate">{module.module_name}</div>
+                              <div className="text-xs text-slate-400 truncate">{module.product_name}</div>
+                              {module.model_spec && <div className="text-[11px] text-slate-400 truncate">型号规格：{module.model_spec}</div>}
+                              <div className="text-[11px] text-slate-400 truncate">厂商：{module.vendor || "未指定"}</div>
+                            </div>
+                          </label>
+                          {selectedModules.includes(module.module_code) && (
+                            <div className="px-3 pb-3 pl-10">
+                              <Input
+                                type="number"
+                                min="0"
+                                placeholder="数量"
+                                className="h-7 text-sm"
+                                value={moduleQuantities[module.module_code] || "1"}
+                                onChange={(e) =>
+                                  setModuleQuantities((prev) => ({
+                                    ...prev,
+                                    [module.module_code]: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
                   );
@@ -2988,9 +3028,10 @@ export function ProjectForm({
                     <div className="flex flex-wrap gap-1.5">
                       {selectedModules.map((code, i) => {
                         const mod = productModules.find((m) => m.module_code === code);
+                        const qty = moduleQuantities[code];
                         return (
                           <Badge key={i} variant="secondary" className="text-xs">
-                            {mod?.module_name || code}
+                            {mod?.module_name || code}{qty ? ` × ${qty}` : ""}
                           </Badge>
                         );
                       })}

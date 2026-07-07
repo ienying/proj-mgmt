@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
           description,
           sort_order,
           is_enabled,
+          model_spec: body.model_spec || null,
           tech_specs: body.tech_specs || null,
           bidding_instructions: body.bidding_instructions || null,
           software_name: body.software_name || null,
