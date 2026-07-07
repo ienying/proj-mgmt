@@ -3544,7 +3544,7 @@ export function StandardManagement({
                               </div>
                             )}
 
-                            <div className="mt-3 pt-3 border-t">
+                            <div className="mt-3 pt-3 border-t flex items-center gap-2">
                               <Button
                                 type="button"
                                 variant="outline"
@@ -3559,9 +3559,9 @@ export function StandardManagement({
                                 variant="outline"
                                 size="sm"
                                 onClick={() => setPasteColumnsOpen(true)}
-                                className="h-8 text-xs gap-1 ml-2"
+                                className="h-8 text-xs gap-1"
                               >
-                                <span className="text-xs mr-0.5">📋</span> 粘贴列名
+                                📋 粘贴列名
                               </Button>
                             </div>
                           </div>
