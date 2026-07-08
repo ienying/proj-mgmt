@@ -73,7 +73,7 @@ export function LoginPage() {
             />
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">
-            项目管理平台
+            售后记录工具
           </h1>
         </div>
 
