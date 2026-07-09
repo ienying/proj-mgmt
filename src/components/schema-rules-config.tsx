@@ -294,9 +294,9 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
       } else {
         parts.push("未配置模块");
       }
-      if (rule.project_stage) {
-        const stage = projectStages.find((s) => s.code === rule.project_stage);
-        parts.push(`阶段: ${stage?.name || rule.project_stage}`);
+      if (rule.project_type) {
+        const type = projectTypes.find((t) => t.code === rule.project_type);
+        parts.push(type?.name || rule.project_type);
       }
       if (rule.project_status) {
         const status = projectStatuses.find((s) => s.code === rule.project_status);
@@ -309,10 +309,6 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
     if (rule.project_type) {
       const type = projectTypes.find((t) => t.code === rule.project_type);
       parts.push(type?.name || rule.project_type);
-    }
-    if (rule.project_stage) {
-      const stage = projectStages.find((s) => s.code === rule.project_stage);
-      parts.push(stage?.name || rule.project_stage);
     }
     if (rule.project_status) {
       const status = projectStatuses.find((s) => s.code === rule.project_status);
@@ -610,25 +606,25 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                   {/* 附加过滤条件 */}
                   <div className="grid grid-cols-2 gap-3 pt-2 border-t">
                     <div className="space-y-1.5">
-                      <Label className="text-[11px]">项目阶段</Label>
+                      <Label className="text-[11px]">项目类型 *</Label>
                       <Select
-                        value={formData.project_stage || ""}
+                        value={formData.project_type || ""}
                         onValueChange={(value) =>
-                          setFormData((prev) => ({ ...prev, project_stage: value || null }))
+                          setFormData((prev) => ({ ...prev, project_type: value || null }))
                         }
                       >
                         <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="不限阶段" />
+                          <SelectValue placeholder="请选择类型" />
                         </SelectTrigger>
                         <SelectContent>
-                          {projectStages.map((stage) => (
-                            <SelectItem key={stage.code} value={stage.code}>{stage.name}</SelectItem>
+                          {projectTypes.map((type) => (
+                            <SelectItem key={type.code} value={type.code}>{type.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-[11px]">项目状态</Label>
+                      <Label className="text-[11px]">项目状态（可选）</Label>
                       <Select
                         value={formData.project_status || ""}
                         onValueChange={(value) =>
@@ -649,9 +645,9 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                 </>
               ) : (
                 <>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label className="text-[11px]">项目类型</Label>
+                      <Label className="text-[11px]">项目类型 *</Label>
                       <Select
                         value={formData.project_type || ""}
                         onValueChange={(value) =>
@@ -669,25 +665,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                       </Select>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-[11px]">项目阶段</Label>
-                      <Select
-                        value={formData.project_stage || ""}
-                        onValueChange={(value) =>
-                          setFormData((prev) => ({ ...prev, project_stage: value || null }))
-                        }
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="请选择阶段" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {projectStages.map((stage) => (
-                            <SelectItem key={stage.code} value={stage.code}>{stage.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-[11px]">项目状态</Label>
+                      <Label className="text-[11px]">项目状态（可选）</Label>
                       <Select
                         value={formData.project_status || ""}
                         onValueChange={(value) =>
@@ -695,7 +673,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                         }
                       >
                         <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="请选择状态" />
+                          <SelectValue placeholder="不限状态" />
                         </SelectTrigger>
                         <SelectContent>
                           {projectStatuses.map((status) => (
@@ -706,7 +684,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                     </div>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    三项均为必选，必须与项目完全匹配才命中。多条规则同时命中时全部合并（Set 去重）。
+                    类型必选，状态可选。匹配后将在项目所有阶段中创建这些规范表，表在哪个阶段显示由规范管理中的「适用范围」决定。多条规则同时命中时全部合并（Set 去重）。
                   </p>
                 </>
               )}

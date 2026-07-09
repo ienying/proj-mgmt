@@ -200,7 +200,6 @@ export async function POST(request: NextRequest) {
     const copyResult = await copyTableDefinitionsToSchema(
       client,
       project_type,
-      project_stage,
       projectSchema,
       procurement_modules as string[] || [],
       project_status || null
@@ -242,7 +241,6 @@ export async function POST(request: NextRequest) {
 async function copyTableDefinitionsToSchema(
   client: Awaited<ReturnType<typeof createServerClient>>,
   projectType: string,
-  projectStage: string,
   projectSchema: string,
   procurementModules: string[] = [],
   projectStatus: string | null = null
@@ -267,23 +265,25 @@ async function copyTableDefinitionsToSchema(
     const allTableDefinitions = new Set<string>();
 
     // 1. 匹配类型阶段规则（type_stage）
-    // 三个条件（type/stage/status）必须全部精确匹配
+    // type + status 匹配（status 为空时匹配所有状态），不再按阶段过滤
+    // 表的阶段归属由 data_table_definitions.apply_project_stages 决定
     const typeStageRules = enabledRules.filter((r) => r.rule_type !== 'module');
 
     for (const rule of typeStageRules) {
       const ruleType = rule.project_type as string | null;
-      const ruleStage = rule.project_stage as string | null;
       const ruleStatus = (rule as Record<string, unknown>).project_status as string | null;
 
-      if (ruleType === projectType && ruleStage === projectStage && ruleStatus === projectStatus) {
-        if (rule.table_definitions) {
+      // type 必匹配；status 为空时匹配所有，否则精确匹配
+      if (ruleType === projectType) {
+        const statusMatch = !ruleStatus || ruleStatus === projectStatus;
+        if (statusMatch && rule.table_definitions) {
           (rule.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
         }
       }
     }
 
     // 2. 匹配模块规则（module）
-    // 模块必须有交集（AND），三个条件必须全部精确匹配
+    // 模块必须有交集（AND），type + status 匹配
     if (procurementModules && procurementModules.length > 0) {
       for (const rule of enabledRules) {
         if (rule.rule_type === 'module' && rule.module_codes) {
@@ -292,8 +292,8 @@ async function copyTableDefinitionsToSchema(
           if (!hasModuleMatch) continue;
 
           if (rule.project_type !== projectType) continue;
-          if (rule.project_stage !== projectStage) continue;
-          if ((rule as Record<string, unknown>).project_status !== projectStatus) continue;
+          const ruleStatus = (rule as Record<string, unknown>).project_status as string | null;
+          if (ruleStatus && ruleStatus !== projectStatus) continue;
 
           if (rule.table_definitions) {
             (rule.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));

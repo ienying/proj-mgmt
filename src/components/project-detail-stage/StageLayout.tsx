@@ -54,43 +54,17 @@ export function StageLayout({
     readonly_mode?: string;
     columns_config?: Array<{ name: string; type: string; readonly?: boolean }>;
   }>>([]);
-  // 项目 Schema 中实际存在的表集合（用于判断是否可编辑）
-  const [existingTableSet, setExistingTableSet] = useState<Set<string> | null>(null);
   useEffect(() => {
-    async function loadTableDefs() {
-      try {
-        // 1. 获取所有规范表定义
-        const defRes = await fetch("/api/standards");
-        const defData = await defRes.json();
-        const defs = (defData.data || []).filter(
+    fetch("/api/standards")
+      .then((r) => r.json())
+      .then((d) => {
+        const defs = (d.data || []).filter(
           (def: Record<string, unknown>) => !String(def.table_code || "").startsWith("task_")
         );
-
-        // 2. 查询项目 Schema 中实际存在的表
-        let schemaTables: Set<string> | null = null;
-        if (project.project_schema) {
-          try {
-            const existingRes = await fetch(
-              `/api/project-data/tables?schema=${encodeURIComponent(project.project_schema)}`
-            );
-            const existingData = await existingRes.json();
-            if (existingData.tables && Array.isArray(existingData.tables)) {
-              schemaTables = new Set<string>(existingData.tables);
-            }
-          } catch {
-            // 查询失败时 schemaTables 保持 null
-          }
-        }
-
-        // 3. 显示全部表定义（不过滤），单独存储 Schema 实际表集合
         setTableDefs(defs);
-        setExistingTableSet(schemaTables);
-      } catch {
-        // 加载失败
-      }
-    }
-    loadTableDefs();
-  }, [project.id, project.project_schema]);
+      })
+      .catch(() => {});
+  }, [project.id]);
 
   // 当 projectStages 加载完成后，按 sort_order 排序后定位到当前阶段
   useEffect(() => {
@@ -316,8 +290,8 @@ export function StageLayout({
             onBack={handleCloseSubContent}
           />
         )
-      ) : existingTableSet !== null && existingTableSet.size === 0 ? (
-        /* Schema 完全为空：未匹配到任何规则，显示空状态引导 */
+      ) : tableDefs.length === 0 ? (
+        /* 无任何规则匹配或未配置规则，Schema 为空，显示空状态引导 */
         <div className="flex items-center justify-center" style={{ minHeight: "60vh" }}>
           <div className="text-center max-w-lg px-6">
             <div className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center" style={{ backgroundColor: "var(--s-surface2)" }}>
@@ -395,7 +369,6 @@ export function StageLayout({
               projectSchema={project.project_schema}
               projectStages={projectStages}
               currentStageCode={project.project_stage}
-              existingTableSet={existingTableSet}
               onRecordsUpdate={(code, records) => {
                 setAllTableRecords((prev) => ({ ...prev, [code]: records }));
               }}

@@ -164,7 +164,6 @@ async function syncProjectSchema(
   client: ReturnType<typeof createServerClient> extends Promise<infer T> ? T : never,
   projectSchema: string,
   projectType: string,
-  projectStage: string,
   procurementModules: string[],
   projectStatus?: string | null
 ): Promise<{ matched: boolean; tableCount: number }> {
@@ -182,23 +181,23 @@ async function syncProjectSchema(
     .sort((a, b) => ((a.sort_order as number) || 0) - ((b.sort_order as number) || 0));
 
   // 1. 匹配类型阶段规则（type_stage）
-  // 三个条件（type/stage/status）必须全部精确匹配
+  // type + status 匹配，不再按阶段过滤
   const typeStageRules = enabledRules.filter((r) => r.rule_type !== "module");
 
   for (const rule of typeStageRules) {
     const ruleType = rule.project_type as string | null;
-    const ruleStage = rule.project_stage as string | null;
     const ruleStatus = (rule as Record<string, unknown>).project_status as string | null;
 
-    if (ruleType === projectType && ruleStage === projectStage && ruleStatus === projectStatus) {
-      if (rule.table_definitions) {
+    if (ruleType === projectType) {
+      const statusMatch = !ruleStatus || ruleStatus === projectStatus;
+      if (statusMatch && rule.table_definitions) {
         (rule.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
       }
     }
   }
 
   // 2. 匹配模块规则（module）
-  // 模块必须有交集（AND），三个条件必须全部精确匹配
+  // 模块必须有交集（AND），type + status 匹配
   if (procurementModules && procurementModules.length > 0) {
     for (const rule of enabledRules) {
       if (rule.rule_type === "module" && rule.module_codes) {
@@ -207,8 +206,8 @@ async function syncProjectSchema(
         if (!hasModuleMatch) continue;
 
         if (rule.project_type !== projectType) continue;
-        if (rule.project_stage !== projectStage) continue;
-        if ((rule as Record<string, unknown>).project_status !== projectStatus) continue;
+        const ruleStatus = (rule as Record<string, unknown>).project_status as string | null;
+        if (ruleStatus && ruleStatus !== projectStatus) continue;
 
         if (rule.table_definitions) {
           (rule.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
@@ -485,7 +484,7 @@ export async function PUT(request: NextRequest) {
 
       if (projectSchema && (projectType || projectStage)) {
         try {
-          const syncResult = await syncProjectSchema(client, projectSchema, projectType, projectStage, procurementModules, projectStatus);
+          const syncResult = await syncProjectSchema(client, projectSchema, projectType, procurementModules, projectStatus);
           if (!syncResult.matched) {
             return NextResponse.json({
               data,
