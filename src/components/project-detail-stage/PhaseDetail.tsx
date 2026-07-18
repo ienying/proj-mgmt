@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 
 // Docx/PPTX 客户端预览组件（使用 CDN 加载 mammoth.js）
 function DocxPreview({ src, fn }: { src: string; fn: string }) {
@@ -62,6 +62,7 @@ interface TableDef {
   allow_add?: boolean;
   allow_delete?: boolean;
   readonly_mode?: string;
+  enable_drawer_form?: boolean;
   columns_config?: Array<{ name: string; type: string; readonly?: boolean; options?: string[]; display_mode?: string; data_source?: string; allow_custom?: boolean; calc_left_col?: string; calc_operator?: string; calc_right_col?: string; calc_sum?: boolean }>;
 }
 
@@ -73,9 +74,10 @@ interface PhaseDetailProps {
   projectStages?: { code: string; name: string; detail_description?: string; sort_order?: number }[];
   currentStageCode?: string;
   onRecordsUpdate?: (tableCode: string, records: Array<Record<string, unknown>>) => void;
+  onDataChange?: () => void; // 通知父组件刷新操作日志
 }
 
-export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema, projectStages = [], currentStageCode, onRecordsUpdate }: PhaseDetailProps) {
+export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema, projectStages = [], currentStageCode, onRecordsUpdate, onDataChange }: PhaseDetailProps) {
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [tableRecords, setTableRecords] = useState<Record<string, Array<Record<string, unknown>>>>({});
   const [loadingTable, setLoadingTable] = useState<string | null>(null);
@@ -84,6 +86,21 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
   const [editingCell, setEditingCell] = useState<{
     tableCode: string; rowIdx: number; colName: string;
   } | null>(null);
+
+  // 抽屉表单模式
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerTableCode, setDrawerTableCode] = useState("");
+  const [drawerRowIdx, setDrawerRowIdx] = useState(-1);
+  const [drawerEditing, setDrawerEditing] = useState(false);
+  const [drawerEditData, setDrawerEditData] = useState<Record<string, string>>({});
+
+  const openDrawer = (tableCode: string, rowIdx: number) => {
+    setDrawerTableCode(tableCode);
+    setDrawerRowIdx(rowIdx);
+    setDrawerEditing(false);
+    setDrawerOpen(true);
+  };
+  const closeDrawer = () => { setDrawerOpen(false); setDrawerEditing(false); };
   const [editValue, setEditValue] = useState("");
   const [dictCache, setDictCache] = useState<Record<string, string[]>>({});
   const [productModules, setProductModules] = useState<{ code: string; name: string }[]>([]);
@@ -123,19 +140,38 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
         updated[rowIdx] = { ...updated[rowIdx], [colName]: valueToSave };
         setTableRecords((prev) => ({ ...prev, [tableCode]: updated }));
         onRecordsUpdate?.(tableCode, updated);
+        onDataChange?.();
       }
     } catch {}
     setEditingCell(null);
-  }, [editingCell, editValue, projectSchema, tableRecords]);
+  }, [editingCell, editValue, projectSchema, tableRecords, onDataChange, onRecordsUpdate]);
 
   // 添加行
   const addRow = async (tableCode: string) => {
     if (!projectSchema) return;
+    const def = tableDefs.find(d => d.table_code === tableCode);
+    if (def?.enable_drawer_form) {
+      // 抽屉模式：打开空白表单
+      setDrawerTableCode(tableCode);
+      setDrawerRowIdx(-1);
+      setDrawerEditing(true);
+      const init: Record<string,string> = {};
+      (def?.columns_config || []).forEach(c => { init[c.name] = ""; });
+      setDrawerEditData(init);
+      setDrawerOpen(true);
+      return;
+    }
     try {
+      const initData: Record<string, unknown> = {};
+      (def?.columns_config || []).forEach(c => {
+        if (c.type === "number") initData[c.name] = 0;
+        else if (c.type === "select") initData[c.name] = c.options?.[0] || "";
+        else initData[c.name] = "";
+      });
       const res = await fetch("/api/project-data", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectSchema, tableCode, data: {} }),
+        body: JSON.stringify({ projectSchema, tableCode, data: initData }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -143,6 +179,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
         const updated = [...currentRecords, data.data || data];
         setTableRecords((prev) => ({ ...prev, [tableCode]: updated }));
         onRecordsUpdate?.(tableCode, updated);
+        onDataChange?.();
       }
     } catch {}
   };
@@ -228,6 +265,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       updated[rowIdx] = { ...updated[rowIdx], [colName]: fileKey };
       setTableRecords((prev) => ({ ...prev, [tableCode]: updated }));
       onRecordsUpdate?.(tableCode, updated);
+      onDataChange?.();
     } catch (e) {
       console.error("上传异常:", e);
     }
@@ -283,6 +321,11 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
   );
 
   const handleRecordClick = (tableCode: string, rowIdx: number) => {
+    const def = tableDefs.find(d => d.table_code === tableCode) || phaseTables.find(d => d.table_code === tableCode);
+    if (def?.enable_drawer_form) {
+      openDrawer(tableCode, rowIdx);
+      return;
+    }
     setSelectedRecord((prev) =>
       prev?.tableCode === tableCode && prev?.rowIdx === rowIdx ? null : { tableCode, rowIdx }
     );
@@ -398,12 +441,12 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ projectSchema, tableCode, rowId: row.id, data: { [colName]: newVal } }),
                         }).then((r) => {
-                          if (r.ok) setTableRecords((prev) => {
+                          if (r.ok) { onDataChange?.(); setTableRecords((prev) => {
                             const updated = [...(prev[tableCode] || [])];
                             updated[rowIdx] = { ...updated[rowIdx], [colName]: newVal };
                             onRecordsUpdate?.(tableCode, updated);
                             return { ...prev, [tableCode]: updated };
-                          });
+                          }); }
                         });
                       }
                     }} className="w-3 h-3" />
@@ -1070,6 +1113,202 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       {previewFile && !previewFullscreen && (
         <div className="fixed inset-0 z-40 bg-black/20" onClick={() => setPreviewFile(null)} />
       )}
+
+      {/* ═══ 抽屉表单（enable_drawer_form 模式） ═══ */}
+      {drawerOpen && (() => {
+        const def = tableDefs.find(d => d.table_code === drawerTableCode);
+        const records = tableRecords[drawerTableCode] || [];
+        const record = records[drawerRowIdx] || {};
+        const cols = def?.columns_config || [];
+        const isNew = drawerRowIdx < 0;
+
+        // 字段分行逻辑
+        const fieldRows: Array<Array<typeof cols[0]>> = [];
+        let i = 0;
+        while (i < cols.length) {
+          const c = cols[i];
+          if (c.type === "textarea" || c.type === "attachment" || c.type === "video") {
+            fieldRows.push([c]); i++;
+          } else if (i + 1 < cols.length && cols[i+1].type !== "textarea" && cols[i+1].type !== "attachment" && cols[i+1].type !== "video") {
+            fieldRows.push([c, cols[i+1]]); i += 2;
+          } else {
+            fieldRows.push([c]); i++;
+          }
+        }
+
+        const handleDrawerSave = async () => {
+          if (!projectSchema) return;
+          const rowId = isNew ? null : record.id;
+          try {
+            const url = "/api/project-data";
+            const method = isNew ? "POST" : "PUT";
+            const body: Record<string, unknown> = isNew
+              ? { projectSchema, tableCode: drawerTableCode, data: drawerEditData }
+              : { projectSchema, tableCode: drawerTableCode, rowId, data: drawerEditData };
+            const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            if (res.ok) {
+              const json = await res.json();
+              const saved = json.data || drawerEditData;
+              if (isNew) {
+                const updated = [...records, saved];
+                setTableRecords(prev => ({ ...prev, [drawerTableCode]: updated }));
+                onRecordsUpdate?.(drawerTableCode, updated);
+              } else {
+                const updated = [...records];
+                updated[drawerRowIdx] = { ...updated[drawerRowIdx], ...drawerEditData };
+                setTableRecords(prev => ({ ...prev, [drawerTableCode]: updated }));
+                onRecordsUpdate?.(drawerTableCode, updated);
+              }
+              onDataChange?.();
+              closeDrawer();
+            }
+          } catch {}
+        };
+
+        const handlePrint = () => {
+          const w = window.open("", "_blank", "width=800,height=600");
+          if (!w) return;
+          let html = '<html><head><title>打印</title><style>table{width:100%;border-collapse:collapse;border:1px solid #555;font-family:sans-serif}td{border:1px solid #aaa;padding:8px;vertical-align:top}td:first-child{background:#f5f5f5;font-weight:600;width:100px;font-size:11px}</style></head><body><table>';
+          fieldRows.forEach(row => {
+            html += '<tr>';
+            row.forEach(f => {
+              const val = drawerEditing ? (drawerEditData[f.name] ?? "") : String(record[f.name] ?? "—");
+              html += `<td>${f.name}</td><td>${val}</td>`;
+            });
+            html += '</tr>';
+          });
+          html += '</table></body></html>';
+          w.document.write(html);
+          w.document.close();
+          setTimeout(() => w.print(), 300);
+        };
+
+        const handleExportExcel = async () => {
+          const rows: string[][] = [];
+          fieldRows.forEach(row => {
+            const r: string[] = [];
+            row.forEach(f => {
+              r.push(f.name);
+              r.push(drawerEditing ? (drawerEditData[f.name] ?? "") : String(record[f.name] ?? "—"));
+            });
+            rows.push(r);
+          });
+          const csv = rows.map(r => r.map(c => `"${(c||"").replace(/"/g,'""')}"`).join(",")).join("\n");
+          const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = `${def?.table_name || drawerTableCode}_记录.csv`;
+          a.click();
+        };
+
+        return (
+          <>
+            <div className="fixed inset-0 z-50 bg-black/30" onClick={closeDrawer} style={{ transition: "opacity .25s" }} />
+            <div className="fixed top-0 right-0 h-full z-55 flex flex-col" style={{ width: 820, maxWidth: "95vw", background: "var(--s-surface)", boxShadow: "-4px 0 24px rgba(0,0,0,.12)", transform: drawerOpen ? "translateX(0)" : "translateX(100%)", transition: "transform .3s" }}>
+              {/* Header */}
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b flex-shrink-0" style={{ borderColor: "var(--s-border)", background: "var(--s-surface2)" }}>
+                <span className="text-[11px] font-semibold uppercase tracking-[1px]" style={{ color: "var(--s-text)", fontFamily: "var(--font-mono, monospace)" }}>
+                  {isNew ? "新增记录" : "记录详情"}
+                </span>
+                <span className="text-[10px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+                  {def?.table_name || drawerTableCode}{!isNew ? ` · 第 ${drawerRowIdx + 1} 条` : ""}
+                </span>
+                <div className="flex-1" />
+                <button onClick={handlePrint} className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-border)", color: "var(--s-text-muted)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>🖨 打印</button>
+                <button onClick={handleExportExcel} className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-border)", color: "var(--s-text-muted)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>📥 导出</button>
+                <button onClick={closeDrawer} className="w-7 h-7 border flex items-center justify-center cursor-pointer flex-shrink-0" style={{ borderColor: "var(--s-border)", background: "var(--s-surface)", color: "var(--s-text-muted)" }}>✕</button>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto px-5 py-4">
+                <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid #555" }}>
+                  <tbody>
+                    {fieldRows.map((row, ri) => (
+                      <tr key={ri}>
+                        {row.map((f, fi) => {
+                          const val = drawerEditing ? (drawerEditData[f.name] ?? "") : String(record[f.name] ?? "—");
+                          const colSpan = row.length === 1 ? 4 : 2;
+                          return (
+                            <React.Fragment key={f.name}>
+                              <td style={{ border: "1px solid #aaa", padding: "8px 10px", verticalAlign: "top", background: "#f5f5f5", fontSize: 9, textTransform: "uppercase", letterSpacing: "1px", color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)", width: 100, fontWeight: 600 }}>
+                                {f.name}
+                              </td>
+                              <td style={{ border: "1px solid #aaa", padding: "8px 10px", verticalAlign: "top", fontSize: f.type === "textarea" ? 12 : 13, lineHeight: f.type === "textarea" ? 1.7 : 1.5, color: "var(--s-text)" }} colSpan={row.length === 1 ? 3 : 1}>
+                                {f.type === "attachment" || f.type === "video" ? (
+                                  drawerEditing && !f.readonly ? (
+                                    <div>
+                                      <input type="file" onChange={async (e) => {
+                                        const file = e.target.files?.[0]; if (!file || !projectSchema) return;
+                                        const fd = new FormData(); fd.append("file", file); fd.append("fileType", f.type); fd.append("projectCode", projectSchema);
+                                        try { const res = await fetch("/api/files/upload", { method: "POST", body: fd }); const d = await res.json(); if (d.key) setDrawerEditData(prev => ({ ...prev, [f.name]: d.key })); } catch {}
+                                      }} className="text-[11px]" />
+                                      {val && <span className="text-[11px] ml-2" style={{ color: "var(--s-text-muted)" }}>当前: {(val as string).split("/").pop()?.replace(/^\d+_/, "") || val}</span>}
+                                    </div>
+                                  ) : val ? (
+                                    <a href={`/api/files/download?key=${encodeURIComponent(val as string)}`} target="_blank" className="text-[11px]" style={{ color: "var(--s-blue)", cursor: "pointer", textDecoration: "none" }}
+                                      onClick={(e) => { e.preventDefault(); fetch(`/api/files/download?key=${encodeURIComponent(val as string)}`).then(r=>r.json()).then(json=>{ if(json.url) window.open(json.url,"_blank"); }).catch(()=>{}); }}>
+                                      📎 {(val as string).split("/").pop()?.replace(/^\d+_/, "") || val}
+                                    </a>
+                                  ) : "—"
+                                ) : drawerEditing && !f.readonly ? (
+                                  f.type === "textarea" ? (
+                                    <textarea value={val} onChange={e => setDrawerEditData(prev => ({ ...prev, [f.name]: e.target.value }))}
+                                      className="w-full border-none outline-none resize-y text-[13px] font-sans" style={{ minHeight: 60, color: "var(--s-text)", background: "transparent" }} />
+                                  ) : f.type === "select" && f.options?.length ? (
+                                    <select value={val} onChange={e => setDrawerEditData(prev => ({ ...prev, [f.name]: e.target.value }))}
+                                      className="w-full border-none outline-none text-[13px] font-sans" style={{ color: "var(--s-text)", background: "transparent" }}>
+                                      <option value="">—</option>
+                                      {f.options.map((o: string) => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                  ) : f.type === "date" ? (
+                                    <input type="date" value={val?.slice(0,10) || ""} onChange={e => setDrawerEditData(prev => ({ ...prev, [f.name]: e.target.value }))}
+                                      className="w-full border-none outline-none text-[13px] font-sans" style={{ color: "var(--s-text)", background: "transparent" }} />
+                                  ) : (
+                                    <input type="text" value={val} onChange={e => setDrawerEditData(prev => ({ ...prev, [f.name]: e.target.value }))}
+                                      className="w-full border-none outline-none text-[13px] font-sans" style={{ color: "var(--s-text)", background: "transparent" }} />
+                                  )
+                                ) : val}
+                              </td>
+                            </React.Fragment>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center gap-2 px-5 py-3 border-t flex-shrink-0" style={{ borderColor: "var(--s-border)", background: "var(--s-surface2)" }}>
+                <span className="text-[9px] px-2 py-0.5 font-semibold uppercase font-mono" style={{ border: drawerEditing ? "1px solid var(--s-orange)" : "1px solid var(--s-border)", color: drawerEditing ? "var(--s-orange)" : "var(--s-text-muted)" }}>
+                  {drawerEditing ? "编辑" : "查看"}
+                </span>
+                <div className="flex-1" />
+                {!drawerEditing ? (
+                  <>
+                    <button onClick={() => { setDrawerEditing(true); const init: Record<string,string> = {}; cols.forEach(c => { init[c.name] = String(record[c.name] ?? ""); }); setDrawerEditData(init); }}
+                      className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-orange)", color: "var(--s-orange)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>编辑</button>
+                    <button onClick={async () => {
+                      if (!projectSchema || !record.id) return;
+                      await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(drawerTableCode)}&rowId=${record.id}`, { method: "DELETE" });
+                      const updated = records.filter((_,i) => i !== drawerRowIdx);
+                      setTableRecords(prev => ({ ...prev, [drawerTableCode]: updated }));
+                      onRecordsUpdate?.(drawerTableCode, updated);
+                      onDataChange?.();
+                      closeDrawer();
+                    }} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-red)", color: "var(--s-red)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>删除</button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={handleDrawerSave} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-orange)", color: "var(--s-orange)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>保存</button>
+                    <button onClick={() => setDrawerEditing(false)} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-border)", color: "var(--s-text-muted)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>取消</button>
+                  </>
+                )}
+              </div>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }

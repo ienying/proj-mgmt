@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { GanttChart } from "./GanttChart";
 
 interface TableDataViewProps {
@@ -13,6 +13,7 @@ interface TableDataViewProps {
     allow_add?: boolean;
     allow_delete?: boolean;
     readonly_mode?: string;
+    enable_drawer_form?: boolean;
     gantt_enabled?: boolean;
     gantt_start_col?: string;
     gantt_end_col?: string;
@@ -45,6 +46,11 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
   const [editingCell, setEditingCell] = useState<{ rowIdx: number; colName: string } | null>(null);
   const [editValue, setEditValue] = useState("");
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
+  // 抽屉表单模式
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerRowIdx, setDrawerRowIdx] = useState(-1);
+  const [drawerEditing, setDrawerEditing] = useState(false);
+  const [drawerEditData, setDrawerEditData] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadTargetRef = useRef<{ rowIdx: number; colName: string } | null>(null);
 
@@ -80,11 +86,26 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
 
   const addRow = async () => {
     if (!projectSchema) return;
+    if (tableDef?.enable_drawer_form) {
+      setDrawerRowIdx(-1); setDrawerEditing(true);
+      const init: Record<string,string> = {};
+      (tableDef.columns_config || []).forEach(c => { init[c.name] = ""; });
+      setDrawerEditData(init);
+      setDrawerOpen(true);
+      return;
+    }
     try {
+      // 构建初始数据：所有列给空值，避免 NOT NULL 约束报错
+      const initData: Record<string, unknown> = {};
+      (tableDef?.columns_config || []).forEach(c => {
+        if (c.type === "number") initData[c.name] = 0;
+        else if (c.type === "select") initData[c.name] = c.options?.[0] || "";
+        else initData[c.name] = "";
+      });
       const res = await fetch("/api/project-data", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectSchema, tableCode, data: {} }),
+        body: JSON.stringify({ projectSchema, tableCode, data: initData }),
       });
       if (res.ok) {
         const d = await res.json();
@@ -140,7 +161,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
       <span
         className={editable ? "cursor-pointer hover:bg-gray-100 px-1 -mx-1 rounded" : ""}
         style={{ color: "var(--s-text)" }}
-        onClick={() => { if (editable) { setEditingCell({ rowIdx: ri, colName: col.name }); setEditValue(val === "—" ? "" : val); } }}
+        onClick={(e) => { if (editable) { e.stopPropagation(); setEditingCell({ rowIdx: ri, colName: col.name }); setEditValue(val === "—" ? "" : val); } }}
         title={editable ? "点击编辑" : "只读-该记录由管理员设置"}>
         {val}
       </span>
@@ -229,7 +250,13 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
             </thead>
             <tbody>
               {records.map((row, ri) => (
-                <tr key={ri} onClick={() => setSelectedRow(selectedRow === ri ? null : ri)}
+                <tr key={ri} onClick={() => {
+                  if (tableDef?.enable_drawer_form) {
+                    setDrawerRowIdx(ri); setDrawerEditing(false); setDrawerOpen(true);
+                  } else {
+                    setSelectedRow(selectedRow === ri ? null : ri);
+                  }
+                }}
                   className={`cursor-pointer hover:bg-[var(--s-surface)] border-b border-[var(--s-border)] ${
                     selectedRow === ri ? "bg-[rgba(28,126,214,.04)] border-l-2 border-l-[var(--s-blue)]" : ""
                   }`}>
@@ -270,6 +297,125 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
         } catch {}
         e.target.value = "";
       }} />
+      {/* ═══ 抽屉表单 ═══ */}
+      {drawerOpen && (() => {
+        const record = drawerRowIdx >= 0 ? records[drawerRowIdx] : {};
+        const cols = tableDef?.columns_config || [];
+        const isNew = drawerRowIdx < 0;
+        // 字段分行
+        const fieldRows: Array<Array<typeof cols[0]>> = [];
+        let i = 0;
+        while (i < cols.length) {
+          const c = cols[i];
+          if (c.type === "textarea" || c.type === "attachment" || c.type === "video") { fieldRows.push([c]); i++; }
+          else if (i+1 < cols.length && cols[i+1].type !== "textarea" && cols[i+1].type !== "attachment" && cols[i+1].type !== "video") { fieldRows.push([c, cols[i+1]]); i += 2; }
+          else { fieldRows.push([c]); i++; }
+        }
+        const closeDrawer = () => { setDrawerOpen(false); setDrawerEditing(false); };
+        const handleDrawerSave = async () => {
+          if (!projectSchema) return;
+          try {
+            const url = "/api/project-data";
+            const method = isNew ? "POST" : "PUT";
+            const body = isNew ? { projectSchema, tableCode, data: drawerEditData } : { projectSchema, tableCode, rowId: record.id, data: drawerEditData };
+            const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            if (res.ok) {
+              const json = await res.json();
+              if (isNew) setRecords(prev => [...prev, json.data || drawerEditData]);
+              else setRecords(prev => { const u = [...prev]; u[drawerRowIdx] = { ...u[drawerRowIdx], ...drawerEditData }; return u; });
+              closeDrawer();
+            }
+          } catch {}
+        };
+        const handlePrint = () => {
+          const w = window.open("", "_blank", "width=800,height=600");
+          if (!w) return;
+          let h = '<html><head><title>打印</title><style>table{width:100%;border-collapse:collapse;border:1px solid #555;font-family:sans-serif}td{border:1px solid #aaa;padding:8px;vertical-align:top}td:first-child{background:#f5f5f5;font-weight:600;width:100px;font-size:11px}</style></head><body><table>';
+          fieldRows.forEach(row => { h += '<tr>'; row.forEach(f => { const v = drawerEditing ? (drawerEditData[f.name]??"") : String(record[f.name]??"—"); h += `<td>${f.name}</td><td>${v}</td>`; }); h += '</tr>'; });
+          h += '</table></body></html>'; w.document.write(h); w.document.close(); setTimeout(() => w.print(), 300);
+        };
+        const handleExport = () => {
+          const rows: string[][] = [];
+          fieldRows.forEach(row => { const r: string[] = []; row.forEach(f => { r.push(f.name); r.push(drawerEditing ? (drawerEditData[f.name]??"") : String(record[f.name]??"—")); }); rows.push(r); });
+          const csv = rows.map(r => r.map(c => `"${(c||"").replace(/"/g,'""')}"`).join(",")).join("\n");
+          const blob = new Blob(["﻿"+csv], { type: "text/csv;charset=utf-8" });
+          const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${tableName}_记录.csv`; a.click();
+        };
+        return (
+          <>
+            <div className="fixed inset-0 z-50 bg-black/30" onClick={closeDrawer} />
+            <div className="fixed top-0 right-0 h-full z-55 flex flex-col" style={{ width: 820, maxWidth: "95vw", background: "var(--s-surface)", boxShadow: "-4px 0 24px rgba(0,0,0,.12)" }}>
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b flex-shrink-0" style={{ borderColor: "var(--s-border)", background: "var(--s-surface2)", paddingTop: 20 }}>
+                <span className="text-[11px] font-semibold uppercase tracking-[1px]" style={{ color: "var(--s-text)", fontFamily: "var(--font-mono, monospace)" }}>{isNew ? "新增记录" : "记录详情"}</span>
+                <span className="text-[10px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>{tableName}{!isNew ? ` · 第 ${drawerRowIdx + 1} 条` : ""}</span>
+                <div className="flex-1" />
+                <button onClick={handlePrint} className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-border)", color: "var(--s-text-muted)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>🖨 打印</button>
+                <button onClick={handleExport} className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-border)", color: "var(--s-text-muted)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>📥 导出</button>
+                <button onClick={closeDrawer} className="w-7 h-7 border flex items-center justify-center cursor-pointer flex-shrink-0" style={{ borderColor: "var(--s-border)", background: "var(--s-surface)", color: "var(--s-text-muted)" }}>✕</button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-5 py-4">
+                <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid #555" }}>
+                  <tbody>
+                    {fieldRows.map((row, ri) => (
+                      <tr key={ri}>
+                        {row.map((f) => {
+                          const val = drawerEditing ? (drawerEditData[f.name] ?? "") : String(record[f.name] ?? "—");
+                          const colSpan = row.length === 1 ? 4 : 2;
+                          return (
+                            <React.Fragment key={f.name}>
+                              <td style={{ border: "1px solid #aaa", padding: "8px 10px", verticalAlign: "top", background: "#f5f5f5", fontSize: 9, textTransform: "uppercase", letterSpacing: "1px", color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)", width: 100, fontWeight: 600 }}>{f.name}</td>
+                              <td style={{ border: "1px solid #aaa", padding: "8px 10px", verticalAlign: "top", fontSize: f.type === "textarea" ? 12 : 13, lineHeight: f.type === "textarea" ? 1.7 : 1.5, color: "var(--s-text)" }} colSpan={row.length === 1 ? 3 : 1}>
+                                {f.type === "attachment" || f.type === "video" ? (
+                                  /* 附件/视频字段 */
+                                  drawerEditing && !f.readonly ? (
+                                    <div>
+                                      <input type="file" onChange={async (e) => {
+                                        const file = e.target.files?.[0]; if (!file || !projectSchema) return;
+                                        const fd = new FormData(); fd.append("file", file); fd.append("fileType", f.type); fd.append("projectCode", projectSchema);
+                                        try { const res = await fetch("/api/files/upload", { method: "POST", body: fd }); const d = await res.json(); if (d.key) setDrawerEditData(prev => ({ ...prev, [f.name]: d.key })); } catch {}
+                                      }} className="text-[11px]" />
+                                      {val && <span className="text-[11px] ml-2" style={{ color: "var(--s-text-muted)" }}>当前: {(val as string).split("/").pop()?.replace(/^\d+_/, "") || val}</span>}
+                                    </div>
+                                  ) : val ? (
+                                    <a href={`/api/files/download?key=${encodeURIComponent(val as string)}`} target="_blank" className="text-[11px]" style={{ color: "var(--s-blue)", cursor: "pointer", textDecoration: "none" }}
+                                      onClick={(e) => { e.preventDefault(); fetch(`/api/files/download?key=${encodeURIComponent(val as string)}`).then(r=>r.json()).then(json=>{ if(json.url) window.open(json.url,"_blank"); }).catch(()=>{}); }}>
+                                      📎 {(val as string).split("/").pop()?.replace(/^\d+_/, "") || val}
+                                    </a>
+                                  ) : "—"
+                                ) : drawerEditing && !f.readonly ? (
+                                  f.type === "textarea" ? <textarea value={val} onChange={e => setDrawerEditData(prev => ({ ...prev, [f.name]: e.target.value }))} className="w-full border-none outline-none resize-y text-[13px] font-sans" style={{ minHeight: 60, color: "var(--s-text)", background: "transparent" }} />
+                                  : f.type === "select" && f.options?.length ? <select value={val} onChange={e => setDrawerEditData(prev => ({ ...prev, [f.name]: e.target.value }))} className="w-full border-none outline-none text-[13px] font-sans" style={{ color: "var(--s-text)", background: "transparent" }}><option value="">—</option>{f.options.map((o: string) => <option key={o} value={o}>{o}</option>)}</select>
+                                  : f.type === "date" ? <input type="date" value={val?.slice(0,10)||""} onChange={e => setDrawerEditData(prev => ({ ...prev, [f.name]: e.target.value }))} className="w-full border-none outline-none text-[13px] font-sans" style={{ color: "var(--s-text)", background: "transparent" }} />
+                                  : <input type="text" value={val} onChange={e => setDrawerEditData(prev => ({ ...prev, [f.name]: e.target.value }))} className="w-full border-none outline-none text-[13px] font-sans" style={{ color: "var(--s-text)", background: "transparent" }} />
+                                ) : val}
+                              </td>
+                            </React.Fragment>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center gap-2 px-5 py-3 border-t flex-shrink-0" style={{ borderColor: "var(--s-border)", background: "var(--s-surface2)" }}>
+                <span className="text-[9px] px-2 py-0.5 font-semibold uppercase font-mono" style={{ border: drawerEditing ? "1px solid var(--s-orange)" : "1px solid var(--s-border)", color: drawerEditing ? "var(--s-orange)" : "var(--s-text-muted)" }}>{drawerEditing ? "编辑" : "查看"}</span>
+                <div className="flex-1" />
+                {!drawerEditing ? (
+                  <>
+                    <button onClick={() => { setDrawerEditing(true); const init: Record<string,string> = {}; cols.forEach(c => { init[c.name] = String(record[c.name]??""); }); setDrawerEditData(init); }} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-orange)", color: "var(--s-orange)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>编辑</button>
+                    {!isNew && <button onClick={() => { deleteRow(drawerRowIdx); closeDrawer(); }} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-red)", color: "var(--s-red)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>删除</button>}
+                  </>
+                ) : (
+                  <>
+                    <button onClick={handleDrawerSave} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-orange)", color: "var(--s-orange)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>保存</button>
+                    <button onClick={() => setDrawerEditing(false)} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-border)", color: "var(--s-text-muted)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>取消</button>
+                  </>
+                )}
+              </div>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }

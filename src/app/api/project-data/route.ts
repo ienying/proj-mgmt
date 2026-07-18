@@ -1,6 +1,55 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
 
+// 缓存表名和列名映射
+const tableMetaCache = new Map<string, { name: string; colLabels: Record<string, string> }>();
+async function getTableMeta(client: Awaited<ReturnType<typeof createServerClient>>, tableCode: string): Promise<{ name: string; colLabels: Record<string, string> }> {
+  if (tableMetaCache.has(tableCode)) return tableMetaCache.get(tableCode)!;
+  try {
+    const { data } = await client.rpc("execute_sql", {
+      p_sql: `SELECT table_name, columns_config FROM data_table_definitions WHERE table_code = '${tableCode.replace(/'/g, "''")}' LIMIT 1`,
+    });
+    const row = (data as Array<Record<string, unknown>>)?.[0];
+    const name = row?.table_name as string || tableCode;
+    const cols = (row?.columns_config as Array<{ name: string; label: string }>) || [];
+    const colLabels: Record<string, string> = {};
+    cols.forEach(c => { if (c.label) colLabels[c.name] = c.label; });
+    const meta = { name, colLabels };
+    tableMetaCache.set(tableCode, meta);
+    return meta;
+  } catch { return { name: tableCode, colLabels: {} }; }
+}
+
+// 记录操作日志（写入项目 schema）
+async function logOperation(
+  client: Awaited<ReturnType<typeof createServerClient>>,
+  projectSchema: string,
+  action: string,
+  targetType: string,
+  targetName: string,
+  detail?: string,
+) {
+  try {
+    const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema;
+    // 兜底建表（先 await 确保表存在）
+    const { error: createErr } = await client.rpc("execute_sql", {
+      p_sql: `CREATE TABLE IF NOT EXISTS ${safeSchema}.operation_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID, user_name VARCHAR(100), action VARCHAR(50) NOT NULL,
+        target_type VARCHAR(100), target_name VARCHAR(255), detail TEXT,
+        created_at TIMESTAMPTZ DEFAULT now()
+      )`,
+    });
+    if (createErr) { console.error("建表失败:", createErr); return; }
+    // 插入日志
+    const { error: insertErr } = await client.rpc("dp_insert", {
+      p_table: `${projectSchema}.operation_logs`,
+      p_data: { action, target_type: targetType, target_name: targetName, detail: detail || null },
+    });
+    if (insertErr) console.error("插入日志失败:", insertErr);
+  } catch (e) { console.error("logOperation 失败:", e); }
+}
+
 /**
  * GET: 查询项目 Schema 中的表数据
  * 参数: projectSchema, tableCode
@@ -88,6 +137,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    const postMeta = await getTableMeta(client, tableCode);
+    await logOperation(client, projectSchema, "create", tableCode, `新建了记录到「${postMeta.name}」`);
     return NextResponse.json({ data: (result as Array<Record<string, unknown>>)?.[0] || data }, { status: 201 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -189,6 +240,10 @@ export async function PUT(request: NextRequest) {
       // 引用同步失败不影响主更新流程
     }
 
+    const putMeta = await getTableMeta(client, tableCode);
+    const changedCols = Object.keys(data).map(c => putMeta.colLabels[c] || c).join("、");
+    const detail = changedCols ? `修改了 ${changedCols}` : undefined;
+    await logOperation(client, projectSchema, "update", tableCode, `编辑了「${putMeta.name}」中的记录`, detail);
     return NextResponse.json({ data: (result as Array<Record<string, unknown>>)?.[0] || data });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -226,6 +281,8 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    const delMeta = await getTableMeta(client, tableCode);
+    await logOperation(client, projectSchema, "delete", tableCode, `删除了「${delMeta.name}」中的记录`);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";

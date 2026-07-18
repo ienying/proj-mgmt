@@ -1871,6 +1871,42 @@ export function StandardManagement({
                     </div>
                   </SectionPanel>
 
+                  {/* 阶段式布局-查看方式 */}
+                  <SectionPanel title="阶段式布局-查看方式" icon={Settings}>
+                    <div className="flex items-center gap-3 pt-2">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <Switch checked={(formData as any).enable_drawer_form === true} onCheckedChange={(c: boolean) => setFormData((prev) => ({ ...prev, enable_drawer_form: c }))} className="scale-75" />
+                        <span className="text-[11px] font-medium">启用表单抽屉查看</span>
+                      </label>
+                      <span className="text-[9px] text-muted-foreground">开启后点击表格行以抽屉方式展示记录详情（适合字段多的表）</span>
+                    </div>
+                  </SectionPanel>
+
+                  {/* 阶段式布局-顶部统计 */}
+                  <SectionPanel title="阶段式布局-顶部统计" icon={Settings}>
+                    <div className="flex items-center gap-3 pt-2">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <Switch checked={(formData as any).show_in_deliverables === true} onCheckedChange={(c: boolean) => setFormData((prev) => ({ ...prev, show_in_deliverables: c }))} className="scale-75" />
+                        <span className="text-[11px] font-medium">在交付物/文档中展示</span>
+                      </label>
+                      <span className="text-[9px] text-muted-foreground">勾选后该表会在项目交付物弹窗的实施资料中显示</span>
+                    </div>
+                    <div className="flex items-center gap-3 pt-2">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <Switch checked={(formData as any).show_in_issues === true} onCheckedChange={(c: boolean) => setFormData((prev) => ({ ...prev, show_in_issues: c }))} className="scale-75" />
+                        <span className="text-[11px] font-medium">在"问题"中展示</span>
+                      </label>
+                      <span className="text-[9px] text-muted-foreground">勾选后该表会出现在问题/风险弹窗的问题列表中</span>
+                    </div>
+                    <div className="flex items-center gap-3 pt-2">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <Switch checked={(formData as any).show_in_risks === true} onCheckedChange={(c: boolean) => setFormData((prev) => ({ ...prev, show_in_risks: c }))} className="scale-75" />
+                        <span className="text-[11px] font-medium">在"风险"中展示</span>
+                      </label>
+                      <span className="text-[9px] text-muted-foreground">勾选后该表会出现在问题/风险弹窗的风险列表中</span>
+                    </div>
+                  </SectionPanel>
+
                   {/* 阶段式布局-进度与汇总 */}
                   <SectionPanel title="阶段式布局-进度与汇总" icon={Settings}>
                     <div className="pt-2 space-y-2">

@@ -80,6 +80,9 @@ interface Project {
   login_url?: string;
   login_username?: string;
   login_password?: string;
+  final_customer?: string;
+  required_date?: string;
+  implementation_unit?: string;
 }
 
 interface ProjectManagementProps {

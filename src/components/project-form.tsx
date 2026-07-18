@@ -398,9 +398,11 @@ export function ProjectForm({
   const [entryDate, setEntryDate] = useState("");
   const [initialAcceptanceDate, setInitialAcceptanceDate] = useState("");
   const [finalAcceptanceDate, setFinalAcceptanceDate] = useState("");
+  const [requiredDate, setRequiredDate] = useState("");  // NEW: 项目要求时间
 
   // 客户信息
   const [companyName, setCompanyName] = useState("");
+  const [finalCustomer, setFinalCustomer] = useState("");  // NEW: 最终客户
   const [implementationUnit, setImplementationUnit] = useState("");
   const [contactPersons, setContactPersons] = useState<ContactPerson[]>([
     { id: "1", name: "", phone: "", email: "", position: "" },
@@ -778,6 +780,8 @@ export function ProjectForm({
       setEntryDate((d.entry_date as string) || "");
       setInitialAcceptanceDate((d.initial_acceptance_date as string) || "");
       setFinalAcceptanceDate((d.final_acceptance_date as string) || "");
+      setRequiredDate((d.required_date as string) || "");
+      setFinalCustomer((d.final_customer as string) || "");
 
       // 客户信息
       const ci = d.customer_info as Record<string, unknown> | null;
@@ -924,6 +928,7 @@ export function ProjectForm({
       setProjectStatus(""); setDepartment(""); setRoleSales(""); setRolePresales("");
       setRoleMarketProduct(""); setRoleProjectManager(""); setDescription("");
       setEntryDate(""); setInitialAcceptanceDate(""); setFinalAcceptanceDate("");
+      setRequiredDate(""); setFinalCustomer("");
       setCompanyName(""); setContactPersons([{ id: "", name: "", phone: "", position: "", email: "" }]);
       setProvince(""); setCity(""); setDistrict(""); setTown(""); setVillage("");
       setLongitude(""); setLatitude(""); setSchoolPhotos([]);
@@ -1374,6 +1379,8 @@ export function ProjectForm({
       entry_date: entryDate || null,
       initial_acceptance_date: initialAcceptanceDate || null,
       final_acceptance_date: finalAcceptanceDate || null,
+      required_date: requiredDate || null,
+      final_customer: finalCustomer || null,
       customer_info: {
         company_name: companyName,
         contact_persons: contactPersons.filter((cp) => cp.name || cp.phone),
@@ -1598,6 +1605,14 @@ export function ProjectForm({
                     placeholder="请输入客户名称"
                   />
                 </div>
+                <div className="col-span-2 space-y-1.5">
+                  <Label>最终客户</Label>
+                  <Input
+                    value={finalCustomer}
+                    onChange={(e) => setFinalCustomer(e.target.value)}
+                    placeholder="请输入最终客户名称（如教育局、上级单位等）"
+                  />
+                </div>
                 <div className="space-y-1.5">
                   <Label>
                     项目类型 <span className="text-red-500">*</span>
@@ -1761,7 +1776,7 @@ export function ProjectForm({
               defaultOpen={true}
               color="cyan"
             >
-              <div className="grid grid-cols-3 gap-5">
+              <div className="grid grid-cols-4 gap-5">
                 <div className="space-y-1.5">
                   <Label>项目进场时间</Label>
                   <Input
@@ -1784,6 +1799,14 @@ export function ProjectForm({
                     type="date"
                     value={finalAcceptanceDate}
                     onChange={(e) => setFinalAcceptanceDate(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>项目要求时间</Label>
+                  <Input
+                    type="date"
+                    value={requiredDate}
+                    onChange={(e) => setRequiredDate(e.target.value)}
                   />
                 </div>
               </div>

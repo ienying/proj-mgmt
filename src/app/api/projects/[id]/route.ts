@@ -502,6 +502,26 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    // 确保项目专属表存在（方案 B）
+    if (updateData.project_schema) {
+      const tables = [
+        `CREATE TABLE IF NOT EXISTS ${updateData.project_schema}.progress_updates (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID, user_name VARCHAR(100), content TEXT NOT NULL,
+          created_at TIMESTAMPTZ DEFAULT now()
+        )`,
+        `CREATE TABLE IF NOT EXISTS ${updateData.project_schema}.operation_logs (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID, user_name VARCHAR(100), action VARCHAR(50) NOT NULL,
+          target_type VARCHAR(100), target_name VARCHAR(255), detail TEXT,
+          created_at TIMESTAMPTZ DEFAULT now()
+        )`,
+      ];
+      for (const sql of tables) {
+        try { await client.rpc("execute_sql", { p_sql: sql }); } catch (e) { /* ignore */ }
+      }
+    }
+
     // 采购模块变更时，同步采购模块记录（无论是否变更类型/阶段）
     if (updateData.procurement_modules && updateData.project_schema) {
       try {

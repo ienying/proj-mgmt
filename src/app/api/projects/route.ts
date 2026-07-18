@@ -99,6 +99,9 @@ export async function POST(request: NextRequest) {
       integration_list,
       custom_dev_info,
       construction_units_info,
+      final_customer,
+      required_date,
+      implementation_unit,
     } = body;
 
     // 0. 检查项目编号是否重复
@@ -152,6 +155,9 @@ export async function POST(request: NextRequest) {
       role_project_manager: body.role_project_manager || null,
       custom_dev_info: custom_dev_info || [],
       construction_units_info: construction_units_info || [],
+      final_customer: final_customer || null,
+      required_date: required_date || null,
+      implementation_unit: implementation_unit || null,
       status: "active",
       created_by: body.created_by || "system",
     };
@@ -205,7 +211,31 @@ export async function POST(request: NextRequest) {
       project_status || null
     );
 
-    // 6. 保存对接信息
+    // 6. 创建项目专属表
+    const projectTables = [
+      `CREATE TABLE IF NOT EXISTS ${projectSchema}.progress_updates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID,
+        user_name VARCHAR(100),
+        content TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT now()
+      )`,
+      `CREATE TABLE IF NOT EXISTS ${projectSchema}.operation_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID,
+        user_name VARCHAR(100),
+        action VARCHAR(50) NOT NULL,
+        target_type VARCHAR(100),
+        target_name VARCHAR(255),
+        detail TEXT,
+        created_at TIMESTAMPTZ DEFAULT now()
+      )`,
+    ];
+    for (const sql of projectTables) {
+      try { await client.rpc("execute_sql", { p_sql: sql }); } catch (e) { console.error("建表失败:", e); }
+    }
+
+    // 7. 保存对接信息
     if (Array.isArray(integration_list) && integration_list.length > 0) {
       for (const item of integration_list as Record<string, unknown>[]) {
         const { id, ...rest } = item;
@@ -291,9 +321,16 @@ async function copyTableDefinitionsToSchema(
           const hasModuleMatch = moduleCodes.some((code) => procurementModules.includes(code));
           if (!hasModuleMatch) continue;
 
-          if (rule.project_type !== projectType) continue;
-          const ruleStatus = (rule as Record<string, unknown>).project_status as string | null;
-          if (ruleStatus && ruleStatus !== projectStatus) continue;
+          // 严格匹配项目类型（多选）
+          const typeList = (rule as Record<string, unknown>).project_type_list as string[] | null;
+          if (typeList && typeList.length > 0 && !typeList.includes(projectType)) continue;
+          // 兼容旧字段 project_type
+          if ((!typeList || typeList.length === 0) && rule.project_type && rule.project_type !== projectType) continue;
+          // 严格匹配项目状态（多选）
+          const statusList = (rule as Record<string, unknown>).project_status_list as string[] | null;
+          if (statusList && statusList.length > 0 && projectStatus && !statusList.includes(projectStatus)) continue;
+          // 兼容旧字段 project_status
+          if ((!statusList || statusList.length === 0) && rule.project_status && rule.project_status !== projectStatus) continue;
 
           if (rule.table_definitions) {
             (rule.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));

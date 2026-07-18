@@ -15,6 +15,8 @@ import { PhaseStepper } from "./PhaseStepper";
 import { PhaseDetail } from "./PhaseDetail";
 import { OverviewGrid } from "./OverviewGrid";
 import { ChartsSection } from "./ChartsSection";
+import { DeliverableModal } from "./DeliverableModal";
+import { IssueRiskModal } from "./IssueRiskModal";
 import { panelData, subContentData } from "./mock-data";
 
 export function StageLayout({
@@ -30,9 +32,15 @@ export function StageLayout({
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
   const [subContent, setSubContent] = useState<{ key: string; label: string } | null>(null);
-  // 根据项目当前阶段确定激活的阶段索引
   const [activePhase, setActivePhase] = useState(0);
   const [leftStripExpanded, setLeftStripExpanded] = useState(false);
+
+  // 新功能状态
+  const [deliverableOpen, setDeliverableOpen] = useState(false);
+  const [issueRiskOpen, setIssueRiskOpen] = useState(false);
+  const [progressContent, setProgressContent] = useState("");
+  const [progressList, setProgressList] = useState<Array<{ id: string; content: string; user_name: string; created_at: string }>>([]);
+  const [operationLogs, setOperationLogs] = useState<Array<{ id: string; action: string; user_name: string; target_name: string; detail: string; created_at: string }>>([]);
 
   // 获取规范管理的数据表定义
   const [moduleTypes, setModuleTypes] = useState<{ code: string; name: string }[]>([]);
@@ -51,7 +59,7 @@ export function StageLayout({
     stage_plan_start_col?: string; stage_plan_end_col?: string;
     stage_actual_start_col?: string; stage_actual_end_col?: string;
     allow_add?: boolean; allow_delete?: boolean;
-    readonly_mode?: string;
+    readonly_mode?: string; enable_drawer_form?: boolean;
     columns_config?: Array<{ name: string; type: string; readonly?: boolean }>;
   }>>([]);
   useEffect(() => {
@@ -147,6 +155,54 @@ export function StageLayout({
   const handleSearch = useCallback(() => {
     alert("搜索功能 — 待实现");
   }, []);
+
+  // ── 操作记录 ──
+  const fetchOperations = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/projects/${project.id}/operations`);
+      const json = await res.json();
+      setOperationLogs(json.data || []);
+    } catch { /* ignore */ }
+  }, [project.id]);
+
+  // ── 进展同步 ──
+  const fetchProgress = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/projects/${project.id}/progress`);
+      const json = await res.json();
+      setProgressList(json.data || []);
+    } catch { /* ignore */ }
+  }, [project.id]);
+
+  const handleSubmitProgress = useCallback(async () => {
+    if (!progressContent.trim()) return;
+    try {
+      await fetch(`/api/projects/${project.id}/progress`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: progressContent.trim() }),
+      });
+      // 写入操作日志
+      await fetch(`/api/projects/${project.id}/operations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "publish",
+          target_type: "progress",
+          target_name: "发布了进展同步",
+          detail: progressContent.trim().slice(0, 100),
+        }),
+      });
+      setProgressContent("");
+      fetchProgress();
+      fetchOperations();
+    } catch { /* ignore */ }
+  }, [progressContent, project.id, fetchProgress, fetchOperations]);
+
+  useEffect(() => {
+    fetchProgress();
+    fetchOperations();
+  }, [fetchProgress, fetchOperations]);
 
   // 浅色 / 深色 配色方案
   const lightVars = {
@@ -272,6 +328,28 @@ export function StageLayout({
         projectName={project.project_name}
       />
 
+      {/* 交付物/文档 Modal */}
+      <DeliverableModal
+        open={deliverableOpen}
+        onClose={() => setDeliverableOpen(false)}
+        projectSchema={project.project_schema}
+        projectName={project.project_name}
+        onNavigateTable={(tableCode) => {
+          const def = tableDefs.find(d => d.table_code === tableCode);
+          const label = def?.table_name || tableCode;
+          // 直接打开表的子页面视图
+          handleOpenSubContent(`table:${tableCode}`, label);
+        }}
+      />
+
+      {/* 问题/风险 Modal */}
+      <IssueRiskModal
+        open={issueRiskOpen}
+        onClose={() => setIssueRiskOpen(false)}
+        projectSchema={project.project_schema}
+        projectName={project.project_name}
+      />
+
       {/* ═══ 主内容区 ═══ */}
       {/* 子内容钻取（替换主内容） */}
       {subContent ? (
@@ -332,13 +410,67 @@ export function StageLayout({
               onSwitchLayout={onSwitchLayout}
               tableDefs={tableDefs}
               tableRecords={allTableRecords}
+              onOpenDeliverable={() => setDeliverableOpen(true)}
+              onOpenIssueRisk={() => setIssueRiskOpen(true)}
             />
 
             {/* 产品网格 */}
             <ProductGrid
               modules={project.procurement_modules}
               moduleDict={procurementModuleDict}
+              project={project as Record<string, unknown>}
+              projectTypes={projectTypes}
+              projectStages={projectStages}
+              customerTypeDict={customerTypeDict}
             />
+
+            {/* ═══ 进展同步 (NEW) ═══ */}
+            <div className="px-16 py-6" style={{ borderBottom: "1px solid var(--s-border)" }}>
+              <div className="text-[9px] uppercase tracking-[2px] mb-4 flex items-center gap-2" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+                📝 进展同步
+                <span className="flex-1 h-px" style={{ backgroundColor: "var(--s-border)" }} />
+              </div>
+              <div className="grid gap-px" style={{ gridTemplateColumns: "1fr 1fr", backgroundColor: "var(--s-border)" }}>
+                {/* 左：输入区 */}
+                <div className="p-5 flex flex-col gap-3" style={{ backgroundColor: "var(--s-bg)" }}>
+                  <textarea
+                    value={progressContent}
+                    onChange={(e) => setProgressContent(e.target.value)}
+                    placeholder="描述当前项目进展..."
+                    className="w-full border flex-1 p-3 text-xs resize-y min-h-[100px] font-sans"
+                    style={{ borderColor: "var(--s-border)", backgroundColor: "var(--s-surface)", color: "var(--s-text)" }}
+                  />
+                  <div className="flex justify-end">
+                    <button
+                      onClick={handleSubmitProgress}
+                      className="text-[10px] px-4 py-1.5 font-semibold uppercase tracking-[0.5px] border cursor-pointer transition-all"
+                      style={{ borderColor: "var(--s-orange)", color: "var(--s-orange)", backgroundColor: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}
+                    >
+                      📤 发布进展
+                    </button>
+                  </div>
+                </div>
+                {/* 右：时间线 */}
+                <div className="p-5 overflow-y-auto max-h-[280px]" style={{ backgroundColor: "var(--s-bg)" }}>
+                  {progressList.length === 0 ? (
+                    <p className="text-xs" style={{ color: "var(--s-text-muted)" }}>暂无进展记录</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {progressList.map((item, i) => (
+                        <div key={item.id || i} className="relative pl-5 pb-3 text-xs" style={{ color: "var(--s-text-secondary)" }}>
+                          <div className="absolute left-1 top-1.5 w-[7px] h-[7px] rounded-full opacity-50" style={{ backgroundColor: "var(--s-orange)" }} />
+                          {i < progressList.length - 1 && <div className="absolute left-[3.5px] top-[10px] bottom-0 w-[2px]" style={{ backgroundColor: "var(--s-border)" }} />}
+                          <div className="text-[9px] mb-0.5 tracking-[0.3px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+                            {item.created_at ? new Date(item.created_at).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
+                          </div>
+                          <div style={{ whiteSpace: "pre-wrap" }}>{item.content}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
 
             {/* 阶段步骤条（内含 Phases 项目阶段 标签） */}
             <PhaseStepper activePhase={activePhase} onPhaseChange={setActivePhase} stages={projectStages} phaseDates={phaseDates} />
@@ -372,6 +504,7 @@ export function StageLayout({
               onRecordsUpdate={(code, records) => {
                 setAllTableRecords((prev) => ({ ...prev, [code]: records }));
               }}
+              onDataChange={fetchOperations}
             />
 
             {/* 项目总览 分隔标题 */}
@@ -393,6 +526,29 @@ export function StageLayout({
 
             {/* 图表区域 */}
             <ChartsSection stages={projectStages} tableDefs={tableDefs} tableRecords={allTableRecords} />
+
+            {/* ═══ 操作记录 (NEW) — 页面最底部 ═══ */}
+            <div className="px-16 py-6">
+              <div className="text-[9px] uppercase tracking-[2px] mb-4 flex items-center gap-2" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+                🕐 操作记录
+                <span className="flex-1 h-px" style={{ backgroundColor: "var(--s-border)" }} />
+              </div>
+              <div className="border overflow-y-auto max-h-[200px]" style={{ borderColor: "var(--s-border)", backgroundColor: "var(--s-surface)" }}>
+                {operationLogs.length === 0 ? (
+                  <p className="text-xs text-center py-6" style={{ color: "var(--s-text-muted)" }}>暂无操作记录</p>
+                ) : (
+                  operationLogs.map((log, i) => (
+                    <div key={log.id || i} className="flex gap-3 px-4 py-2 text-[11px] items-baseline" style={{ borderBottom: i < operationLogs.length - 1 ? "1px solid var(--s-border-light)" : "none", color: "var(--s-text-secondary)" }}>
+                      <span className="text-[10px] whitespace-nowrap min-w-[130px] tracking-[0.3px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+                        {log.created_at ? new Date(log.created_at).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : ""}
+                      </span>
+                      <span className="font-semibold min-w-[50px] whitespace-nowrap" style={{ color: "var(--s-blue)" }}>{log.user_name || "系统"}</span>
+                      <span>{log.target_name || log.action}{log.detail ? `：${log.detail}` : ""}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

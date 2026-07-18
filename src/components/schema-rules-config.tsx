@@ -38,6 +38,8 @@ interface SchemaRule {
   project_type: string | null;
   project_stage: string | null;
   project_status: string | null;
+  project_type_list?: string[] | null;
+  project_status_list?: string[] | null;
   module_codes: string[];
   table_definitions: string[];
   is_enabled: boolean;
@@ -96,6 +98,8 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
     project_type: null,
     project_stage: null,
     project_status: null,
+    project_type_list: null,
+    project_status_list: null,
     module_codes: [],
     table_definitions: [],
     is_enabled: true,
@@ -170,6 +174,8 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
       project_type: null,
       project_stage: null,
       project_status: null,
+      project_type_list: null,
+      project_status_list: null,
       module_codes: [],
       table_definitions: [],
       is_enabled: true,
@@ -604,42 +610,88 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                     )}
                   </div>
                   {/* 附加过滤条件 */}
-                  <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+                  <div className="space-y-3 pt-2 border-t">
                     <div className="space-y-1.5">
-                      <Label className="text-[11px]">项目类型 *</Label>
-                      <Select
-                        value={formData.project_type || ""}
-                        onValueChange={(value) =>
-                          setFormData((prev) => ({ ...prev, project_type: value || null }))
-                        }
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="请选择类型" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {projectTypes.map((type) => (
-                            <SelectItem key={type.code} value={type.code}>{type.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label className="text-[11px]">项目类型 *（多选，严格匹配）</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="flex w-full items-center justify-between min-h-[2rem] rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm hover:bg-accent hover:text-accent-foreground">
+                            {(formData.project_type_list || []).length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {(formData.project_type_list || []).map((code) => (
+                                  <Badge key={code} variant="secondary" className="text-[10px] h-4 px-1">
+                                    {projectTypes.find(t => t.code === code)?.name || code}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">请选择类型</span>
+                            )}
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[220px] p-1" align="start">
+                          <div className="max-h-[180px] overflow-y-auto space-y-0.5">
+                            {projectTypes.map((type) => {
+                              const checked = (formData.project_type_list || []).includes(type.code);
+                              return (
+                                <label key={type.code} className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs hover:bg-gray-100 ${checked ? 'bg-blue-50' : ''}`}>
+                                  <Checkbox checked={checked} onCheckedChange={() => {
+                                    const list = formData.project_type_list || [];
+                                    setFormData(prev => ({ ...prev, project_type_list: list.includes(type.code) ? list.filter(c => c !== type.code) : [...list, type.code] }));
+                                  }} />
+                                  {type.name}
+                                </label>
+                              );
+                            })}
+                          </div>
+                          {(formData.project_type_list || []).length > 0 && (
+                            <div className="border-t pt-1 mt-1">
+                              <button className="text-xs text-red-500 hover:underline w-full text-center" onClick={() => setFormData(prev => ({ ...prev, project_type_list: null }))}>清除全部</button>
+                            </div>
+                          )}
+                        </PopoverContent>
+                      </Popover>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-[11px]">项目状态（可选）</Label>
-                      <Select
-                        value={formData.project_status || ""}
-                        onValueChange={(value) =>
-                          setFormData((prev) => ({ ...prev, project_status: value || null }))
-                        }
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="不限状态" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {projectStatuses.map((status) => (
-                            <SelectItem key={status.code} value={status.code}>{status.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label className="text-[11px]">项目状态 *（多选，严格匹配）</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="flex w-full items-center justify-between min-h-[2rem] rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm hover:bg-accent hover:text-accent-foreground">
+                            {(formData.project_status_list || []).length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {(formData.project_status_list || []).map((code) => (
+                                  <Badge key={code} variant="secondary" className="text-[10px] h-4 px-1">
+                                    {projectStatuses.find(s => s.code === code)?.name || code}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">不限状态</span>
+                            )}
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[220px] p-1" align="start">
+                          <div className="max-h-[180px] overflow-y-auto space-y-0.5">
+                            {projectStatuses.map((status) => {
+                              const checked = (formData.project_status_list || []).includes(status.code);
+                              return (
+                                <label key={status.code} className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs hover:bg-gray-100 ${checked ? 'bg-blue-50' : ''}`}>
+                                  <Checkbox checked={checked} onCheckedChange={() => {
+                                    const list = formData.project_status_list || [];
+                                    setFormData(prev => ({ ...prev, project_status_list: list.includes(status.code) ? list.filter(c => c !== status.code) : [...list, status.code] }));
+                                  }} />
+                                  {status.name}
+                                </label>
+                              );
+                            })}
+                          </div>
+                          {(formData.project_status_list || []).length > 0 && (
+                            <div className="border-t pt-1 mt-1">
+                              <button className="text-xs text-red-500 hover:underline w-full text-center" onClick={() => setFormData(prev => ({ ...prev, project_status_list: null }))}>清除全部</button>
+                            </div>
+                          )}
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
                 </>
