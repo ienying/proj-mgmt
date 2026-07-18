@@ -32,7 +32,7 @@ interface AboutPageProps {
 }
 
 const NAV_SECTIONS = [
-  { id: "overview", label: "项目概览", icon: <LayoutDashboard className="w-3.5 h-3.5" /> },
+  { id: "overview", label: "工具概览", icon: <LayoutDashboard className="w-3.5 h-3.5" /> },
   { id: "features", label: "功能模块", icon: <Layers className="w-3.5 h-3.5" /> },
   { id: "architecture", label: "技术架构", icon: <Server className="w-3.5 h-3.5" /> },
   { id: "docker", label: "Docker部署", icon: <Container className="w-3.5 h-3.5" /> },
@@ -41,7 +41,7 @@ const NAV_SECTIONS = [
   { id: "auth", label: "认证与权限", icon: <Shield className="w-3.5 h-3.5" /> },
   { id: "dashboard-detail", label: "看板预警", icon: <AlertTriangle className="w-3.5 h-3.5" /> },
   { id: "flow", label: "核心流程", icon: <GitBranch className="w-3.5 h-3.5" /> },
-  { id: "project-flow", label: "创建项目", icon: <FolderPlus className="w-3.5 h-3.5" /> },
+  { id: "project-flow", label: "创建售后项目", icon: <FolderPlus className="w-3.5 h-3.5" /> },
   { id: "schema-rules", label: "Schema 规则", icon: <FileText className="w-3.5 h-3.5" /> },
   { id: "permissions", label: "数据权限", icon: <Shield className="w-3.5 h-3.5" /> },
 ];
@@ -49,7 +49,7 @@ const NAV_SECTIONS = [
 const FEATURE_MODULES = [
   {
     id: "dashboard",
-    name: "项目看板",
+    name: "数据看板",
     icon: <LayoutDashboard className="w-5 h-5" />,
     color: "bg-teal-500",
     viewId: "project-board",
@@ -74,7 +74,7 @@ const FEATURE_MODULES = [
       "8种数据视图：卡片/表格/网格/看板/树形/表单/甘特图/分组",
       "3种脉络追踪视图：色标脉络/进度条/瀑布图",
       "项目成员权限精细控制（8项权限）",
-      "右侧面板：项目概览 + 任务列表 + 成员与权限",
+      "右侧面板：工具概览 + 任务列表 + 成员与权限",
       "采购模块支持模板导入导出与搜索过滤",
     ],
   },
@@ -189,7 +189,7 @@ const FEATURE_MODULES = [
 const DATABASE_TABLES = [
   { group: "用户与认证", tables: ["users", "user_sessions", "project_member_permissions"] },
   { group: "项目管理", tables: ["projects", "project_types", "project_stages", "project_members", "project_module_types", "project_type_stage_modules"] },
-  { group: "规范管理", tables: ["data_table_definitions", "project_schema_rules"] },
+  { group: "规范与配置", tables: ["data_table_definitions", "project_schema_rules"] },
   { group: "待办任务（统一待办）", tables: ["todo_task_defs", "todo_task_instances"] },
   { group: "问题上报", tables: ["issue_mgmt_issues", "issue_mgmt_issue_attachments", "issue_mgmt_issue_processing_records", "issue_mgmt_issue_notifications", "issue_mgmt_issue_categories", "issue_mgmt_issue_urgency", "issue_mgmt_issue_warranty_status", "issue_mgmt_external_receivers"] },
   { group: "信息广场", tables: ["design_info_square.knowledge_categories", "design_info_square.knowledge_posts", "design_info_square.knowledge_attachments", "design_info_square.knowledge_reads", "design_info_square.knowledge_likes", "design_info_square.knowledge_comments"] },
@@ -268,17 +268,16 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
       {/* 内容区域 */}
       <div className="max-w-5xl mx-auto px-6 pt-32 pb-8 pl-20 space-y-12">
 
-        {/* 项目概览 */}
+        {/* 工具概览 */}
         <section id="overview" className="scroll-mt-4">
           <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-8 text-white mb-6">
-            <h3 className="text-2xl font-bold mb-2">元素科技 · 项目管理平台</h3>
+            <h3 className="text-2xl font-bold mb-2">售后记录工具</h3>
             <p className="text-blue-100 text-sm mb-6">
-              Element Tech - Project Management System
+              After-Sales Service Recording Tool
             </p>
             <p className="text-blue-50 leading-relaxed">
-              企业级全流程项目管理平台，涵盖看板监控、项目立项、规范定义、任务分配、问题追踪、知识分享、案例管理等核心场景。
-              通过统一的权限体系和数据架构，实现跨团队协作与精细化管理。
-              整体采用 Windows Phone Metro 磁贴导航风格，简洁直观。
+              面向售后实施团队的全流程记录工具，覆盖施工日志、设备安装、质量检查、问题追踪、资料归档、信息共享等核心场景。
+              通过规范化的数据录入和灵活的表格配置，实现售后工作的标准化管理和团队知识沉淀。
             </p>
           </div>
 
@@ -891,7 +890,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
               <h4 className="font-semibold text-gray-900 mb-3">配置消费流程</h4>
               <div className="space-y-2 text-sm">
                 {[
-                  "1. 创建项目时选择类型和阶段",
+                  "1. 创建售后项目时选择类型和阶段",
                   "2. 查询 project_type_stage_modules",
                   "3. 根据 type_code + stage_code 获取启用模块列表",
                   "4. 项目详情页按模块展示管理功能",
@@ -940,7 +939,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
                   role: "user",
                   label: "普通用户",
                   color: "bg-gray-100 text-gray-700 border-gray-200",
-                  desc: "可创建项目，项目内权限由管理员分配",
+                  desc: "可创建售后项目，项目内权限由管理员分配",
                 },
               ].map((r) => (
                 <div key={r.role} className={`border rounded-lg p-3 ${r.color}`}>
@@ -971,7 +970,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
                     <td colSpan={4} className="pt-3 pb-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Dock 栏可见性</td>
                   </tr>
                   {[
-                    ["项目看板 / 项目管理 / 任务中心 / 工单提交 / 案例中心 / 信息广场", true, true, true],
+                    ["数据看板 / 项目管理 / 任务中心 / 工单提交 / 案例中心 / 信息广场", true, true, true],
                     ["规范管理", true, true, false],
                     ["设置", true, true, false],
                   ].map(([label, sa, sub, u], i) => (
@@ -1005,7 +1004,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
                     <td colSpan={4} className="pt-3 pb-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">操作权限</td>
                   </tr>
                   {[
-                    ["创建项目", true, true, true],
+                    ["创建售后项目", true, true, true],
                     ["管理用户角色（分配/修改角色）", true, false, false],
                     ["创建/编辑用户时设置角色", true, false, false],
                     ["后端 API 角色保护", true, true, true],
@@ -1022,7 +1021,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
             </div>
             <div className="mt-3 bg-blue-50 rounded-lg p-3">
               <p className="text-xs text-blue-700 leading-relaxed">
-                <strong>说明：</strong>普通用户仅能看到 Dock 栏中的项目看板、项目管理、任务中心、工单提交、案例中心、信息广场六个入口。
+                <strong>说明：</strong>普通用户仅能看到 Dock 栏中的数据看板、项目管理、任务中心、工单提交、案例中心、信息广场六个入口。
                 规范管理和设置页面对普通用户完全隐藏，且前端页面渲染层和后端 API 层均有权限校验。
                 超级管理员拥有全部权限，子管理员由超级管理员授权，可管理用户和基础数据但不可变更用户角色。
               </p>
@@ -1108,7 +1107,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
           </div>
         </section>
 
-        {/* 项目看板预警 */}
+        {/* 数据看板预警 */}
         <section id="dashboard-detail" className="scroll-mt-4">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-xl bg-rose-600 flex items-center justify-center">
@@ -1123,7 +1122,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
           <div className="bg-gradient-to-br from-rose-600 to-pink-700 rounded-2xl p-8 text-white mb-6">
             <h3 className="text-xl font-bold mb-2">实时项目健康监控</h3>
             <p className="text-rose-100 text-sm leading-relaxed">
-              项目看板集成三大预警板块，实时监控项目指标，自动识别异常并告警。
+              数据看板集成三大预警板块，实时监控项目指标，自动识别异常并告警。
               结合雷达图健康度评分和项目排名，帮助管理者快速定位风险项目。
             </p>
           </div>
@@ -1293,11 +1292,11 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
           </div>
         </section>
 
-        {/* 创建项目流程与数据库逻辑 */}
+        {/* 创建售后项目流程与数据库逻辑 */}
         <section id="section-project-flow" className="scroll-mt-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <FolderPlus className="w-5 h-5 text-emerald-600" />
-            创建项目流程
+            创建售后项目流程
           </h3>
 
           {/* 操作流程 */}
@@ -1338,7 +1337,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
               </div>
             </div>
             <div className="mt-3 bg-emerald-50 rounded-lg p-2.5">
-              <p className="text-xs text-emerald-700">每个人都可以创建项目。创建后自动成为项目成员。</p>
+              <p className="text-xs text-emerald-700">每个人都可以创建售后项目。创建后自动成为项目成员。</p>
             </div>
           </div>
 
@@ -1651,7 +1650,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
         {/* 页脚 */}
         <div className="text-center py-8 border-t border-gray-200 mt-8">
           <p className="text-sm text-gray-400">
-            元素科技 · 项目管理平台 — Element Tech Project Management System
+            售后记录工具 — After-Sales Service Recording Tool
           </p>
           <p className="text-xs text-gray-300 mt-1">
             Built with Next.js 16 · React 19 · TypeScript 5 · PostgreSQL 16
@@ -1677,7 +1676,7 @@ function GuideContent({ onNavigate }: { onNavigate: (viewId: string) => void }) 
     <div className="max-w-4xl mx-auto px-6 pt-32 pb-8 space-y-10">
       {/* 欢迎区块 */}
       <div className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-2xl p-8 text-white">
-        <h3 className="text-2xl font-bold mb-2">欢迎使用元素科技项目管理平台</h3>
+        <h3 className="text-2xl font-bold mb-2">欢迎使用售后记录工具</h3>
         <p className="text-emerald-100 text-sm leading-relaxed">
           本平台覆盖项目全生命周期管理，包括看板监控、项目创建、任务分发、工单追踪、规范管理、信息共享等核心场景。
           以下操作说明将帮助你快速上手。
@@ -1698,7 +1697,7 @@ function GuideContent({ onNavigate }: { onNavigate: (viewId: string) => void }) 
           </p>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
             {[
-              { label: "项目看板", desc: "总览所有项目健康度与预警" },
+              { label: "数据看板", desc: "总览所有项目健康度与预警" },
               { label: "项目管理", desc: "创建、查看和管理项目" },
               { label: "任务中心", desc: "发布任务、查看待办、统计" },
               { label: "工单提交", desc: "提交问题工单、追踪处理" },
