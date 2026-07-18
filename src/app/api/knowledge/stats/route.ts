@@ -6,11 +6,12 @@ export async function GET() {
     const client = await createServerClient();
 
     // Load all data
-    const [postsRes, catsRes, readsRes, dlsRes] = await Promise.all([
+    const [postsRes, catsRes, readsRes, dlsRes, usersRes] = await Promise.all([
       client.rpc("dp_select", { p_table: "design_info_square.knowledge_posts" }),
       client.rpc("dp_select", { p_table: "design_info_square.knowledge_categories" }),
       client.rpc("dp_select", { p_table: "design_info_square.knowledge_reads" }),
       client.rpc("dp_select", { p_table: "design_info_square.knowledge_downloads" }),
+      client.rpc("dp_select", { p_table: "users" }),
     ]);
 
     const posts = ((postsRes.data as Record<string, unknown>[]) || []).filter(
@@ -19,6 +20,13 @@ export async function GET() {
     const categories = (catsRes.data as Record<string, unknown>[]) || [];
     const reads = (readsRes.data as Record<string, unknown>[]) || [];
     const downloads = (dlsRes.data as Record<string, unknown>[]) || [];
+    const users = (usersRes.data as Record<string, unknown>[]) || [];
+
+    // Build user ID → name map
+    const userNameMap: Record<string, string> = {};
+    for (const u of users) {
+      userNameMap[String(u.id)] = String(u.name || u.username || u.id);
+    }
 
     const stats: Record<string, {
       category_name: string;
@@ -55,6 +63,8 @@ export async function GET() {
     // Aggregate post stats
     const contributors = new Set<string>();
     const contribByType: Record<string, Set<string>> = {};
+    // Per-contributor details
+    const contributorMap: Record<string, { name: string; post_count: number; categories: Set<string>; total_views: number; total_likes: number }> = {};
 
     for (const post of posts) {
       const catId = String(post.category_id || "");
@@ -66,11 +76,21 @@ export async function GET() {
       stats[type].like_count += (post.like_count as number) || 0;
       stats[type].comment_count += (post.comment_count as number) || 0;
 
-      const author = String(post.created_by || "");
+      // 优先用 created_by_name，否则查 users 表
+      const author = String(post.created_by_name || post.created_by || "");
       if (author) {
         contributors.add(author);
         if (!contribByType[type]) contribByType[type] = new Set();
         contribByType[type].add(author);
+        const authorName = userNameMap[author] || author;
+        // Per-contributor stats
+        if (!contributorMap[author]) {
+          contributorMap[author] = { name: authorName, post_count: 0, categories: new Set(), total_views: 0, total_likes: 0 };
+        }
+        contributorMap[author].post_count++;
+        contributorMap[author].categories.add(stats[type].category_name);
+        contributorMap[author].total_views += (post.view_count as number) || 0;
+        contributorMap[author].total_likes += (post.like_count as number) || 0;
       }
 
       const createdAt = String(post.created_at || "");
@@ -104,6 +124,17 @@ export async function GET() {
 
     const result = Object.values(stats).sort((a, b) => b.post_count - a.post_count);
 
+    // Build contributors list sorted by post count
+    const contributorsList = Object.values(contributorMap)
+      .map(c => ({
+        name: c.name,
+        post_count: c.post_count,
+        categories: [...c.categories].join("、"),
+        total_views: c.total_views,
+        total_likes: c.total_likes,
+      }))
+      .sort((a, b) => b.post_count - a.post_count);
+
     return NextResponse.json({
       data: {
         categories: result,
@@ -113,6 +144,7 @@ export async function GET() {
         total_comments: result.reduce((s, c) => s + c.comment_count, 0),
         total_downloads: result.reduce((s, c) => s + c.download_count, 0),
         total_contributors: contributors.size,
+        contributors: contributorsList,
       },
     });
   } catch (err) {

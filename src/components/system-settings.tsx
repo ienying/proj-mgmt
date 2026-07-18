@@ -459,73 +459,56 @@ export default function SystemSettings({
   }, [departments, deptSearchQuery]);
 
   // 统计卡片配置 - 扁平风格
+  // 导航分组
+  const navGroups = [
+    { title: "系统", items: ["users", "roles"] },
+    { title: "数据", items: ["base-data", "module-mgmt", "issue-config"] },
+    { title: "扩展", items: ["knowledge-category", "ai-config", "ai-stats"] },
+    { title: "其他", items: ["config"] },
+  ];
+
   return (
-    <div className="h-full bg-muted">
-      {/* 顶部标题栏 */}
-      <div className="p-6">
-        <h2 className="text-2xl font-semibold flex items-center gap-2">
-          <Settings className="w-6 h-6" />
-          系统设置
-        </h2>
-        <p className="text-sm text-muted-foreground mt-1">用户管理、角色权限、基础数据等系统配置</p>
+    <div className="h-full bg-[#f9fafb] flex">
+      {/* 左侧导航 - fixed 居中 */}
+      <div className="w-[180px] flex-shrink-0 relative">
+        <div className="fixed top-1/2 -translate-y-1/2 w-[180px] pl-6 pr-3">
+          {navGroups.map((group) => (
+            <div key={group.title} className="mb-5">
+              <div className="text-[10px] uppercase tracking-[1.2px] text-[#9ca3af] font-semibold mb-1.5">{group.title}</div>
+              {visibleMenuItems.filter((item) => group.items.includes(item.id)).map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActiveMenu(item.id);
+                    setVisitedMenus(prev => new Set(prev).add(item.id));
+                  }}
+                  className={cn(
+                    "block w-full text-left py-[5px] text-[14px] transition-colors",
+                    activeMenu === item.id
+                      ? "text-[#e8590c] font-semibold"
+                      : "text-[#6b7280] hover:text-[#1e293b]"
+                  )}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* 主内容区 - 双栏布局 */}
-      <div className="flex h-[calc(100vh-220px)]">
-        {/* 左侧导航 - 固定不滚动 */}
-        <div className="w-48 bg-card border-r border-border p-4 flex-shrink-0">
-          <nav className="space-y-1">
-            {visibleMenuItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => {
-                  setActiveMenu(item.id);
-                  setVisitedMenus(prev => new Set(prev).add(item.id));
-                }}
-                className={cn(
-                  "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                  activeMenu === item.id
-                    ? "bg-blue-500 text-white"
-                    : "text-slate-600 hover:bg-accent"
-                )}
-              >
-                <item.icon className="w-4 h-4" />
-                {item.label}
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        {/* 右侧内容区 - 仅右侧滚动 */}
-        <div className="flex-1 p-6 overflow-y-auto">
+      {/* 右侧内容区 */}
+      <div className="flex-1 overflow-y-auto pr-12 pl-2 py-12">
           {/* 用户管理 */}
           <div className={activeMenu === "users" ? "" : "hidden"}>
             {/* 子 Tab 切换 */}
-            <div className="flex gap-2 mb-4">
-              <button
-                type="button"
-                onClick={() => setUserSubTab("users")}
-                className={cn(
-                  "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                  userSubTab === "users"
-                    ? "bg-blue-500 text-white"
-                    : "bg-white text-slate-600 hover:bg-accent border border-border"
-                )}
-              >
-                <Users className="w-4 h-4 inline mr-1.5 -mt-0.5" />
-                用户列表
+            <div className="flex gap-0 mb-4">
+              <button type="button" onClick={() => setUserSubTab("users")}
+                className={cn("px-4 py-1.5 text-xs font-medium border border-[#e5e7eb] bg-white transition-colors rounded-l", userSubTab === "users" ? "bg-[#111827] text-white border-[#111827]" : "text-[#6b7280] hover:bg-[#f9fafb]")}>
+                用户账户
               </button>
-              <button
-                type="button"
-                onClick={() => setUserSubTab("departments")}
-                className={cn(
-                  "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                  userSubTab === "departments"
-                    ? "bg-blue-500 text-white"
-                    : "bg-white text-slate-600 hover:bg-accent border border-border"
-                )}
-              >
-                <Database className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+              <button type="button" onClick={() => setUserSubTab("departments")}
+                className={cn("px-4 py-1.5 text-xs font-medium border border-[#e5e7eb] bg-white transition-colors rounded-r -ml-px", userSubTab === "departments" ? "bg-[#111827] text-white border-[#111827]" : "text-[#6b7280] hover:bg-[#f9fafb]")}>
                 部门管理
               </button>
             </div>
@@ -1276,7 +1259,6 @@ export default function SystemSettings({
               projectStages={projectStages} 
             />}
           </div>
-        </div>
       </div>
     </div>
   );
@@ -1859,68 +1841,71 @@ function RolePermissionPanel({ users, onUserUpdate }: { users: User[]; onUserUpd
     });
   }, [addableUsers, addMemberSearch, addMemberDeptFilter, addMemberPositionFilter]);
 
+  const [roleFilter, setRoleFilter] = useState("all");
+  const filteredByRole = roleFilter === "all" ? users : users.filter((u) => (u.role || "user") === roleFilter);
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-800">角色权限管理</h3>
-        <span className="text-sm text-muted-foreground">共 {totalUsers} 名用户</span>
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-semibold text-[#1e293b]">角色权限</span>
+        <span className="text-xs text-[#9ca3af]">共 {filteredByRole.length} 名用户</span>
+        <div className="flex-1" />
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
+          className="h-[30px] px-2 text-[11px] border border-[#e5e7eb] bg-white text-[#4b5563] cursor-pointer"
+        >
+          <option value="all">全部角色</option>
+          <option value="super_admin">超级管理员</option>
+          <option value="sub_admin">子管理员</option>
+          <option value="user">普通用户</option>
+        </select>
       </div>
 
-      {/* 角色说明卡片 — 含权限清单 + 操作按钮 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {roleGroups.map((group) => {
-          const groupUsers = users.filter((u) => (u.role || "user") === group.role);
-          const perms = rolePermissions[group.role] || [];
-          return (
-            <div key={group.role} className={`p-4 rounded-lg border ${group.color} flex flex-col transition-all`}>
-              <div className="flex items-center gap-2 mb-2">
-                <Shield className={`w-5 h-5 ${group.iconColor}`} />
-                <h4 className="font-semibold">{group.label}</h4>
-                <span className="text-xs text-muted-foreground ml-auto">{groupUsers.length} 人</span>
-              </div>
-              <p className="text-sm text-gray-600 mb-3">{roleDescriptions[group.role]}</p>
-              {/* 权限标签 — 只读展示 */}
-              <div className="flex flex-wrap gap-1 mb-3">
-                {perms.map((perm) => (
-                  <Badge key={perm} variant="outline" className="text-xs bg-white/60">
-                    {perm}
-                  </Badge>
-                ))}
-              </div>
-              {/* 操作按钮 */}
-              <div className="flex items-center gap-1.5 mt-auto pt-3 border-t border-border/50">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className={`h-7 text-xs ${group.btnClass}`}
-                  onClick={() => {
-                    setAddMemberOpen({ open: true, role: group.role });
-                    setAddSelectedIds(new Set());
-                    setAddMemberSearch("");
-                    setAddMemberDeptFilter("all");
-                    setAddMemberPositionFilter("all");
-                  }}
-                >
-                  <UserPlus className="h-3.5 w-3.5 mr-1" />
-                  添加成员
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className={`h-7 text-xs ${group.btnClass}`}
-                  disabled={groupUsers.length === 0}
-                  onClick={() => {
-                    setRemoveMemberOpen({ open: true, role: group.role });
-                    setRemoveSelectedIds(new Set());
-                  }}
-                >
-                  <Trash2 className="h-3.5 w-3.5 mr-1" />
-                  移除成员
-                </Button>
-              </div>
-            </div>
-          );
-        })}
+      {/* 用户角色列表 */}
+      <div className="bg-white border border-[#e5e7eb]">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="border-b border-[#e5e7eb]">
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#6b7280] bg-[#f9fafb]">用户</th>
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#6b7280] bg-[#f9fafb]">部门</th>
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#6b7280] bg-[#f9fafb]">当前角色</th>
+              <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#6b7280] bg-[#f9fafb]">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...filteredByRole].sort((a, b) => (a.name || "").localeCompare(b.name || "", "zh")).map((u) => (
+              <tr key={u.id} className="border-b border-[#f3f4f6] hover:bg-[#f9fafb]">
+                <td className="px-4 py-2.5 text-[13px] font-medium text-[#1e293b]">{u.name}</td>
+                <td className="px-4 py-2.5 text-[12px] text-[#6b7280]">{u.department || "—"}</td>
+                <td className="px-4 py-2.5">
+                  <span className={`inline-block text-[10px] px-2 py-0.5 rounded font-medium ${
+                    (u.role || "user") === "super_admin" ? "bg-[#fff7ed] text-[#e8590c]" :
+                    (u.role || "user") === "sub_admin" ? "bg-[#eff6ff] text-[#3b82f6]" :
+                    "bg-[#f3f4f6] text-[#6b7280]"
+                  }`}>
+                    {roleLabels[(u.role || "user") as string] || u.role || "普通用户"}
+                  </span>
+                </td>
+                <td className="px-4 py-2.5 text-right">
+                  <select
+                    value={u.role || "user"}
+                    onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                    className="h-[30px] px-2 text-[11px] border border-[#e5e7eb] bg-white text-[#4b5563] cursor-pointer"
+                    disabled={loading}
+                  >
+                    <option value="super_admin">超级管理员</option>
+                    <option value="sub_admin">子管理员</option>
+                    <option value="user">普通用户</option>
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {users.length === 0 && (
+          <div className="text-center py-8 text-[12px] text-[#9ca3af]">暂无用户数据</div>
+        )}
       </div>
 
       {/* 添加成员弹窗 */}

@@ -5,7 +5,6 @@ import type { PanelKey } from "./types";
 import type { StageLayoutProps } from "./types";
 import { LeftStrip } from "./LeftStrip";
 import { Toolbar } from "./Toolbar";
-import { NavDrawer } from "./NavDrawer";
 import { AIDialog } from "./AIDialog";
 import { SubContentArea } from "./SubContentArea";
 import { TableDataView } from "./TableDataView";
@@ -30,6 +29,8 @@ export function StageLayout({
 }: StageLayoutProps) {
   const [activePanel, setActivePanel] = useState<PanelKey>("scope");
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeModule, setActiveModule] = useState("scope");
+  const [expandedModules, setExpandedModules] = useState<string[]>([]);
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
   const [subContent, setSubContent] = useState<{ key: string; label: string } | null>(null);
   const [activePhase, setActivePhase] = useState(0);
@@ -305,20 +306,65 @@ export function StageLayout({
         isDark={isDark}
         onThemeToggle={toggleTheme}
         onSwitchLayout={() => onSwitchLayout("management")}
+        lockedExpanded={navDrawerOpen}
       />
 
-      {/* 导航抽屉 */}
-      <NavDrawer
-        open={navDrawerOpen}
-        panelData={panelData}
-        activePanel={activePanel}
-        onPanelChange={setActivePanel}
-        onSubClick={(key, label) => {
-          handleOpenSubContent(key, label);
-          setNavDrawerOpen(false);
-        }}
-        onClose={() => setNavDrawerOpen(false)}
-      />
+      {/* 导航下拉菜单 */}
+      {navDrawerOpen && (
+        <>
+          <div className="fixed inset-0 z-50" onClick={() => setNavDrawerOpen(false)} />
+          <div className="fixed z-55 flex" style={{ top: 123, right: 24 }}>
+            {/* 一级模块 */}
+            <div className="w-[160px] border border-[var(--s-border)] bg-[var(--s-surface)] max-h-[500px] overflow-y-auto flex-shrink-0">
+              {(moduleTypes.length > 0 ? moduleTypes : [
+                { code: "scope", name: "范围管理" }, { code: "schedule", name: "进度管理" }, { code: "quality", name: "质量管理" },
+                { code: "cost", name: "成本管理" }, { code: "communication", name: "沟通管理" }, { code: "risk", name: "风险管理" }, { code: "document", name: "资料管理" }
+              ]).map((mt, idx) => {
+                const tableCount = tableDefs.filter(def =>
+                  (def.module_type || []).some((m: string) => m === mt.code || m === "progress" && mt.code === "schedule") &&
+                  (!def.stage_display_mode || def.stage_display_mode === "menu" || def.stage_display_mode === "both")
+                ).length;
+                return (
+                  <div
+                    key={mt.code}
+                    onClick={() => { setActiveModule(mt.code); if (!expandedModules.includes(mt.code)) setExpandedModules(prev => [...prev, mt.code]); }}
+                    className={`px-3 py-2 cursor-pointer text-[12px] flex items-center justify-between ${activeModule === mt.code ? "bg-[var(--s-bg)] text-[var(--s-orange)] font-semibold" : "text-[var(--s-text-secondary)] hover:bg-[var(--s-bg)]"}`}
+                  >
+                    <span>{mt.name}</span>
+                    {tableCount > 0 && <span className="text-[10px] text-[var(--s-text-muted)]">{tableCount}</span>}
+                  </div>
+                );
+              })}
+            </div>
+            {/* 二级表列表 */}
+            <div className="w-[280px] border-t border-r border-b border-[var(--s-border)] bg-[var(--s-surface)] max-h-[500px] overflow-y-auto">
+              {(() => {
+                const aliases: Record<string, string[]> = { schedule: ["progress"] };
+                const tablesFiltered = tableDefs.filter(def =>
+                  (def.module_type || []).some((m: string) => m === activeModule || (aliases[activeModule] || []).includes(m)) &&
+                  (!def.stage_display_mode || def.stage_display_mode === "menu" || def.stage_display_mode === "both")
+                );
+                return tablesFiltered.length === 0 ? (
+                  <p className="text-[11px] text-[var(--s-text-muted)] text-center py-8">暂无表</p>
+                ) : (
+                  tablesFiltered.map(def => (
+                    <button
+                      key={def.table_code}
+                      onClick={() => { handleOpenSubContent(`table:${def.table_code}`, def.table_name); setNavDrawerOpen(false); }}
+                      className="block w-full text-left px-3 py-2 text-[12px] text-[var(--s-text-secondary)] hover:bg-[var(--s-bg)] hover:text-[var(--s-text)] cursor-pointer border-b border-[var(--s-border-light)]"
+                    >
+                      {def.table_name}
+                      {allTableRecords[def.table_code]?.length > 0 && (
+                        <span className="ml-1.5 text-[10px] text-[var(--s-text-muted)]" style={{ fontFamily: "var(--font-mono, monospace)" }}>{allTableRecords[def.table_code]?.length}</span>
+                      )}
+                    </button>
+                  ))
+                );
+              })()}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* AI 对话框 */}
       <AIDialog
@@ -326,6 +372,9 @@ export function StageLayout({
         onClose={() => setAiDialogOpen(false)}
         projectSchema={project.project_schema}
         projectName={project.project_name}
+        progressUpdates={progressList}
+        procurementModules={project.procurement_modules}
+        projectInfo={project as unknown as Record<string, unknown>}
       />
 
       {/* 交付物/文档 Modal */}

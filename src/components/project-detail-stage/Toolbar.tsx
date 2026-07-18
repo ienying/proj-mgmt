@@ -9,9 +9,10 @@ interface ToolbarProps {
   isDark: boolean;
   onThemeToggle: () => void;
   onSwitchLayout: () => void;
+  lockedExpanded?: boolean;
 }
 
-export function Toolbar({ onNavToggle, navActive, onSearch, onAIToggle, aiActive, isDark, onThemeToggle, onSwitchLayout }: ToolbarProps) {
+export function Toolbar({ onNavToggle, navActive, onSearch, onAIToggle, aiActive, isDark, onThemeToggle, onSwitchLayout, lockedExpanded }: ToolbarProps) {
   const btnClass = (active: boolean) =>
     `flex items-center gap-1.5 px-3 h-[38px] cursor-pointer whitespace-nowrap text-xs font-medium tracking-[0.3px] transition-all border border-[var(--s-border)] bg-[var(--s-surface)] flex-shrink-0 ${
       active
@@ -22,9 +23,9 @@ export function Toolbar({ onNavToggle, navActive, onSearch, onAIToggle, aiActive
   return (
     <div
       className="fixed z-35 flex items-stretch cursor-default overflow-hidden"
-      style={{ top: "85px", right: "24px", width: "80px", height: "38px", transition: "width 0.3s" }}
+      style={{ top: "85px", right: "24px", width: lockedExpanded ? "440px" : "80px", height: "38px", transition: "width 0.3s" }}
       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.width = "440px"; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.width = "80px"; }}
+      onMouseLeave={(e) => { if (!lockedExpanded) (e.currentTarget as HTMLElement).style.width = "80px"; }}
     >
       <div className="flex items-center gap-0" style={{ minWidth: "430px" }}>
         <button onClick={onNavToggle} className={btnClass(navActive)}>

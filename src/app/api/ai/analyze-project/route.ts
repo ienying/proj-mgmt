@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   try {
     await ensureAITables();
     const body = await request.json();
-    const { projectSchema, projectName, moduleName, tableCode, userId, userName, question, conversationHistory, systemMessage, userPrompt } = body;
+    const { projectSchema, projectName, moduleName, tableCode, userId, userName, question, conversationHistory, systemMessage, userPrompt, progressUpdates, procurementModules, projectInfo } = body;
 
     if (!projectSchema) {
       return NextResponse.json({ error: "缺少 projectSchema" }, { status: 400 });
@@ -239,13 +239,38 @@ export async function POST(request: Request) {
 
 请按以下结构输出分析报告（Markdown，适当使用 📊📈⚠️✅🔴🟡🟢 等图标增强可读性）：
 
-1. **📊 数据概览**：整体数据量、表关联关系
-   - 用 \`\`\`mermaid 输出一张饼图（pie），展示各表数据量占比
+1. **📊 数据概览**：简要描述项目整体数据情况（1-2句话即可，不列详细表格）
 2. **🔍 关键发现**：数据中值得关注的模式、异常或亮点（至少5条）
-   - 如有数值对比，用 \`\`\`mermaid 输出柱状图
 3. **📈 趋势与建议**：基于数据给出项目管理建议
 4. **🛡️ 数据质量**：缺失值、不一致或异常值情况`;
+
       effectiveUserPrompt = substituteVariables(effectiveUserPrompt);
+    }
+
+    // 附加数据：进展同步、采购清单、项目基本信息
+    if (progressUpdates && Array.isArray(progressUpdates) && progressUpdates.length > 0) {
+      effectiveUserPrompt += "\n\n## 项目进展同步（最近" + Math.min(progressUpdates.length, 10) + "条）：\n";
+      (progressUpdates as Array<Record<string, unknown>>).slice(0, 10).forEach((p) => {
+        effectiveUserPrompt += "- [" + (p.created_at || "?") + "] " + (p.user_name || "") + ": " + String(p.content || "").slice(0, 200) + "\n";
+      });
+    }
+    if (procurementModules && Array.isArray(procurementModules) && procurementModules.length > 0) {
+      const pmList = (procurementModules as Array<unknown>).map(m => typeof m === "string" ? m : (m as Record<string,unknown>).module_name || (m as Record<string,unknown>).name || "").filter(Boolean);
+      if (pmList.length > 0) effectiveUserPrompt += "\n\n## 项目采购清单（" + pmList.length + "项）：\n" + pmList.join("、");
+    }
+    if (projectInfo && typeof projectInfo === "object") {
+      const pi = projectInfo as Record<string, unknown>;
+      const ci = (pi.customer_info as Record<string, unknown>) || {};
+      effectiveUserPrompt += "\n\n## 项目基本信息：\n";
+      if (pi.project_name) effectiveUserPrompt += "- 项目名称：" + pi.project_name + "\n";
+      if (pi.project_type) effectiveUserPrompt += "- 项目类型：" + pi.project_type + "\n";
+      if (pi.project_stage) effectiveUserPrompt += "- 项目阶段：" + pi.project_stage + "\n";
+      if (ci.company_name) effectiveUserPrompt += "- 客户名称：" + ci.company_name + "\n";
+      if (pi.final_customer) effectiveUserPrompt += "- 最终客户：" + pi.final_customer + "\n";
+      if (pi.required_date) effectiveUserPrompt += "- 要求时间：" + pi.required_date + "\n";
+      if (pi.entry_date) effectiveUserPrompt += "- 进场时间：" + pi.entry_date + "\n";
+      if (pi.role_sales) effectiveUserPrompt += "- 销售负责人：" + pi.role_sales + "\n";
+      if (pi.role_project_manager) effectiveUserPrompt += "- 项目经理：" + pi.role_project_manager + "\n";
     }
 
     // 4. 调用大模型

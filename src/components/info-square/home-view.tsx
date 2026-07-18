@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Search, ChevronRight, FileText, BookOpen, Wrench, CheckCircle, FileEdit,
-  BarChart3, Eye, ThumbsUp, MessageCircle, Download, User, X,
+  BarChart3, Eye, ThumbsUp, MessageCircle, Download, User, Users, X,
   Video,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,13 @@ interface StatsData {
   total_comments: number;
   total_downloads: number;
   total_contributors: number;
+  contributors?: Array<{
+    name: string;
+    post_count: number;
+    categories: string;
+    total_views: number;
+    total_likes: number;
+  }>;
 }
 
 interface Post {
@@ -469,6 +476,45 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
                     </tbody>
                   </table>
                 </div>
+                {/* 贡献者统计 */}
+                {statsData.contributors && statsData.contributors.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                      <Users className="w-4 h-4 text-violet-500" />
+                      贡献者统计
+                      <span className="text-xs text-gray-400 font-normal ml-1">共 {statsData.contributors.length} 人</span>
+                    </h3>
+                    <div className="border rounded-xl overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 border-b">
+                            <th className="text-left px-4 py-2.5 font-medium text-gray-600">贡献者</th>
+                            <th className="text-center px-3 py-2.5 font-medium text-gray-600">发布数</th>
+                            <th className="text-center px-3 py-2.5 font-medium text-gray-600">总浏览</th>
+                            <th className="text-center px-3 py-2.5 font-medium text-gray-600">总点赞</th>
+                            <th className="text-left px-4 py-2.5 font-medium text-gray-600">涉及分类</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {statsData.contributors.map((c, i) => (
+                            <tr key={c.name} className="border-b last:border-0 hover:bg-gray-50/50">
+                              <td className="px-4 py-2.5 font-medium text-gray-800">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span className="w-5 h-5 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-[10px] font-bold">{i + 1}</span>
+                                  {c.name}
+                                </span>
+                              </td>
+                              <td className="text-center px-3 py-2.5 font-semibold">{c.post_count}</td>
+                              <td className="text-center px-3 py-2.5">{c.total_views}</td>
+                              <td className="text-center px-3 py-2.5">{c.total_likes}</td>
+                              <td className="px-4 py-2.5 text-gray-500 text-xs">{c.categories}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex items-center justify-center h-40 text-gray-400">

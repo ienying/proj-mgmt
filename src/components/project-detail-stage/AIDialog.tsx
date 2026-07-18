@@ -11,27 +11,75 @@ interface AIDialogProps {
   onClose: () => void;
   projectSchema: string;
   projectName: string;
+  progressUpdates?: Array<Record<string, unknown>>;
+  procurementModules?: Array<unknown>;
+  projectInfo?: Record<string, unknown>;
 }
 
-export function AIDialog({ open, onClose, projectSchema, projectName }: AIDialogProps) {
+// 简易 Markdown → HTML 转换
+function renderMarkdown(text: string): string {
+  // 先处理表格，避免被换行转换影响
+  let html = text;
+  // 检测连续 | 行，转换为 HTML table
+  const lines = html.split("\n");
+  let i = 0;
+  let result = "";
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    // 检测表格行（以 | 开头，且下一行或下两行也是 | 行）
+    if (line.startsWith("|") && line.endsWith("|") && i + 1 < lines.length && lines[i + 1].trim().match(/^\|[-:| ]+\|$/)) {
+      const headerCells = line.split("|").filter(c => c.trim());
+      result += "<table class='w-full border-collapse border border-gray-300 my-3 text-xs'><thead><tr>";
+      headerCells.forEach(c => { result += "<th class='px-2 py-1.5 border border-gray-300 bg-gray-50 text-left font-semibold'>" + c.trim() + "</th>"; });
+      result += "</tr></thead><tbody>";
+      i += 2; // skip header + separator
+      while (i < lines.length && lines[i].trim().startsWith("|") && lines[i].trim().endsWith("|")) {
+        const cells = lines[i].trim().split("|").filter(c => c.trim());
+        result += "<tr>";
+        cells.forEach(c => { result += "<td class='px-2 py-1 border border-gray-200'>" + c.trim() + "</td>"; });
+        result += "</tr>";
+        i++;
+      }
+      result += "</tbody></table>";
+    } else {
+      result += line + "\n";
+      i++;
+    }
+  }
+  html = result;
+  // 标准转换
+  return html
+    .replace(/^#### (.+)$/gm, "<h5 class='text-sm font-semibold mt-3 mb-1'>$1</h5>")
+    .replace(/^### (.+)$/gm, "<h4 class='text-sm font-bold mt-4 mb-1'>$1</h4>")
+    .replace(/^## (.+)$/gm, "<h3 class='text-base font-bold mt-4 mb-1'>$1</h3>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/^\* (.+)$/gm, "<span class='block pl-3'>• $1</span>")
+    .replace(/^- (.+)$/gm, "<span class='block pl-3'>• $1</span>")
+    .replace(/\n\n/g, "<br><br>")
+    .replace(/\n/g, "<br>")
+    .replace(/---/g, "<hr class='my-3 border-[var(--s-border)]'>");
+}
+
+export function AIDialog({ open, onClose, projectSchema, projectName, progressUpdates, procurementModules, projectInfo }: AIDialogProps) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ analysis: string; tableCount: number; totalRows: number } | null>(null);
   const [error, setError] = useState("");
   const [followUpQ, setFollowUpQ] = useState("");
   const [followUpLoading, setFollowUpLoading] = useState(false);
   const [conversation, setConversation] = useState<Array<{ role: string; content: string }>>([]);
+  const [chatMessages, setChatMessages] = useState<Array<{ role: string; content: string; loading?: boolean }>>([]);
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setResult(null); setError(""); setConversation([]); }, [open]);
+  useEffect(() => { setResult(null); setError(""); setConversation([]); setChatMessages([]); }, [open]);
 
   const runAnalysis = useCallback(async (systemMsg?: string, userPrompt?: string) => {
-    setLoading(true); setResult(null); setError(""); setConversation([]);
+    setLoading(true); setResult(null); setError(""); setConversation([]); setChatMessages([]);
     try {
       const res = await fetch("/api/ai/analyze-project", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectSchema, projectName, ...(systemMsg ? { systemMessage: systemMsg } : {}), ...(userPrompt ? { userPrompt } : {}) }),
+        body: JSON.stringify({ projectSchema, projectName, progressUpdates, procurementModules, projectInfo, ...(systemMsg ? { systemMessage: systemMsg } : {}), ...(userPrompt ? { userPrompt } : {}) }),
       });
       const json = await res.json();
       if (!res.ok || json.error) {
@@ -48,20 +96,24 @@ export function AIDialog({ open, onClose, projectSchema, projectName }: AIDialog
 
   const handleFollowUp = useCallback(async () => {
     if (!followUpQ.trim() || !conversation.length) return;
+    const q = followUpQ.trim();
+    setFollowUpQ("");
+    setChatMessages(prev => [...prev, { role: "user", content: q }, { role: "ai", content: "", loading: true }]);
     setFollowUpLoading(true);
     try {
       const res = await fetch("/api/ai/analyze-project", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectSchema, projectName, conversationHistory: conversation, userPrompt: followUpQ.trim() }),
+        body: JSON.stringify({ projectSchema, projectName, conversationHistory: conversation, userPrompt: q, progressUpdates, procurementModules, projectInfo }),
       });
       const json = await res.json();
       if (json.data) {
-        setResult((prev) => prev ? { ...prev, analysis: prev.analysis + "\n\n---\n\n" + (json.data.analysis || "") } : { analysis: json.data.analysis || "", tableCount: json.data.tableCount || 0, totalRows: json.data.totalRows || 0 });
         if (json.data.conversationHistory) setConversation(json.data.conversationHistory);
+        setChatMessages(prev => prev.map((m, i) => i === prev.length - 1 ? { role: "ai", content: json.data.analysis || "" } : m));
       }
-      setFollowUpQ("");
-    } catch {}
+    } catch {
+      setChatMessages(prev => prev.map((m, i) => i === prev.length - 1 ? { role: "ai", content: "请求失败，请重试" } : m));
+    }
     setFollowUpLoading(false);
   }, [followUpQ, conversation, projectSchema, projectName]);
 
@@ -108,7 +160,43 @@ export function AIDialog({ open, onClose, projectSchema, projectName }: AIDialog
                   已分析 <strong>{result.tableCount}</strong> 张表，共 <strong>{result.totalRows}</strong> 条数据
                 </div>
                 <div className="prose prose-sm max-w-none text-sm text-gray-700 whitespace-pre-wrap leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: result.analysis.replace(/\n/g, "<br>") }} />
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(result.analysis) }} />
+                {/* 追问对话 */}
+                {chatMessages.length > 0 && (
+                  <div className="space-y-3 pt-3 border-t">
+                    {chatMessages.map((msg, i) => (
+                      <div key={i} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : ""}`}>
+                        {msg.role === "ai" && <Sparkles className="w-4 h-4 text-teal-400 flex-shrink-0 mt-0.5" />}
+                        <div className={`text-sm rounded-lg px-3 py-2 max-w-[85%] ${
+                          msg.role === "user"
+                            ? "bg-teal-500 text-white"
+                            : msg.loading
+                              ? "bg-gray-100 text-gray-400"
+                              : "bg-gray-100 text-gray-700"
+                        }`}>
+                          {msg.loading ? (
+                            <span className="flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" />思考中...</span>
+                          ) : (
+                            <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap leading-relaxed"
+                              dangerouslySetInnerHTML={{ __html:
+                                msg.content
+                                  .replace(/^#### (.+)$/gm, "<h5 class='text-sm font-semibold mt-3 mb-1'>$1</h5>")
+                                  .replace(/^### (.+)$/gm, "<h4 class='text-sm font-bold mt-4 mb-1'>$1</h4>")
+                                  .replace(/^## (.+)$/gm, "<h3 class='text-base font-bold mt-4 mb-1'>$1</h3>")
+                                  .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+                                  .replace(/^\* (.+)$/gm, "<span class='block pl-3'>• $1</span>")
+                                  .replace(/^- (.+)$/gm, "<span class='block pl-3'>• $1</span>")
+                                  .replace(/\n\n/g, "<br><br>")
+                                  .replace(/\n/g, "<br>")
+                                  .replace(/---/g, "<hr class='my-3 border-[var(--s-border)]'>")
+                              }} />
+                          )}
+                        </div>
+                        {msg.role === "user" && <ChevronRight className="w-4 h-4 text-teal-400 flex-shrink-0 mt-0.5" />}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {conversation.length > 0 && (
                   <div className="flex items-center gap-2 pt-2 border-t">
                     <input value={followUpQ} onChange={(e) => setFollowUpQ(e.target.value)}
