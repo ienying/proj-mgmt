@@ -116,6 +116,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 0.5 检查是否有匹配的 Schema 规则
+    const { data: rules } = await client.rpc("dp_select", { p_table: "project_schema_rules" });
+    const enabledRules = ((rules as Record<string, unknown>[]) || []).filter(r => r.is_enabled === true);
+    const hasMatchingRule = enabledRules.some(rule => {
+      // 类型阶段规则
+      if (rule.rule_type !== "module" && rule.project_type === project_type) {
+        const ruleStatus = (rule as Record<string, unknown>).project_status as string | null;
+        if (!ruleStatus || ruleStatus === (project_status || null)) return true;
+      }
+      // 产品规则：采购模块有交集 + 类型匹配
+      if (rule.rule_type === "module" && rule.project_type === project_type) {
+        const ruleStatus = (rule as Record<string, unknown>).project_status as string | null;
+        if (ruleStatus && ruleStatus !== (project_status || null)) return false;
+        const moduleCodes = (rule.module_codes as string[]) || [];
+        const procModules = (procurement_modules as string[]) || [];
+        if (moduleCodes.some(code => procModules.includes(code))) return true;
+      }
+      return false;
+    });
+
+    if (!hasMatchingRule) {
+      return NextResponse.json(
+        { error: "未匹配到任何 Schema 规则。请检查「系统设置 → 项目 Schema 规则配置」中是否配置了对应的项目类型和状态的规则，或联系管理人员进行配置后再试。" },
+        { status: 400 }
+      );
+    }
+
     // 1. 生成项目 Schema 名称
     const projectSchema = `yuansu_${project_code.toLowerCase()}`;
 
