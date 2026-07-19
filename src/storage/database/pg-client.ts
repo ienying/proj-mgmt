@@ -10,7 +10,7 @@ function getPool(): Pool {
     }
     pool = new Pool({
       connectionString,
-      max: 40,
+      max: 80,
       idleTimeoutMillis: 60000,
       connectionTimeoutMillis: 15000,
     });
