@@ -241,7 +241,12 @@ export async function PUT(request: NextRequest) {
     }
 
     const putMeta = await getTableMeta(client, tableCode);
-    const changedCols = Object.keys(data).map(c => putMeta.colLabels[c] || c).join("、");
+    const changedCols = Object.keys(data).map(c => {
+      const label = putMeta.colLabels[c] || c;
+      const val = data[c];
+      const valStr = typeof val === "string" ? (val.length > 50 ? val.slice(0, 50) + "..." : val) : String(val ?? "");
+      return valStr ? `${label}: ${valStr}` : label;
+    }).join("、");
     const detail = changedCols ? `修改了 ${changedCols}` : undefined;
     const userName2 = body.user_name as string || "";
     await logOperation(client, projectSchema, "update", tableCode, `编辑了「${putMeta.name}」中的记录`, userName2, detail);
