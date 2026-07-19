@@ -248,7 +248,7 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
       icon: "Video",
       count: videoCount,
       onClick: onEnterVideoCenter,
-      badgeLabel: `${videoCount} 个视频`,
+      badgeLabel: "个视频",
     },
     {
       id: "drafts",
@@ -410,7 +410,7 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
                           <span>{card.badgeLabel}</span>
                         </>
                       ) : (
-                        <span>{card.badgeLabel === "进入查看" ? "点击进入" : "暂无内容"}</span>
+                        <span>{card.count === 0 && card.type === "video_center" ? "暂无视频" : card.count === 0 ? "暂无内容" : ""}</span>
                       )}
                     </div>
                     <div className="flex items-center justify-center text-xs text-gray-400 group-hover:text-gray-600 transition-colors duration-300">
