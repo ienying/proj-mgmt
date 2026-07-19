@@ -144,6 +144,7 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
   const [searchCategory, setSearchCategory] = useState("all");
   const [statsOpen, setStatsOpen] = useState(false);
   const [statsData, setStatsData] = useState<StatsData | null>(null);
+  const [videoCount, setVideoCount] = useState(0);
 
   const loadData = useCallback(async () => {
     // 进入信息广场时更新最后访问时间，清除角标
@@ -182,6 +183,8 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
       if (statsJson.data) setStatsData(statsJson.data);
       const draftsJson = await draftsRes.json();
       setDraftCount(draftsJson.total || draftsJson.data?.length || 0);
+      // 视频数量
+      try { const vRes = await fetch("/api/video-center/videos?page_size=1"); const vJson = await vRes.json(); setVideoCount(vJson.total || vJson.data?.length || 0); } catch {}
     } catch (e) {
       console.error("Failed to load home data:", e);
     }
@@ -243,9 +246,9 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
       description: "产品视频上传、查看与分享",
       type: "video_center",
       icon: "Video",
-      count: 0,
+      count: videoCount,
       onClick: onEnterVideoCenter,
-      badgeLabel: "进入查看",
+      badgeLabel: `${videoCount} 个视频`,
     },
     {
       id: "drafts",
