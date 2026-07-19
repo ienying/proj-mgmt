@@ -143,11 +143,20 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
 
   const handleFullscreen = () => setFullscreenOpen(true);
   const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
-  const [vendorFilter, setVendorFilter] = useState("");
-  const vendorFilterRef = useRef("");
+  const [vendorFilter, setVendorFilter] = useState<string[]>([]);
+  const vendorFilterRef = useRef<string[]>([]);
   useEffect(() => { vendorFilterRef.current = vendorFilter; }, [vendorFilter]);
   const vendorOptions = useMemo(() => [...new Set(items.map(it => productDetails[it.name]?.vendor).filter(Boolean) as string[])].sort(), [items, productDetails]);
-  useEffect(() => { if (fullscreenOpen) filterProcurementTable(); }, [vendorFilter]); // eslint-disable-line
+  useEffect(() => { if (fullscreenOpen) filterProcurementTable(); }, [vendorFilter]);
+  const [vendorSearch, setVendorSearch] = useState("");
+
+  const [scopeDropdownOpen, setScopeDropdownOpen] = useState(false);
+  const [scopeFilter, setScopeFilter] = useState<string[]>([]);
+  const scopeFilterRef = useRef<string[]>([]);
+  useEffect(() => { scopeFilterRef.current = scopeFilter; }, [scopeFilter]);
+  const scopeOptions = useMemo(() => [...new Set(items.map(it => productDetails[it.name]?.scope).filter(Boolean) as string[])].sort(), [items, productDetails]);
+  useEffect(() => { if (fullscreenOpen) filterProcurementTable(); }, [scopeFilter]);
+  const [scopeSearch, setScopeSearch] = useState("");
 
   const filterProcurementTable = () => {
     setTimeout(() => {
@@ -156,8 +165,11 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
         const tag = el.tagName.toLowerCase();
         filters.push(((tag === "select" ? (el as HTMLSelectElement).value : (el as HTMLInputElement).value) || "").toLowerCase());
       });
-      // insert vendor filter from ref (avoids stale closure)
-      if (filters.length >= 3) filters[3] = vendorFilterRef.current.toLowerCase();
+      // pad filters array and insert vendor/scope from refs
+      while (filters.length < 6) filters.push("");
+      // multi-select vendor/scope: check if cell value is in selected list
+      const selectedVendors = vendorFilterRef.current;
+      const selectedScopes = scopeFilterRef.current;
       const rows = document.querySelectorAll("#fs-procurement-table tbody tr");
       let visible = 0; const total = rows.length;
       rows.forEach((tr) => {
@@ -170,6 +182,16 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
               match = false; break;
             }
           }
+        }
+        // multi-select vendor filter
+        if (match && selectedVendors.length > 0 && cells[4]) {
+          const cellVal = (cells[4].textContent || "").trim();
+          if (!selectedVendors.some(v => cellVal.includes(v))) match = false;
+        }
+        // multi-select scope filter
+        if (match && selectedScopes.length > 0 && cells[6]) {
+          const cellVal = (cells[6].textContent || "").trim();
+          if (!selectedScopes.some(v => cellVal.includes(v))) match = false;
         }
         (tr as HTMLElement).style.display = match ? "" : "none";
         if (match) { visible++; (cells[0] as HTMLElement).textContent = String(visible); }
@@ -270,26 +292,70 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
                     onClick={() => setVendorDropdownOpen(!vendorDropdownOpen)}
                     style={{ width: "100%", padding: "5px 10px", border: "1px solid var(--s-border)", background: "var(--s-surface)", fontSize: 11, fontFamily: "inherit", color: vendorFilter ? "var(--s-text)" : "var(--s-text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: 0 }}
                   >
-                    <span>{vendorFilter || "厂家..."}</span>
-                    <span style={{ fontSize: 8, color: "var(--s-text-muted)" }}>▼</span>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, textAlign: "left" }}>
+                      {vendorFilter.length > 0 ? vendorFilter.join("、") : <span style={{ color: "var(--s-text-muted)" }}>厂家...</span>}
+                    </span>
+                    <span style={{ fontSize: 8, color: "var(--s-text-muted)", flexShrink: 0, marginLeft: 4 }}>▼</span>
                   </button>
                   {vendorDropdownOpen && (
                     <>
-                      <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => setVendorDropdownOpen(false)} />
-                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 200, background: "var(--s-surface)", border: "1px solid var(--s-border)", maxHeight: 180, overflowY: "auto", borderRadius: 0 }}>
-                        <div onClick={() => { setVendorFilter(""); setVendorDropdownOpen(false); filterProcurementTable(); }} style={{ padding: "5px 10px", fontSize: 11, color: "var(--s-text-muted)", cursor: "pointer", borderBottom: "1px solid var(--s-border-light)" }}>全部厂家</div>
-                        {vendorOptions.map(v => (
-                          <div key={v} onClick={() => { setVendorFilter(v); setVendorDropdownOpen(false); filterProcurementTable(); }} style={{ padding: "5px 10px", fontSize: 11, color: "var(--s-text-secondary)", cursor: "pointer", borderBottom: "1px solid var(--s-border-light)" }}
-                            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--s-bg)"}
-                            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
-                          >{v}</div>
-                        ))}
+                      <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => { setVendorDropdownOpen(false); setVendorSearch(""); }} />
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 200, background: "var(--s-surface)", border: "1px solid var(--s-border)", borderRadius: 0, minWidth: 180 }}>
+                        <input value={vendorSearch} onChange={e => setVendorSearch(e.target.value)} placeholder="搜索厂家..." style={{ width: "100%", padding: "5px 8px", border: "none", borderBottom: "1px solid var(--s-border)", outline: "none", fontSize: 11, fontFamily: "inherit", background: "transparent", color: "var(--s-text)" }} autoFocus />
+                        <div style={{ maxHeight: 180, overflowY: "auto" }}>
+                          {vendorOptions.filter(v => !vendorSearch || v.toLowerCase().includes(vendorSearch.toLowerCase())).map(v => {
+                            const checked = vendorFilter.includes(v);
+                            return (
+                              <label key={v} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", fontSize: 11, color: "var(--s-text-secondary)", cursor: "pointer", borderBottom: "1px solid var(--s-border-light)" }}
+                                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--s-bg)"}
+                                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}>
+                                <input type="checkbox" checked={checked} onChange={() => setVendorFilter(prev => checked ? prev.filter(x => x !== v) : [...prev, v])} style={{ margin: 0 }} />
+                                {v}
+                              </label>
+                            );
+                          })}
+                        </div>
+                        {vendorFilter.length > 0 && (
+                          <div onClick={() => { setVendorFilter([]); setVendorDropdownOpen(false); setVendorSearch(""); }} style={{ padding: "5px 10px", fontSize: 10, color: "var(--s-red)", cursor: "pointer", textAlign: "center", borderTop: "1px solid var(--s-border-light)" }}>清除已选</div>
+                        )}
                       </div>
                     </>
                   )}
                 </div>
-                <input className="fs-filter" data-col="5" placeholder="范围..." onInput={filterProcurementTable} style={{ padding: "5px 10px", border: "1px solid var(--s-border)", background: "var(--s-surface)", fontSize: 11, fontFamily: "inherit", minWidth: 110, flex: 1, maxWidth: 150 }} />
-                <button onClick={() => { document.querySelectorAll(".fs-filter").forEach(el => ((el as HTMLInputElement).value = "")); setVendorFilter(""); filterProcurementTable(); }} style={{ padding: "5px 14px", fontSize: 10, fontWeight: 600, cursor: "pointer", border: "1px solid var(--s-border)", background: "var(--s-surface)", color: "var(--s-text-muted)", fontFamily: "var(--s-font-mono)", textTransform: "uppercase", letterSpacing: "0.5px", whiteSpace: "nowrap" }}>清除筛选</button>
+                {/* 范围自定义下拉 */}
+                <div style={{ position: "relative", minWidth: 110, flex: 1, maxWidth: 150 }}>
+                  <button type="button" onClick={() => setScopeDropdownOpen(!scopeDropdownOpen)}
+                    style={{ width: "100%", padding: "5px 10px", border: "1px solid var(--s-border)", background: "var(--s-surface)", fontSize: 11, fontFamily: "inherit", color: scopeFilter.length > 0 ? "var(--s-text)" : "var(--s-text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: 0 }}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, textAlign: "left" }}>
+                      {scopeFilter.length > 0 ? scopeFilter.join("、") : <span style={{ color: "var(--s-text-muted)" }}>范围...</span>}
+                    </span><span style={{ fontSize: 8, color: "var(--s-text-muted)", flexShrink: 0, marginLeft: 4 }}>▼</span>
+                  </button>
+                  {scopeDropdownOpen && (
+                    <>
+                      <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => { setScopeDropdownOpen(false); setScopeSearch(""); }} />
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 200, background: "var(--s-surface)", border: "1px solid var(--s-border)", borderRadius: 0, minWidth: 180 }}>
+                        <input value={scopeSearch} onChange={e => setScopeSearch(e.target.value)} placeholder="搜索范围..." style={{ width: "100%", padding: "5px 8px", border: "none", borderBottom: "1px solid var(--s-border)", outline: "none", fontSize: 11, fontFamily: "inherit", background: "transparent", color: "var(--s-text)" }} autoFocus />
+                        <div style={{ maxHeight: 180, overflowY: "auto" }}>
+                        {scopeOptions.filter(v => !scopeSearch || v.toLowerCase().includes(scopeSearch.toLowerCase())).map(v => {
+                          const checked = scopeFilter.includes(v);
+                          return (
+                            <label key={v} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", fontSize: 11, color: "var(--s-text-secondary)", cursor: "pointer", borderBottom: "1px solid var(--s-border-light)" }}
+                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--s-bg)"}
+                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}>
+                              <input type="checkbox" checked={checked} onChange={() => setScopeFilter(prev => checked ? prev.filter(x => x !== v) : [...prev, v])} style={{ margin: 0 }} />
+                              {v}
+                            </label>
+                          );
+                        })}
+                        </div>
+                        {scopeFilter.length > 0 && (
+                          <div onClick={() => { setScopeFilter([]); setScopeDropdownOpen(false); setScopeSearch(""); }} style={{ padding: "5px 10px", fontSize: 10, color: "var(--s-red)", cursor: "pointer", textAlign: "center", borderTop: "1px solid var(--s-border-light)" }}>清除已选</div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+                <button onClick={() => { document.querySelectorAll(".fs-filter").forEach(el => ((el as HTMLInputElement).value = "")); setVendorFilter([]); setScopeFilter([]); filterProcurementTable(); }} style={{ padding: "5px 14px", fontSize: 10, fontWeight: 600, cursor: "pointer", border: "1px solid var(--s-border)", background: "var(--s-surface)", color: "var(--s-text-muted)", fontFamily: "var(--s-font-mono)", textTransform: "uppercase", letterSpacing: "0.5px", whiteSpace: "nowrap" }}>清除筛选</button>
                 <span id="fs-result-count" style={{ fontSize: 10, color: "var(--s-text-muted)", fontFamily: "var(--s-font-mono)", marginLeft: "auto", whiteSpace: "nowrap" }}>显示 <strong>{totalModules}</strong> / {totalModules} 条</span>
               </div>
               <table id="fs-procurement-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -335,7 +401,11 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
                   <FieldBlock label="项目经理" value={s(p.role_project_manager)} />
                   <FieldBlock label="客户类型" value={customerTypeDisplay} />
                   <FieldBlock label="部署模式" value={deployName} />
-                  <FieldBlock label="项目描述" value={s(p.description)} span2 />
+                  <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--s-border-light)", gridColumn: "span 2", display: "flex", flexDirection: "column", gap: 3 }}>
+                    <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "1px", color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>项目描述</div>
+                    <div className="prose prose-sm max-w-none text-[13px]" style={{ color: "var(--s-text-secondary)", lineHeight: 1.7 }}
+                      dangerouslySetInnerHTML={{ __html: s(p.description) }} />
+                  </div>
                 </div>
               </InfoSection>
               <InfoSection title="时间信息" defaultOpen>

@@ -22,6 +22,8 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import dynamic from "next/dynamic";
+const RichTextEditor = dynamic(() => import("@/components/rich-text-editor"), { ssr: false });
 import {
   X,
   Plus,
@@ -157,7 +159,7 @@ interface ProjectFormProps {
   projectTypes: { code: string; name: string }[];
   projectStages: { code: string; name: string }[];
   memberRoles: string[];
-  productModules: { module_code: string; module_name: string; product_name: string; vendor?: string; model_spec?: string }[];
+  productModules: { module_code: string; module_name: string; product_name: string; vendor?: string; model_spec?: string; scope?: string }[];
   users: { id: string; name: string; phone?: string; position?: string; email?: string }[];
   initialData?: Record<string, unknown> | null; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
@@ -1760,11 +1762,10 @@ export function ProjectForm({
               </div>
               <div className="space-y-1.5">
                 <Label>项目描述（工前会议纪要）</Label>
-                <textarea
+                <RichTextEditor
                   value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+                  onChange={setDescription}
                   placeholder="请输入项目描述或工前会议纪要..."
-                  className="w-full min-h-[200px] p-3 border rounded-md resize-y text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </Section>
@@ -2324,6 +2325,7 @@ export function ProjectForm({
                               <div className="text-xs text-slate-400 truncate">{module.product_name}</div>
                               {module.model_spec && <div className="text-[11px] text-slate-400 truncate">型号规格：{module.model_spec}</div>}
                               <div className="text-[11px] text-slate-400 truncate">厂商：{module.vendor || "未指定"}</div>
+                              {(module as any).scope && <div className="text-[11px] text-slate-400 truncate">范围：{(module as any).scope}</div>}
                             </div>
                           </label>
                           {selectedModules.includes(module.module_code) && (
@@ -3054,7 +3056,7 @@ export function ProjectForm({
                         const qty = moduleQuantities[code];
                         return (
                           <Badge key={i} variant="secondary" className="text-xs">
-                            {mod?.module_name || code}{qty ? ` × ${qty}` : ""}
+                            {mod?.module_name || code}{qty ? ` × ${qty}` : ""}{(mod as any)?.scope ? ` (${(mod as any).scope})` : ""}
                           </Badge>
                         );
                       })}

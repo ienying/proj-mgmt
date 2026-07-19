@@ -236,6 +236,7 @@ export default function HomePage() {
             product_name: item.product_name || "",
             vendor: item.vendor || "",
             model_spec: item.model_spec || "",
+            scope: item.scope || "",
           }));
           setProcurementModules(modules);
         }
