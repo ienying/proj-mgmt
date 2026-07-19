@@ -185,6 +185,39 @@ function dedupeColumnsByName(columns: ColumnConfig[]): ColumnConfig[] {
 }
 
 // 采购模块搜索选择组件
+// 用户搜索下拉选择
+function UserSelect({ value, onChange, userList }: { value: string; onChange: (val: string) => void; userList: { id: string; name: string }[] }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const filtered = userList.filter(u => !search || u.name.includes(search));
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen(!open)}
+        className="flex items-center justify-between w-full px-2 py-1 text-xs border rounded bg-white hover:bg-gray-50 min-w-[100px]">
+        <span className={value ? "text-gray-900" : "text-gray-400"}>{value || "选择用户"}</span>
+        <span className="text-gray-400 ml-1">▼</span>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => { setOpen(false); setSearch(""); }} />
+          <div className="absolute z-50 top-full left-0 mt-1 bg-white border rounded shadow-lg w-48 max-h-[200px] overflow-hidden">
+            <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="搜索用户..." className="w-full px-2 py-1.5 text-xs border-b outline-none" autoFocus />
+            <div className="overflow-y-auto max-h-[160px]">
+              <div onClick={() => { onChange(""); setOpen(false); setSearch(""); }} className="px-2 py-1 text-xs text-gray-400 hover:bg-gray-100 cursor-pointer">清除选择</div>
+              {filtered.slice(0, 30).map(u => (
+                <div key={u.id} onClick={() => { onChange(u.name); setOpen(false); setSearch(""); }}
+                  className={`px-2 py-1 text-xs cursor-pointer hover:bg-blue-50 ${value === u.name ? "bg-blue-100 text-blue-700" : "text-gray-700"}`}>{u.name}</div>
+              ))}
+              {filtered.length === 0 && <div className="px-2 py-1 text-xs text-gray-400">无匹配</div>}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ProcurementModuleSelect({
   col,
   value,
@@ -1261,6 +1294,12 @@ export function ProjectDetail({
               </SelectContent>
             </Select>
           )
+        ) : col.type === "user" ? (
+          <UserSelect
+            value={editValue || ""}
+            onChange={(val) => { setEditValue(val); saveEdit(val); }}
+            userList={userList}
+          />
         ) : col.type === "procurement_module" ? (
           <ProcurementModuleSelect
             col={col}
