@@ -12,7 +12,6 @@ export async function GET(request: Request) {
     const supabase = await createServerClient();
 
     const issueResult = await supabase.rpc("dp_select", { p_table: "issue_mgmt_issues" });
-    const knowledgeResult = await supabase.rpc("dp_select", { p_table: "design_info_square.knowledge_reads" });
 
     // 计算工单角标
     const issues = (issueResult.data || []) as any[];
@@ -37,17 +36,16 @@ export async function GET(request: Request) {
         userExternalSourceIds.has(String(i.id))
     ).length;
 
-    // 计算信息广场未读角标
-    // 先查所有帖子，再减去已读
-    const knowledgePostsResult = await supabase.rpc("dp_select", { p_table: "design_info_square.knowledge_posts" });
-    const posts = (knowledgePostsResult.data || []) as any[];
-    const reads = (knowledgeResult.data || []) as any[];
-    const readPostIds = new Set(
-      reads.filter((r: any) => r.user_id === userId).map((r: any) => r.post_id)
-    );
-    const unreadCount = posts.filter(
-      (p: any) => !readPostIds.has(p.id) && p.is_deleted !== true && p.is_enabled !== false
-    ).length;
+    // 计算信息广场未读角标 — 基于最后访问时间
+    const { data: lastVisitRows } = await supabase.rpc("execute_sql", {
+      p_sql: `SELECT last_visit_at FROM design_info_square.user_last_visit WHERE user_id = '${userId.replace(/'/g, "''")}'`,
+    });
+    const lastVisitAt = ((lastVisitRows as Array<Record<string,unknown>>)?.[0]?.last_visit_at as string) || "1970-01-01";
+    const knowledgePostsResult = await supabase.rpc("execute_sql", {
+      p_sql: `SELECT id FROM design_info_square.knowledge_posts WHERE is_deleted IS NOT TRUE AND is_enabled IS NOT FALSE AND created_at > '${lastVisitAt}'`,
+    });
+    const unreadPosts = (knowledgePostsResult.data || []) as any[];
+    const unreadCount = unreadPosts.length;
 
     // 视频中心未读数
     const videoResult = await supabase.rpc("dp_select", { p_table: "video_center_videos" });

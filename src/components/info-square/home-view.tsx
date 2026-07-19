@@ -136,7 +136,7 @@ function formatDate(dateStr: string): string {
   return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`;
 }
 
-export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, onEnterVideoCenter }: HomeViewProps) {
+export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, onEnterVideoCenter, currentUser }: HomeViewProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [postCounts, setPostCounts] = useState<Record<string, number>>({});
   const [draftCount, setDraftCount] = useState(0);
@@ -146,8 +146,12 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
   const [statsData, setStatsData] = useState<StatsData | null>(null);
 
   const loadData = useCallback(async () => {
-    // 进入信息广场时标记所有帖子已读
-    fetch("/api/knowledge/mark-all-read", { method: "POST" }).catch(() => {});
+    // 进入信息广场时更新最后访问时间，清除角标
+    fetch("/api/knowledge/visit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: currentUser?.id || "anonymous" }),
+    }).catch(() => {});
     try {
       const [catRes, postsRes, statsRes, draftsRes] = await Promise.all([
         fetch("/api/knowledge/categories"),
