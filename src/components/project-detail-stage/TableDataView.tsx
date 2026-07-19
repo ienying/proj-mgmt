@@ -60,11 +60,17 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
   const columns = tableDef?.columns_config || [];
   const [productModules, setProductModules] = useState<{ code: string; name: string }[]>([]);
   const [pmSearch, setPmSearch] = useState("");
+  const [userList, setUserList] = useState<{ id: string; name: string }[]>([]);
+  const [userSearch, setUserSearch] = useState("");
 
   useEffect(() => {
     fetch("/api/dicts?type=product_module_types")
       .then(r => r.json())
       .then(d => setProductModules((d.data || []).map((item: any) => ({ code: item.code, name: item.module_name || item.product_name || item.code }))))
+      .catch(() => {});
+    fetch("/api/users")
+      .then(r => r.json())
+      .then(d => setUserList((d.data || []).map((u: any) => ({ id: u.id, name: u.name }))))
       .catch(() => {});
   }, []);
 
@@ -177,9 +183,17 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
     // 为 select/系统模块 列添加下拉数据验证
     cols.forEach((c, ci) => {
       const colLetter = String.fromCharCode(65 + ci);
-      if (c.type === "select" && c.options?.length) {
+      if ((c.type === "select" || c.type === "multiple_select") && c.options?.length) {
         const list = c.options.join(",");
-        for (let ri = 2; ri <= records.length + 1; ri++) {
+        for (let ri = 2; ri <= records.length + 100; ri++) {
+          ws.getCell(`${colLetter}${ri}`).dataValidation = {
+            type: "list", allowBlank: true, formulae: [`"${list}"`],
+          };
+        }
+      }
+      if (c.type === "user" && userList.length > 0) {
+        const list = userList.map(u => u.name).join(",");
+        for (let ri = 2; ri <= records.length + 100; ri++) {
           ws.getCell(`${colLetter}${ri}`).dataValidation = {
             type: "list", allowBlank: true, formulae: [`"${list}"`],
           };
@@ -187,7 +201,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
       }
       if (c.type === "procurement_module" && productModules.length > 0) {
         const list = productModules.map(m => m.name).join(",");
-        for (let ri = 2; ri <= records.length + 1; ri++) {
+        for (let ri = 2; ri <= records.length + 100; ri++) {
           ws.getCell(`${colLetter}${ri}`).dataValidation = {
             type: "list", allowBlank: true, formulae: [`"${list}"`],
           };
@@ -304,7 +318,22 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
           </div>
         );
       }
-      if (col.type === "select" && col.options?.length) {
+      if (col.type === "user") {
+        return (
+          <div className="flex flex-col gap-1" style={{ minWidth: 150 }}>
+            <input type="text" value={userSearch} onChange={(e) => setUserSearch(e.target.value)}
+              placeholder="搜索用户..." className="w-full px-2 py-1 text-[11px] border border-[var(--s-orange)] bg-white outline-none" autoFocus />
+            <div className="max-h-[120px] overflow-y-auto border border-[var(--s-border)] bg-white">
+              {userList.filter(u => !userSearch || u.name.includes(userSearch)).slice(0, 20).map(u => (
+                <div key={u.id} onClick={() => { setEditValue(u.name); setUserSearch(""); saveEdit(u.name); }}
+                  className={`px-2 py-1 text-[11px] cursor-pointer hover:bg-gray-100 ${editValue === u.name ? "bg-blue-50 text-blue-600" : "text-gray-700"}`}>{u.name}</div>
+              ))}
+              {userList.length === 0 && <div className="px-2 py-1 text-[11px] text-gray-400">加载中...</div>}
+            </div>
+          </div>
+        );
+      }
+      if ((col.type === "select" || col.type === "multiple_select") && col.options?.length) {
         return (
           <select value={editValue} onChange={(e) => { setEditValue(e.target.value); saveEdit(e.target.value); }}
             className="w-full px-1 py-0.5 text-[11px] border border-[var(--s-orange)] outline-none bg-white" autoFocus>
