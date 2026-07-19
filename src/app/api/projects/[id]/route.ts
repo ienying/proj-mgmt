@@ -475,7 +475,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // 如果类型/阶段/状态变更需要同步 schema
-    // 自动检测：如果 project schema 中只有系统表（progress_updates/operation_logs），强制同步
+    // 编辑保存时始终检查是否有新表需要同步（增量，不删已有表）
     let shouldSync = !!_sync_schema;
     const projectSchema = updateData.project_schema as string;
     const projectType = updateData.project_type as string;
@@ -485,12 +485,28 @@ export async function PUT(request: NextRequest) {
 
     if (!shouldSync && projectSchema && projectType) {
       try {
+        // 查当前 schema 中的表
         const { data: existingTables } = await client.rpc("execute_sql", {
           p_sql: `SELECT table_name FROM information_schema.tables WHERE table_schema = '${projectSchema}'`,
         });
-        const tables = (existingTables as Array<{ table_name: string }>) || [];
-        const nonSystemTables = tables.filter(t => t.table_name !== "progress_updates" && t.table_name !== "operation_logs");
-        if (nonSystemTables.length === 0) shouldSync = true; // schema 为空，自动同步
+        const existingSet = new Set(((existingTables as Array<{ table_name: string }>) || []).map(t => t.table_name));
+        // 查规则匹配到的表
+        const { data: rules } = await client.rpc("dp_select", { p_table: "project_schema_rules" });
+        const allRules = (rules as Record<string, unknown>[]) || [];
+        const matchedCodes = new Set<string>();
+        for (const rule of allRules) {
+          if (!rule.is_enabled) continue;
+          if (rule.rule_type !== "module" && rule.project_type === projectType) {
+            const rs = (rule as Record<string, unknown>).project_status as string | null;
+            if (!rs || rs === projectStatus) {
+              ((rule.table_definitions as string[]) || []).forEach(c => matchedCodes.add(c));
+            }
+          }
+        }
+        // 有规则匹配到但 schema 中没有的表 → 需要同步
+        for (const code of matchedCodes) {
+          if (!existingSet.has(code)) { shouldSync = true; break; }
+        }
       } catch { /* 检测失败不影响主流程 */ }
     }
 
