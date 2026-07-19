@@ -2325,7 +2325,7 @@ export function ProjectForm({
                               <div className="text-xs text-slate-400 truncate">{module.product_name}</div>
                               {module.model_spec && <div className="text-[11px] text-slate-400 truncate">型号规格：{module.model_spec}</div>}
                               <div className="text-[11px] text-slate-400 truncate">厂商：{module.vendor || "未指定"}</div>
-                              {(module as any).scope && <div className="text-[11px] text-slate-400 truncate">范围：{(module as any).scope}</div>}
+                              {module.scope && <div className="text-[11px] text-slate-400 truncate">范围：{module.scope}</div>}
                             </div>
                           </label>
                           {selectedModules.includes(module.module_code) && (
@@ -2934,15 +2934,19 @@ export function ProjectForm({
                 <div className="bg-white rounded-lg p-3.5 space-y-2.5 border">
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-500">进场时间</span>
-                    <span className="font-medium">{entryDate || "-"}</span>
+                    <span className="font-medium">{(entryDate || "").slice(0, 10) || "-"}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-500">初验时间</span>
-                    <span className="font-medium">{initialAcceptanceDate || "-"}</span>
+                    <span className="font-medium">{(initialAcceptanceDate || "").slice(0, 10) || "-"}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-500">终验时间</span>
-                    <span className="font-medium">{finalAcceptanceDate || "-"}</span>
+                    <span className="font-medium">{(finalAcceptanceDate || "").slice(0, 10) || "-"}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">要求时间</span>
+                    <span className="font-medium">{(requiredDate || "").slice(0, 10) || "-"}</span>
                   </div>
                 </div>
               </div>
