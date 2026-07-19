@@ -4352,6 +4352,12 @@ export function ProjectDetail({
                         </SelectContent>
                       </Select>
                     )
+                ) : col.type === "user" ? (
+                  <UserSelect
+                    value={newRowData[col.name] || ""}
+                    onChange={(val) => setNewRowData(prev => ({ ...prev, [col.name]: val }))}
+                    userList={userList}
+                  />
                 ) : col.type === "procurement_module" ? (
                   <ProcurementModuleSelect
                     col={col}
