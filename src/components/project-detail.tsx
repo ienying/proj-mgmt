@@ -777,10 +777,10 @@ export function ProjectDetail({
 
         // 3. 同步采购模块记录：对于含有 procurement_record 类型列的表，
         //    确保每个采购模块都有一条对应记录
-        await sortProcurementModuleRecords(visibleDefs, dataMap);
+        await sortProcurementModuleRecords(definitions, dataMap);
 
         // 4. 触发引用关系双向同步
-        const hasReferences = visibleDefs.some((def: TableDefinition) =>
+        const hasReferences = definitions.some((def: TableDefinition) =>
           def.references_config && def.references_config.length > 0
         );
         if (hasReferences) {
@@ -792,7 +792,7 @@ export function ProjectDetail({
             });
             // 同步后重新获取相关表数据
             const refTableCodes = new Set<string>();
-            visibleDefs.forEach((def: TableDefinition) => {
+            definitions.forEach((def: TableDefinition) => {
               if (def.references_config?.length) refTableCodes.add(def.table_code);
               def.references_config?.forEach(ref => refTableCodes.add(ref.source_table_code));
             });
@@ -811,7 +811,7 @@ export function ProjectDetail({
         setTableDataMap(dataMap);
 
         // Fetch linked task center workflows for records in these tables
-        fetchLinkedTasks(visibleDefs, dataMap);
+        fetchLinkedTasks(definitions, dataMap);
       }
     } catch (error) {
       console.error("加载数据失败:", error);
