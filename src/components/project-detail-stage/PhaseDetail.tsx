@@ -334,10 +334,13 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
   };
 
   // 筛选属于当前阶段 + 显示位置为 phase/both 的表
-  const phaseTables = tableDefs.filter(
-    (def) =>
-      (!def.stage_display_mode || def.stage_display_mode === "phase" || def.stage_display_mode === "both")
-  );
+  const phaseTables = stageCode
+    ? tableDefs.filter(
+        (def) =>
+          def.apply_project_stages?.includes(stageCode) &&
+          (!def.stage_display_mode || def.stage_display_mode === "phase" || def.stage_display_mode === "both")
+      )
+    : [];
 
   const expandedDef = expandedTable ? phaseTables.find((t) => t.table_code === expandedTable) : null;
   // 解析汇总字段：{column, label, hide}
