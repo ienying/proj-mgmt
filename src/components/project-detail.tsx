@@ -731,6 +731,11 @@ export function ProjectDetail({
   const loadTableDefinitionsAndData = async () => {
     setLoading(true);
     try {
+      // 查询 schema 中实际存在的表
+      const schemaCheckRes = await fetch(`/api/project-data/tables?schema=${encodeURIComponent(project.project_schema)}`);
+      const schemaCheckData = await schemaCheckRes.json();
+      const existingTableSet = new Set<string>((schemaCheckData.tables || []) as string[]);
+
       // 1. 获取表定义
       const defResponse = await fetch("/api/standards");
       const defData = await defResponse.json();
@@ -756,13 +761,14 @@ export function ProjectDetail({
           }
         });
 
-        setTableDefinitions(definitions);
+        // 只显示项目 schema 中实际存在的表
+        const visibleDefs = definitions.filter((def: TableDefinition) => existingTableSet.has(def.table_code));
+        setTableDefinitions(visibleDefs);
 
         // 并获取数据
         const dataMap: Record<string, TableData[]> = {};
-        // 并行获取所有表数据
         const dataResults = await Promise.all(
-          definitions.map((def: TableDefinition) =>
+          visibleDefs.map((def: TableDefinition) =>
             fetch(
               `/api/project-data?projectSchema=${project.project_schema}&tableCode=${def.table_code}`
             )

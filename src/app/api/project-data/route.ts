@@ -27,11 +27,11 @@ async function logOperation(
   action: string,
   targetType: string,
   targetName: string,
+  userName?: string,
   detail?: string,
 ) {
   try {
     const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema;
-    // 兜底建表（先 await 确保表存在）
     const { error: createErr } = await client.rpc("execute_sql", {
       p_sql: `CREATE TABLE IF NOT EXISTS ${safeSchema}.operation_logs (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -41,10 +41,9 @@ async function logOperation(
       )`,
     });
     if (createErr) { console.error("建表失败:", createErr); return; }
-    // 插入日志
     const { error: insertErr } = await client.rpc("dp_insert", {
       p_table: `${projectSchema}.operation_logs`,
-      p_data: { action, target_type: targetType, target_name: targetName, detail: detail || null },
+      p_data: { action, target_type: targetType, target_name: targetName, detail: detail || null, user_name: userName || "" },
     });
     if (insertErr) console.error("插入日志失败:", insertErr);
   } catch (e) { console.error("logOperation 失败:", e); }
@@ -138,7 +137,8 @@ export async function POST(request: NextRequest) {
     }
 
     const postMeta = await getTableMeta(client, tableCode);
-    await logOperation(client, projectSchema, "create", tableCode, `新建了记录到「${postMeta.name}」`);
+    const userName1 = body.user_name as string || "";
+    await logOperation(client, projectSchema, "create", tableCode, `新建了记录到「${postMeta.name}」`, userName1);
     return NextResponse.json({ data: (result as Array<Record<string, unknown>>)?.[0] || data }, { status: 201 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -243,7 +243,8 @@ export async function PUT(request: NextRequest) {
     const putMeta = await getTableMeta(client, tableCode);
     const changedCols = Object.keys(data).map(c => putMeta.colLabels[c] || c).join("、");
     const detail = changedCols ? `修改了 ${changedCols}` : undefined;
-    await logOperation(client, projectSchema, "update", tableCode, `编辑了「${putMeta.name}」中的记录`, detail);
+    const userName2 = body.user_name as string || "";
+    await logOperation(client, projectSchema, "update", tableCode, `编辑了「${putMeta.name}」中的记录`, userName2, detail);
     return NextResponse.json({ data: (result as Array<Record<string, unknown>>)?.[0] || data });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -282,7 +283,8 @@ export async function DELETE(request: NextRequest) {
     }
 
     const delMeta = await getTableMeta(client, tableCode);
-    await logOperation(client, projectSchema, "delete", tableCode, `删除了「${delMeta.name}」中的记录`);
+    const userName3 = searchParams.get("user_name") || "";
+    await logOperation(client, projectSchema, "delete", tableCode, `删除了「${delMeta.name}」中的记录`, userName3);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";

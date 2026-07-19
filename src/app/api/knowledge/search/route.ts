@@ -76,7 +76,29 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json({ data: enriched, total: enriched.length });
+    // 同时搜索视频
+    let videoResults: Array<Record<string, unknown>> = [];
+    if (keyword) {
+      try {
+        const { data: videoData } = await client.rpc("dp_select", { p_table: "video_center_videos" });
+        const videos = ((videoData as Record<string, unknown>[]) || []).filter(v => v.is_deleted !== true);
+        const kw2 = keyword.toLowerCase();
+        videoResults = videos.filter(v =>
+          String(v.title || "").toLowerCase().includes(kw2) ||
+          String(v.file_name || "").toLowerCase().includes(kw2) ||
+          String(v.tags || "").toLowerCase().includes(kw2) ||
+          String(v.description || "").toLowerCase().includes(kw2)
+        ).map(v => ({ ...v, _type: "video" }));
+      } catch {}
+    }
+
+    // 合并：帖子在前，视频在后
+    const allResults: Array<Record<string, unknown>> = [
+      ...enriched.map(p => ({ ...p, _type: "post" })),
+      ...videoResults,
+    ];
+
+    return NextResponse.json({ data: allResults, total: allResults.length, videoCount: videoResults.length });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

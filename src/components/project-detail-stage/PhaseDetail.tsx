@@ -74,10 +74,11 @@ interface PhaseDetailProps {
   projectStages?: { code: string; name: string; detail_description?: string; sort_order?: number }[];
   currentStageCode?: string;
   onRecordsUpdate?: (tableCode: string, records: Array<Record<string, unknown>>) => void;
-  onDataChange?: () => void; // 通知父组件刷新操作日志
+  onDataChange?: () => void;
+  userName?: string;
 }
 
-export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema, projectStages = [], currentStageCode, onRecordsUpdate, onDataChange }: PhaseDetailProps) {
+export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema, projectStages = [], currentStageCode, onRecordsUpdate, onDataChange, userName }: PhaseDetailProps) {
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [tableRecords, setTableRecords] = useState<Record<string, Array<Record<string, unknown>>>>({});
   const [loadingTable, setLoadingTable] = useState<string | null>(null);
@@ -132,6 +133,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
           tableCode,
           rowId: row.id,
           data: { [colName]: valueToSave },
+          user_name: userName || "",
         }),
       });
       if (res.ok) {
@@ -171,7 +173,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       const res = await fetch("/api/project-data", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectSchema, tableCode, data: initData }),
+        body: JSON.stringify({ projectSchema, tableCode, data: initData, user_name: userName || "" }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -190,7 +192,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
     const row = tableRecords[tableCode]?.[rowIdx];
     if (!row?.id) return;
     try {
-      const res = await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(tableCode)}&rowId=${row.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(tableCode)}&rowId=${row.id}&user_name=${encodeURIComponent(userName || "")}`, { method: "DELETE" });
       if (res.ok) {
         const currentRecords = tableRecords[tableCode] || [];
         const updated = currentRecords.filter((_, i) => i !== rowIdx);

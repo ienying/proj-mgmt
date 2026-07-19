@@ -23,6 +23,7 @@ interface TableDataViewProps {
     gantt_milestone_value?: string;
   };
   onBack: () => void;
+  userName?: string;
 }
 
 // 判断列是否可编辑
@@ -38,7 +39,7 @@ function isColEditable(col: { type: string; readonly?: boolean }, row?: Record<s
   return true;
 }
 
-export function TableDataView({ tableName, tableCode, projectSchema, tableDef, onBack }: TableDataViewProps) {
+export function TableDataView({ tableName, tableCode, projectSchema, tableDef, onBack, userName }: TableDataViewProps) {
   const [records, setRecords] = useState<Array<Record<string, unknown>>>([]);
   const [loading, setLoading] = useState(true);
   const [ganttExpanded, setGanttExpanded] = useState(true);
@@ -46,6 +47,8 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
   const [editingCell, setEditingCell] = useState<{ rowIdx: number; colName: string } | null>(null);
   const [editValue, setEditValue] = useState("");
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set()); // 多选
+  const importFileRef = useRef<HTMLInputElement>(null);
   // 抽屉表单模式
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerRowIdx, setDrawerRowIdx] = useState(-1);
@@ -59,7 +62,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
   useEffect(() => {
     if (!projectSchema) return;
     setLoading(true);
-    fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(tableCode)}`)
+    fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema || "")}&tableCode=${encodeURIComponent(tableCode)}`)
       .then((r) => r.json())
       .then((d) => { setRecords(d.data || []); setLoading(false); })
       .catch(() => setLoading(false));
@@ -75,7 +78,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
       const res = await fetch("/api/project-data", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectSchema, tableCode, rowId: row.id, data: { [colName]: val } }),
+        body: JSON.stringify({ projectSchema, tableCode, rowId: row.id, data: { [colName]: val }, user_name: userName || "" }),
       });
       if (res.ok) {
         setRecords((prev) => { const u = [...prev]; u[rowIdx] = { ...u[rowIdx], [colName]: val }; return u; });
@@ -105,7 +108,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
       const res = await fetch("/api/project-data", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectSchema, tableCode, data: initData }),
+        body: JSON.stringify({ projectSchema, tableCode, data: initData, user_name: userName || "" }),
       });
       if (res.ok) {
         const d = await res.json();
@@ -117,11 +120,80 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
   const deleteRow = async (rowIdx: number) => {
     const row = records[rowIdx];
     if (!row?.id || !projectSchema) return;
+    if (row.allow_delete === false) return;
     if (!confirm("确定删除？")) return;
     try {
-      const res = await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${tableCode}&rowId=${row.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema || "")}&tableCode=${tableCode}&rowId=${row.id}&user_name=${encodeURIComponent(userName || "")}`, { method: "DELETE" });
       if (res.ok) setRecords((prev) => prev.filter((_, i) => i !== rowIdx));
     } catch {}
+  };
+
+  const batchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`确定删除选中的 ${selectedIds.size} 条记录？`)) return;
+    for (const ri of selectedIds) {
+      const row = records[ri];
+      if (!row?.id || row.allow_delete === false) continue;
+      try {
+        await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema || "")}&tableCode=${tableCode}&rowId=${row.id}&user_name=${encodeURIComponent(userName || "")}`, { method: "DELETE" });
+      } catch {}
+    }
+    setRecords(prev => prev.filter((_, i) => !selectedIds.has(i)));
+    setSelectedIds(new Set());
+  };
+
+  const handleExportExcel = async () => {
+    const ExcelJS = await import("exceljs");
+    const Excel: any = (ExcelJS as any).default || ExcelJS;
+    const wb = new Excel.Workbook();
+    const ws = wb.addWorksheet(tableName || "Sheet1");
+    const cols = columns.filter(c => c.name !== tableDef?.stage_desc_column);
+    ws.columns = cols.map(c => ({ header: c.name, key: c.name, width: 20 }));
+    records.forEach(r => {
+      const row: Record<string, unknown> = {};
+      cols.forEach(c => { row[c.name] = r[c.name] ?? ""; });
+      ws.addRow(row);
+    });
+    const headerRow = ws.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE3F2FD" } };
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${tableName}_${new Date().toISOString().slice(0,10)}.xlsx`;
+    a.click();
+  };
+
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !projectSchema) return;
+    try {
+      const XLSX_dyn = await import("xlsx");
+      const xlsxLib: any = (XLSX_dyn as any).default || XLSX_dyn;
+      const data = await file.arrayBuffer();
+      const wb = xlsxLib.read(data, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = xlsxLib.utils.sheet_to_json(sheet, { defval: "", raw: false }) as Record<string, string>[];
+      const headers = Object.keys(rows[0] || {});
+      if (headers.length === 0) { alert("Excel 文件为空"); return; }
+      let imported = 0;
+      for (const row of rows) {
+        try {
+          const res = await fetch("/api/project-data", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ projectSchema, tableCode, data: row }),
+          });
+          if (res.ok) imported++;
+        } catch {}
+      }
+      const reload = await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema || "")}&tableCode=${encodeURIComponent(tableCode)}`);
+      const reloadJson = await reload.json();
+      setRecords(reloadJson.data || []);
+      alert(`成功导入 ${imported} 条记录`);
+    } catch (e) { alert("导入失败: " + String(e)); }
+    if (importFileRef.current) importFileRef.current.value = "";
   };
 
   const fmt = (v: unknown) => String(v ?? "—");
@@ -225,13 +297,32 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
 
       {/* 表格/操作 */}
       <div className="px-16 py-6">
-        {(tableDef?.allow_add !== false) && (
-          <button onClick={addRow}
-            className="mb-3 inline-flex items-center gap-1 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border border-[var(--s-green)] text-[var(--s-green)] cursor-pointer hover:bg-[rgba(43,138,62,.06)]"
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          {(tableDef?.allow_add !== false) && (
+            <button onClick={addRow}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border border-[var(--s-green)] text-[var(--s-green)] cursor-pointer hover:bg-[rgba(43,138,62,.06)]"
+              style={{ fontFamily: "var(--font-mono, monospace)" }}>
+              + 添加记录
+            </button>
+          )}
+          <label className="inline-flex items-center gap-1 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border border-[var(--s-border)] text-[var(--s-text-muted)] cursor-pointer hover:bg-[var(--s-surface2)]"
             style={{ fontFamily: "var(--font-mono, monospace)" }}>
-            + 添加记录
+            📥 导入Excel
+            <input ref={importFileRef} type="file" accept=".xlsx" className="hidden" onChange={handleImportExcel} />
+          </label>
+          <button onClick={handleExportExcel}
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border border-[var(--s-border)] text-[var(--s-text-muted)] cursor-pointer hover:bg-[var(--s-surface2)]"
+            style={{ fontFamily: "var(--font-mono, monospace)" }}>
+            📤 导出Excel
           </button>
-        )}
+          {selectedIds.size > 0 && (
+            <button onClick={batchDelete}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border border-[var(--s-red)] text-[var(--s-red)] cursor-pointer hover:bg-[rgba(224,49,49,.06)]"
+              style={{ fontFamily: "var(--font-mono, monospace)" }}>
+              🗑 删除选中 ({selectedIds.size})
+            </button>
+          )}
+        </div>
 
         {loading ? (
           <div className="text-xs text-[var(--s-text-muted)] py-8 text-center">加载中...</div>
@@ -239,13 +330,20 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
           <table className="w-full border-collapse">
             <thead>
               <tr>
+                <th className="w-8 text-center px-1 py-[11px] text-[10px] uppercase tracking-[1px] font-medium bg-[var(--s-surface)] border-b-2 border-[var(--s-border)] text-[var(--s-text-muted)]"
+                  style={{ fontFamily: "var(--font-mono, monospace)" }}>
+                  <input type="checkbox" onChange={(e) => {
+                    if (e.target.checked) setSelectedIds(new Set(records.map((_, i) => records[i].allow_delete !== false ? i : -1).filter(i => i >= 0)));
+                    else setSelectedIds(new Set());
+                  }} checked={selectedIds.size > 0 && selectedIds.size === records.filter(r => r.allow_delete !== false).length} />
+                </th>
                 <th className="text-left px-4 py-[11px] text-[10px] uppercase tracking-[1px] font-medium bg-[var(--s-surface)] border-b-2 border-[var(--s-border)] text-[var(--s-text-muted)]"
                   style={{ fontFamily: "var(--font-mono, monospace)" }}>#</th>
                 {columns.filter((c) => c.name !== tableDef?.stage_desc_column).map((col) => (
                   <th key={col.name} className="text-left px-4 py-[11px] text-[10px] uppercase tracking-[1px] font-medium bg-[var(--s-surface)] border-b-2 border-[var(--s-border)] text-[var(--s-text-muted)]"
                     style={{ fontFamily: "var(--font-mono, monospace)" }}>{col.name}{col.readonly ? " 🔒" : ""}</th>
                 ))}
-                {(tableDef?.allow_delete !== false) && <th className="w-10"></th>}
+                <th className="w-10"></th>
               </tr>
             </thead>
             <tbody>
@@ -257,19 +355,26 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
                     setSelectedRow(selectedRow === ri ? null : ri);
                   }
                 }}
-                  className={`cursor-pointer hover:bg-[var(--s-surface)] border-b border-[var(--s-border)] ${
-                    selectedRow === ri ? "bg-[rgba(28,126,214,.04)] border-l-2 border-l-[var(--s-blue)]" : ""
-                  }`}>
+                className={`cursor-pointer hover:bg-[var(--s-surface)] border-b border-[var(--s-border)] ${
+                  selectedRow === ri ? "bg-[rgba(28,126,214,.04)] border-l-2 border-l-[var(--s-blue)]" : ""
+                }`}>
+                  <td className="text-center px-1 py-3" onClick={(e) => e.stopPropagation()}>
+                    {records[ri].allow_delete !== false && (
+                      <input type="checkbox" checked={selectedIds.has(ri)} onChange={() => {
+                        setSelectedIds(prev => { const next = new Set(prev); if (next.has(ri)) next.delete(ri); else next.add(ri); return next; });
+                      }} />
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-[11px] text-[var(--s-text-muted)]" style={{ fontFamily: "var(--font-mono, monospace)" }}>{ri + 1}</td>
                   {columns.filter((c) => c.name !== tableDef?.stage_desc_column).map((col) => (
                     <td key={col.name} className="px-4 py-3 text-xs">{renderValue(col, row, ri)}</td>
                   ))}
-                  {(tableDef?.allow_delete !== false) && (
-                    <td className="px-2 py-3">{!row._readonly && (
+                  <td className="px-2 py-3">
+                    {records[ri].allow_delete !== false && !row._readonly && (
                       <button onClick={(e) => { e.stopPropagation(); deleteRow(ri); }}
                         className="text-[10px] text-[var(--s-red)] hover:underline">删除</button>
-                    )}</td>
-                  )}
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -339,7 +444,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
           fieldRows.forEach(row => { const r: string[] = []; row.forEach(f => { r.push(f.name); r.push(drawerEditing ? (drawerEditData[f.name]??"") : String(record[f.name]??"—")); }); rows.push(r); });
           const csv = rows.map(r => r.map(c => `"${(c||"").replace(/"/g,'""')}"`).join(",")).join("\n");
           const blob = new Blob(["﻿"+csv], { type: "text/csv;charset=utf-8" });
-          const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${tableName}_记录.csv`; a.click();
+          const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${tableName}_记录.xlsx`; a.click();
         };
         return (
           <>

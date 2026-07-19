@@ -21,10 +21,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 
+    const client = await createServerClient();
+
     // Log download
     if (attachmentId && postId && !preview) {
       try {
-        const client = await createServerClient();
         await client.rpc("dp_insert", {
           p_table: "design_info_square.knowledge_downloads",
           p_data: {
@@ -42,7 +43,22 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "File not readable" }, { status: 404 });
     }
 
-    const fileName = path.basename(filePath);
+    // 优先使用数据库中的原始文件名
+    let fileName = path.basename(filePath);
+    if (attachmentId) {
+      try {
+        const { data: attData } = await client.rpc("dp_get_by_id", {
+          p_table: "design_info_square.knowledge_attachments",
+          p_id: attachmentId,
+        });
+        const att = attData as Record<string, unknown> | null;
+        if (att?.file_name) {
+          const originalName = String(att.file_name);
+          const ext = path.extname(fileName);
+          fileName = originalName.includes(".") ? originalName : originalName + ext;
+        }
+      } catch { /* 降级使用 filePath */ }
+    }
     const size = await getFileSize(filePath);
 
     const ext = path.extname(filePath).toLowerCase();

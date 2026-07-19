@@ -327,37 +327,46 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
           ) : (
             <div className="space-y-3">
               {searchResults.map((item: Record<string, unknown>) => {
-                const catName = categories.find((c) => c.id === item.category_id)?.name || "";
-                const snippet = String(item.content || "").replace(/<[^>]+>/g, "").substring(0, 200);
+                const isVideo = item._type === "video";
+                const catName = !isVideo ? (categories.find((c) => c.id === item.category_id)?.name || "") : "";
+                const snippet = isVideo ? String(item.description || item.file_name || "") : String(item.content || "").replace(/<[^>]+>/g, "").substring(0, 200);
                 return (
                   <div
-                    key={String(item.id)}
+                    key={String(item.id) + (isVideo ? "_v" : "")}
                     onClick={() => {
-                      onPostClick({
-                        id: String(item.id),
-                        title: String(item.title || ""),
-                        content: String(item.content || ""),
-                        content_type: String(item.content_type || "rich_text"),
-                        version: Number(item.version || 1),
-                        category_id: String(item.category_id || ""),
-                        created_by: String(item.created_by || ""),
-                        created_by_name: String(item.created_by_name || ""),
-                        is_pinned: Boolean(item.is_pinned),
-                        tags: String(item.tags || ""),
-                        view_count: Number(item.view_count || 0),
-                        like_count: Number(item.like_count || 0),
-                        comment_count: Number(item.comment_count || 0),
-                        created_at: String(item.created_at || ""),
-                      });
+                      if (isVideo) {
+                        window.open(`/video-center?video=${item.id}`, "_blank");
+                      } else {
+                        onPostClick({
+                          id: String(item.id),
+                          title: String(item.title || ""),
+                          content: String(item.content || ""),
+                          content_type: String(item.content_type || "rich_text"),
+                          version: Number(item.version || 1),
+                          category_id: String(item.category_id || ""),
+                          created_by: String(item.created_by || ""),
+                          created_by_name: String(item.created_by_name || ""),
+                          is_pinned: Boolean(item.is_pinned),
+                          tags: String(item.tags || ""),
+                          view_count: Number(item.view_count || 0),
+                          like_count: Number(item.like_count || 0),
+                          comment_count: Number(item.comment_count || 0),
+                          created_at: String(item.created_at || ""),
+                        });
+                      }
                     }}
                     className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-md hover:border-indigo-200 cursor-pointer transition-all"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-gray-900 mb-1 truncate">{String(item.title || "")}</h4>
+                        <h4 className="font-medium text-gray-900 mb-1 truncate">
+                          {isVideo && <Video className="w-3.5 h-3.5 inline mr-1 text-purple-500" />}
+                          {String(item.title || "")}
+                        </h4>
                         <p className="text-sm text-gray-500 line-clamp-2 mb-2">{snippet}</p>
                         <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap">
-                          {catName && (
+                          {isVideo && <span className="bg-purple-100 rounded-full px-2 py-0.5 text-purple-600">🎬 视频</span>}
+                          {!isVideo && catName && (
                             <span className="bg-gray-100 rounded-full px-2 py-0.5 text-gray-600">{catName}</span>
                           )}
                           <span className="flex items-center gap-1">

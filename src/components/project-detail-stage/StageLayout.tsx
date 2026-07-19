@@ -17,6 +17,7 @@ import { ChartsSection } from "./ChartsSection";
 import { DeliverableModal } from "./DeliverableModal";
 import { IssueRiskModal } from "./IssueRiskModal";
 import { panelData, subContentData } from "./mock-data";
+import { useAuth } from "@/components/auth-context";
 
 export function StageLayout({
   project,
@@ -27,6 +28,8 @@ export function StageLayout({
   onBack,
   onSwitchLayout,
 }: StageLayoutProps) {
+  const { user: currentUser } = useAuth();
+  const userName = currentUser?.name || "";
   const [activePanel, setActivePanel] = useState<PanelKey>("scope");
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
   const [activeModule, setActiveModule] = useState("scope");
@@ -409,6 +412,7 @@ export function StageLayout({
             projectSchema={project.project_schema}
             tableDef={tableDefs.find((d) => d.table_code === subContent.key.replace("table:", ""))}
             onBack={handleCloseSubContent}
+            userName={userName}
           />
         ) : (
           <SubContentArea
@@ -553,6 +557,7 @@ export function StageLayout({
               onRecordsUpdate={(code, records) => {
                 setAllTableRecords((prev) => ({ ...prev, [code]: records }));
               }}
+              userName={userName}
               onDataChange={fetchOperations}
             />
 
@@ -591,7 +596,7 @@ export function StageLayout({
                       <span className="text-[10px] whitespace-nowrap min-w-[130px] tracking-[0.3px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
                         {log.created_at ? new Date(log.created_at).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : ""}
                       </span>
-                      <span className="font-semibold min-w-[50px] whitespace-nowrap" style={{ color: "var(--s-blue)" }}>{log.user_name || "系统"}</span>
+                      <span className="font-semibold min-w-[50px] whitespace-nowrap" style={{ color: "var(--s-blue)" }}>{log.user_name || "—"}</span>
                       <span>{log.target_name || log.action}{log.detail ? `：${log.detail}` : ""}</span>
                     </div>
                   ))
