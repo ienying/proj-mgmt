@@ -58,6 +58,15 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
   const uploadTargetRef = useRef<{ rowIdx: number; colName: string } | null>(null);
 
   const columns = tableDef?.columns_config || [];
+  const [productModules, setProductModules] = useState<{ code: string; name: string }[]>([]);
+  const [pmSearch, setPmSearch] = useState("");
+
+  useEffect(() => {
+    fetch("/api/dicts?type=product_module_types")
+      .then(r => r.json())
+      .then(d => setProductModules((d.data || []).map((item: any) => ({ code: item.code, name: item.module_name || item.product_name || item.code }))))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!projectSchema) return;
@@ -151,12 +160,40 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
     ws.columns = cols.map(c => ({ header: c.name, key: c.name, width: 20 }));
     records.forEach(r => {
       const row: Record<string, unknown> = {};
-      cols.forEach(c => { row[c.name] = r[c.name] ?? ""; });
+      cols.forEach(c => {
+        const v = r[c.name] ?? "";
+        // 系统模块类型：导出名称而非代码
+        if (c.type === "procurement_module" && v) {
+          row[c.name] = productModules.find(m => m.code === String(v))?.name || v;
+        } else {
+          row[c.name] = v;
+        }
+      });
       ws.addRow(row);
     });
     const headerRow = ws.getRow(1);
     headerRow.font = { bold: true };
     headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE3F2FD" } };
+    // 为 select/系统模块 列添加下拉数据验证
+    cols.forEach((c, ci) => {
+      const colLetter = String.fromCharCode(65 + ci);
+      if (c.type === "select" && c.options?.length) {
+        const list = c.options.join(",");
+        for (let ri = 2; ri <= records.length + 1; ri++) {
+          ws.getCell(`${colLetter}${ri}`).dataValidation = {
+            type: "list", allowBlank: true, formulae: [`"${list}"`],
+          };
+        }
+      }
+      if (c.type === "procurement_module" && productModules.length > 0) {
+        const list = productModules.map(m => m.name).join(",");
+        for (let ri = 2; ri <= records.length + 1; ri++) {
+          ws.getCell(`${colLetter}${ri}`).dataValidation = {
+            type: "list", allowBlank: true, formulae: [`"${list}"`],
+          };
+        }
+      }
+    });
     const buffer = await wb.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const a = document.createElement("a");
@@ -178,20 +215,56 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
       const headers = Object.keys(rows[0] || {});
       if (headers.length === 0) { alert("Excel 文件为空"); return; }
       let imported = 0;
-      for (const row of rows) {
+      const failures: Array<{ row: number; data: Record<string, string>; error: string }> = [];
+      for (let i = 0; i < rows.length; i++) {
+        // 系统模块类型：名称→代码转换
+        const row = { ...rows[i] };
+        columns.forEach(c => {
+          if (c.type === "procurement_module" && row[c.name]) {
+            const mod = productModules.find(m => m.name === row[c.name]);
+            if (mod) row[c.name] = mod.code; else failures.push({ row: i + 2, data: { ...rows[i] }, error: `模块名称"${row[c.name]}"未找到` });
+          }
+        });
         try {
           const res = await fetch("/api/project-data", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ projectSchema, tableCode, data: row }),
           });
-          if (res.ok) imported++;
-        } catch {}
+          if (res.ok) imported++; else {
+            const err = await res.json().catch(() => ({}));
+            failures.push({ row: i + 2, data: { ...rows[i] }, error: err.error || "新增失败" });
+          }
+        } catch { failures.push({ row: i + 2, data: { ...rows[i] }, error: "网络错误" }); }
       }
       const reload = await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema || "")}&tableCode=${encodeURIComponent(tableCode)}`);
       const reloadJson = await reload.json();
       setRecords(reloadJson.data || []);
-      alert(`成功导入 ${imported} 条记录`);
+      if (failures.length > 0) {
+        // 导出失败记录为 Excel
+        const ExcelJS = await import("exceljs");
+        const Excel: any = (ExcelJS as any).default || ExcelJS;
+        const wb2 = new Excel.Workbook();
+        const ws2 = wb2.addWorksheet("导入失败记录");
+        ws2.columns = [
+          { header: "行号", key: "row", width: 8 },
+          { header: "错误原因", key: "error", width: 30 },
+          ...headers.map(h => ({ header: h, key: h, width: 20 })),
+        ];
+        failures.forEach(f => {
+          ws2.addRow({ row: f.row, error: f.error, ...f.data });
+        });
+        const hdr = ws2.getRow(1); hdr.font = { bold: true };
+        const buf = await wb2.xlsx.writeBuffer();
+        const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `${tableName}_导入失败_${new Date().toISOString().slice(0,10)}.xlsx`;
+        a.click();
+        alert(`导入完成：成功 ${imported} 条，失败 ${failures.length} 条（已下载失败记录 Excel）`);
+      } else {
+        alert(`成功导入 ${imported} 条记录`);
+      }
     } catch (e) { alert("导入失败: " + String(e)); }
     if (importFileRef.current) importFileRef.current.value = "";
   };
@@ -210,7 +283,27 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
     const editable = isColEditable(col, row, tableDef);
     const isEditing = editingCell?.rowIdx === ri && editingCell?.colName === col.name;
 
+    // 系统模块类型：显示名称而非代码
+    const displayVal = col.type === "procurement_module" ? (productModules.find(m => m.code === rawVal)?.name || rawVal) : val;
+
     if (isEditing) {
+      if (col.type === "procurement_module") {
+        return (
+          <div className="flex flex-col gap-1" style={{ minWidth: 180 }}>
+            <input type="text" value={pmSearch} onChange={(e) => setPmSearch(e.target.value)}
+              placeholder="搜索模块..." className="w-full px-2 py-1 text-[11px] border border-[var(--s-orange)] bg-white outline-none" autoFocus />
+            <div className="max-h-[120px] overflow-y-auto border border-[var(--s-border)] bg-white">
+              {productModules.filter(m => !pmSearch || m.name.includes(pmSearch) || m.code.includes(pmSearch)).slice(0, 20).map(m => (
+                <div key={m.code} onClick={() => { setEditValue(m.name); setPmSearch(""); saveEdit(m.name); }}
+                  className={`px-2 py-1 text-[11px] cursor-pointer hover:bg-gray-100 ${editValue === m.name ? "bg-blue-50 text-blue-600" : "text-gray-700"}`}>
+                  {m.name}
+                </div>
+              ))}
+              {productModules.length === 0 && <div className="px-2 py-1 text-[11px] text-gray-400">加载中...</div>}
+            </div>
+          </div>
+        );
+      }
       if (col.type === "select" && col.options?.length) {
         return (
           <select value={editValue} onChange={(e) => { setEditValue(e.target.value); saveEdit(e.target.value); }}
@@ -233,9 +326,9 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
       <span
         className={editable ? "cursor-pointer hover:bg-gray-100 px-1 -mx-1 rounded" : ""}
         style={{ color: "var(--s-text)" }}
-        onClick={(e) => { if (editable) { e.stopPropagation(); setEditingCell({ rowIdx: ri, colName: col.name }); setEditValue(val === "—" ? "" : val); } }}
+        onClick={(e) => { if (editable) { e.stopPropagation(); setEditingCell({ rowIdx: ri, colName: col.name }); setEditValue(rawVal === "—" ? "" : rawVal); } }}
         title={editable ? "点击编辑" : "只读-该记录由管理员设置"}>
-        {val}
+        {displayVal}
       </span>
     );
   };
