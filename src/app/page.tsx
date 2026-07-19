@@ -126,7 +126,7 @@ export default function HomePage() {
   const [projects, setProjects] = useState(mockProjects);
   const [users, setUsers] = useState<{ id: string; username: string; name: string; phone?: string; email?: string; department?: string; position?: string; avatar?: string; role?: "super_admin" | "sub_admin" | "user"; is_active: boolean; created_at: string }[]>([]);
   const [standards, setStandards] = useState<TableDefinition[]>([]);
-  const [badges, setBadges] = useState<{ issues: number; messages: number; tasks: number }>({ issues: 0, messages: 0, tasks: 0 });
+  const [badges, setBadges] = useState<{ issues: number; messages: number; tasks: number; videos: number }>({ issues: 0, messages: 0, tasks: 0, videos: 0 });
   const userName = user?.name || "";
   const currentUser = user ? { id: user.id, name: user.name, department: user.department || "", phone: user.phone || "", role: user.role } : { id: "default_user", name: "", department: "", phone: "", role: "user" as const };
   const [viewingProject, setViewingProject] = useState<{
@@ -194,6 +194,7 @@ export default function HomePage() {
           issues: badgesData?.data?.issues || 0,
           messages: badgesData?.data?.messages || 0,
           tasks: tasksData?.data?.tasks || 0,
+          videos: badgesData?.data?.videos || 0,
         });
       } catch {}
     };

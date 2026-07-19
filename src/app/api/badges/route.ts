@@ -46,13 +46,26 @@ export async function GET(request: Request) {
       reads.filter((r: any) => r.user_id === userId).map((r: any) => r.post_id)
     );
     const unreadCount = posts.filter(
-      (p: any) => !readPostIds.has(p.id) && p.post_type === "announcement"
+      (p: any) => !readPostIds.has(p.id) && p.is_deleted !== true && p.is_enabled !== false
+    ).length;
+
+    // 视频中心未读数
+    const videoResult = await supabase.rpc("dp_select", { p_table: "video_center_videos" });
+    const videoReadsResult = await supabase.rpc("dp_select", { p_table: "video_center_reads" });
+    const videos = (videoResult.data || []) as any[];
+    const videoReads = (videoReadsResult.data || []) as any[];
+    const readVideoIds = new Set(
+      videoReads.filter((r: any) => r.user_id === userId).map((r: any) => r.video_id)
+    );
+    const unreadVideos = videos.filter(
+      (v: any) => !readVideoIds.has(v.id) && v.is_deleted !== true
     ).length;
 
     return NextResponse.json({
       data: {
         issues: issueCount + externalCount,
         messages: unreadCount,
+        videos: unreadVideos,
       },
     });
   } catch (error) {

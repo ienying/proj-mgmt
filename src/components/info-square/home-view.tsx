@@ -146,6 +146,8 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
   const [statsData, setStatsData] = useState<StatsData | null>(null);
 
   const loadData = useCallback(async () => {
+    // 进入信息广场时标记所有帖子已读
+    fetch("/api/knowledge/mark-all-read", { method: "POST" }).catch(() => {});
     try {
       const [catRes, postsRes, statsRes, draftsRes] = await Promise.all([
         fetch("/api/knowledge/categories"),
