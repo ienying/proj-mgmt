@@ -519,6 +519,7 @@ export function ProjectDetail({
   const [editValue, setEditValue] = useState<string>("");
   // 产品目录列表（系统产品目录名称，用于采购模块选择类型）
   const [productModuleNames, setProductModuleNames] = useState<string[]>([]);
+  const [userList, setUserList] = useState<{ id: string; name: string }[]>([]);
   const [dictCache, setDictCache] = useState<Record<string, string[]>>({});
   const getOpts = (col: ColumnConfig) => {
     const s = col.data_source && col.data_source !== "custom" ? (dictCache[col.data_source] || []) : [];
@@ -625,9 +626,9 @@ export function ProjectDetail({
     loadTableDefinitionsAndData();
   }, [project.project_schema]);
 
-  // 加载产品目录名称列表
+  // 加载产品目录名称列表和用户列表
   useEffect(() => {
-    const fetchModuleNames = async () => {
+    const fetchNames = async () => {
       try {
         const res = await fetch("/api/dicts?type=product_module_types");
         const json = await res.json();
@@ -635,9 +636,14 @@ export function ProjectDetail({
           const names = [...new Set(json.data.map((item: Record<string, unknown>) => item.module_name).filter(Boolean) as string[])];
           setProductModuleNames(names);
         }
-      } catch { /* ignore */ }
+      } catch {}
+      try {
+        const uRes = await fetch("/api/users");
+        const uJson = await uRes.json();
+        setUserList((uJson.data || []).map((u: any) => ({ id: u.id, name: u.name })));
+      } catch {}
     };
-    fetchModuleNames();
+    fetchNames();
   }, []);
 
   // 动态加载模块配置（根据项目类型+阶段）
@@ -2022,24 +2028,46 @@ export function ProjectDetail({
           <button onClick={async () => {
             try {
               const XLSX = await import("xlsx");
-              const exportData = filteredData.map((row: Record<string, unknown>) => {
-                const record: Record<string, string> = {};
+              const ExcelJS = await import("exceljs");
+              const Excel: any = (ExcelJS as any).default || ExcelJS;
+              const wb2 = new Excel.Workbook();
+              const ws2 = wb2.addWorksheet(table.table_name || "数据");
+              ws2.columns = columns.map((col: ColumnConfig) => ({ header: col.label || col.name, key: col.key || col.name, width: 20 }));
+              filteredData.forEach((row: Record<string, unknown>) => {
+                const rec: Record<string, unknown> = {};
                 columns.forEach((col: ColumnConfig) => {
                   const v = row[col.key ?? col.name];
-                  if (col.type === "multiselect" && Array.isArray(v)) {
-                    record[col.label || col.name] = v.join(", ");
-                  } else if (col.type === "boolean") {
-                    record[col.label || col.name] = v === true || v === "true" ? "是" : "否";
-                  } else {
-                    record[col.label || col.name] = v != null ? String(v) : "";
-                  }
+                  if (col.type === "multiselect" && Array.isArray(v)) rec[col.key || col.name] = v.join(", ");
+                  else if (col.type === "boolean") rec[col.key || col.name] = v === true ? "是" : "否";
+                  else if (col.type === "procurement_module" && v) rec[col.key || col.name] = productModuleNames.find(n => n === String(v)) || String(v);
+                  else rec[col.key || col.name] = v ?? "";
                 });
-                return record;
+                ws2.addRow(rec);
               });
-              const ws = XLSX.utils.json_to_sheet(exportData);
-              const wb = XLSX.utils.book_new();
-              XLSX.utils.book_append_sheet(wb, ws, table.table_name || "数据");
-              XLSX.writeFile(wb, `${table.table_name || table.table_code}_数据.xlsx`);
+              const hdr = ws2.getRow(1); hdr.font = { bold: true }; hdr.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE3F2FD" } };
+              // 下拉验证（隐藏 sheet）
+              const hiddenSheet = wb2.addWorksheet("_options"); hiddenSheet.state = "hidden";
+              let hr = 1;
+              columns.forEach((col: ColumnConfig, ci: number) => {
+                const colLetter = String.fromCharCode(65 + ci);
+                const options: string[] = [];
+                if (col.type === "select" && col.options?.length) options.push(...col.options);
+                else if (col.type === "user") options.push(...userList.map(u => u.name).filter(Boolean));
+                else if (col.type === "procurement_module") options.push(...productModuleNames.filter(Boolean));
+                if (options.length > 0) {
+                  const sr = hr;
+                  options.forEach(o => { hiddenSheet.getCell(`A${hr}`).value = o; hr++; });
+                  for (let r = 2; r <= filteredData.length + 100; r++) {
+                    ws2.getCell(`${colLetter}${r}`).dataValidation = { type: "list", allowBlank: true, formulae: [`_options!$A$${sr}:$A$${hr-1}`] };
+                  }
+                }
+              });
+              const buf = await wb2.xlsx.writeBuffer();
+              const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+              const a = document.createElement("a");
+              a.href = URL.createObjectURL(blob);
+              a.download = `${table.table_name || table.table_code}_数据.xlsx`;
+              a.click();
               toast.success("导出成功");
             } catch (e) { toast.error("导出失败: " + String(e)); }
           }} className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-gray-600 hover:bg-gray-200 transition-colors">

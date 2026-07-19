@@ -180,30 +180,23 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
     const headerRow = ws.getRow(1);
     headerRow.font = { bold: true };
     headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE3F2FD" } };
-    // 为 select/系统模块 列添加下拉数据验证
+    // 为 select/用户/系统模块 列添加下拉数据验证（使用隐藏 sheet 避免字符限制）
+    const hiddenSheet = wb.addWorksheet("_options");
+    hiddenSheet.state = "hidden";
+    let hiddenRow = 1;
     cols.forEach((c, ci) => {
       const colLetter = String.fromCharCode(65 + ci);
-      if ((c.type === "select" || c.type === "multiple_select") && c.options?.length) {
-        const list = c.options.join(",");
+      const options: string[] = [];
+      if ((c.type === "select" || c.type === "multiple_select") && c.options?.length) options.push(...c.options);
+      else if (c.type === "user" && userList.length > 0) options.push(...userList.map(u => u.name));
+      else if (c.type === "procurement_module" && productModules.length > 0) options.push(...productModules.map(m => m.name));
+      if (options.length > 0) {
+        const startRow = hiddenRow;
+        options.forEach(o => { hiddenSheet.getCell(`A${hiddenRow}`).value = o; hiddenRow++; });
+        const endRow = hiddenRow - 1;
         for (let ri = 2; ri <= records.length + 100; ri++) {
           ws.getCell(`${colLetter}${ri}`).dataValidation = {
-            type: "list", allowBlank: true, formulae: [`"${list}"`],
-          };
-        }
-      }
-      if (c.type === "user" && userList.length > 0) {
-        const list = userList.map(u => u.name).join(",");
-        for (let ri = 2; ri <= records.length + 100; ri++) {
-          ws.getCell(`${colLetter}${ri}`).dataValidation = {
-            type: "list", allowBlank: true, formulae: [`"${list}"`],
-          };
-        }
-      }
-      if (c.type === "procurement_module" && productModules.length > 0) {
-        const list = productModules.map(m => m.name).join(",");
-        for (let ri = 2; ri <= records.length + 100; ri++) {
-          ws.getCell(`${colLetter}${ri}`).dataValidation = {
-            type: "list", allowBlank: true, formulae: [`"${list}"`],
+            type: "list", allowBlank: true, formulae: [`_options!$A$${startRow}:$A$${endRow}`],
           };
         }
       }
