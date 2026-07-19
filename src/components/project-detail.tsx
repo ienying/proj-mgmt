@@ -756,26 +756,13 @@ export function ProjectDetail({
           }
         });
 
-        // 查询 schema 中实际存在的表，只展示规则匹配创建的表
-        const existingTableSet = new Set<string>();
-        try {
-          const existingRes = await fetch(`/api/project-data/tables?schema=${encodeURIComponent(project.project_schema)}`);
-          const existingData = await existingRes.json();
-          if (existingData.tables && Array.isArray(existingData.tables)) {
-            existingData.tables.forEach((t: string) => existingTableSet.add(t));
-          }
-        } catch {
-          // 查不到就不过滤
-        }
-        const visibleDefs = definitions.filter((def: TableDefinition) => existingTableSet.has(def.table_code));
-
-        setTableDefinitions(visibleDefs);
+        setTableDefinitions(definitions);
 
         // 并获取数据
         const dataMap: Record<string, TableData[]> = {};
         // 并行获取所有表数据
         const dataResults = await Promise.all(
-          visibleDefs.map((def: TableDefinition) =>
+          definitions.map((def: TableDefinition) =>
             fetch(
               `/api/project-data?projectSchema=${project.project_schema}&tableCode=${def.table_code}`
             )
