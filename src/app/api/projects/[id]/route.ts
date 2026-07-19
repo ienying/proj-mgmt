@@ -475,13 +475,26 @@ export async function PUT(request: NextRequest) {
     }
 
     // 如果类型/阶段/状态变更需要同步 schema
-    if (_sync_schema) {
-      const projectSchema = updateData.project_schema as string;
-      const projectType = updateData.project_type as string;
-      const projectStage = updateData.project_stage as string;
-      const projectStatus = updateData.project_status as string | null;
-      const procurementModules = (updateData.procurement_modules as string[]) || [];
+    // 自动检测：如果 project schema 中只有系统表（progress_updates/operation_logs），强制同步
+    let shouldSync = !!_sync_schema;
+    const projectSchema = updateData.project_schema as string;
+    const projectType = updateData.project_type as string;
+    const projectStage = updateData.project_stage as string;
+    const projectStatus = updateData.project_status as string | null;
+    const procurementModules = (updateData.procurement_modules as string[]) || [];
 
+    if (!shouldSync && projectSchema && projectType) {
+      try {
+        const { data: existingTables } = await client.rpc("execute_sql", {
+          p_sql: `SELECT table_name FROM information_schema.tables WHERE table_schema = '${projectSchema}'`,
+        });
+        const tables = (existingTables as Array<{ table_name: string }>) || [];
+        const nonSystemTables = tables.filter(t => t.table_name !== "progress_updates" && t.table_name !== "operation_logs");
+        if (nonSystemTables.length === 0) shouldSync = true; // schema 为空，自动同步
+      } catch { /* 检测失败不影响主流程 */ }
+    }
+
+    if (shouldSync) {
       if (projectSchema && (projectType || projectStage)) {
         try {
           const syncResult = await syncProjectSchema(client, projectSchema, projectType, procurementModules, projectStatus);
@@ -493,7 +506,6 @@ export async function PUT(request: NextRequest) {
           }
         } catch (syncErr) {
           console.error("同步Schema失败:", syncErr);
-          // 不阻塞主流程，但返回警告
           return NextResponse.json({
             data,
             warning: "项目已更新，但Schema同步部分失败，请手动检查"
