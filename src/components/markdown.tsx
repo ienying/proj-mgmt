@@ -319,6 +319,18 @@ function RenderBlock({ block }: { block: Block }) {
 }
 
 export const Markdown = memo(function Markdown({ children, className = "" }: { children: string; className?: string }) {
-  const blocks = useMemo(() => parseBlocks(children), [children]);
-  return <div className={className}>{blocks.map((block, i) => <RenderBlock key={i} block={block} />)}</div>;
+  const MAX_LEN = 500000; // 500KB，超出后截断渲染避免浏览器卡死
+  const truncated = children.length > MAX_LEN;
+  const content = truncated ? children.slice(0, MAX_LEN) : children;
+  const blocks = useMemo(() => parseBlocks(content), [content]);
+  return (
+    <div className={className}>
+      {truncated && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 mb-4 rounded">
+          ⚠️ 内容过长（{Math.round(children.length / 1024)}KB），仅预览前 {Math.round(MAX_LEN / 1024)}KB。发布不受影响，完整内容会正常保存。
+        </div>
+      )}
+      {blocks.map((block, i) => <RenderBlock key={i} block={block} />)}
+    </div>
+  );
 });
