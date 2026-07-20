@@ -455,8 +455,9 @@ export default function PostEditor({
                   variant={contentType === "rich_text" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => {
-                    if (contentType === "markdown" && content && content.length > 0) {
-                      if (!confirm("切换到富文本将丢失 Markdown 格式，确定继续？")) return;
+                    if (contentType === "markdown") {
+                      const mdVal = markdownRef.current?.value || content;
+                      if (mdVal && mdVal.length > 0 && !confirm("切换到富文本将丢失 Markdown 格式，确定继续？")) return;
                       setContent("");
                     }
                     setContentType("rich_text");
