@@ -447,7 +447,7 @@ export default function PostDrawer({
                 )}
               </Button>
 
-              {currentUser?.id && (
+              {(currentUser?.id === post.created_by || currentUser?.role === "super_admin") && (
                 <Button
                   variant="ghost"
                   size="sm"
