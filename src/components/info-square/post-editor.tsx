@@ -95,6 +95,8 @@ export default function PostEditor({
   const [uploadedFiles, setUploadedFiles] = useState<Attachment[]>([]);
   const [activeUploads, setActiveUploads] = useState<{ fileName: string; progress: number }[]>([]);
   const [saving, setSaving] = useState(false);
+  // 每次切换模式或打开时，重置保存状态防止按钮卡死
+  useEffect(() => { setSaving(false); }, [contentType, open]);
   const [showPreview, setShowPreview] = useState(false);
   // Ensure preview is reset on every open
   useEffect(() => { if (open) setShowPreview(false); }, [open]);
