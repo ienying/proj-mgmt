@@ -525,7 +525,22 @@ export default function PostDrawer({
                   id="post-content"
                 >
                   {post.content_type === "markdown" ? (
-                    <Markdown>{displayContent || ""}</Markdown>
+                    (displayContent || "").length > 100000 ? (
+                      <iframe
+                        ref={(el) => {
+                          if (el && el.contentDocument) {
+                            const doc = el.contentDocument;
+                            doc.open();
+                            doc.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:-apple-system,sans-serif;max-width:100%;margin:0;padding:0;line-height:1.8;color:#333;word-break:break-word;overflow-x:hidden}pre{background:#f5f5f5;padding:12px;border-radius:4px;overflow-x:auto;white-space:pre-wrap}code{background:#f5f5f5;padding:2px 4px;border-radius:2px;word-break:break-all}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}img{max-width:100%}blockquote{border-left:3px solid #ddd;padding-left:16px;color:#666;margin:0}</style></head><body>${displayContent||""}</body></html>`);
+                            doc.close();
+                          }
+                        }}
+                        style={{ width: "100%", border: "none", minHeight: Math.min((displayContent || "").length / 20, 3000) }}
+                        sandbox="allow-same-origin"
+                      />
+                    ) : (
+                      <Markdown>{displayContent || ""}</Markdown>
+                    )
                   ) : (
                     <div
                       dangerouslySetInnerHTML={{
