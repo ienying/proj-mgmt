@@ -484,9 +484,13 @@ export default function PostEditor({
                   ref={markdownRef}
                   defaultValue={content}
                   onChange={() => {
-                    // 去抖 200ms，避免大内容频繁触发 React 重渲染
-                    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-                    syncTimerRef.current = setTimeout(() => setContent(markdownRef.current?.value || ""), 200);
+                    // 小内容即时同步，大内容去抖
+                    const val = markdownRef.current?.value || "";
+                    if (val.length < 50000) setContent(val);
+                    else {
+                      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+                      syncTimerRef.current = setTimeout(() => setContent(val), 300);
+                    }
                   }}
                   onBlur={() => setContent(markdownRef.current?.value || "")}
                   placeholder="请输入 Markdown 内容..."
