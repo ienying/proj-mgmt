@@ -84,6 +84,9 @@ export default function PostEditor({
   const [contentType, setContentType] = useState<"rich_text" | "markdown">("rich_text");
   const markdownRef = useRef<HTMLTextAreaElement>(null);
   const [mdPreview, setMdPreview] = useState(""); // markdown 预览内容，手动触发
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [iframePreviewOpen, setIframePreviewOpen] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [isPinned, setIsPinned] = useState(false);
   const [tagStr, setTagStr] = useState("");
@@ -378,14 +381,16 @@ export default function PostEditor({
             if (contentType === "markdown") {
               const val = markdownRef.current?.value || "";
               setContent(val);
-              // 新窗口预览 markdown，避免大内容卡死主页面
-              const w = window.open("", "_blank", "width=900,height=700");
-              if (w) {
-                w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>预览</title><style>body{font-family:-apple-system,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.8;color:#333}pre{background:#f5f5f5;padding:12px;border-radius:4px;overflow-x:auto}code{background:#f5f5f5;padding:2px 4px;border-radius:2px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}img{max-width:100%}blockquote{border-left:3px solid #ddd;padding-left:16px;color:#666;margin:0}</style></head><body><div id="root"></div></body></html>`);
-                w.document.close();
-                // 使用简易 markdown 渲染
-                try {
-                  const el = w.document.getElementById("root");
+              setIframePreviewOpen(true);
+              // 延迟写入 iframe，确保 DOM 已挂载
+              setTimeout(() => {
+                const iframe = iframeRef.current;
+                if (iframe && iframe.contentDocument) {
+                  const doc = iframe.contentDocument;
+                  doc.open();
+                  doc.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:-apple-system,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.8;color:#333}pre{background:#f5f5f5;padding:12px;border-radius:4px;overflow-x:auto}code{background:#f5f5f5;padding:2px 4px;border-radius:2px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}img{max-width:100%}blockquote{border-left:3px solid #ddd;padding-left:16px;color:#666;margin:0}</style></head><body><div id="root"></div></body></html>`);
+                  doc.close();
+                  const el = doc.getElementById("root");
                   if (el) el.innerHTML = val
                     .replace(/### (.+)/g, "<h4>$1</h4>")
                     .replace(/## (.+)/g, "<h3>$1</h3>")
@@ -394,8 +399,8 @@ export default function PostEditor({
                     .replace(/\n- (.+)/g, "<li>$1</li>")
                     .replace(/\n\n/g, "<br><br>")
                     .replace(/\n/g, "<br>");
-                } catch {}
-              }
+                }
+              }, 100);
             } else {
               setShowPreview(!showPreview);
             }
@@ -469,7 +474,11 @@ export default function PostEditor({
                 <textarea
                   ref={markdownRef}
                   defaultValue={content}
-                  onChange={() => setContent(markdownRef.current?.value || "")}
+                  onChange={() => {
+                    // 去抖 200ms，避免大内容频繁触发 React 重渲染
+                    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+                    syncTimerRef.current = setTimeout(() => setContent(markdownRef.current?.value || ""), 200);
+                  }}
                   onBlur={() => setContent(markdownRef.current?.value || "")}
                   placeholder="请输入 Markdown 内容..."
                   className="flex-1 min-h-[400px] w-full font-mono text-sm p-4 border rounded-lg resize-y outline-none focus:border-indigo-400"
@@ -741,6 +750,18 @@ export default function PostEditor({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* markdown 预览弹窗（iframe，不卡主线程） */}
+      {iframePreviewOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => setIframePreviewOpen(false)}>
+          <div className="bg-white w-[90vw] h-[85vh] rounded-lg shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-2 border-b">
+              <span className="text-sm font-semibold">预览</span>
+              <button onClick={() => setIframePreviewOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+            </div>
+            <iframe ref={iframeRef} className="flex-1 w-full border-0" sandbox="allow-same-origin" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
