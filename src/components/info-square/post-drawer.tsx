@@ -525,11 +525,35 @@ export default function PostDrawer({
                   id="post-content"
                 >
                   {post.content_type === "markdown" ? (
-                    (post as any).content_html ? (
-                      <div dangerouslySetInnerHTML={{ __html: (post as any).content_html }} />
-                    ) : (
-                      <Markdown>{post.content || ""}</Markdown>
-                    )
+                    <>
+                      {/* 目录 TOC */}
+                      {(() => {
+                        const html = (post as any).content_html || "";
+                        const headings = [...html.matchAll(/<(h[1-4])[^>]*id="([^"]*)"[^>]*>(.*?)<\/\1>/g)];
+                        if (headings.length < 3) return null;
+                        return (
+                          <details className="mb-6 bg-gray-50 rounded-lg border border-gray-200" open>
+                            <summary className="px-4 py-2 text-sm font-semibold text-gray-600 cursor-pointer hover:text-gray-800">📑 目录</summary>
+                            <div className="px-4 pb-3 space-y-0.5">
+                              {headings.map((m, idx) => (
+                                <a key={idx} href={`#${m[2]}`}
+                                  className={`block text-sm hover:text-indigo-600 transition-colors ${
+                                    m[1] === "h1" ? "font-bold pl-0" : m[1] === "h2" ? "font-semibold pl-2" : m[1] === "h3" ? "pl-4 text-gray-600" : "pl-6 text-gray-500 text-xs"
+                                  }`}
+                                  onClick={(e) => { e.preventDefault(); document.getElementById(m[2])?.scrollIntoView({ behavior:"smooth" }); }}>
+                                  {m[3].replace(/<[^>]+>/g, "")}
+                                </a>
+                              ))}
+                            </div>
+                          </details>
+                        );
+                      })()}
+                      {(post as any).content_html ? (
+                        <div dangerouslySetInnerHTML={{ __html: (post as any).content_html }} />
+                      ) : (
+                        <Markdown>{post.content || ""}</Markdown>
+                      )}
+                    </>
                   ) : (
                     <div
                       dangerouslySetInnerHTML={{

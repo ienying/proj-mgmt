@@ -103,16 +103,54 @@ export async function POST(request: Request) {
     // Markdown → HTML 预渲染（方案 A：发布时转换，查看时零解析）
     let contentHtml = null;
     if (postData.content_type === "markdown" && postData.content) {
-      contentHtml = (postData.content as string)
-        .replace(/### (.+)/g, "<h4>$1</h4>")
-        .replace(/## (.+)/g, "<h3>$1</h3>")
-        .replace(/# (.+)/g, "<h2>$1</h2>")
-        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-        .replace(/`([^`]+)`/g, "<code>$1</code>")
-        .replace(/\n- (.+)/g, "<li>$1</li>")
-        .replace(/\n\n/g, "</p><p>")
-        .replace(/\n/g, "<br>");
-      contentHtml = "<p>" + contentHtml + "</p>";
+      const md = postData.content as string;
+      const lines = md.split("\n");
+      const html: string[] = [];
+      let inCodeBlock = false;
+      let inList = false;
+      let i = 0;
+      while (i < lines.length) {
+        const line = lines[i];
+        // 代码块
+        if (line.trim().startsWith("```")) {
+          if (inCodeBlock) { html.push("</code></pre>"); inCodeBlock = false; }
+          else { html.push("<pre class='bg-gray-100 rounded-lg p-4 overflow-x-auto my-3'><code>"); inCodeBlock = true; }
+          i++; continue;
+        }
+        if (inCodeBlock) { html.push(line + "\n"); i++; continue; }
+        // 空行
+        if (!line.trim()) { if (inList) { html.push("</ul>"); inList = false; } i++; continue; }
+        // 标题
+        const h4 = line.match(/^#### (.+)/);
+        if (h4) { if (inList) { html.push("</ul>"); inList = false; } html.push(`<h4 class="text-base font-semibold mt-5 mb-2 text-gray-800" id="${h4[1].replace(/\s+/g,"-").slice(0,30)}">${h4[1]}</h4>`); i++; continue; }
+        const h3 = line.match(/^### (.+)/);
+        if (h3) { if (inList) { html.push("</ul>"); inList = false; } html.push(`<h3 class="text-lg font-bold mt-6 mb-2 text-gray-900" id="${h3[1].replace(/\s+/g,"-").slice(0,30)}">${h3[1]}</h3>`); i++; continue; }
+        const h2 = line.match(/^## (.+)/);
+        if (h2) { if (inList) { html.push("</ul>"); inList = false; } html.push(`<h2 class="text-xl font-bold mt-6 mb-3 text-gray-900 border-b pb-2" id="${h2[1].replace(/\s+/g,"-").slice(0,30)}">${h2[1]}</h2>`); i++; continue; }
+        const h1 = line.match(/^# (.+)/);
+        if (h1) { if (inList) { html.push("</ul>"); inList = false; } html.push(`<h1 class="text-2xl font-bold mt-6 mb-3 text-gray-900" id="${h1[1].replace(/\s+/g,"-").slice(0,30)}">${h1[1]}</h1>`); i++; continue; }
+        // 无序列表
+        const ul = line.match(/^- (.+)/);
+        if (ul) { if (!inList) { html.push("<ul class='list-disc pl-5 my-2 space-y-1'>"); inList = true; } html.push(`<li class='text-gray-700'>${ul[1]}</li>`); i++; continue; }
+        // 水平线
+        if (/^---+$/.test(line.trim())) { if (inList) { html.push("</ul>"); inList = false; } html.push("<hr class='my-4 border-gray-200'>"); i++; continue; }
+        // 引用
+        const bq = line.match(/^> (.+)/);
+        if (bq) { if (inList) { html.push("</ul>"); inList = false; } html.push(`<blockquote class='border-l-4 border-gray-300 pl-4 my-2 text-gray-600 italic'>${bq[1]}</blockquote>`); i++; continue; }
+        // 普通段落
+        if (inList) { html.push("</ul>"); inList = false; }
+        const processed = line
+          .replace(/\!\[([^\]]*)\]\(([^)]+)\)/g, `<img src="$2" alt="$1" class="max-w-full rounded-lg my-2" />`)
+          .replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" class="text-indigo-600 hover:underline">$1</a>`)
+          .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+          .replace(/`([^`]+)`/g, "<code class='bg-gray-100 px-1.5 py-0.5 rounded text-sm text-pink-600'>$1</code>")
+          .replace(/\*(.+?)\*/g, "<em>$1</em>");
+        html.push(`<p class="my-1.5 text-gray-700 leading-relaxed">${processed}</p>`);
+        i++;
+      }
+      if (inList) html.push("</ul>");
+      if (inCodeBlock) html.push("</code></pre>");
+      contentHtml = html.join("\n");
     }
 
     const postPayload = {
