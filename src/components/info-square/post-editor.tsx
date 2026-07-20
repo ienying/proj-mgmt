@@ -297,7 +297,7 @@ export default function PostEditor({
   };
 
   const handleSave = async () => {
-    if (!title.trim()) return;
+    if (!title.trim() || saving) return;
 
     // 从 markdown 编辑器的 textarea 同步内容到 state
     const finalContent = contentType === "markdown" && markdownRef.current
@@ -388,7 +388,7 @@ export default function PostEditor({
                 if (iframe && iframe.contentDocument) {
                   const doc = iframe.contentDocument;
                   doc.open();
-                  doc.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:-apple-system,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.8;color:#333}pre{background:#f5f5f5;padding:12px;border-radius:4px;overflow-x:auto}code{background:#f5f5f5;padding:2px 4px;border-radius:2px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}img{max-width:100%}blockquote{border-left:3px solid #ddd;padding-left:16px;color:#666;margin:0}</style></head><body><div id="root"></div></body></html>`);
+                  doc.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:-apple-system,sans-serif;max-width:100%;margin:40px auto;padding:0 20px;line-height:1.8;color:#333;word-break:break-word;overflow-x:hidden}pre{background:#f5f5f5;padding:12px;border-radius:4px;overflow-x:auto;white-space:pre-wrap;word-break:break-all}code{background:#f5f5f5;padding:2px 4px;border-radius:2px;word-break:break-all}table{border-collapse:collapse;width:100%;display:block;overflow-x:auto}td,th{border:1px solid #ddd;padding:8px}img{max-width:100%}blockquote{border-left:3px solid #ddd;padding-left:16px;color:#666;margin:0}</style></head><body><div id="root"></div></body></html>`);
                   doc.close();
                   const el = doc.getElementById("root");
                   if (el) el.innerHTML = val
