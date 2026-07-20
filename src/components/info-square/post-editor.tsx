@@ -454,7 +454,13 @@ export default function PostEditor({
                 <Button
                   variant={contentType === "rich_text" ? "default" : "ghost"}
                   size="sm"
-                  onClick={() => setContentType("rich_text")}
+                  onClick={() => {
+                    if (contentType === "markdown" && content && content.length > 0) {
+                      if (!confirm("切换到富文本将丢失 Markdown 格式，确定继续？")) return;
+                      setContent("");
+                    }
+                    setContentType("rich_text");
+                  }}
                   className={contentType === "rich_text" ? "bg-white shadow-sm text-indigo-600 hover:bg-white" : "text-gray-500 hover:text-gray-700"}
                 >
                   富文本
