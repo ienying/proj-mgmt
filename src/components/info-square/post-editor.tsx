@@ -397,9 +397,9 @@ export default function PostEditor({
             <div className="flex-1 overflow-y-auto p-8 max-w-4xl mx-auto w-full">
               <h1 className="text-3xl font-bold mb-6">{title || "未命名"}</h1>
               {contentType === "markdown" ? (
-                <Markdown>{deferredContent}</Markdown>
+                <Markdown>{content}</Markdown>
               ) : (
-                <div className="prose max-w-none post-content break-words [overflow-wrap:anywhere] [&_img]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_table]:block [&_table]:overflow-x-auto" dangerouslySetInnerHTML={{ __html: deferredContent }} />
+                <div className="prose max-w-none post-content break-words [overflow-wrap:anywhere] [&_img]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_table]:block [&_table]:overflow-x-auto" dangerouslySetInnerHTML={{ __html: content }} />
               )}
             </div>
           ) : (
