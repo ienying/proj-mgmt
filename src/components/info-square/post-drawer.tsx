@@ -525,19 +525,31 @@ export default function PostDrawer({
                   id="post-content"
                 >
                   {post.content_type === "markdown" ? (
-                    (displayContent || "").length > 100000 ? (
-                      <iframe
-                        ref={(el) => {
-                          if (el && el.contentDocument) {
-                            const doc = el.contentDocument;
-                            doc.open();
-                            doc.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:-apple-system,sans-serif;max-width:100%;margin:0;padding:0;line-height:1.8;color:#333;word-break:break-word;overflow-x:hidden}pre{background:#f5f5f5;padding:12px;border-radius:4px;overflow-x:auto;white-space:pre-wrap}code{background:#f5f5f5;padding:2px 4px;border-radius:2px;word-break:break-all}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}img{max-width:100%}blockquote{border-left:3px solid #ddd;padding-left:16px;color:#666;margin:0}</style></head><body>${displayContent||""}</body></html>`);
-                            doc.close();
-                          }
-                        }}
-                        style={{ width: "100%", border: "none", minHeight: Math.min((displayContent || "").length / 20, 3000) }}
-                        sandbox="allow-same-origin"
-                      />
+                    (displayContent || "").length > 80000 ? (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
+                        <p className="text-amber-800 text-sm mb-3">内容较长（{Math.round((displayContent||"").length/1024)}KB），点击在新窗口查看完整内容</p>
+                        <button
+                          onClick={() => {
+                            const w = window.open("", "_blank", "width=900,height=700");
+                            if (w) {
+                              w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:-apple-system,sans-serif;max-width:100%;margin:0;padding:0 20px;line-height:1.8;color:#333;word-break:break-word;overflow-x:hidden}pre{background:#f5f5f5;padding:12px;border-radius:4px;overflow-x:auto;white-space:pre-wrap}code{background:#f5f5f5;padding:2px 4px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}img{max-width:100%}</style></head><body><div id="root"></div></body></html>`);
+                              w.document.close();
+                              const el = w.document.getElementById("root");
+                              if (el) el.innerHTML = (displayContent || "")
+                                .replace(/### (.+)/g, "<h4>$1</h4>")
+                                .replace(/## (.+)/g, "<h3>$1</h3>")
+                                .replace(/# (.+)/g, "<h2>$1</h2>")
+                                .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+                                .replace(/\n- (.+)/g, "<li>$1</li>")
+                                .replace(/\n\n/g, "<br><br>")
+                                .replace(/\n/g, "<br>");
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 px-4 py-2 text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 rounded transition-colors"
+                        >
+                          👁 在新窗口查看
+                        </button>
+                      </div>
                     ) : (
                       <Markdown>{displayContent || ""}</Markdown>
                     )
