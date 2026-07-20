@@ -312,9 +312,10 @@ export default function RichTextEditor(props: RichTextEditorProps) {
   var handleContainerClick = function () { if (editor) editor.focus(); };
 
   return (
-    <div className={`border border-gray-300 rounded-lg overflow-hidden focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-200 ${props.className || ""}`} onClick={handleContainerClick}>
+    <div className={`border border-gray-300 rounded-lg overflow-hidden focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-200 flex flex-col max-h-[calc(100vh-250px)] ${props.className || ""}`} onClick={handleContainerClick}>
+      <style>{`.w-e-text-container h1{font-size:2em!important;font-weight:700!important;margin:0.67em 0!important;line-height:1.3!important}.w-e-text-container h2{font-size:1.5em!important;font-weight:700!important;margin:0.83em 0!important;line-height:1.4!important;border-bottom:1px solid #e5e7eb;padding-bottom:0.3em}.w-e-text-container h3{font-size:1.25em!important;font-weight:600!important;margin:1em 0!important;line-height:1.5!important}.w-e-text-container h4{font-size:1.1em!important;font-weight:600!important;margin:0.8em 0!important}`}</style>
       <Toolbar editor={editor} defaultConfig={TOOLBAR_CONFIG} style={{ borderBottom: "1px solid #e5e7eb", position: "sticky", top: 0, zIndex: 10, background: "#fff" }} />
-      <Editor value={value} onChange={function (ed) { onChange(normalizeHtml(ed.getHtml())); }} onCreated={handleCreated} defaultConfig={editorConfig} style={{ minHeight: 180 }} />
+      <Editor value={value} onChange={function (ed) { onChange(normalizeHtml(ed.getHtml())); }} onCreated={handleCreated} defaultConfig={editorConfig} style={{ minHeight: 180, overflowY: "auto", flex: 1 }} />
     </div>
   );
 }
