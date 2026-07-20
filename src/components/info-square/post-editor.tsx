@@ -436,7 +436,7 @@ export default function PostEditor({
               {contentType === "markdown" ? (
                 <Markdown>{content}</Markdown>
               ) : (
-                <div className="prose max-w-none post-content break-words [overflow-wrap:anywhere] [&_img]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_table]:block [&_table]:overflow-x-auto" dangerouslySetInnerHTML={{ __html: content }} />
+                <div className="prose max-w-none post-content break-words [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:mt-8 [&_h1]:mb-4 [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:mt-6 [&_h2]:mb-3 [&_h2]:border-b [&_h2]:pb-2 [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:mt-5 [&_h3]:mb-2 [&_h4]:text-lg [&_h4]:font-semibold [&_h4]:mt-4 [&_h4]:mb-1 [overflow-wrap:anywhere] [&_img]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_table]:block [&_table]:overflow-x-auto" dangerouslySetInnerHTML={{ __html: content }} />
               )}
             </div>
           ) : (
