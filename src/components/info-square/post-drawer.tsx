@@ -562,8 +562,6 @@ export default function PostDrawer({
                       </>
                     );
                   })()}
-                    />
-                  )}
                 </div>
 
                 {post.tags && (
