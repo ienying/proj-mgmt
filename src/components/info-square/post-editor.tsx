@@ -375,13 +375,33 @@ export default function PostEditor({
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => {
-            if (!showPreview && contentType === "markdown" && markdownRef.current) {
-              setContent(markdownRef.current.value);
+            if (contentType === "markdown") {
+              const val = markdownRef.current?.value || "";
+              setContent(val);
+              // 新窗口预览 markdown，避免大内容卡死主页面
+              const w = window.open("", "_blank", "width=900,height=700");
+              if (w) {
+                w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>预览</title><style>body{font-family:-apple-system,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.8;color:#333}pre{background:#f5f5f5;padding:12px;border-radius:4px;overflow-x:auto}code{background:#f5f5f5;padding:2px 4px;border-radius:2px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}img{max-width:100%}blockquote{border-left:3px solid #ddd;padding-left:16px;color:#666;margin:0}</style></head><body><div id="root"></div></body></html>`);
+                w.document.close();
+                // 使用简易 markdown 渲染
+                try {
+                  const el = w.document.getElementById("root");
+                  if (el) el.innerHTML = val
+                    .replace(/### (.+)/g, "<h4>$1</h4>")
+                    .replace(/## (.+)/g, "<h3>$1</h3>")
+                    .replace(/# (.+)/g, "<h2>$1</h2>")
+                    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+                    .replace(/\n- (.+)/g, "<li>$1</li>")
+                    .replace(/\n\n/g, "<br><br>")
+                    .replace(/\n/g, "<br>");
+                } catch {}
+              }
+            } else {
+              setShowPreview(!showPreview);
             }
-            setShowPreview(!showPreview);
           }}>
-            {showPreview ? <EyeOff className="w-4 h-4 mr-1" /> : <Eye className="w-4 h-4 mr-1" />}
-            {showPreview ? "编辑" : "预览"}
+            <Eye className="w-4 h-4 mr-1" />
+            预览
           </Button>
           {!isEditing && (
             <Button variant="outline" onClick={handleSaveDraft} disabled={!title.trim() || saving} className="border-amber-300 text-amber-700 hover:bg-amber-50">
