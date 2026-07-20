@@ -524,18 +524,19 @@ export default function PostDrawer({
                   className="prose prose-sm max-w-none post-content [overflow-wrap:break-word] [&_img]:max-w-full [&_img]:h-auto [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_iframe]:max-w-full [&_video]:max-w-full"
                   id="post-content"
                 >
-                  {post.content_type === "markdown" ? (
-                    <>
-                      {/* 目录 TOC */}
-                      {(() => {
-                        const html = (post as any).content_html || "";
-                        const headings = [...html.matchAll(/<(h[1-4])[^>]*id="([^"]*)"[^>]*>(.*?)<\/\1>/g)];
-                        if (headings.length < 3) return null;
-                        return (
+                  {(() => {
+                    const htmlContent = post.content_type === "markdown"
+                      ? ((post as any).content_html || "")
+                      : (displayContent || "");
+                    // 提取标题生成目录
+                    const tocHeadings = [...htmlContent.matchAll(/<(h[1-4])[^>]*id="([^"]*)"[^>]*>(.*?)<\/\1>/gi)];
+                    return (
+                      <>
+                        {tocHeadings.length >= 3 && (
                           <details className="mb-6 bg-gray-50 rounded-lg border border-gray-200" open>
                             <summary className="px-4 py-2 text-sm font-semibold text-gray-600 cursor-pointer hover:text-gray-800">📑 目录</summary>
                             <div className="px-4 pb-3 space-y-0.5">
-                              {headings.map((m, idx) => (
+                              {tocHeadings.map((m, idx) => (
                                 <a key={idx} href={`#${m[2]}`}
                                   className={`block text-sm hover:text-indigo-600 transition-colors ${
                                     m[1] === "h1" ? "font-bold pl-0" : m[1] === "h2" ? "font-semibold pl-2" : m[1] === "h3" ? "pl-4 text-gray-600" : "pl-6 text-gray-500 text-xs"
@@ -546,22 +547,21 @@ export default function PostDrawer({
                               ))}
                             </div>
                           </details>
-                        );
-                      })()}
-                      {(post as any).content_html ? (
-                        <div dangerouslySetInnerHTML={{ __html: (post as any).content_html }} />
-                      ) : (
-                        <Markdown>{post.content || ""}</Markdown>
-                      )}
-                    </>
-                  ) : (
-                    <div
-                      dangerouslySetInnerHTML={{
-                        __html: (displayContent || "").replace(
-                          /<h([1-4])>/g,
-                          (_, n) => `<h${n} id="heading-${n}">`
-                        ),
-                      }}
+                        )}
+                        {post.content_type === "markdown" ? (
+                          (post as any).content_html ? (
+                            <div dangerouslySetInnerHTML={{ __html: (post as any).content_html }} />
+                          ) : (
+                            <Markdown>{post.content || ""}</Markdown>
+                          )
+                        ) : (
+                          <div dangerouslySetInnerHTML={{
+                            __html: (displayContent || "").replace(/<h([1-4])>/g, (_, n) => `<h${n} id="heading-${n}">`),
+                          }} />
+                        )}
+                      </>
+                    );
+                  })()}
                     />
                   )}
                 </div>
