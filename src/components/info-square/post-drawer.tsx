@@ -525,12 +525,20 @@ export default function PostDrawer({
                   id="post-content"
                 >
                   {post.content_type === "markdown" ? (
-                    (post.content || "").length > 80000 ? (
+                    ((post as any)._content_truncated || (post.content || "").length > 80000) ? (
                       <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
                         <p className="text-amber-800 text-sm mb-3">内容较长（{Math.round((post.content||"").length/1024)}KB），点击查看完整内容</p>
                         <button
-                          onClick={() => {
-                            const fc = post.content || "";
+                          onClick={async () => {
+                            // 优先用 detail 中的全量内容，否则请求 API
+                            let fc = detail?.versions?.[0]?.content || displayContent;
+                            if ((post as any)._content_truncated && (!fc || fc.length < 1000)) {
+                              try {
+                                const res = await fetch(`/api/knowledge/posts/${post.id}`);
+                                const json = await res.json();
+                                fc = json.data?.post?.content || json.data?.content || fc;
+                              } catch {}
+                            }
                             const w = window.open("", "_blank", "width=900,height=700");
                             if (w) {
                               w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:-apple-system,sans-serif;max-width:100%;margin:0;padding:0 20px;line-height:1.8;color:#333;word-break:break-word;overflow-x:hidden}pre{background:#f5f5f5;padding:12px;border-radius:4px;overflow-x:auto;white-space:pre-wrap}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}img{max-width:100%}</style></head><body><div id="root"></div></body></html>`);
