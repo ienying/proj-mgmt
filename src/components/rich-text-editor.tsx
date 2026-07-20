@@ -313,7 +313,7 @@ export default function RichTextEditor(props: RichTextEditorProps) {
 
   return (
     <div className={`border border-gray-300 rounded-lg overflow-hidden focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-200 ${props.className || ""}`} onClick={handleContainerClick}>
-      <Toolbar editor={editor} defaultConfig={TOOLBAR_CONFIG} style={{ borderBottom: "1px solid #e5e7eb" }} />
+      <Toolbar editor={editor} defaultConfig={TOOLBAR_CONFIG} style={{ borderBottom: "1px solid #e5e7eb", position: "sticky", top: 0, zIndex: 10, background: "#fff" }} />
       <Editor value={value} onChange={function (ed) { onChange(normalizeHtml(ed.getHtml())); }} onCreated={handleCreated} defaultConfig={editorConfig} style={{ minHeight: 180 }} />
     </div>
   );
