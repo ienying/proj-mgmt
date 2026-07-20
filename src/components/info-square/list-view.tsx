@@ -242,6 +242,7 @@ export default function ListView({
                 </div>
                 {/* Actions */}
                 <div className="shrink-0 flex items-center gap-1">
+                  {(currentUser?.id === post.created_by || currentUser?.role === "super_admin") && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -253,6 +254,7 @@ export default function ListView({
                   >
                     <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-500" />
                   </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
