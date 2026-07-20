@@ -82,6 +82,10 @@ export default function VideoGrid({ videos, loading, currentUser, onVideoClick, 
         >
           {/* Thumbnail area */}
           <div className="relative aspect-video bg-gradient-to-br from-purple-900/90 to-indigo-900/90 flex items-center justify-center overflow-hidden">
+            {(video as any).thumbnail && (
+              <img src={`/api/video-center/thumbnail?file=${encodeURIComponent((video as any).thumbnail)}`}
+                alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+            )}
             <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
             <Play className="w-12 h-12 text-white/80 group-hover:text-white group-hover:scale-110 transition-all" />
             {video.duration && (

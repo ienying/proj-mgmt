@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import fs from "fs";
+import { execSync } from "child_process";
 
 const VIDEO_DIR = path.join(process.cwd(), "data", "video-center", "videos");
+const THUMB_DIR = path.join(process.cwd(), "data", "video-center", "thumbnails");
 
 const ALLOWED_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/x-msvideo"];
 const ALLOWED_EXTS = [".mp4", ".webm", ".mov", ".avi"];
@@ -41,6 +43,16 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     fs.writeFileSync(filePath, buffer);
 
+    // 生成缩略图：取第一帧
+    let thumbnailPath = "";
+    try {
+      if (!fs.existsSync(THUMB_DIR)) fs.mkdirSync(THUMB_DIR, { recursive: true });
+      const thumbFile = storedName.replace(/\.[^.]+$/, ".jpg");
+      const thumbFullPath = path.join(THUMB_DIR, thumbFile);
+      execSync(`ffmpeg -i "${filePath}" -vframes 1 -q:v 5 "${thumbFullPath}" -y 2>/dev/null`, { timeout: 30000 });
+      if (fs.existsSync(thumbFullPath)) thumbnailPath = thumbFile;
+    } catch {}
+
     const url = `/api/video-center/download?file=${encodeURIComponent(storedName)}`;
 
     return NextResponse.json({
@@ -49,6 +61,7 @@ export async function POST(request: NextRequest) {
         file_name: file.name,
         file_path: storedName,
         file_size: file.size,
+        thumbnail: thumbnailPath || null,
       },
     });
   } catch (error) {

@@ -196,6 +196,7 @@ export default function VideoUploadDialog({
           file_name: uploadResult.file_name,
           file_path: uploadResult.file_path,
           file_size: uploadResult.file_size,
+          thumbnail: (uploadResult as any).thumbnail || null,
           module_name: moduleName || null,
           tags: tags || null,
           description: description || null,
