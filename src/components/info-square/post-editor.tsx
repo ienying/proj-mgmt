@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useDeferredValue } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { X, Upload, FileText, Plus, Eye, EyeOff, Save, Loader2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,8 +81,9 @@ export default function PostEditor({
 }: PostEditorProps) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const deferredContent = useDeferredValue(content); // 延迟预览渲染，避免大内容卡死
   const [contentType, setContentType] = useState<"rich_text" | "markdown">("rich_text");
+  const markdownRef = useRef<HTMLTextAreaElement>(null);
+  const [mdPreview, setMdPreview] = useState(""); // markdown 预览内容，手动触发
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [isPinned, setIsPinned] = useState(false);
   const [tagStr, setTagStr] = useState("");
@@ -435,16 +436,31 @@ export default function PostEditor({
 
               {/* Content editor */}
               {contentType === "markdown" ? (
-                <div className="grid grid-cols-2 gap-4 flex-1">
-                  <Textarea
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    placeholder="请输入 Markdown 内容..."
-                    className="min-h-[400px] font-mono text-sm"
-                  />
-                  <div className="border rounded-lg p-4 overflow-y-auto min-h-[400px] bg-gray-50">
-                    <Markdown>{content}</Markdown>
+                <div className="flex-1 flex flex-col">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Button size="sm" variant={mdPreview ? "ghost" : "default"} onClick={() => {
+                      const val = markdownRef.current?.value || "";
+                      setContent(val); // 同步到 state 用于保存
+                      setMdPreview("");
+                    }}>✏️ 编辑</Button>
+                    <Button size="sm" variant={mdPreview ? "default" : "ghost"} onClick={() => {
+                      const val = markdownRef.current?.value || "";
+                      setContent(val);
+                      setMdPreview(val);
+                    }}>👁 预览</Button>
                   </div>
+                  {mdPreview ? (
+                    <div className="border rounded-lg p-4 overflow-y-auto flex-1 min-h-[400px] bg-gray-50">
+                      <Markdown>{mdPreview}</Markdown>
+                    </div>
+                  ) : (
+                    <Textarea
+                      ref={markdownRef}
+                      defaultValue={content}
+                      placeholder="请输入 Markdown 内容..."
+                      className="flex-1 min-h-[400px] font-mono text-sm"
+                    />
+                  )}
                 </div>
               ) : (
                 <div ref={editorAreaRef} className="relative">
