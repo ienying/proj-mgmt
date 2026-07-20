@@ -296,11 +296,16 @@ export default function PostEditor({
   const handleSave = async () => {
     if (!title.trim()) return;
 
+    // 从 markdown 编辑器的 textarea 同步内容到 state
+    const finalContent = contentType === "markdown" && markdownRef.current
+      ? markdownRef.current.value
+      : content;
+
     const tags = tagStr.split(",").map((t) => t.trim()).filter(Boolean);
 
     const payload = {
       title,
-      content,
+      content: finalContent,
       content_type: contentType,
       category_id: selectedCategoryId || categoryId,
       is_pinned: isPinned,
@@ -369,7 +374,12 @@ export default function PostEditor({
           </h2>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setShowPreview(!showPreview)}>
+          <Button variant="outline" size="sm" onClick={() => {
+            if (!showPreview && contentType === "markdown" && markdownRef.current) {
+              setContent(markdownRef.current.value);
+            }
+            setShowPreview(!showPreview);
+          }}>
             {showPreview ? <EyeOff className="w-4 h-4 mr-1" /> : <Eye className="w-4 h-4 mr-1" />}
             {showPreview ? "编辑" : "预览"}
           </Button>
@@ -436,32 +446,14 @@ export default function PostEditor({
 
               {/* Content editor */}
               {contentType === "markdown" ? (
-                <div className="flex-1 flex flex-col">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Button size="sm" variant={mdPreview ? "ghost" : "default"} onClick={() => {
-                      const val = markdownRef.current?.value || "";
-                      setContent(val); // 同步到 state 用于保存
-                      setMdPreview("");
-                    }}>✏️ 编辑</Button>
-                    <Button size="sm" variant={mdPreview ? "default" : "ghost"} onClick={() => {
-                      const val = markdownRef.current?.value || "";
-                      setContent(val);
-                      setMdPreview(val);
-                    }}>👁 预览</Button>
-                  </div>
-                  {mdPreview ? (
-                    <div className="border rounded-lg p-4 overflow-y-auto flex-1 min-h-[400px] bg-gray-50">
-                      <Markdown>{mdPreview}</Markdown>
-                    </div>
-                  ) : (
-                    <Textarea
-                      ref={markdownRef}
-                      defaultValue={content}
-                      placeholder="请输入 Markdown 内容..."
-                      className="flex-1 min-h-[400px] font-mono text-sm"
-                    />
-                  )}
-                </div>
+                <textarea
+                  ref={markdownRef}
+                  defaultValue={content}
+                  onChange={() => {}} // read-only handler, just to avoid React warning
+                  onBlur={() => setContent(markdownRef.current?.value || "")}
+                  placeholder="请输入 Markdown 内容..."
+                  className="flex-1 min-h-[400px] w-full font-mono text-sm p-4 border rounded-lg resize-y outline-none focus:border-indigo-400"
+                />
               ) : (
                 <div ref={editorAreaRef} className="relative">
                   <RichTextEditor
