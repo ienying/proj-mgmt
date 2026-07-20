@@ -469,7 +469,7 @@ export default function PostEditor({
                 <textarea
                   ref={markdownRef}
                   defaultValue={content}
-                  onChange={() => {}} // read-only handler, just to avoid React warning
+                  onChange={() => setContent(markdownRef.current?.value || "")}
                   onBlur={() => setContent(markdownRef.current?.value || "")}
                   placeholder="请输入 Markdown 内容..."
                   className="flex-1 min-h-[400px] w-full font-mono text-sm p-4 border rounded-lg resize-y outline-none focus:border-indigo-400"
