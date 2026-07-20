@@ -8,13 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Download, Trash2, Share2, Eye, MessageCircle, Tag, Package,
-  Paperclip, Send, X, User, ChevronUp,
+  Paperclip, Send, X, User, ChevronUp, ChevronsUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
+import { copyToClipboard } from "@/lib/utils";
 
 interface VideoItem {
   id: string;
@@ -26,6 +30,7 @@ interface VideoItem {
   module_name?: string;
   tags?: string;
   description?: string;
+  thumbnail?: string;
   created_by?: string;
   created_by_name?: string;
   view_count: number;
@@ -97,7 +102,9 @@ export default function VideoDetailDrawer({
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
-  const [editModule, setEditModule] = useState("");
+  const [editModules, setEditModules] = useState<string[]>([]);
+  const [editModuleSearch, setEditModuleSearch] = useState("");
+  const [editModuleOpen, setEditModuleOpen] = useState(false);
   const [editTags, setEditTags] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [modules, setModules] = useState<string[]>([]);
@@ -128,6 +135,8 @@ export default function VideoDetailDrawer({
     setNewComment("");
     setReplyTo(null);
     setEditing(false);
+    setEditModuleSearch("");
+    setEditModuleOpen(false);
 
     fetch(`/api/video-center/videos/${video.id}`)
       .then((r) => r.json())
@@ -137,7 +146,8 @@ export default function VideoDetailDrawer({
           setAttachments((json.data.attachments as Attachment[]) || []);
           setComments((json.data.comments as Comment[]) || []);
           setEditTitle(String(json.data.title || ""));
-          setEditModule(String(json.data.module_name || ""));
+          const moduleNameStr = String(json.data.module_name || "");
+          setEditModules(moduleNameStr ? moduleNameStr.split(",").map((s: string) => s.trim()).filter(Boolean) : []);
           setEditTags(String(json.data.tags || ""));
           setEditDesc(String(json.data.description || ""));
         }
@@ -162,7 +172,7 @@ export default function VideoDetailDrawer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: editTitle,
-          module_name: editModule && editModule !== "none" ? editModule : null,
+          module_name: editModules.length > 0 ? editModules.join(",") : null,
           tags: editTags || null,
           description: editDesc || null,
         }),
@@ -174,6 +184,8 @@ export default function VideoDetailDrawer({
       }
       toast.success("已更新");
       setEditing(false);
+      setEditModuleSearch("");
+      setEditModuleOpen(false);
       onUpdated();
     } catch {
       toast.error("更新失败");
@@ -258,7 +270,7 @@ export default function VideoDetailDrawer({
   const handleShare = () => {
     if (!fullVideo?.share_token) return;
     const shareUrl = `${window.location.origin}/video-center/share/${fullVideo.share_token}`;
-    navigator.clipboard.writeText(shareUrl).then(() => {
+    copyToClipboard(shareUrl).then(() => {
       toast.success("分享链接已复制到剪贴板");
     }).catch(() => {
       toast.error("复制失败，请手动复制");
@@ -319,18 +331,89 @@ export default function VideoDetailDrawer({
                       <Input id="edit-title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
                     </div>
                     <div>
-                      <Label htmlFor="edit-module">产品目录</Label>
-                      <Select value={editModule} onValueChange={setEditModule}>
-                        <SelectTrigger id="edit-module">
-                          <SelectValue placeholder="选择产品目录" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">不选择模块</SelectItem>
-                          {modules.map((m) => (
-                            <SelectItem key={m} value={m}>{m}</SelectItem>
+                      <Label>产品目录</Label>
+                      <Popover open={editModuleOpen} onOpenChange={setEditModuleOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-between font-normal"
+                          >
+                            {editModules.length > 0
+                              ? `已选 ${editModules.length} 个产品目录`
+                              : "选择产品目录"}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                          <div className="p-2 border-b">
+                            <Input
+                              placeholder="搜索产品目录..."
+                              value={editModuleSearch}
+                              onChange={(e) => setEditModuleSearch(e.target.value)}
+                              className="h-8 text-sm border-0 focus-visible:ring-0"
+                            />
+                          </div>
+                          <div className="max-h-48 overflow-y-auto p-1">
+                            {(editModuleSearch
+                              ? modules.filter((m) => m.toLowerCase().includes(editModuleSearch.toLowerCase()))
+                              : modules
+                            ).length === 0 ? (
+                              <p className="text-sm text-gray-400 text-center py-4">未找到匹配的模块</p>
+                            ) : (
+                              (editModuleSearch
+                                ? modules.filter((m) => m.toLowerCase().includes(editModuleSearch.toLowerCase()))
+                                : modules
+                              ).map((m) => {
+                                const isSelected = editModules.includes(m);
+                                return (
+                                  <div
+                                    key={m}
+                                    className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-100 cursor-pointer"
+                                    onClick={() => {
+                                      if (isSelected) {
+                                        setEditModules((prev) => prev.filter((n) => n !== m));
+                                      } else {
+                                        setEditModules((prev) => [...prev, m]);
+                                      }
+                                    }}
+                                  >
+                                    <Checkbox checked={isSelected} className="h-3.5 w-3.5" />
+                                    <span className="text-sm">{m}</span>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                          {editModules.length > 0 && (
+                            <div className="border-t p-1.5">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="w-full text-xs text-gray-500"
+                                onClick={() => setEditModules([])}
+                              >
+                                清除全部
+                              </Button>
+                            </div>
+                          )}
+                        </PopoverContent>
+                      </Popover>
+                      {/* Selected module badges */}
+                      {editModules.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {editModules.map((name) => (
+                            <Badge
+                              key={name}
+                              variant="secondary"
+                              className="text-xs cursor-pointer hover:bg-gray-200"
+                              onClick={() => setEditModules((prev) => prev.filter((n) => n !== name))}
+                            >
+                              {name}
+                              <X className="w-3 h-3 ml-0.5" />
+                            </Badge>
                           ))}
-                        </SelectContent>
-                      </Select>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="edit-tags">标签</Label>
@@ -342,7 +425,7 @@ export default function VideoDetailDrawer({
                     </div>
                     <div className="flex gap-2">
                       <Button size="sm" onClick={handleSaveEdit}>保存</Button>
-                      <Button size="sm" variant="outline" onClick={() => setEditing(false)}>取消</Button>
+                      <Button size="sm" variant="outline" onClick={() => { setEditing(false); setEditModuleSearch(""); setEditModuleOpen(false); }}>取消</Button>
                     </div>
                   </div>
                 ) : (
@@ -360,15 +443,20 @@ export default function VideoDetailDrawer({
                       </span>
                     </div>
 
-                    {/* Module badge */}
-                    {fullVideo.module_name && (
-                      <div className="flex items-center gap-1">
-                        <Package className="w-4 h-4 text-purple-500" />
-                        <span className="text-sm text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full">
-                          {fullVideo.module_name}
-                        </span>
-                      </div>
-                    )}
+                    {/* Module badges */}
+                    {fullVideo.module_name && (() => {
+                      const moduleList = String(fullVideo.module_name).split(",").map((s: string) => s.trim()).filter(Boolean);
+                      return moduleList.length > 0 ? (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Package className="w-4 h-4 text-purple-500 shrink-0" />
+                          {moduleList.map((name: string) => (
+                            <span key={name} className="text-sm text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full">
+                              {name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null;
+                    })()}
 
                     {/* Tags */}
                     {fullVideo.tags && (
@@ -433,7 +521,7 @@ export default function VideoDetailDrawer({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setEditing(true)}
+                        onClick={() => { setEditing(true); setEditModuleSearch(""); setEditModuleOpen(false); }}
                       >
                         编辑
                       </Button>

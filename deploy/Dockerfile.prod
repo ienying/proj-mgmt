@@ -37,9 +37,9 @@ RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
 WORKDIR /app
 
-# Install runtime system dependencies
+# Install runtime system dependencies (bcrypt + ffmpeg for video thumbnail)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ \
+    python3 make g++ ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy package files

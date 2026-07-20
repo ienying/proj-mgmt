@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   ArrowLeft, Plus, Search, Eye, MessageCircle,
-  User, Clock, FileText, Download, Pin, Trash2, Edit
+  User, Clock, FileText, Download, Pin, Trash2, Edit, Package
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,7 @@ interface Post {
   created_by_name?: string;
   is_pinned: boolean;
   tags?: string;
+  module_name?: string;
   view_count: number;
   like_count: number;
   comment_count: number;
@@ -229,6 +230,20 @@ export default function ListView({
                       )}
                     </div>
                   )}
+                  {/* Module badges */}
+                  {post.module_name && (() => {
+                    const moduleList = post.module_name.split(",").map((s: string) => s.trim()).filter(Boolean);
+                    return moduleList.length > 0 ? (
+                      <div className="flex gap-1 flex-wrap mt-2 items-center">
+                        <Package className="w-3 h-3 text-purple-400 shrink-0" />
+                        {moduleList.map((name: string) => (
+                          <Badge key={name} variant="outline" className="text-[10px] bg-purple-50/50 text-purple-500 border-purple-100">
+                            {name}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
                   {/* Tags */}
                   {post.tags && (
                     <div className="flex gap-1 flex-wrap mt-2">

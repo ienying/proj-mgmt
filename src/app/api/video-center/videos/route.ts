@@ -22,7 +22,10 @@ export async function GET(request: Request) {
     );
 
     if (moduleName) {
-      items = items.filter((i) => String(i.module_name || "") === moduleName);
+      items = items.filter((i) => {
+        const modules = String(i.module_name || "").split(",").map((m) => m.trim());
+        return modules.includes(moduleName);
+      });
     }
     if (tags) {
       const tagList = tags.split(",").map((t) => t.trim().toLowerCase());

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { copyToClipboard } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -3161,28 +3162,11 @@ export function ProjectForm({
                   type="button"
                   onClick={() => {
                     const text = unmatchedNames.join("\n");
-                    if (navigator.clipboard) {
-                      navigator.clipboard.writeText(text).then(() => {
-                        toast.success("已复制 " + unmatchedNames.length + " 个模块名称到剪贴板");
-                      }).catch(() => {
-                        toast.error("复制失败，请手动复制");
-                      });
-                    } else {
-                      // fallback for non-HTTPS environments
-                      const ta = document.createElement("textarea");
-                      ta.value = text;
-                      ta.style.position = "fixed";
-                      ta.style.left = "-9999px";
-                      document.body.appendChild(ta);
-                      ta.select();
-                      try {
-                        document.execCommand("copy");
-                        toast.success("已复制 " + unmatchedNames.length + " 个模块名称到剪贴板");
-                      } catch {
-                        toast.error("复制失败，请手动复制");
-                      }
-                      document.body.removeChild(ta);
-                    }
+                    copyToClipboard(text).then(() => {
+                      toast.success("已复制 " + unmatchedNames.length + " 个模块名称到剪贴板");
+                    }).catch(() => {
+                      toast.error("复制失败，请手动复制");
+                    });
                   }}
                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-cyan-600 text-white hover:bg-cyan-700 transition-colors"
                 >

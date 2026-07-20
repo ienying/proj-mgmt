@@ -2,6 +2,7 @@
 
 import React, { memo, useMemo, Fragment, useEffect, useRef, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
+import { copyToClipboard } from "@/lib/utils";
 
 /* ---- 类型 ---- */
 type InlineToken =
@@ -242,7 +243,7 @@ function CodeBlock({ lang, text }: { lang: string; text: string }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(text).then(() => {
+    copyToClipboard(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }).catch(() => {});

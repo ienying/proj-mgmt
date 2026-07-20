@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import dynamic from "next/dynamic";
 const RichTextEditor = dynamic(() => import("@/components/rich-text-editor"), { ssr: false });
 import { toast } from "sonner";
+import { copyToClipboard } from "@/lib/utils";
 import {
   Plus, Search, Filter, FileText, AlertTriangle, CheckCircle2,
   Clock, XCircle, Archive, Send, Eye, Bell, BarChart3,
@@ -3295,7 +3296,7 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
                   <Input value={submissionUrl} readOnly className="h-8 text-xs font-mono bg-[#f4f7fb] flex-1 rounded-none border-2 border-[#0f2840]" />
                   <button className="px-3 py-1.5 border-2 border-[#0f2840] bg-white text-xs font-bold text-[#3d5468] hover:bg-[#0d2137] hover:text-white"
                     onClick={() => {
-                      navigator.clipboard.writeText(submissionUrl).then(() => {
+                      copyToClipboard(submissionUrl).then(() => {
                         setQrCopied(true); setTimeout(() => setQrCopied(false), 2000);
                       });
                     }}>

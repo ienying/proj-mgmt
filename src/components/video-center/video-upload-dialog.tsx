@@ -8,9 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Upload, X, Loader2, FileText, Paperclip, Check, ChevronsUpDown } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Upload, X, Loader2, FileText, Paperclip, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -31,9 +32,9 @@ export default function VideoUploadDialog({
 }: VideoUploadDialogProps) {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
-  const [moduleName, setModuleName] = useState("");
-  const [moduleOpen, setModuleOpen] = useState(false);
+  const [moduleNames, setModuleNames] = useState<string[]>([]);
   const [moduleSearch, setModuleSearch] = useState("");
+  const [moduleOpen, setModuleOpen] = useState(false);
   const [tags, setTags] = useState("");
   const [description, setDescription] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -46,7 +47,7 @@ export default function VideoUploadDialog({
   const resetForm = useCallback(() => {
     setVideoFile(null);
     setTitle("");
-    setModuleName("");
+    setModuleNames([]);
     setModuleOpen(false);
     setModuleSearch("");
     setTags("");
@@ -144,7 +145,7 @@ export default function VideoUploadDialog({
       const videoForm = new FormData();
       videoForm.append("file", videoFile);
 
-      const uploadResult = await new Promise<{ url: string; file_name: string; file_path: string; file_size: number }>(
+      const uploadResult = await new Promise<{ url: string; file_name: string; file_path: string; file_size: number; thumbnail?: string | null }>(
         (resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhrRef.current = xhr;
@@ -196,8 +197,8 @@ export default function VideoUploadDialog({
           file_name: uploadResult.file_name,
           file_path: uploadResult.file_path,
           file_size: uploadResult.file_size,
-          thumbnail: (uploadResult as any).thumbnail || null,
-          module_name: moduleName || null,
+          thumbnail: uploadResult.thumbnail || null,
+          module_name: moduleNames.length > 0 ? moduleNames.join(",") : null,
           tags: tags || null,
           description: description || null,
           created_by: currentUser?.id || null,
@@ -329,7 +330,7 @@ export default function VideoUploadDialog({
             />
           </div>
 
-          {/* Searchable Module dropdown */}
+          {/* Multi-select Module dropdown */}
           <div>
             <Label>产品目录</Label>
             <Popover open={moduleOpen} onOpenChange={setModuleOpen}>
@@ -339,54 +340,88 @@ export default function VideoUploadDialog({
                   role="combobox"
                   className={cn(
                     "w-full mt-1.5 justify-between font-normal",
-                    !moduleName && "text-muted-foreground"
+                    moduleNames.length === 0 && "text-muted-foreground"
                   )}
                   disabled={uploading}
                 >
-                  {moduleName || "选择产品目录（可选）"}
+                  {moduleNames.length > 0
+                    ? `已选 ${moduleNames.length} 个产品目录`
+                    : "选择产品目录（可选）"}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                <Command shouldFilter={false}>
-                  <CommandInput
+                <div className="p-2 border-b">
+                  <Input
                     placeholder="搜索产品目录..."
                     value={moduleSearch}
-                    onValueChange={setModuleSearch}
+                    onChange={(e) => setModuleSearch(e.target.value)}
+                    className="h-8 text-sm border-0 focus-visible:ring-0"
                   />
-                  <CommandList>
-                    <CommandEmpty>未找到匹配的模块</CommandEmpty>
-                    <CommandGroup>
-                      <CommandItem
-                        value="none"
-                        onSelect={() => {
-                          setModuleName("");
-                          setModuleSearch("");
-                          setModuleOpen(false);
-                        }}
-                      >
-                        <Check className={cn("mr-2 h-4 w-4", !moduleName ? "opacity-100" : "opacity-0")} />
-                        不选择模块
-                      </CommandItem>
-                      {filteredModules.map((m) => (
-                        <CommandItem
+                </div>
+                <div className="max-h-60 overflow-y-auto p-1">
+                  {filteredModules.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-4">未找到匹配的模块</p>
+                  ) : (
+                    filteredModules.map((m) => {
+                      const isSelected = moduleNames.includes(m);
+                      return (
+                        <div
                           key={m}
-                          value={m}
-                          onSelect={() => {
-                            setModuleName(m);
-                            setModuleSearch("");
-                            setModuleOpen(false);
+                          className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-100 cursor-pointer"
+                          onClick={() => {
+                            if (isSelected) {
+                              setModuleNames((prev) => prev.filter((n) => n !== m));
+                            } else {
+                              setModuleNames((prev) => [...prev, m]);
+                            }
                           }}
                         >
-                          <Check className={cn("mr-2 h-4 w-4", moduleName === m ? "opacity-100" : "opacity-0")} />
-                          {m}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
+                          <Checkbox checked={isSelected} className="h-3.5 w-3.5" />
+                          <span className="text-sm">{m}</span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+                {moduleNames.length > 0 && (
+                  <div className="border-t p-1.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full text-xs text-gray-500"
+                      onClick={() => {
+                        setModuleNames([]);
+                        setModuleSearch("");
+                        setModuleOpen(false);
+                      }}
+                    >
+                      清除全部
+                    </Button>
+                  </div>
+                )}
               </PopoverContent>
             </Popover>
+            {/* Show selected module badges */}
+            {moduleNames.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {moduleNames.map((name) => (
+                  <Badge
+                    key={name}
+                    variant="secondary"
+                    className="text-xs cursor-pointer hover:bg-gray-200"
+                    onClick={() => {
+                      if (!uploading) {
+                        setModuleNames((prev) => prev.filter((n) => n !== name));
+                      }
+                    }}
+                  >
+                    {name}
+                    <X className="w-3 h-3 ml-0.5" />
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Tags */}

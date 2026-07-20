@@ -14,6 +14,7 @@ interface VideoItem {
   module_name?: string;
   tags?: string;
   description?: string;
+  thumbnail?: string;
   created_by?: string;
   created_by_name?: string;
   view_count: number;
@@ -82,8 +83,8 @@ export default function VideoGrid({ videos, loading, currentUser, onVideoClick, 
         >
           {/* Thumbnail area */}
           <div className="relative aspect-video bg-gradient-to-br from-purple-900/90 to-indigo-900/90 flex items-center justify-center overflow-hidden">
-            {(video as any).thumbnail && (
-              <img src={`/api/video-center/thumbnail?file=${encodeURIComponent((video as any).thumbnail)}`}
+            {video.thumbnail && (
+              <img src={`/api/video-center/thumbnail?file=${encodeURIComponent(video.thumbnail)}`}
                 alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
             )}
             <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
@@ -114,14 +115,19 @@ export default function VideoGrid({ videos, loading, currentUser, onVideoClick, 
               {video.title}
             </h3>
 
-            {video.module_name && (
-              <div className="flex items-center gap-1 mb-2">
-                <Package className="w-3 h-3 text-purple-500" />
-                <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
-                  {video.module_name}
-                </span>
-              </div>
-            )}
+            {video.module_name && (() => {
+              const moduleList = video.module_name.split(",").map((s: string) => s.trim()).filter(Boolean);
+              return moduleList.length > 0 ? (
+                <div className="flex items-center gap-1 mb-2 flex-wrap">
+                  <Package className="w-3 h-3 text-purple-500 shrink-0" />
+                  {moduleList.map((name: string) => (
+                    <span key={name} className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              ) : null;
+            })()}
 
             {video.tags && (
               <div className="flex flex-wrap gap-1 mb-2">

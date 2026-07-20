@@ -179,6 +179,7 @@ function MultiSelectBadge({ label, options, selected, onChange }: {
   onChange: (v: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const uniqueOptions = [...new Set(options)];
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -193,8 +194,8 @@ function MultiSelectBadge({ label, options, selected, onChange }: {
       </PopoverTrigger>
       <PopoverContent className="w-[220px] p-1" align="start">
         <div className="max-h-[200px] overflow-y-auto space-y-0.5">
-          {options.length === 0 && <div className="text-xs text-gray-400 text-center py-3">暂无数据</div>}
-          {options.map((opt) => (
+          {uniqueOptions.length === 0 && <div className="text-xs text-gray-400 text-center py-3">暂无数据</div>}
+          {uniqueOptions.map((opt) => (
             <label key={opt} className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs hover:bg-gray-100 ${selected.includes(opt) ? 'bg-blue-50' : ''}`}>
               <Checkbox checked={selected.includes(opt)} onCheckedChange={(c) => {
                 onChange(c ? [...selected, opt] : selected.filter(s => s !== opt));

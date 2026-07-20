@@ -395,6 +395,7 @@ export const video_center_videos = pgTable("video_center.videos", {
   module_name: varchar("module_name", { length: 200 }),
   tags: varchar("tags", { length: 500 }),
   description: text("description"),
+  thumbnail: varchar("thumbnail", { length: 500 }),
   created_by: varchar("created_by", { length: 36 }),
   created_by_name: varchar("created_by_name", { length: 100 }),
   view_count: integer("view_count").default(0),

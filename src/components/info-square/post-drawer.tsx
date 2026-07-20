@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   X, MessageCircle, Send, Download, Share2,
   FileText, User, Clock, Eye, Copy, Check, Maximize2, Minimize2,
-  Lock, Unlock, Trash2, History
+  Lock, Unlock, Trash2, History, Package
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Markdown } from "@/components/markdown";
 import { toast } from "sonner";
 import { parseTags } from "./tag-utils";
+import { copyToClipboard } from "@/lib/utils";
 
 interface Attachment {
   id: string;
@@ -60,6 +61,7 @@ interface Post {
   created_by_name?: string;
   is_pinned: boolean;
   tags?: string;
+  module_name?: string;
   view_count: number;
   like_count: number;
   comment_count: number;
@@ -284,7 +286,7 @@ export default function PostDrawer({
     }
     const text = sharePassword ? `${shareUrl}\n访问密码: ${sharePassword}` : shareUrl;
     try {
-      await navigator.clipboard.writeText(text);
+      await copyToClipboard(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       toast.success(sharePassword ? "链接和密码已复制" : "链接已复制");
@@ -563,6 +565,20 @@ export default function PostDrawer({
                     );
                   })()}
                 </div>
+
+                {post.module_name && (() => {
+                  const moduleList = post.module_name.split(",").map((s: string) => s.trim()).filter(Boolean);
+                  return moduleList.length > 0 ? (
+                    <div className="flex gap-1.5 flex-wrap items-center">
+                      <Package className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                      {moduleList.map((name: string) => (
+                        <Badge key={name} variant="outline" className="text-xs bg-purple-50 text-purple-600 border-purple-200">
+                          {name}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : null;
+                })()}
 
                 {post.tags && (
                   <div className="flex gap-1.5 flex-wrap">

@@ -56,6 +56,7 @@ interface Post {
   version: number;
   category_id?: string;
   tags?: string;
+  module_name?: string;
   is_pinned: boolean;
   share_token?: string;
 }
@@ -92,6 +93,10 @@ export default function PostEditor({
   const [tagStr, setTagStr] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
   const [allTags, setAllTags] = useState<TagDef[]>([]);
+  const [productModules, setProductModules] = useState<string[]>([]);
+  const [selectedModules, setSelectedModules] = useState<string[]>([]);
+  const [moduleSearch, setModuleSearch] = useState("");
+  const [moduleOpen, setModuleOpen] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<Attachment[]>([]);
   const [activeUploads, setActiveUploads] = useState<{ fileName: string; progress: number }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -161,6 +166,19 @@ export default function PostEditor({
         .then((r) => r.json())
         .then((j) => setAllTags(j.data || []));
 
+      // Load product modules from system settings base data
+      fetch("/api/dicts?type=product_module_types")
+        .then((r) => r.json())
+        .then((j) => {
+          if (j.data) {
+            const names = (j.data as Array<{ module_name: string }>)
+              .map((m) => m.module_name)
+              .filter(Boolean);
+            setProductModules([...new Set(names)]);
+          }
+        })
+        .catch(() => {});
+
       // Populate form if editing
       if (editPost) {
         setTitle(editPost.title || "");
@@ -169,6 +187,9 @@ export default function PostEditor({
         setSelectedCategoryId(editPost.category_id || "");
         setIsPinned(editPost.is_pinned || false);
         setTagStr(parseTags(editPost.tags).join(", "));
+        // Populate product modules from comma-separated string
+        const moduleStr = String(editPost.module_name || "");
+        setSelectedModules(moduleStr ? moduleStr.split(",").map((s: string) => s.trim()).filter(Boolean) : []);
         // Load existing attachments
         fetch(`/api/knowledge/posts/${editPost.id}`)
           .then((r) => r.json())
@@ -182,6 +203,7 @@ export default function PostEditor({
         setSelectedCategoryId(categoryId || "");
         setIsPinned(false);
         setTagStr("");
+        setSelectedModules([]);
         setUploadedFiles([]);
       }
     }
@@ -315,6 +337,7 @@ export default function PostEditor({
       category_id: selectedCategoryId || categoryId,
       is_pinned: isPinned,
       tags,
+      module_name: selectedModules.length > 0 ? selectedModules.join(",") : null,
       created_by: currentUser?.id,
       created_by_name: currentUser?.name,
       attachments: uploadedFiles.map((f) => ({
@@ -347,6 +370,7 @@ export default function PostEditor({
       category_id: selectedCategoryId || categoryId,
       is_pinned: isPinned,
       tags: tags,
+      module_name: selectedModules.length > 0 ? selectedModules.join(",") : null,
       status: "draft",
       created_by: currentUser?.id,
       created_by_name: currentUser?.name,
@@ -590,6 +614,92 @@ export default function PostEditor({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Product Modules (multi-select) */}
+          <div>
+            <Label className="text-xs font-semibold text-gray-500 uppercase">产品目录</Label>
+            <Popover open={moduleOpen} onOpenChange={setModuleOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="w-full mt-1 justify-between h-auto min-h-9 py-1.5">
+                  <span className="text-muted-foreground text-xs">
+                    {selectedModules.length > 0
+                      ? `已选 ${selectedModules.length} 个产品目录`
+                      : "选择产品目录..."}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 ml-2 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-0" align="start">
+                <div className="p-2 border-b">
+                  <Input
+                    placeholder="搜索产品目录..."
+                    value={moduleSearch}
+                    onChange={(e) => setModuleSearch(e.target.value)}
+                    className="h-8 text-sm border-0 focus-visible:ring-0"
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto p-1">
+                  {(moduleSearch
+                    ? productModules.filter((m) => m.toLowerCase().includes(moduleSearch.toLowerCase()))
+                    : productModules
+                  ).length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-4">未找到匹配的模块</p>
+                  ) : (
+                    (moduleSearch
+                      ? productModules.filter((m) => m.toLowerCase().includes(moduleSearch.toLowerCase()))
+                      : productModules
+                    ).map((m) => {
+                      const isSelected = selectedModules.includes(m);
+                      return (
+                        <div
+                          key={m}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-100 cursor-pointer"
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedModules((prev) => prev.filter((n) => n !== m));
+                            } else {
+                              setSelectedModules((prev) => [...prev, m]);
+                            }
+                          }}
+                        >
+                          <Checkbox checked={isSelected} className="h-3.5 w-3.5" />
+                          <span className="text-sm">{m}</span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+                {selectedModules.length > 0 && (
+                  <div className="border-t p-1.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full text-xs text-gray-500"
+                      onClick={() => setSelectedModules([])}
+                    >
+                      清除全部
+                    </Button>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+            {/* Selected module badges */}
+            {selectedModules.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {selectedModules.map((name) => (
+                  <Badge
+                    key={name}
+                    variant="secondary"
+                    className="text-xs cursor-pointer hover:bg-gray-200"
+                    onClick={() => setSelectedModules((prev) => prev.filter((n) => n !== name))}
+                  >
+                    {name}
+                    <X className="w-3 h-3 ml-0.5" />
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Tags */}

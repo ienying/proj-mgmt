@@ -43,15 +43,17 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     fs.writeFileSync(filePath, buffer);
 
-    // 生成缩略图：取第一帧
+    // 生成缩略图：跳过开头 2 秒后取第一帧，避免黑屏
     let thumbnailPath = "";
     try {
       if (!fs.existsSync(THUMB_DIR)) fs.mkdirSync(THUMB_DIR, { recursive: true });
       const thumbFile = storedName.replace(/\.[^.]+$/, ".jpg");
       const thumbFullPath = path.join(THUMB_DIR, thumbFile);
-      execSync(`ffmpeg -i "${filePath}" -vframes 1 -q:v 5 "${thumbFullPath}" -y 2>/dev/null`, { timeout: 30000 });
+      execSync(`ffmpeg -ss 2 -i "${filePath}" -vframes 1 -update 1 -q:v 5 "${thumbFullPath}" -y 2>/dev/null`, { timeout: 30000 });
       if (fs.existsSync(thumbFullPath)) thumbnailPath = thumbFile;
-    } catch {}
+    } catch (e) {
+      console.error("视频缩略图生成失败:", e instanceof Error ? e.message : e);
+    }
 
     const url = `/api/video-center/download?file=${encodeURIComponent(storedName)}`;
 

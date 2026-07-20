@@ -20,6 +20,7 @@ interface VideoItem {
   module_name?: string;
   tags?: string;
   description?: string;
+  thumbnail?: string;
   created_by?: string;
   created_by_name?: string;
   view_count: number;

@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn, copyToClipboard } from "@/lib/utils";
 import { toast } from "sonner";
 import { Markdown } from "@/components/markdown";
 import { AIPromptDialog } from "@/components/ai-prompt-dialog";
@@ -4657,7 +4657,7 @@ export function ProjectDetail({
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      navigator.clipboard.writeText(aiResult.analysis);
+                      copyToClipboard(aiResult.analysis);
                       toast.success("已复制分析结果");
                     }}
                   >
