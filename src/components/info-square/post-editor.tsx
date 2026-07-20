@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useDeferredValue } from "react";
 import { X, Upload, FileText, Plus, Eye, EyeOff, Save, Loader2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,6 +81,7 @@ export default function PostEditor({
 }: PostEditorProps) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const deferredContent = useDeferredValue(content); // 延迟预览渲染，避免大内容卡死
   const [contentType, setContentType] = useState<"rich_text" | "markdown">("rich_text");
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [isPinned, setIsPinned] = useState(false);
@@ -395,9 +396,9 @@ export default function PostEditor({
             <div className="flex-1 overflow-y-auto p-8 max-w-4xl mx-auto w-full">
               <h1 className="text-3xl font-bold mb-6">{title || "未命名"}</h1>
               {contentType === "markdown" ? (
-                <Markdown>{content}</Markdown>
+                <Markdown>{deferredContent}</Markdown>
               ) : (
-                <div className="prose max-w-none post-content break-words [overflow-wrap:anywhere] [&_img]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_table]:block [&_table]:overflow-x-auto" dangerouslySetInnerHTML={{ __html: content }} />
+                <div className="prose max-w-none post-content break-words [overflow-wrap:anywhere] [&_img]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_table]:block [&_table]:overflow-x-auto" dangerouslySetInnerHTML={{ __html: deferredContent }} />
               )}
             </div>
           ) : (
