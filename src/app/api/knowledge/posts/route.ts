@@ -71,13 +71,8 @@ export async function GET(request: Request) {
     const allAttachments = (allAtts as Record<string, unknown>[]) || [];
     const enriched = paged.map((post) => {
       const pid = String(post.id);
-      // 列表页只返回内容前 500 字符摘要，减少传输和渲染压力
-      const fullContent = String(post.content || "");
-      const summary = fullContent.length > 500 ? fullContent.substring(0, 500) + "..." : fullContent;
       return {
         ...post,
-        content: summary,
-        _content_truncated: fullContent.length > 500,
         attachments: allAttachments.filter(
           (a) => String(a.post_id) === pid && a.is_deleted !== true
         ),
@@ -105,11 +100,27 @@ export async function POST(request: Request) {
       postData.tags = postData.tags.join(",");
     }
 
+    // Markdown → HTML 预渲染（方案 A：发布时转换，查看时零解析）
+    let contentHtml = null;
+    if (postData.content_type === "markdown" && postData.content) {
+      contentHtml = (postData.content as string)
+        .replace(/### (.+)/g, "<h4>$1</h4>")
+        .replace(/## (.+)/g, "<h3>$1</h3>")
+        .replace(/# (.+)/g, "<h2>$1</h2>")
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/`([^`]+)`/g, "<code>$1</code>")
+        .replace(/\n- (.+)/g, "<li>$1</li>")
+        .replace(/\n\n/g, "</p><p>")
+        .replace(/\n/g, "<br>");
+      contentHtml = "<p>" + contentHtml + "</p>";
+    }
+
     const postPayload = {
       ...postData,
       version: 1,
       content_type: postData.content_type || "rich_text",
       share_token: shareToken,
+      content_html: contentHtml,
     };
 
     const { data, error } = await client.rpc("dp_insert", {

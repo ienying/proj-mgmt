@@ -123,11 +123,27 @@ export async function PUT(
       postData.tags = postData.tags.join(",");
     }
 
+    // Markdown → HTML 预渲染
+    let contentHtml = null;
+    if (postData.content_type === "markdown" && postData.content) {
+      contentHtml = (postData.content as string)
+        .replace(/### (.+)/g, "<h4>$1</h4>")
+        .replace(/## (.+)/g, "<h3>$1</h3>")
+        .replace(/# (.+)/g, "<h2>$1</h2>")
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/`([^`]+)`/g, "<code>$1</code>")
+        .replace(/\n- (.+)/g, "<li>$1</li>")
+        .replace(/\n\n/g, "</p><p>")
+        .replace(/\n/g, "<br>");
+      contentHtml = "<p>" + contentHtml + "</p>";
+    }
+
     // Update post with new data + incremented version
     const updatePayload = {
       ...postData,
       version: newVersion,
       updated_at: new Date().toISOString(),
+      content_html: contentHtml,
     };
 
     const { data, error } = await client.rpc("dp_update", {
