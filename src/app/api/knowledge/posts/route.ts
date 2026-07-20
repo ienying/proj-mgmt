@@ -71,8 +71,13 @@ export async function GET(request: Request) {
     const allAttachments = (allAtts as Record<string, unknown>[]) || [];
     const enriched = paged.map((post) => {
       const pid = String(post.id);
+      // 列表页只返回内容前 500 字符摘要，减少传输和渲染压力
+      const fullContent = String(post.content || "");
+      const summary = fullContent.length > 500 ? fullContent.substring(0, 500) + "..." : fullContent;
       return {
         ...post,
+        content: summary,
+        _content_truncated: fullContent.length > 500,
         attachments: allAttachments.filter(
           (a) => String(a.post_id) === pid && a.is_deleted !== true
         ),
