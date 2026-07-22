@@ -31,6 +31,7 @@ interface VideoGridProps {
   currentUser?: { id?: string; name?: string; role?: string } | null;
   onVideoClick: (video: VideoItem) => void;
   onDelete: (video: VideoItem) => void;
+  unreadVideoIds?: Set<string>;
 }
 
 function formatFileSize(bytes: number): string {
@@ -46,7 +47,7 @@ function formatDate(dateStr: string): string {
   return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`;
 }
 
-export default function VideoGrid({ videos, loading, currentUser, onVideoClick, onDelete }: VideoGridProps) {
+export default function VideoGrid({ videos, loading, currentUser, onVideoClick, onDelete, unreadVideoIds }: VideoGridProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-400">
@@ -111,7 +112,10 @@ export default function VideoGrid({ videos, loading, currentUser, onVideoClick, 
 
           {/* Info */}
           <div className="p-4">
-            <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2 text-sm" title={video.title}>
+            <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2 text-sm flex items-center gap-1.5" title={video.title}>
+              {unreadVideoIds?.has(video.id) && (
+                <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="未读" />
+              )}
               {video.title}
             </h3>
 

@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import InfoBanner from "./info-banner";
 
 interface Category {
@@ -144,6 +143,7 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
   const [searchCategory, setSearchCategory] = useState("all");
   const [statsOpen, setStatsOpen] = useState(false);
   const [statsData, setStatsData] = useState<StatsData | null>(null);
+  const [expandedContributor, setExpandedContributor] = useState<number | null>(null);
   const [videoCount, setVideoCount] = useState(0);
 
   const loadData = useCallback(async () => {
@@ -295,7 +295,7 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
           variant="ghost"
           size="icon"
           className="h-10 w-10 rounded-xl shrink-0 hover:bg-violet-100 hover:text-violet-600"
-          onClick={() => { setStatsOpen(true); loadData(); }}
+          onClick={() => { setStatsOpen(true); setExpandedContributor(null); loadData(); }}
           title="信息统计"
         >
           <BarChart3 className="w-5 h-5" />
@@ -439,14 +439,14 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
 
       {/* Stats Dialog */}
       <Dialog open={statsOpen} onOpenChange={setStatsOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[85vh]">
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-violet-500" />
               信息统计
             </DialogTitle>
           </DialogHeader>
-          <ScrollArea className="max-h-[65vh]">
+          <div className="flex-1 min-h-0 overflow-y-auto">
             {statsData ? (
               <div className="space-y-6 pr-4">
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -494,45 +494,59 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
                     </tbody>
                   </table>
                 </div>
-                {/* 贡献者统计 */}
-                {statsData.contributors && statsData.contributors.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                      <Users className="w-4 h-4 text-violet-500" />
-                      贡献者统计
-                      <span className="text-xs text-gray-400 font-normal ml-1">共 {statsData.contributors.length} 人</span>
-                    </h3>
-                    <div className="border rounded-xl overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-gray-50 border-b">
-                            <th className="text-left px-4 py-2.5 font-medium text-gray-600">贡献者</th>
-                            <th className="text-center px-3 py-2.5 font-medium text-gray-600">发布数</th>
-                            <th className="text-center px-3 py-2.5 font-medium text-gray-600">总浏览</th>
-                            <th className="text-center px-3 py-2.5 font-medium text-gray-600">总点赞</th>
-                            <th className="text-left px-4 py-2.5 font-medium text-gray-600">涉及分类</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {statsData.contributors.map((c, i) => (
-                            <tr key={c.name} className="border-b last:border-0 hover:bg-gray-50/50">
-                              <td className="px-4 py-2.5 font-medium text-gray-800">
-                                <span className="inline-flex items-center gap-1.5">
-                                  <span className="w-5 h-5 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-[10px] font-bold">{i + 1}</span>
+                {/* 贡献者排行 */}
+                {statsData.contributors && statsData.contributors.length > 0 && (() => {
+                  const maxPosts = Math.max(...statsData.contributors.map((c) => c.post_count), 1);
+                  return (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                        <Users className="w-4 h-4 text-violet-500" />
+                        贡献者排行
+                        <span className="text-xs text-gray-400 font-normal ml-1">共 {statsData.contributors.length} 人</span>
+                      </h3>
+                      <div className="border rounded-xl divide-y max-h-[260px] overflow-y-auto">
+                        {statsData.contributors.map((c, i) => {
+                          const isExpanded = expandedContributor === i;
+                          const rankClass =
+                            i === 0 ? "text-amber-500" :
+                            i === 1 ? "text-slate-400" :
+                            i === 2 ? "text-orange-500" : "text-gray-400";
+                          return (
+                            <div key={c.name}>
+                              <div
+                                className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${isExpanded ? "bg-violet-50" : "hover:bg-gray-50"}`}
+                                onClick={() => setExpandedContributor(isExpanded ? null : i)}
+                              >
+                                <span className={`w-6 text-center text-xs font-bold shrink-0 ${rankClass}`}>
+                                  {i + 1}
+                                </span>
+                                <span className="text-sm font-medium text-gray-800 w-16 shrink-0 truncate">
                                   {c.name}
                                 </span>
-                              </td>
-                              <td className="text-center px-3 py-2.5 font-semibold">{c.post_count}</td>
-                              <td className="text-center px-3 py-2.5">{c.total_views}</td>
-                              <td className="text-center px-3 py-2.5">{c.total_likes}</td>
-                              <td className="px-4 py-2.5 text-gray-500 text-xs">{c.categories}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                                <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-gradient-to-r from-violet-400 to-violet-600 rounded-full transition-all duration-500"
+                                    style={{ width: `${Math.round((c.post_count / maxPosts) * 100)}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs font-semibold text-gray-600 w-10 text-right shrink-0">
+                                  {c.post_count}篇
+                                </span>
+                              </div>
+                              {isExpanded && (
+                                <div className="px-4 py-2 bg-gray-50/50 text-xs text-gray-500 flex items-center gap-4 ml-14">
+                                  <span>👁 {c.total_views} 浏览</span>
+                                  <span>👍 {c.total_likes} 点赞</span>
+                                  <span className="truncate">📂 {c.categories}</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             ) : (
               <div className="flex items-center justify-center h-40 text-gray-400">
@@ -540,7 +554,7 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
                 加载中...
               </div>
             )}
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

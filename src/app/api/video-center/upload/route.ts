@@ -14,6 +14,7 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
+    const captureSecond = parseFloat(formData.get("capture_second") as string) || 2;
 
     if (!file) {
       return NextResponse.json({ error: "未选择文件" }, { status: 400 });
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
       if (!fs.existsSync(THUMB_DIR)) fs.mkdirSync(THUMB_DIR, { recursive: true });
       const thumbFile = storedName.replace(/\.[^.]+$/, ".jpg");
       const thumbFullPath = path.join(THUMB_DIR, thumbFile);
-      execSync(`ffmpeg -ss 2 -i "${filePath}" -vframes 1 -update 1 -q:v 5 "${thumbFullPath}" -y 2>/dev/null`, { timeout: 30000 });
+      execSync(`ffmpeg -ss ${captureSecond} -i "${filePath}" -vframes 1 -update 1 -q:v 5 "${thumbFullPath}" -y 2>/dev/null`, { timeout: 30000 });
       if (fs.existsSync(thumbFullPath)) thumbnailPath = thumbFile;
     } catch (e) {
       console.error("视频缩略图生成失败:", e instanceof Error ? e.message : e);

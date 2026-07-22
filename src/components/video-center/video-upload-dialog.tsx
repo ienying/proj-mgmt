@@ -38,6 +38,7 @@ export default function VideoUploadDialog({
   const [tags, setTags] = useState("");
   const [description, setDescription] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [captureSecond, setCaptureSecond] = useState(2);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -53,6 +54,7 @@ export default function VideoUploadDialog({
     setTags("");
     setDescription("");
     setAttachments([]);
+    setCaptureSecond(2);
     setUploadProgress(0);
   }, []);
 
@@ -144,6 +146,7 @@ export default function VideoUploadDialog({
       // 1. Upload video file with abort support
       const videoForm = new FormData();
       videoForm.append("file", videoFile);
+      videoForm.append("capture_second", String(captureSecond));
 
       const uploadResult = await new Promise<{ url: string; file_name: string; file_path: string; file_size: number; thumbnail?: string | null }>(
         (resolve, reject) => {
@@ -315,6 +318,22 @@ export default function VideoUploadDialog({
                 点击选择视频文件
               </Button>
             )}
+          </div>
+
+          {/* Capture second */}
+          <div>
+            <Label htmlFor="vc-capture">封面截取时间（秒）</Label>
+            <p className="text-xs text-gray-400 mb-1">从视频第几秒截取封面图，默认 2 秒</p>
+            <Input
+              id="vc-capture"
+              type="number"
+              min={0}
+              step={0.5}
+              value={captureSecond}
+              onChange={(e) => setCaptureSecond(Number(e.target.value) || 0)}
+              className="mt-1 w-28"
+              disabled={uploading}
+            />
           </div>
 
           {/* Title */}

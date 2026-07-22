@@ -48,6 +48,7 @@ export default function VideoCenter({ currentUser, onBack }: VideoCenterProps) {
   const [detailVideo, setDetailVideo] = useState<VideoItem | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [unreadVideoIds, setUnreadVideoIds] = useState<Set<string>>(new Set());
 
   const fetchVideos = useCallback(async () => {
     setLoading(true);
@@ -86,6 +87,25 @@ export default function VideoCenter({ currentUser, onBack }: VideoCenterProps) {
     fetchVideos();
     fetchModules();
   }, [fetchVideos, fetchModules, refreshKey]);
+
+  // 获取未读视频ID
+  useEffect(() => {
+    if (!currentUser?.id || videos.length === 0) return;
+    fetch("/api/video-center/read-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: currentUser.id, video_ids: videos.map(v => v.id) }),
+    })
+      .then(r => r.json())
+      .then(j => {
+        if (j.data?.read_ids) {
+          const readSet = new Set(j.data.read_ids);
+          const unread = new Set(videos.filter(v => !readSet.has(v.id) && v.created_by !== currentUser.id).map(v => v.id));
+          setUnreadVideoIds(unread);
+        }
+      })
+      .catch(() => {});
+  }, [currentUser?.id, videos]);
 
   const handleUploadSuccess = () => {
     setUploadOpen(false);
@@ -206,6 +226,7 @@ export default function VideoCenter({ currentUser, onBack }: VideoCenterProps) {
           currentUser={currentUser}
           onVideoClick={handleVideoClick}
           onDelete={handleDelete}
+          unreadVideoIds={unreadVideoIds}
         />
       </div>
 

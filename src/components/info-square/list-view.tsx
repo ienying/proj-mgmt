@@ -82,6 +82,7 @@ export default function ListView({
   const [loading, setLoading] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [total, setTotal] = useState(0);
+  const [unreadIds, setUnreadIds] = useState<Set<string>>(new Set());
 
   const loadPosts = useCallback(async () => {
     setLoading(true);
@@ -105,6 +106,29 @@ export default function ListView({
   useEffect(() => {
     loadPosts();
   }, [loadPosts]);
+
+  // 获取当前用户已读帖子ID列表，未读的显示红点
+  useEffect(() => {
+    if (!currentUser?.id || isDraft || posts.length === 0) return;
+    const ids = posts.map(p => p.id);
+    fetch(`/api/knowledge/read-status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: currentUser.id, post_ids: ids }),
+    })
+      .then(r => r.json())
+      .then(j => {
+        if (j.data?.read_ids) {
+          const readSet = new Set(j.data.read_ids);
+          // 未读 = 不在已读集合中 且 不是自己创建的
+          const unread = new Set(ids.filter(id => !readSet.has(id)));
+          // 排除自己创建的帖子
+          posts.filter(p => p.created_by === currentUser.id).forEach(p => unread.delete(p.id));
+          setUnreadIds(unread);
+        }
+      })
+      .catch(() => {});
+  }, [currentUser?.id, isDraft, posts]);
 
   const handleSearch = () => {
     loadPosts();
@@ -190,6 +214,10 @@ export default function ListView({
                 >
                   <div className="flex items-center gap-2 mb-1">
                     {post.is_pinned && <Pin className="w-3.5 h-3.5 text-red-500 shrink-0" />}
+                    {/* 未读红点 */}
+                    {unreadIds.has(post.id) && post.created_by !== currentUser?.id && (
+                      <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="未读" />
+                    )}
                     <h4 className="font-medium text-gray-900 truncate">{post.title}</h4>
                     <Badge variant="outline" className="text-xs shrink-0">v{post.version}</Badge>
                   </div>

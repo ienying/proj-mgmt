@@ -40,23 +40,33 @@ export async function GET(request: Request) {
     const { data: lastVisitRows } = await supabase.rpc("execute_sql", {
       p_sql: `SELECT last_visit_at FROM design_info_square.user_last_visit WHERE user_id = '${userId.replace(/'/g, "''")}'`,
     });
-    const lastVisitAt = ((lastVisitRows as Array<Record<string,unknown>>)?.[0]?.last_visit_at as string) || "1970-01-01";
-    const knowledgePostsResult = await supabase.rpc("execute_sql", {
-      p_sql: `SELECT id FROM design_info_square.knowledge_posts WHERE is_deleted IS NOT TRUE AND is_enabled IS NOT FALSE AND created_at > '${lastVisitAt}'`,
+    const rawLastVisit = (lastVisitRows as Array<Record<string,unknown>>)?.[0]?.last_visit_at;
+    const lastVisitAt = rawLastVisit instanceof Date ? rawLastVisit.toISOString() : (String(rawLastVisit || "") || "1970-01-01");
+    // 新帖或编辑更新（created_at 或 updated_at > 上次访问）
+    const { data: unreadPostRows } = await supabase.rpc("execute_sql", {
+      p_sql: `SELECT id FROM design_info_square.knowledge_posts WHERE is_deleted IS NOT TRUE AND status != 'draft' AND (created_at > '${lastVisitAt.replace(/'/g, "''")}' OR updated_at > '${lastVisitAt.replace(/'/g, "''")}')`,
     });
-    const unreadPosts = (knowledgePostsResult.data || []) as any[];
-    const unreadCount = unreadPosts.length;
+    const unreadPostIds = new Set(((unreadPostRows || []) as any[]).map((r: any) => r.id));
+    // 排除用户自己创建的
+    const { data: myPosts } = await supabase.rpc("execute_sql", {
+      p_sql: `SELECT id FROM design_info_square.knowledge_posts WHERE created_by = '${userId.replace(/'/g, "''")}'`,
+    });
+    ((myPosts || []) as any[]).forEach((r: any) => unreadPostIds.delete(r.id));
+    const unreadCount = unreadPostIds.size;
 
     // 视频中心未读数
-    const videoResult = await supabase.rpc("dp_select", { p_table: "video_center_videos" });
-    const videoReadsResult = await supabase.rpc("dp_select", { p_table: "video_center_reads" });
-    const videos = (videoResult.data || []) as any[];
-    const videoReads = (videoReadsResult.data || []) as any[];
+    const { data: videos } = await supabase.rpc("dp_select", { p_table: "video_center.videos" });
+    const { data: videoReads } = await supabase.rpc("dp_select", { p_table: "video_center.reads" });
+    const videoList = (videos || []) as any[];
+    const videoReadList = (videoReads || []) as any[];
     const readVideoIds = new Set(
-      videoReads.filter((r: any) => r.user_id === userId).map((r: any) => r.video_id)
+      videoReadList.filter((r: any) => r.user_id === userId).map((r: any) => r.video_id)
     );
-    const unreadVideos = videos.filter(
-      (v: any) => !readVideoIds.has(v.id) && v.is_deleted !== true
+    const myVideoIds = new Set(
+      videoList.filter((v: any) => v.created_by === userId).map((v: any) => v.id)
+    );
+    const unreadVideos = videoList.filter(
+      (v: any) => !readVideoIds.has(v.id) && !myVideoIds.has(v.id) && v.is_deleted !== true
     ).length;
 
     return NextResponse.json({

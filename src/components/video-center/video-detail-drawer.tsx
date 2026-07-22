@@ -105,6 +105,8 @@ export default function VideoDetailDrawer({
   const [editModules, setEditModules] = useState<string[]>([]);
   const [editModuleSearch, setEditModuleSearch] = useState("");
   const [editModuleOpen, setEditModuleOpen] = useState(false);
+  const [readHistory, setReadHistory] = useState<Array<{ user_name?: string; read_at: string }>>([]);
+  const [readHistoryOpen, setReadHistoryOpen] = useState(false);
   const [editTags, setEditTags] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [modules, setModules] = useState<string[]>([]);
@@ -138,6 +140,15 @@ export default function VideoDetailDrawer({
     setEditModuleSearch("");
     setEditModuleOpen(false);
 
+    // 记录已读
+    if (currentUser?.id) {
+      fetch(`/api/video-center/videos/${video.id}/read`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: currentUser.id }),
+      }).catch(() => {});
+    }
+
     fetch(`/api/video-center/videos/${video.id}`)
       .then((r) => r.json())
       .then((json) => {
@@ -151,6 +162,11 @@ export default function VideoDetailDrawer({
           setEditTags(String(json.data.tags || ""));
           setEditDesc(String(json.data.description || ""));
         }
+        // 加载阅读记录
+        fetch(`/api/video-center/videos/${video.id}/reads`)
+          .then(r => r.json())
+          .then(j => { if (j.data) setReadHistory(j.data); })
+          .catch(() => {});
       })
       .catch(() => toast.error("加载视频详情失败"))
       .finally(() => setLoading(false));
@@ -435,6 +451,26 @@ export default function VideoDetailDrawer({
                       <span className="flex items-center gap-1">
                         <Eye className="w-4 h-4" /> {fullVideo.view_count || 0} 次观看
                       </span>
+                      {readHistory.length > 0 && (
+                        <Popover open={readHistoryOpen} onOpenChange={setReadHistoryOpen}>
+                          <PopoverTrigger asChild>
+                            <button className="flex items-center gap-1 text-xs text-indigo-500 hover:text-indigo-700 cursor-pointer">
+                              <User className="w-3.5 h-3.5" /> 浏览记录
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-56 p-2" align="start">
+                            <div className="text-xs font-medium text-gray-500 mb-2">最近浏览</div>
+                            <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                              {readHistory.map((r, i) => (
+                                <div key={i} className="flex items-center justify-between text-xs">
+                                  <span className="text-gray-700">{r.user_name || "匿名"}</span>
+                                  <span className="text-gray-400">{new Date(r.read_at).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      )}
                       <span className="flex items-center gap-1">
                         <Download className="w-4 h-4" /> {fullVideo.download_count || 0} 次下载
                       </span>
