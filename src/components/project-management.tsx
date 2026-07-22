@@ -704,6 +704,31 @@ export function ProjectManagement({
         {/* 项目概览信息 */}
         <div className="px-4 py-3 border-b border-slate-100">
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+            {/* 最终客户 - 最顶部展示 */}
+            <div className="col-span-2 mb-1">
+              <span className="text-[11px] text-slate-400">最终客户</span>
+              <p className="text-sm font-semibold text-blue-600 truncate">
+                {(selectedProject as unknown as Record<string, string>)?.final_customer
+                  || (typeof selectedProject.customer_info === 'object' && selectedProject.customer_info !== null
+                    ? (selectedProject.customer_info as { company_name?: string }).company_name
+                    : '') || '未关联客户'}
+              </p>
+            </div>
+            {/* 签约客户 - 如果与最终客户不同才显示 */}
+            {(() => {
+              const finalCust = (selectedProject as unknown as Record<string, string>)?.final_customer || '';
+              const custInfo = typeof selectedProject.customer_info === 'object' && selectedProject.customer_info !== null
+                ? (selectedProject.customer_info as { company_name?: string }).company_name || '' : '';
+              if (finalCust && custInfo && finalCust !== custInfo) {
+                return (
+                  <div className="col-span-2">
+                    <span className="text-[11px] text-slate-400">签约客户</span>
+                    <p className="text-xs font-medium text-slate-600 truncate">{custInfo}</p>
+                  </div>
+                );
+              }
+              return null;
+            })()}
             {selectedProject.project_code && (
               <div>
                 <span className="text-[11px] text-slate-400">项目编号</span>
@@ -1090,189 +1115,196 @@ export function ProjectManagement({
 
   // 渲染列表视图
   const renderListView = () => (
-    <div className="space-y-3">
+    <div>
       {filteredProjects.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-lg p-8 text-center">
-          <div className="text-slate-400 mb-2">暂无项目</div>
-          <div className="text-sm text-slate-500">点击"新建项目"开始创建</div>
+        <div className="bg-white border border-slate-200 rounded-xl p-10 text-center">
+          <FolderKanban className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+          <div className="text-sm text-slate-500 font-medium">没有匹配的项目</div>
+          <div className="text-xs text-slate-400 mt-1">尝试调整筛选条件或搜索关键词</div>
         </div>
       ) : (
-        filteredProjects.map((project) => (
-          <div
-            key={project.id}
-            onClick={() => setSelectedProject(selectedProject?.id === project.id ? null : project)}
-            className={cn(
-              "bg-white border rounded-lg p-4 transition-colors cursor-pointer shadow-sm",
-              selectedProject?.id === project.id
-                ? "border-blue-500 bg-blue-50"
-                : "border-slate-200 hover:border-slate-300 hover:shadow-md"
-            )}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className="font-medium text-slate-900">{project.project_name}</h3>
-                  {getStatusBadge(project.project_status || project.status)}
-                  {getStageBadge(project.project_stage)}
-                </div>
-                <div className="flex items-center gap-4 text-sm text-slate-500">
-                  <span className="flex items-center gap-1">
-                    <span className="text-slate-400">编号:</span>
-                    {project.project_code}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="text-slate-400">类型:</span>
-                    {projectTypes.find(t => t.code === project.project_type)?.name || project.project_type}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    {project.created_at ? new Date(project.created_at).toLocaleDateString() : '-'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs gap-1"
-                  onClick={(e) => { e.stopPropagation(); onViewProject?.(project); }}
-                >
-                  <ArrowRight className="w-3.5 h-3.5" />
-                  详情
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                    <button className="p-1 hover:bg-slate-100 rounded">
-                      <MoreHorizontal className="w-4 h-4 text-slate-400" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setSelectedProject(project)}>
-                      <Edit className="w-4 h-4 mr-2" />
-                      查看详情
-                    </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    className="text-red-600"
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      if (confirm("确定要删除此项目吗？此操作不可恢复。")) {
-                        await onProjectDelete(project.id);
-                      }
-                    }}
+        <div className="bg-white rounded-xl border border-slate-100 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50/80 border-b border-slate-100">
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">项目名称</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">最终客户</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">编号</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">类型</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">阶段</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">状态</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">经理</th>
+                <th className="w-12"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredProjects.map((project) => {
+                const finalCustomer = (project as unknown as Record<string, string>)?.final_customer
+                  || (project.customer_info as Record<string, string>)?.company_name
+                  || '-';
+                return (
+                  <tr
+                    key={project.id}
+                    onClick={() => setSelectedProject(selectedProject?.id === project.id ? null : project)}
+                    className={cn(
+                      "border-b border-slate-50 cursor-pointer transition-colors",
+                      selectedProject?.id === project.id ? "bg-blue-50" : "hover:bg-slate-50"
+                    )}
                   >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    删除
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0",
+                          (project.project_status || project.status) === 'active' ? "bg-emerald-400" :
+                          (project.project_status || project.status) === 'paused' ? "bg-amber-400" :
+                          "bg-slate-300"
+                        )} />
+                        <span className="font-medium text-slate-800 truncate max-w-[240px]">{project.project_name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-blue-600 text-xs font-medium">{finalCustomer}</td>
+                    <td className="px-4 py-2.5 text-xs text-slate-400 font-mono">{project.project_code}</td>
+                    <td className="px-4 py-2.5 text-xs text-slate-600">{projectTypes.find(t => t.code === project.project_type)?.name || project.project_type}</td>
+                    <td className="px-4 py-2.5 text-xs text-slate-600">{projectStages.find(s => s.code === project.project_stage)?.name || project.project_stage}</td>
+                    <td className="px-4 py-2.5">{getStatusBadge(project.project_status || project.status)}</td>
+                    <td className="px-4 py-2.5 text-xs text-slate-600">{project.role_project_manager || '-'}</td>
+                    <td className="px-2 py-2.5">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <button className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-slate-100">
+                            <MoreHorizontal className="w-3.5 h-3.5 text-slate-400" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setSelectedProject(project)}>
+                            <Edit className="w-4 h-4 mr-2" />查看详情
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-red-600"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (confirm("确定要删除此项目吗？此操作不可恢复。")) {
+                                await onProjectDelete(project.id);
+                              }
+                            }}>
+                            <Trash2 className="w-4 h-4 mr-2" />删除
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-        ))
       )}
     </div>
   );
 
+  // 阶段对应顶部装饰色
+  const STAGE_ACCENT: Record<string, string> = {
+    initiation: "bg-gradient-to-r from-blue-400 to-blue-300",
+    implementation: "bg-gradient-to-r from-violet-400 to-violet-300",
+    acceptance: "bg-gradient-to-r from-emerald-400 to-emerald-300",
+    maintenance: "bg-gradient-to-r from-amber-400 to-amber-300",
+    closed: "bg-gradient-to-r from-slate-300 to-slate-200",
+  };
+
   // 渲染卡片视图
   const renderCardView = () => (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid grid-cols-3 gap-3.5">
       {filteredProjects.length === 0 ? (
-        <div className="col-span-3 bg-white border border-slate-200 rounded-lg p-8 text-center">
-          <div className="text-slate-400 mb-2">暂无项目</div>
-          <div className="text-sm text-slate-500">点击"新建项目"开始创建</div>
+        <div className="col-span-3 bg-white border border-slate-200 rounded-xl p-10 text-center">
+          <FolderKanban className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+          <div className="text-sm text-slate-500 font-medium">没有匹配的项目</div>
+          <div className="text-xs text-slate-400 mt-1">尝试调整筛选条件或搜索关键词</div>
         </div>
       ) : (
-        filteredProjects.map((project, index) => (
-          <div
-            key={project.id}
-            onClick={() => setSelectedProject(selectedProject?.id === project.id ? null : project)}
-            className={cn(
-              "bg-white border rounded-xl transition-all cursor-pointer group shadow-sm",
-              selectedProject?.id === project.id
-                ? "border-slate-800 shadow-lg"
-                : "border-slate-200 hover:border-slate-300 hover:shadow-md"
-            )}
-          >
-            <div className="p-5">
-              {/* 头部：客户名称 + 操作按钮 */}
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="font-medium text-indigo-600 text-sm truncate">
-                  {(project.customer_info as Record<string, string>)?.company_name || '未关联客户'}
-                </h3>
-                <div className="flex items-center gap-1.5">
-                  {onViewProject && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onViewProject(project);
-                      }}
-                    >
-                      <ArrowRight className="w-3 h-3 mr-1" />
-                      详情
-                    </Button>
-                  )}
+        filteredProjects.map((project) => {
+          const finalCustomer = (project as unknown as Record<string, string>)?.final_customer
+            || (project.customer_info as Record<string, string>)?.company_name
+            || '未关联客户';
+          const accentClass = STAGE_ACCENT[project.project_stage] || "bg-gradient-to-r from-blue-400 to-blue-300";
+          return (
+            <div
+              key={project.id}
+              onClick={() => setSelectedProject(selectedProject?.id === project.id ? null : project)}
+              className={cn(
+                "bg-white rounded-xl border overflow-hidden transition-all cursor-pointer",
+                selectedProject?.id === project.id
+                  ? "border-blue-400 shadow-[0_0_0_3px_rgba(59,130,246,0.1)]"
+                  : "border-slate-100 hover:border-slate-200 hover:shadow-md hover:-translate-y-0.5"
+              )}
+            >
+              {/* 顶部装饰条 */}
+              <div className={cn("h-1", accentClass)} />
+              <div className="p-4">
+                {/* 最终客户 + 更多 */}
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="flex items-center gap-1.5 text-blue-600 text-xs font-medium truncate">
+                    <Building2 className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate">{finalCustomer}</span>
+                  </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                      <button className="p-1 hover:bg-slate-100 rounded">
-                        <MoreHorizontal className="w-4 h-4 text-slate-400" />
+                      <button className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-slate-100 flex-shrink-0">
+                        <MoreHorizontal className="w-3.5 h-3.5 text-slate-400" />
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => setSelectedProject(project)}>
-                        <Edit className="w-4 h-4 mr-2" />
-                        查看信息
+                        <Edit className="w-4 h-4 mr-2" />查看信息
                       </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        className="text-red-600"
+                      <DropdownMenuItem className="text-red-600"
                         onClick={async (e) => {
                           e.stopPropagation();
                           if (confirm("确定要删除此项目吗？此操作不可恢复。")) {
                             await onProjectDelete(project.id);
                           }
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        删除
+                        }}>
+                        <Trash2 className="w-4 h-4 mr-2" />删除
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-              </div>
-              
-              {/* 项目名称 */}
-              <h2 className="font-semibold text-slate-900 text-base mb-3 truncate">{project.project_name}</h2>
-              
-              {/* 状态标签 */}
-              <div className="flex items-center gap-2 mb-3">
-                {getStatusBadge(project.project_status || project.status)}
-                {getStageBadge(project.project_stage)}
-              </div>
-              
-              {/* 详情字段 */}
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between text-slate-500">
-                  <span>编号</span>
-                  <span className="font-mono text-slate-700">{project.project_code}</span>
+
+                {/* 项目名称 */}
+                <h3 className="font-semibold text-slate-900 text-sm leading-snug mb-2 line-clamp-2">{project.project_name}</h3>
+
+                {/* 标签 */}
+                <div className="flex items-center gap-1.5 mb-2.5 flex-wrap">
+                  {getStatusBadge(project.project_status || project.status)}
+                  {getStageBadge(project.project_stage)}
+                  <span className="text-[11px] text-slate-400">
+                    {projectTypes.find(t => t.code === project.project_type)?.name || project.project_type}
+                  </span>
                 </div>
-                <div className="flex items-center justify-between text-slate-500">
-                  <span>所属部门</span>
-                  <span className="text-slate-700">{project.department || '-'}</span>
+
+                {/* 信息行 */}
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] mb-3">
+                  <div className="flex items-center gap-1 text-slate-400"><span>编号</span><span className="font-mono text-slate-600 truncate">{project.project_code}</span></div>
+                  <div className="flex items-center gap-1 text-slate-400"><span>部门</span><span className="text-slate-600 truncate">{project.department || '-'}</span></div>
+                  <div className="flex items-center gap-1 text-slate-400"><span>经理</span><span className="text-slate-600 truncate">{project.role_project_manager || '-'}</span></div>
+                  <div className="flex items-center gap-1 text-slate-400"><span>截止</span><span className="text-slate-600 truncate">{project.final_acceptance_date || project.initial_acceptance_date || project.required_date || '-'}</span></div>
                 </div>
-                <div className="flex items-center justify-between text-slate-500">
-                  <span>项目经理</span>
-                  <span className="text-slate-700">{project.role_project_manager || '-'}</span>
-                </div>
-                <div className="flex items-center justify-between text-slate-500">
-                  <span>部署模式</span>
-                  <span className="text-slate-700">{formatCodeList(project.deployment_mode, deploymentModes) || '-'}</span>
+
+                {/* 底部：进度条 + 操作 */}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-50">
+                  {onViewProject && (
+                    <Button variant="ghost" size="sm" className="h-6 text-[11px] gap-0.5 px-1.5 text-slate-500 hover:text-blue-600"
+                      onClick={(e) => { e.stopPropagation(); onViewProject(project); }}>
+                      <ArrowRight className="w-3 h-3" />详情
+                    </Button>
+                  )}
+                  <div className="flex-1" />
+                  <span className="text-[10px] text-slate-400 mr-1">进度</span>
+                  <div className="w-14 h-1 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-500 rounded-full" style={{ width: project.project_status === 'completed' ? '100%' : project.project_stage === 'acceptance' ? '75%' : project.project_stage === 'implementation' ? '50%' : project.project_stage === 'initiation' ? '20%' : project.project_stage === 'maintenance' ? '90%' : '30%' }} />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))
+          );
+        })
       )}
     </div>
   );
@@ -1281,7 +1313,6 @@ export function ProjectManagement({
     <div className="h-full flex bg-gray-50">
       {/* 浮动阶段导航 */}
       <div ref={stageNavRef} className="relative z-30 flex flex-shrink-0">
-        {/* 触发粗线按钮 - 使用 sticky 保持垂直居中 */}
         <div className="sticky top-1/2 -translate-y-1/2 self-start h-0 flex items-center">
           <button
             onClick={() => setStageNavOpen(!stageNavOpen)}
@@ -1294,14 +1325,11 @@ export function ProjectManagement({
             title="项目阶段导航"
           />
         </div>
-
-        {/* 展开面板 */}
         <div className={cn(
           "bg-white/95 backdrop-blur-sm shadow-xl border border-slate-200 transition-all duration-300 overflow-hidden rounded-xl",
           stageNavOpen ? "w-20 opacity-100" : "w-0 opacity-0 border-transparent"
         )}>
           <div className="w-20 py-3">
-            {/* 全部 */}
             <button
               onClick={() => handleStageNavClick("all")}
               className={cn(
@@ -1315,25 +1343,15 @@ export function ProjectManagement({
                   ? "bg-blue-500 shadow-md shadow-blue-200 scale-110"
                   : "bg-slate-100"
               )}>
-                <span className={cn(
-                  "text-xs font-bold",
-                  filterStage === "all" ? "text-white" : "text-slate-400"
-                )}>
+                <span className={cn("text-xs font-bold", filterStage === "all" ? "text-white" : "text-slate-400")}>
                   {projects.length}
                 </span>
               </div>
-              <span className={cn(
-                "text-[11px] mt-1.5 font-medium truncate w-full text-center",
-                filterStage === "all" ? "text-blue-600" : "text-slate-500"
-              )}>
+              <span className={cn("text-[11px] mt-1.5 font-medium truncate w-full text-center", filterStage === "all" ? "text-blue-600" : "text-slate-500")}>
                 全部
               </span>
             </button>
-
-            {/* 分隔线 */}
             <div className="mx-3 my-1 border-t border-slate-100" />
-
-            {/* 各阶段 */}
             {projectStages.map((stage, idx) => {
               const color = STAGE_COLORS[idx % STAGE_COLORS.length];
               const count = stageCounts[stage.code] || 0;
@@ -1349,21 +1367,11 @@ export function ProjectManagement({
                 >
                   <div className={cn(
                     "w-7 h-7 rounded-full flex items-center justify-center transition-all",
-                    isActive
-                      ? cn(color.bg, "shadow-md scale-110")
-                      : "bg-slate-100"
+                    isActive ? cn(color.bg, "shadow-md scale-110") : "bg-slate-100"
                   )}>
-                    <span className={cn(
-                      "text-xs font-bold",
-                      isActive ? "text-white" : "text-slate-400"
-                    )}>
-                      {count}
-                    </span>
+                    <span className={cn("text-xs font-bold", isActive ? "text-white" : "text-slate-400")}>{count}</span>
                   </div>
-                  <span className={cn(
-                    "text-[11px] mt-1.5 font-medium truncate w-full text-center",
-                    isActive ? color.text : "text-slate-500"
-                  )}>
+                  <span className={cn("text-[11px] mt-1.5 font-medium truncate w-full text-center", isActive ? color.text : "text-slate-500")}>
                     {stage.name}
                   </span>
                 </button>
@@ -1374,137 +1382,153 @@ export function ProjectManagement({
       </div>
 
       <div className="flex-1 flex flex-col min-w-0">
-        {/* 页面标题 */}
-        <div className="p-6">
-          <h2 className="text-2xl font-semibold flex items-center gap-2">
-            <FolderKanban className="w-6 h-6" />
+        {/* Row 1: 标题 + 搜索 + 视图切换 + 操作 */}
+        <div className="px-6 pt-5 pb-0 flex items-center gap-3 flex-wrap">
+          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2 whitespace-nowrap">
+            <FolderKanban className="w-5 h-5 text-blue-500" />
             项目管理
+            <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{filteredProjects.length}</span>
           </h2>
-          <p className="text-sm text-muted-foreground mt-1">管理项目信息、跟踪进度、协调资源</p>
-        </div>
 
-        {/* 筛选工具栏 */}
-        <div className="p-6 pb-0">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            {/* 第一排 */}
-            <div className="px-4 py-3 flex items-center gap-2">
-              <div className="relative w-[260px] shrink-0">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input placeholder="搜索名称/编号..." value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 h-9 text-sm border-slate-200 rounded-lg focus-visible:ring-indigo-500" />
-              </div>
-              <div className="w-px h-6 bg-slate-200" />
-              <Select value={filterStage} onValueChange={(v) => setFilterStage(v)}>
-                <SelectTrigger className="w-[110px] h-9 text-xs rounded-lg"><SelectValue placeholder="阶段" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">全部</SelectItem>{projectStages.filter(s => s.code).map((s) => <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>)}</SelectContent>
-              </Select>
-              <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v)}>
-                <SelectTrigger className="w-[110px] h-9 text-xs rounded-lg"><SelectValue placeholder="状态" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">全部</SelectItem><SelectItem value="进行中">进行中</SelectItem><SelectItem value="已完成">已完成</SelectItem><SelectItem value="已暂停">已暂停</SelectItem></SelectContent>
-              </Select>
-              <Select value={filterSales} onValueChange={(v) => setFilterSales(v)}>
-                <SelectTrigger className="w-[110px] h-9 text-xs rounded-lg"><SelectValue placeholder="销售" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">全部</SelectItem>{salesList.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-              </Select>
-              <Select value={filterManager} onValueChange={(v) => setFilterManager(v)}>
-                <SelectTrigger className="w-[110px] h-9 text-xs rounded-lg"><SelectValue placeholder="项目经理" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">全部</SelectItem>{managers.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-              </Select>
-              {/* 日期：进场 初验 终验 */}
-              <DateRange label="进场" from={filterEntryDateFrom} to={filterEntryDateTo}
-                onFrom={(v) => setFilterEntryDateFrom(v)} onTo={(v) => setFilterEntryDateTo(v)} />
-              <DateRange label="初验" from={filterInitialDateFrom} to={filterInitialDateTo}
-                onFrom={(v) => setFilterInitialDateFrom(v)} onTo={(v) => setFilterInitialDateTo(v)} />
-              <DateRange label="终验" from={filterFinalDateFrom} to={filterFinalDateTo}
-                onFrom={(v) => setFilterFinalDateFrom(v)} onTo={(v) => setFilterFinalDateTo(v)} />
-              <div className="w-px h-6 bg-slate-200" />
-              <Button variant="ghost" size="sm"
-                className={`h-9 gap-1 text-xs rounded-lg whitespace-nowrap ${showAdvancedFilter ? "bg-slate-100 text-slate-700" : "text-slate-500"}`}
-                onClick={() => setShowAdvancedFilter(!showAdvancedFilter)}>
-                <SlidersHorizontal className="w-3.5 h-3.5" />更多选项
-                {[filterType, filterDept, filterPresales, filterMarketProduct, filterDeployMode, ...filterImplementationUnit, ...filterCustomerTypes, ...filterChannelCompanies, ...filterProjectMembers, ...filterProcurementModules, filterIntegrationModule, filterCustomDevModule].some(v => v !== "all" && v !== "" && (!Array.isArray(v) || v.length > 0)) && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                )}
-              </Button>
-              <div className="flex-1" />
-              <span className="text-xs text-slate-400">{filteredProjects.length} 个项目</span>
-              <Button variant="outline" size="sm" className="h-9 gap-1 text-xs rounded-lg" onClick={handleExport}><Download className="w-3.5 h-3.5" />导出</Button>
-              <Button size="sm" className="h-9 gap-1 text-xs rounded-lg bg-indigo-600 hover:bg-indigo-700"
-                onClick={() => { setEditingProject(null); setShowProjectForm(true); }}>
-                <Plus className="w-3.5 h-3.5" />新建项目</Button>
-            </div>
-
-            {/* 第二排：更多选项 */}
-            {showAdvancedFilter && (
-            <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/80 space-y-2.5">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] text-slate-400 uppercase tracking-[1px] w-12 shrink-0">属性</span>
-                <Select value={filterType} onValueChange={(v) => setFilterType(v)}>
-                  <SelectTrigger className="w-[100px] h-7 text-[11px] rounded-lg"><SelectValue placeholder="类型" /></SelectTrigger>
-                  <SelectContent><SelectItem value="all">全部</SelectItem>{projectTypes.filter(t => t.code).map((t) => <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>)}</SelectContent>
-                </Select>
-                <Select value={filterDept} onValueChange={(v) => setFilterDept(v)}>
-                  <SelectTrigger className="w-[100px] h-7 text-[11px] rounded-lg"><SelectValue placeholder="部门" /></SelectTrigger>
-                  <SelectContent><SelectItem value="all">全部</SelectItem>{departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
-                </Select>
-                <Select value={filterDeployMode} onValueChange={(v) => setFilterDeployMode(v)}>
-                  <SelectTrigger className="w-[100px] h-7 text-[11px] rounded-lg"><SelectValue placeholder="部署模式" /></SelectTrigger>
-                  <SelectContent><SelectItem value="all">全部</SelectItem>{allDeployModes.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] text-slate-400 uppercase tracking-[1px] w-12 shrink-0">人员</span>
-                <Select value={filterPresales} onValueChange={(v) => setFilterPresales(v)}>
-                  <SelectTrigger className="w-[100px] h-7 text-[11px] rounded-lg"><SelectValue placeholder="售前" /></SelectTrigger>
-                  <SelectContent><SelectItem value="all">全部</SelectItem>{presalesList.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                </Select>
-                <Select value={filterMarketProduct} onValueChange={(v) => setFilterMarketProduct(v)}>
-                  <SelectTrigger className="w-[100px] h-7 text-[11px] rounded-lg"><SelectValue placeholder="市场产品" /></SelectTrigger>
-                  <SelectContent><SelectItem value="all">全部</SelectItem>{marketProductList.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                </Select>
-                <MultiSelectBadge label="项目成员" options={allProjectMembers} selected={filterProjectMembers} onChange={setFilterProjectMembers} />
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] text-slate-400 uppercase tracking-[1px] w-12 shrink-0">客户</span>
-                <MultiSelectBadge label="客户类型"
-          options={allCustomerTypes.map((c) => customerTypes.find((ct) => ct.code === c)?.name || c)}
-          selected={filterCustomerTypes.map((c) => customerTypes.find((ct) => ct.code === c)?.name || c)}
-          onChange={(names) => {
-            const codes = names.map((n) => customerTypes.find((ct) => ct.name === n)?.code || n);
-            setFilterCustomerTypes(codes);
-          }} />
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] text-slate-400 uppercase tracking-[1px] w-12 shrink-0">采购</span>
-                <MultiSelectBadge label="采购模块"
-                  options={allProcurementModules.map((c) => procurementModules.find((pm) => pm.code === c)?.name || c)}
-                  selected={filterProcurementModules.map((c) => procurementModules.find((pm) => pm.code === c)?.name || c)}
-                  onChange={(names) => {
-                    const codes = names.map((n) => procurementModules.find((pm) => pm.name === n)?.code || n);
-                    setFilterProcurementModules(codes);
-                  }} />
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] text-slate-400 uppercase tracking-[1px] w-12 shrink-0">其他</span>
-                <MultiSelectBadge label="实施单位" options={implementationUnits} selected={filterImplementationUnit} onChange={setFilterImplementationUnit} />
-                <MultiSelectBadge label="渠道公司" options={allChannelCompanies} selected={filterChannelCompanies} onChange={setFilterChannelCompanies} />
-                <Button variant="ghost" size="sm" className="h-7 text-[11px] text-slate-400 ml-auto" onClick={() => {
-                  setFilterDept("all"); setFilterType("all"); setFilterStage("all"); setFilterStatus("all");
-                  setFilterSales("all"); setFilterPresales("all"); setFilterMarketProduct("all"); setFilterManager("all");
-                  setFilterDeployMode("all"); setFilterImplementationUnit([]); setFilterCustomerTypes([]);
-                  setFilterEntryDateFrom(""); setFilterEntryDateTo("");
-                  setFilterInitialDateFrom(""); setFilterInitialDateTo("");
-                  setFilterFinalDateFrom(""); setFilterFinalDateTo("");
-                  setFilterChannelCompanies([]); setFilterProjectMembers([]); setFilterProcurementModules([]);
-                  setFilterIntegrationModule("all"); setFilterCustomDevModule("all");
-                  setSearchQuery(""); setShowAdvancedFilter(false);
-                }}>清除全部筛选</Button>
-              </div>
-            </div>
+          {/* 搜索框 */}
+          <div className="relative flex-1 min-w-[200px] max-w-[360px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Input placeholder="搜索项目名称、编号、客户..." value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 h-8 text-sm border-slate-200 rounded-lg focus-visible:ring-blue-500" />
+            {searchQuery && (
+              <button className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center hover:bg-slate-300"
+                onClick={() => setSearchQuery("")}>
+                <X className="w-2.5 h-2.5 text-slate-500" />
+              </button>
             )}
           </div>
+
+          {/* 视图切换 */}
+          <div className="flex bg-slate-100 rounded-lg p-0.5 flex-shrink-0">
+            <button onClick={() => setViewMode("card")}
+              className={cn("w-7 h-7 flex items-center justify-center rounded-md transition-all", viewMode === "card" ? "bg-white text-slate-800 shadow-sm" : "text-slate-400 hover:text-slate-600")}>
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => setViewMode("list")}
+              className={cn("w-7 h-7 flex items-center justify-center rounded-md transition-all", viewMode === "list" ? "bg-white text-slate-800 shadow-sm" : "text-slate-400 hover:text-slate-600")}>
+              <List className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <Button variant="outline" size="sm" className="h-8 gap-1 text-xs rounded-lg" onClick={handleExport}><Download className="w-3.5 h-3.5" />导出</Button>
+          <Button size="sm" className="h-8 gap-1 text-xs rounded-lg bg-blue-500 hover:bg-blue-600"
+            onClick={() => { setEditingProject(null); setShowProjectForm(true); }}>
+            <Plus className="w-3.5 h-3.5" />新建项目</Button>
         </div>
+
+        {/* Row 2: 阶段 chips + 快捷下拉筛选 */}
+        <div className="px-6 pt-2.5 pb-0 flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] text-slate-400 font-medium mr-0.5">筛选:</span>
+          <button onClick={() => { setFilterStage("all"); handleStageNavClick("all"); }}
+            className={cn("px-2.5 py-1 rounded-md text-xs font-medium transition-all border",
+              filterStage === "all" ? "bg-blue-50 border-blue-400 text-blue-600" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300")}>
+            全部<span className="ml-1 text-[10px] bg-slate-100 px-1 rounded">{projects.length}</span>
+          </button>
+          {projectStages.filter(s => s.code).map((stage) => {
+            const count = stageCounts[stage.code] || 0;
+            const isActive = filterStage === stage.code;
+            return (
+              <button key={stage.code} onClick={() => handleStageNavClick(stage.code)}
+                className={cn("px-2.5 py-1 rounded-md text-xs font-medium transition-all border",
+                  isActive ? "bg-blue-50 border-blue-400 text-blue-600" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300")}>
+                {stage.name}<span className="ml-1 text-[10px] bg-slate-100 px-1 rounded">{count}</span>
+              </button>
+            );
+          })}
+          <span className="w-px h-4 bg-slate-200 mx-0.5" />
+          {/* 状态 */}
+          <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v)}>
+            <SelectTrigger className="w-[90px] h-7 text-[11px] rounded-md"><SelectValue placeholder="状态" /></SelectTrigger>
+            <SelectContent><SelectItem value="all">全部状态</SelectItem><SelectItem value="进行中">进行中</SelectItem><SelectItem value="已完成">已完成</SelectItem><SelectItem value="已暂停">已暂停</SelectItem></SelectContent>
+          </Select>
+          {/* 项目经理 */}
+          <Select value={filterManager} onValueChange={(v) => setFilterManager(v)}>
+            <SelectTrigger className="w-[100px] h-7 text-[11px] rounded-md"><SelectValue placeholder="项目经理" /></SelectTrigger>
+            <SelectContent><SelectItem value="all">全部经理</SelectItem>{managers.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+          </Select>
+          {/* 类型 */}
+          <Select value={filterType} onValueChange={(v) => setFilterType(v)}>
+            <SelectTrigger className="w-[90px] h-7 text-[11px] rounded-md"><SelectValue placeholder="类型" /></SelectTrigger>
+            <SelectContent><SelectItem value="all">全部类型</SelectItem>{projectTypes.filter(t => t.code).map((t) => <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>)}</SelectContent>
+          </Select>
+          {/* 部门 */}
+          <Select value={filterDept} onValueChange={(v) => setFilterDept(v)}>
+            <SelectTrigger className="w-[90px] h-7 text-[11px] rounded-md"><SelectValue placeholder="部门" /></SelectTrigger>
+            <SelectContent><SelectItem value="all">全部部门</SelectItem>{departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+          </Select>
+          {/* 更多按钮 */}
+          <Button variant="ghost" size="sm"
+            className={cn("h-7 gap-1 text-[11px] rounded-md", showAdvancedFilter ? "bg-slate-100 text-slate-700" : "text-slate-500")}
+            onClick={() => setShowAdvancedFilter(!showAdvancedFilter)}>
+            <SlidersHorizontal className="w-3 h-3" />更多
+            {[filterSales, filterPresales, filterMarketProduct, filterDeployMode, ...filterImplementationUnit, ...filterCustomerTypes, ...filterChannelCompanies, ...filterProjectMembers, ...filterProcurementModules, filterIntegrationModule, filterCustomDevModule, filterEntryDateFrom, filterEntryDateTo, filterInitialDateFrom, filterInitialDateTo, filterFinalDateFrom, filterFinalDateTo].some(v => v !== "all" && v !== "" && (!Array.isArray(v) || v.length > 0)) && (
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+            )}
+          </Button>
+          <div className="flex-1" />
+          <button onClick={() => {
+            setFilterDept("all"); setFilterType("all"); setFilterStage("all"); setFilterStatus("all");
+            setFilterSales("all"); setFilterPresales("all"); setFilterMarketProduct("all"); setFilterManager("all");
+            setFilterDeployMode("all"); setFilterImplementationUnit([]); setFilterCustomerTypes([]);
+            setFilterEntryDateFrom(""); setFilterEntryDateTo("");
+            setFilterInitialDateFrom(""); setFilterInitialDateTo("");
+            setFilterFinalDateFrom(""); setFilterFinalDateTo("");
+            setFilterChannelCompanies([]); setFilterProjectMembers([]); setFilterProcurementModules([]);
+            setFilterIntegrationModule("all"); setFilterCustomDevModule("all");
+            setSearchQuery(""); setShowAdvancedFilter(false);
+          }}
+            className={cn("text-[11px] text-red-400 hover:text-red-500 hover:underline transition-all flex-shrink-0",
+              [filterStage, filterStatus, filterType, filterDept, filterManager, filterSales, filterPresales, filterMarketProduct, filterDeployMode, ...filterImplementationUnit, ...filterCustomerTypes, ...filterChannelCompanies, ...filterProjectMembers, ...filterProcurementModules, filterEntryDateFrom, filterEntryDateTo, filterInitialDateFrom, filterInitialDateTo, filterFinalDateFrom, filterFinalDateTo].some(v => v !== "all" && v !== "" && (!Array.isArray(v) || v.length > 0)) ? "" : "hidden")}>
+            清除全部筛选
+          </button>
+        </div>
+
+        {/* Row 3: 更多筛选（点击"更多"展开） */}
+        {showAdvancedFilter && (
+        <div className="px-6 pt-2 pb-0 flex items-center gap-2 flex-wrap">
+          {/* 销售 */}
+          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">销售</span>
+          <Select value={filterSales} onValueChange={(v) => setFilterSales(v)}>
+            <SelectTrigger className="w-[90px] h-7 text-[11px] rounded-md"><SelectValue placeholder="销售" /></SelectTrigger>
+            <SelectContent><SelectItem value="all">全部</SelectItem>{salesList.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+          </Select>
+          {/* 采购模块 */}
+          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider ml-1">采购模块</span>
+          <MultiSelectBadge label="采购模块"
+            options={allProcurementModules.map((c) => procurementModules.find((pm) => pm.code === c)?.name || c)}
+            selected={filterProcurementModules.map((c) => procurementModules.find((pm) => pm.code === c)?.name || c)}
+            onChange={(names) => {
+              const codes = names.map((n) => procurementModules.find((pm) => pm.name === n)?.code || n);
+              setFilterProcurementModules(codes);
+            }} />
+          {/* 渠道公司 */}
+          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider ml-1">渠道公司</span>
+          <MultiSelectBadge label="渠道公司" options={allChannelCompanies} selected={filterChannelCompanies} onChange={setFilterChannelCompanies} />
+          {/* 项目成员 */}
+          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider ml-1">项目成员</span>
+          <MultiSelectBadge label="项目成员" options={allProjectMembers} selected={filterProjectMembers} onChange={setFilterProjectMembers} />
+          <span className="w-px h-4 bg-slate-200 mx-0.5" />
+          {/* 进场日期 */}
+          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">进场</span>
+          <DateRange label="进场" from={filterEntryDateFrom} to={filterEntryDateTo}
+            onFrom={(v) => setFilterEntryDateFrom(v)} onTo={(v) => setFilterEntryDateTo(v)} />
+          {/* 初验日期 */}
+          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider ml-1">初验</span>
+          <DateRange label="初验" from={filterInitialDateFrom} to={filterInitialDateTo}
+            onFrom={(v) => setFilterInitialDateFrom(v)} onTo={(v) => setFilterInitialDateTo(v)} />
+          {/* 终验日期 */}
+          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider ml-1">终验</span>
+          <DateRange label="终验" from={filterFinalDateFrom} to={filterFinalDateTo}
+            onFrom={(v) => setFilterFinalDateFrom(v)} onTo={(v) => setFilterFinalDateTo(v)} />
+        </div>
+        )}
+
         {/* 项目表单弹窗 */}
         <ProjectForm
           open={showProjectForm}
@@ -1517,8 +1541,9 @@ export function ProjectManagement({
           productModules={procurementModules.map(m => ({ module_code: m.code, module_name: m.name, product_name: m.product_name || m.name, vendor: m.vendor || "", model_spec: m.model_spec || "", scope: m.scope || "" }))}
           users={users}
         />
+
         {/* 主内容区 */}
-        <div className="flex-1 p-6 overflow-y-auto">
+        <div className="flex-1 px-6 py-3 overflow-y-auto">
           {viewMode === "list" ? renderListView() : renderCardView()}
         </div>
       </div>
