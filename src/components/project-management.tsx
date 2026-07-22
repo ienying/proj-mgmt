@@ -274,6 +274,8 @@ export function ProjectManagement({
   const [selectedRoleType, setSelectedRoleType] = useState("");
   const [userSearchOpen, setUserSearchOpen] = useState(false);
   const [modSearch, setModSearch] = useState("");
+  const [descDialogOpen, setDescDialogOpen] = useState(false);
+  const [descDialogContent, setDescDialogContent] = useState("");
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
 
   // 加载项目成员和权限
@@ -656,6 +658,16 @@ export function ProjectManagement({
     );
   };
 
+  // 日期格式化：处理 ISO 字符串
+  const formatDate = (val?: string): string => {
+    if (!val) return '-';
+    try {
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return val.slice(0, 10);
+      return d.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
+    } catch { return val.slice(0, 10); }
+  };
+
   // 将存储值（JSON数组字符串/逗号分隔字符串/数组）解析为 code 数组，并转为名称展示
   const formatCodeList = (raw: unknown, dict: { code: string; name: string }[]): string => {
     if (!raw) return "";
@@ -807,33 +819,17 @@ export function ProjectManagement({
             {selectedProject.description && (
               <div className="col-span-2">
                 <span className="text-[11px] text-slate-400">项目描述</span>
-                <p className="text-xs text-slate-600 line-clamp-2">{selectedProject.description}</p>
+                <p
+                  className="text-xs text-slate-600 line-clamp-2 cursor-pointer hover:text-blue-600 transition-colors"
+                  onClick={() => { setDescDialogContent(selectedProject.description || ''); setDescDialogOpen(true); }}
+                  title="点击查看完整描述"
+                >
+                  {selectedProject.description.replace(/<[^>]*>/g, '').slice(0, 80)}
+                  {selectedProject.description.replace(/<[^>]*>/g, '').length > 80 ? '...' : ''}
+                </p>
               </div>
             )}
           </div>
-          {/* 金额信息 */}
-          {(selectedProject.procurement_amount || selectedProject.software_amount || selectedProject.hardware_amount) && (
-            <div className="mt-2 pt-2 border-t border-slate-200/60 flex items-center gap-3">
-              {selectedProject.procurement_amount && (
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-slate-400">总金额</span>
-                  <span className="text-xs font-semibold text-indigo-600">{Number(selectedProject.procurement_amount).toLocaleString()}</span>
-                </div>
-              )}
-              {selectedProject.software_amount && (
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-slate-400">软件</span>
-                  <span className="text-xs font-medium text-blue-600">{Number(selectedProject.software_amount).toLocaleString()}</span>
-                </div>
-              )}
-              {selectedProject.hardware_amount && (
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-slate-400">硬件</span>
-                  <span className="text-xs font-medium text-amber-600">{Number(selectedProject.hardware_amount).toLocaleString()}</span>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* 采购模块 */}
@@ -1284,23 +1280,34 @@ export function ProjectManagement({
                   <div className="flex items-center gap-1 text-slate-400"><span>编号</span><span className="font-mono text-slate-600 truncate">{project.project_code}</span></div>
                   <div className="flex items-center gap-1 text-slate-400"><span>部门</span><span className="text-slate-600 truncate">{project.department || '-'}</span></div>
                   <div className="flex items-center gap-1 text-slate-400"><span>经理</span><span className="text-slate-600 truncate">{project.role_project_manager || '-'}</span></div>
-                  <div className="flex items-center gap-1 text-slate-400"><span>截止</span><span className="text-slate-600 truncate">{project.final_acceptance_date || project.initial_acceptance_date || project.required_date || '-'}</span></div>
+                  <div className="flex items-center gap-1 text-slate-400"><span>截止</span><span className="text-slate-600 truncate">{formatDate(project.final_acceptance_date || project.initial_acceptance_date || project.required_date)}</span></div>
                 </div>
 
                 {/* 底部：进度条 + 操作 */}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-50">
-                  {onViewProject && (
-                    <Button variant="ghost" size="sm" className="h-6 text-[11px] gap-0.5 px-1.5 text-slate-500 hover:text-blue-600"
-                      onClick={(e) => { e.stopPropagation(); onViewProject(project); }}>
-                      <ArrowRight className="w-3 h-3" />详情
-                    </Button>
-                  )}
-                  <div className="flex-1" />
-                  <span className="text-[10px] text-slate-400 mr-1">进度</span>
-                  <div className="w-14 h-1 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500 rounded-full" style={{ width: project.project_status === 'completed' ? '100%' : project.project_stage === 'acceptance' ? '75%' : project.project_stage === 'implementation' ? '50%' : project.project_stage === 'initiation' ? '20%' : project.project_stage === 'maintenance' ? '90%' : '30%' }} />
-                  </div>
-                </div>
+                {(() => {
+                  const pct = project.project_status === 'completed' ? 100
+                    : project.project_stage === 'maintenance' ? 90
+                    : project.project_stage === 'acceptance' ? 75
+                    : project.project_stage === 'implementation' ? 50
+                    : project.project_stage === 'initiation' ? 20 : 30;
+                  return (
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-50">
+                      {onViewProject && (
+                        <Button variant="ghost" size="sm" className="h-6 text-[11px] gap-0.5 px-1.5 text-slate-500 hover:text-blue-600"
+                          onClick={(e) => { e.stopPropagation(); onViewProject(project); }}>
+                          <ArrowRight className="w-3 h-3" />详情
+                        </Button>
+                      )}
+                      <div className="flex-1" />
+                      <span className="text-[11px] font-semibold text-slate-500 mr-1.5">{pct}%</span>
+                      <div className="w-14 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div className={cn("h-full rounded-full",
+                          pct >= 100 ? "bg-emerald-400" : pct >= 75 ? "bg-blue-500" : pct >= 50 ? "bg-violet-400" : "bg-amber-400"
+                        )} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           );
@@ -1550,6 +1557,19 @@ export function ProjectManagement({
 
       {/* 右侧项目详情面板 */}
       {selectedProject && renderProjectDetail()}
+
+      {/* 项目描述弹窗 */}
+      <Dialog open={descDialogOpen} onOpenChange={setDescDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[70vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>项目描述</DialogTitle>
+          </DialogHeader>
+          <div
+            className="text-sm text-slate-700 leading-relaxed [&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+            dangerouslySetInnerHTML={{ __html: descDialogContent }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
