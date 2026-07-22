@@ -276,6 +276,7 @@ export function ProjectManagement({
   const [modSearch, setModSearch] = useState("");
   const [descDialogOpen, setDescDialogOpen] = useState(false);
   const [descDialogContent, setDescDialogContent] = useState("");
+  const [progressMap, setProgressMap] = useState<Record<string, number>>({});
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
 
   // 加载项目成员和权限
@@ -410,6 +411,33 @@ export function ProjectManagement({
   useEffect(() => {
     setProjects(initialProjects);
   }, [initialProjects]);
+
+  // 获取项目总进度百分比
+  useEffect(() => {
+    const fetchProgress = async () => {
+      const projList = projects.length > 0 ? projects : initialProjects;
+      if (projList.length === 0) return;
+      try {
+        const res = await fetch("/api/projects/progress-summary", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projects: projList.map((p) => ({
+              id: p.id,
+              project_schema: p.project_schema || '',
+              project_type: p.project_type || '',
+              project_stage: p.project_stage || '',
+            })),
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setProgressMap(data.data || {});
+        }
+      } catch { /* ignore */ }
+    };
+    fetchProgress();
+  }, [projects, initialProjects]);
 
   // 从 API 刷新项目列表
   const refreshProjects = async () => {
@@ -1285,11 +1313,7 @@ export function ProjectManagement({
 
                 {/* 底部：进度条 + 操作 */}
                 {(() => {
-                  const pct = project.project_status === 'completed' ? 100
-                    : project.project_stage === 'maintenance' ? 90
-                    : project.project_stage === 'acceptance' ? 75
-                    : project.project_stage === 'implementation' ? 50
-                    : project.project_stage === 'initiation' ? 20 : 30;
+                  const pct = progressMap[project.id] ?? 0;
                   return (
                     <div className="flex items-center justify-between pt-2 border-t border-slate-50">
                       {onViewProject && (
