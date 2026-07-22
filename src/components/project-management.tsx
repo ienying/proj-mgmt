@@ -1224,6 +1224,46 @@ export function ProjectManagement({
     </div>
   );
 
+  // 可搜索下拉选择器
+  const FilterCombobox = ({ value, onChange, options, placeholder, width = "w-[120px]" }: {
+    value: string; onChange: (v: string) => void; options: { value: string; label: string }[];
+    placeholder: string; width?: string;
+  }) => {
+    const [open, setOpen] = useState(false);
+    const selectedLabel = options.find(o => o.value === value)?.label || placeholder;
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button className={cn(
+            "inline-flex items-center justify-between rounded-md border text-[11px] h-7 px-2.5 transition-colors hover:bg-accent hover:text-accent-foreground flex-shrink-0",
+            width,
+            value !== "all" ? "border-blue-400 bg-blue-50 text-blue-700" : "border-input bg-transparent text-muted-foreground"
+          )}>
+            <span className="truncate">{selectedLabel}</span>
+            <ChevronDown className="w-3 h-3 ml-1 opacity-50 flex-shrink-0" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="p-0 w-[200px]" align="start">
+          <Command>
+            <CommandInput placeholder={`搜索${placeholder}...`} className="h-8 text-xs" />
+            <CommandList>
+              <CommandEmpty className="text-xs py-3">无匹配选项</CommandEmpty>
+              <CommandGroup>
+                {options.map((opt) => (
+                  <CommandItem key={opt.value} value={opt.label} className="text-xs"
+                    onSelect={() => { onChange(opt.value); setOpen(false); }}>
+                    <CheckIcon className={cn("mr-2 h-3.5 w-3.5", value === opt.value ? "opacity-100" : "opacity-0")} />
+                    {opt.label}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    );
+  };
+
   // 阶段对应顶部装饰色
   const STAGE_ACCENT: Record<string, string> = {
     initiation: "bg-gradient-to-r from-blue-400 to-blue-300",
@@ -1474,25 +1514,17 @@ export function ProjectManagement({
           })}
           <span className="w-px h-4 bg-slate-200 mx-0.5" />
           {/* 状态 */}
-          <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v)}>
-            <SelectTrigger className="w-[90px] h-7 text-[11px] rounded-md"><SelectValue placeholder="状态" /></SelectTrigger>
-            <SelectContent><SelectItem value="all">全部状态</SelectItem><SelectItem value="进行中">进行中</SelectItem><SelectItem value="已完成">已完成</SelectItem><SelectItem value="已暂停">已暂停</SelectItem></SelectContent>
-          </Select>
+          <FilterCombobox value={filterStatus} onChange={setFilterStatus} placeholder="状态" width="w-[120px]"
+            options={[{value:"all",label:"全部状态"},{value:"进行中",label:"进行中"},{value:"已完成",label:"已完成"},{value:"已暂停",label:"已暂停"}]} />
           {/* 项目经理 */}
-          <Select value={filterManager} onValueChange={(v) => setFilterManager(v)}>
-            <SelectTrigger className="w-[100px] h-7 text-[11px] rounded-md"><SelectValue placeholder="项目经理" /></SelectTrigger>
-            <SelectContent><SelectItem value="all">全部经理</SelectItem>{managers.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-          </Select>
+          <FilterCombobox value={filterManager} onChange={setFilterManager} placeholder="项目经理" width="w-[130px]"
+            options={[{value:"all",label:"全部经理"},...managers.map(m=>({value:m,label:m}))]} />
           {/* 类型 */}
-          <Select value={filterType} onValueChange={(v) => setFilterType(v)}>
-            <SelectTrigger className="w-[90px] h-7 text-[11px] rounded-md"><SelectValue placeholder="类型" /></SelectTrigger>
-            <SelectContent><SelectItem value="all">全部类型</SelectItem>{projectTypes.filter(t => t.code).map((t) => <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>)}</SelectContent>
-          </Select>
+          <FilterCombobox value={filterType} onChange={setFilterType} placeholder="类型" width="w-[120px]"
+            options={[{value:"all",label:"全部类型"},...projectTypes.filter(t=>t.code).map(t=>({value:t.code,label:t.name}))]} />
           {/* 部门 */}
-          <Select value={filterDept} onValueChange={(v) => setFilterDept(v)}>
-            <SelectTrigger className="w-[90px] h-7 text-[11px] rounded-md"><SelectValue placeholder="部门" /></SelectTrigger>
-            <SelectContent><SelectItem value="all">全部部门</SelectItem>{departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
-          </Select>
+          <FilterCombobox value={filterDept} onChange={setFilterDept} placeholder="部门" width="w-[120px]"
+            options={[{value:"all",label:"全部部门"},...departments.map(d=>({value:d,label:d}))]} />
           {/* 更多按钮 */}
           <Button variant="ghost" size="sm"
             className={cn("h-7 gap-1 text-[11px] rounded-md", showAdvancedFilter ? "bg-slate-100 text-slate-700" : "text-slate-500")}
@@ -1525,10 +1557,8 @@ export function ProjectManagement({
         <div className="px-6 pt-2 pb-0 flex items-center gap-2 flex-wrap">
           {/* 销售 */}
           <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">销售</span>
-          <Select value={filterSales} onValueChange={(v) => setFilterSales(v)}>
-            <SelectTrigger className="w-[90px] h-7 text-[11px] rounded-md"><SelectValue placeholder="销售" /></SelectTrigger>
-            <SelectContent><SelectItem value="all">全部</SelectItem>{salesList.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-          </Select>
+          <FilterCombobox value={filterSales} onChange={setFilterSales} placeholder="销售" width="w-[120px]"
+            options={[{value:"all",label:"全部"},...salesList.map(s=>({value:s,label:s}))]} />
           {/* 采购模块 */}
           <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider ml-1">采购模块</span>
           <MultiSelectBadge label="采购模块"
