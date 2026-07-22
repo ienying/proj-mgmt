@@ -228,7 +228,7 @@ export function ProjectManagement({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [viewMode, setViewMode] = useState<"list" | "card">("list");
+  const [viewMode, setViewMode] = useState<"list" | "card">("card");
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState("all");
@@ -1383,7 +1383,7 @@ export function ProjectManagement({
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Row 1: 标题 + 搜索 + 视图切换 + 操作 */}
-        <div className="px-6 pt-5 pb-0 flex items-center gap-3 flex-wrap">
+        <div className="px-6 pt-[100px] pb-0 flex items-center gap-3 flex-wrap">
           <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2 whitespace-nowrap">
             <FolderKanban className="w-5 h-5 text-blue-500" />
             项目管理
