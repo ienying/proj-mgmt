@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
       table_code: string; apply_project_types: string[] | null;
       apply_project_stages: string[] | null;
       stage_progress_column: string | null; stage_progress_target: string | null;
+      stage_display_mode: string | null;
     }>;
 
     const result: Record<string, number> = {};
@@ -37,12 +38,13 @@ export async function POST(request: NextRequest) {
 
       const schema = proj.project_schema.replace(/[^a-zA-Z0-9_]/g, "_");
 
+      // 与 HeroSection 逻辑一致：跨所有阶段计算总进度
+      // HeroSection 不过滤 apply_project_types，只按阶段+显示模式过滤
       const relevantDefs = defs.filter((d) => {
         if (!d.stage_progress_column || !d.stage_progress_target) return false;
-        const types = d.apply_project_types;
-        const stages = d.apply_project_stages;
-        if (types && types.length > 0 && !types.includes(proj.project_type)) return false;
-        if (stages && stages.length > 0 && !stages.includes(proj.project_stage)) return false;
+        // 必须是阶段布局表（有阶段分配 + 显示模式为 phase/both/未设置）
+        if (!d.apply_project_stages || d.apply_project_stages.length === 0) return false;
+        if (d.stage_display_mode && d.stage_display_mode !== "phase" && d.stage_display_mode !== "both") return false;
         return true;
       });
 
