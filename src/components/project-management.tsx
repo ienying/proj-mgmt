@@ -427,6 +427,7 @@ export function ProjectManagement({
               project_schema: p.project_schema || '',
               project_type: p.project_type || '',
               project_stage: p.project_stage || '',
+              project_status: p.project_status || p.status || '',
             })),
           }),
         });

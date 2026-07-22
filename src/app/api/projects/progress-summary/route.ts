@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { projects } = body as {
-      projects: Array<{ id: string; project_schema: string; project_type: string; project_stage: string }>;
+      projects: Array<{ id: string; project_schema: string; project_status?: string }>;
     };
 
     if (!projects || !Array.isArray(projects) || projects.length === 0) {
@@ -38,17 +38,13 @@ export async function POST(request: NextRequest) {
 
       const schema = proj.project_schema.replace(/[^a-zA-Z0-9_]/g, "_");
 
-      // 与 HeroSection 逻辑一致：跨所有阶段计算总进度
-      // HeroSection 不过滤 apply_project_types，只按阶段+显示模式过滤
+      // 与 HeroSection 逻辑一致，只统计 stage_display_mode === "phase" 的表
       const relevantDefs = defs.filter((d) => {
         if (!d.stage_progress_column || !d.stage_progress_target) return false;
-        // 必须是阶段布局表（有阶段分配 + 显示模式为 phase/both/未设置）
         if (!d.apply_project_stages || d.apply_project_stages.length === 0) return false;
-        if (d.stage_display_mode && d.stage_display_mode !== "phase" && d.stage_display_mode !== "both") return false;
+        if (d.stage_display_mode !== "phase") return false;
         return true;
       });
-
-      if (relevantDefs.length === 0) { result[proj.id] = 0; continue; }
 
       let totalTasks = 0;
       let totalCompleted = 0;
@@ -70,7 +66,13 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      result[proj.id] = totalTasks > 0 ? Math.round((totalCompleted / totalTasks) * 100) : 0;
+      if (totalTasks > 0) {
+        result[proj.id] = Math.round((totalCompleted / totalTasks) * 100);
+      } else {
+        // 无 phase 表或无数据：项目已完工 → 100%，否则 0%
+        const isCompleted = proj.project_status === 'completed' || proj.project_status === '已完成' || proj.project_status === '已结项';
+        result[proj.id] = isCompleted ? 100 : 0;
+      }
     }
 
     return NextResponse.json({ data: result });
