@@ -143,7 +143,7 @@ export default function KnowledgeCenter({ currentUser }: KnowledgeCenterProps) {
       <PostDrawer
         post={drawerPost}
         open={drawerOpen}
-        onOpenChange={setDrawerOpen}
+        onOpenChange={(v) => { setDrawerOpen(v); if (!v) setRefreshKey((k) => k + 1); }}
         currentUser={currentUser}
         onPostUpdated={handlePostUpdated}
         onEdit={handleEdit}
