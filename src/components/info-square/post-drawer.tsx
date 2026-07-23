@@ -150,7 +150,7 @@ export default function PostDrawer({
   const loadDetail = useCallback(async () => {
     if (!post) return;
     try {
-      fetch(`/api/knowledge/posts/${post.id}/read`, {
+      await fetch(`/api/knowledge/posts/${post.id}/read`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: currentUser?.id, user_name: currentUser?.name }),
