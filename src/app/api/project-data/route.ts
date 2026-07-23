@@ -67,16 +67,21 @@ export async function GET(request: NextRequest) {
 
     const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema;
 
-    // 查询项目 Schema 中的表数据
+    // 先检查表是否存在
+    const { data: tableCheck } = await client.rpc("execute_sql", {
+      p_sql: `SELECT table_name FROM information_schema.tables WHERE table_schema = '${safeSchema.replace(/'/g, "''")}' AND table_name = '${tableCode.replace(/'/g, "''")}'`,
+    });
+    const tableExists = Array.isArray(tableCheck) && tableCheck.length > 0;
+    if (!tableExists) {
+      return NextResponse.json({ data: null, exists: false });
+    }
+
+    // 表存在，查询数据
     const { data, error } = await client.rpc("execute_sql", {
       p_sql: `SELECT * FROM ${safeSchema}."${tableCode}" ORDER BY sort_order, created_at`,
     });
 
     if (error) {
-      // 表不存在(42P01)时返回标记，让调用方区分"无数据"和"表不存在"
-      if ((error as { code?: string }).code === '42P01') {
-        return NextResponse.json({ data: null, exists: false });
-      }
       console.error("查询表数据失败:", error);
       return NextResponse.json({ data: [] });
     }
