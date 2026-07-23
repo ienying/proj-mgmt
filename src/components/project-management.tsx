@@ -254,6 +254,61 @@ function FilterCombobox({ value, onChange, options, placeholder, width = "w-[120
   );
 }
 
+// 可搜索多选下拉组件
+function MultiSelectSearch({ label, options, selected, onChange }: {
+  label: string;
+  options: string[];
+  selected: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const uniqueOptions = [...new Set(options)].filter((o) =>
+    !search || o.toLowerCase().includes(search.toLowerCase())
+  );
+  return (
+    <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) setSearch(""); }}>
+      <PopoverTrigger asChild>
+        <button
+          className={`inline-flex items-center justify-between rounded-md border text-[11px] h-7 px-2.5 transition-colors hover:bg-accent hover:text-accent-foreground flex-shrink-0 min-w-[100px] ${selected.length > 0 ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-input bg-transparent text-muted-foreground'}`}
+        >
+          <span className="truncate">
+            {selected.length > 0 ? `${label}(${selected.length})` : label}
+          </span>
+          <ChevronDown className="w-3 h-3 ml-1 opacity-50 flex-shrink-0" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[220px] p-1" align="start">
+        <div className="px-1 pb-1">
+          <Input
+            placeholder={`搜索${label}...`}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-7 text-xs"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+        <div className="max-h-[180px] overflow-y-auto space-y-0.5">
+          {uniqueOptions.length === 0 && <div className="text-xs text-gray-400 text-center py-3">暂无匹配</div>}
+          {uniqueOptions.map((opt) => (
+            <label key={opt} className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs hover:bg-gray-100 ${selected.includes(opt) ? 'bg-blue-50' : ''}`}>
+              <Checkbox checked={selected.includes(opt)} onCheckedChange={(c) => {
+                onChange(c ? [...selected, opt] : selected.filter(s => s !== opt));
+              }} />
+              {opt}
+            </label>
+          ))}
+        </div>
+        {selected.length > 0 && (
+          <div className="border-t pt-1 mt-1 px-1">
+            <button className="text-xs text-red-500 hover:underline w-full text-center" onClick={() => onChange([])}>清除全部 ({selected.length})</button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function ProjectManagement({
   projects: initialProjects,
   initialProjectTypes,
@@ -1565,7 +1620,7 @@ export function ProjectManagement({
             options={[{value:"all",label:"全部"},...salesList.map(s=>({value:s,label:s}))]} />
           {/* 采购模块 */}
           <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider ml-1">采购模块</span>
-          <MultiSelectBadge label="采购模块"
+          <MultiSelectSearch label="采购模块"
             options={allProcurementModules.map((c) => procurementModules.find((pm) => pm.code === c)?.name || c)}
             selected={filterProcurementModules.map((c) => procurementModules.find((pm) => pm.code === c)?.name || c)}
             onChange={(names) => {
@@ -1574,10 +1629,10 @@ export function ProjectManagement({
             }} />
           {/* 渠道公司 */}
           <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider ml-1">渠道公司</span>
-          <MultiSelectBadge label="渠道公司" options={allChannelCompanies} selected={filterChannelCompanies} onChange={setFilterChannelCompanies} />
+          <MultiSelectSearch label="渠道公司" options={allChannelCompanies} selected={filterChannelCompanies} onChange={setFilterChannelCompanies} />
           {/* 项目成员 */}
           <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider ml-1">项目成员</span>
-          <MultiSelectBadge label="项目成员" options={allProjectMembers} selected={filterProjectMembers} onChange={setFilterProjectMembers} />
+          <MultiSelectSearch label="项目成员" options={allProjectMembers} selected={filterProjectMembers} onChange={setFilterProjectMembers} />
           <span className="w-px h-4 bg-slate-200 mx-0.5" />
           {/* 进场日期 */}
           <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">进场</span>
