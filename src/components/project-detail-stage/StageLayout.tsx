@@ -71,13 +71,7 @@ export function StageLayout({
       .then((r) => r.json())
       .then((d) => {
         const defs = (d.data || []).filter(
-          (def: Record<string, unknown>) => {
-            if (String(def.table_code || "").startsWith("task_")) return false;
-            // 按项目类型过滤：只显示匹配当前项目类型或无类型限制的表
-            const types = def.apply_project_types as string[] | null | undefined;
-            if (types && types.length > 0 && !types.includes(project.project_type)) return false;
-            return true;
-          }
+          (def: Record<string, unknown>) => !String(def.table_code || "").startsWith("task_")
         );
         setTableDefs(defs);
       })
@@ -98,6 +92,8 @@ export function StageLayout({
   // 计算每个阶段的日期范围 + 缓存表数据
   const [phaseDates, setPhaseDates] = useState<Record<number, { planStart?: string; planEnd?: string; actualStart?: string; actualEnd?: string }>>({});
   const [allTableRecords, setAllTableRecords] = useState<Record<string, Array<Record<string, unknown>>>>({});
+  // 只显示实际存在于项目 schema 中的表
+  const existingTableDefs = tableDefs.filter((d) => d.table_code in allTableRecords);
   useEffect(() => {
     if (tableDefs.length === 0 || !project.project_schema) return;
     const sorted = [...projectStages].sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99));
@@ -286,7 +282,7 @@ export function StageLayout({
         activePanel={activePanel}
         onPanelChange={setActivePanel}
         onSubClick={handleOpenSubContent}
-        tableDefs={tableDefs}
+        tableDefs={existingTableDefs}
         onHoverChange={setLeftStripExpanded}
         tableRecordCounts={Object.fromEntries(Object.entries(allTableRecords).map(([k, v]) => [k, v.length]))}
         moduleTypes={moduleTypes}
@@ -329,7 +325,7 @@ export function StageLayout({
                 { code: "scope", name: "范围管理" }, { code: "schedule", name: "进度管理" }, { code: "quality", name: "质量管理" },
                 { code: "cost", name: "成本管理" }, { code: "communication", name: "沟通管理" }, { code: "risk", name: "风险管理" }, { code: "document", name: "资料管理" }
               ]).map((mt, idx) => {
-                const tableCount = tableDefs.filter(def =>
+                const tableCount = existingTableDefs.filter(def =>
                   (def.module_type || []).some((m: string) => m === mt.code || m === "progress" && mt.code === "schedule") &&
                   (!def.stage_display_mode || def.stage_display_mode === "menu" || def.stage_display_mode === "both")
                 ).length;
@@ -349,7 +345,7 @@ export function StageLayout({
             <div className="w-[280px] border-t border-r border-b border-[var(--s-border)] bg-[var(--s-surface)] max-h-[500px] overflow-y-auto">
               {(() => {
                 const aliases: Record<string, string[]> = { schedule: ["progress"] };
-                const tablesFiltered = tableDefs.filter(def =>
+                const tablesFiltered = existingTableDefs.filter(def =>
                   (def.module_type || []).some((m: string) => m === activeModule || (aliases[activeModule] || []).includes(m)) &&
                   (!def.stage_display_mode || def.stage_display_mode === "menu" || def.stage_display_mode === "both")
                 );
