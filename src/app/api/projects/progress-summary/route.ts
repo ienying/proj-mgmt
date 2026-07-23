@@ -14,10 +14,9 @@ export async function POST(request: NextRequest) {
 
     const client = await createServerClient();
 
-    // Get all table definitions with progress config
+    // Get all table definitions
     const { data: allDefs, error: defsError } = await client.rpc("dp_select", {
       p_table: "data_table_definitions",
-      p_filters: { is_active: true },
     });
 
     if (defsError || !allDefs) {
@@ -25,7 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     const defs = allDefs as Array<{
-      table_code: string; apply_project_types: string[] | null;
+      table_code: string;
       apply_project_stages: string[] | null;
       stage_progress_column: string | null; stage_progress_target: string | null;
       stage_display_mode: string | null;
@@ -37,39 +36,43 @@ export async function POST(request: NextRequest) {
       if (!proj.project_schema) { result[proj.id] = 0; continue; }
 
       const schema = proj.project_schema.replace(/[^a-zA-Z0-9_]/g, "_");
+      const safeSchema = schema.includes('-') ? `"${schema}"` : schema;
 
-      // 与 HeroSection 逻辑一致，只统计 stage_display_mode === "phase" 的表
-      const relevantDefs = defs.filter((d) => {
-        if (!d.stage_progress_column || !d.stage_progress_target) return false;
+      // 与 HeroSection stageLayoutTables 过滤完全一致：
+      // apply_project_stages?.length > 0 && stage_display_mode in (null, "phase", "both")
+      const stageLayoutTables = defs.filter((d) => {
         if (!d.apply_project_stages || d.apply_project_stages.length === 0) return false;
-        if (d.stage_display_mode !== "phase") return false;
+        const mode = d.stage_display_mode;
+        if (mode && mode !== "phase" && mode !== "both") return false;
         return true;
       });
 
       let totalTasks = 0;
       let totalCompleted = 0;
 
-      for (const def of relevantDefs) {
+      for (const def of stageLayoutTables) {
         try {
-          const tableName = `${schema}.${def.table_code}`;
           const { data: recs, error: recsError } = await client.rpc("execute_sql", {
-            p_sql: `SELECT * FROM ${tableName}`,
+            p_sql: `SELECT * FROM ${safeSchema}."${def.table_code}"`,
           });
-          if (recsError || !recs) continue;
-          const rows = recs as Array<Record<string, unknown>>;
+          if (recsError) continue;
+          const rows = (recs || []) as Array<Record<string, unknown>>;
           totalTasks += rows.length;
-          const col = def.stage_progress_column!;
-          const target = String(def.stage_progress_target!).trim();
-          totalCompleted += rows.filter((r) => String(r[col] || "").trim() === target).length;
+          // 只有配置了进度列的表才统计完成数
+          if (def.stage_progress_column && def.stage_progress_target) {
+            const col = def.stage_progress_column;
+            const target = String(def.stage_progress_target).trim();
+            totalCompleted += rows.filter((r) => String(r[col] || "").trim() === target).length;
+          }
         } catch {
-          // Table might not exist yet
+          // Table might not exist yet in this schema
         }
       }
 
       if (totalTasks > 0) {
         result[proj.id] = Math.round((totalCompleted / totalTasks) * 100);
       } else {
-        // 无 phase 表或无数据：项目已完工 → 100%，否则 0%
+        // 无数据：已完工项目默认 100%
         const isCompleted = proj.project_status === 'completed' || proj.project_status === '已完成' || proj.project_status === '已结项';
         result[proj.id] = isCompleted ? 100 : 0;
       }
