@@ -432,10 +432,13 @@ export function ProjectManagement({
           }),
         });
         if (res.ok) {
-          const data = await res.json();
-          setProgressMap(data.data || {});
+          const text = await res.text();
+          try {
+            const data = JSON.parse(text);
+            if (data && data.data) setProgressMap(data.data);
+          } catch { /* response not valid JSON */ }
         }
-      } catch { /* ignore */ }
+      } catch { /* network error, ignore */ }
     };
     fetchProgress();
   }, [projects, initialProjects]);
