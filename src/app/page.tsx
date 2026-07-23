@@ -667,6 +667,22 @@ export default function HomePage() {
         );
       case "projects":
         if (viewingProject) {
+          // 等待用户选择布局方式，不提前渲染详情组件
+          if (layoutMode === null) {
+            return (
+              <ContentErrorBoundary>
+                <ProjectManagement
+                  projects={projects}
+                  initialProjectTypes={projectTypes}
+                  initialProjectStages={projectStages}
+                  initialProcurementModules={procurementModules}
+                  users={users}
+                  onProjectDelete={handleProjectDelete}
+                  onViewProject={handleViewProject}
+                />
+              </ContentErrorBoundary>
+            );
+          }
           if (layoutMode === "stage") {
             return (
               <ContentErrorBoundary>
@@ -682,7 +698,6 @@ export default function HomePage() {
               </ContentErrorBoundary>
             );
           }
-          // layoutMode === "management" or null (shows management behind selector)
           return (
             <ContentErrorBoundary>
               <ProjectDetail
