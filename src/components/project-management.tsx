@@ -214,6 +214,46 @@ function MultiSelectBadge({ label, options, selected, onChange }: {
   );
 }
 
+// 可搜索下拉选择器（独立组件，避免在 ProjectManagement 内部重建）
+function FilterCombobox({ value, onChange, options, placeholder, width = "w-[120px]" }: {
+  value: string; onChange: (v: string) => void; options: { value: string; label: string }[];
+  placeholder: string; width?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedLabel = options.find(o => o.value === value)?.label || placeholder;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button className={cn(
+          "inline-flex items-center justify-between rounded-md border text-[11px] h-7 px-2.5 transition-colors hover:bg-accent hover:text-accent-foreground flex-shrink-0",
+          width,
+          value !== "all" ? "border-blue-400 bg-blue-50 text-blue-700" : "border-input bg-transparent text-muted-foreground"
+        )}>
+          <span className="truncate">{selectedLabel}</span>
+          <ChevronDown className="w-3 h-3 ml-1 opacity-50 flex-shrink-0" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-[200px]" align="start">
+        <Command>
+          <CommandInput placeholder={`搜索${placeholder}...`} className="h-8 text-xs" />
+          <CommandList>
+            <CommandEmpty className="text-xs py-3">无匹配选项</CommandEmpty>
+            <CommandGroup>
+              {options.map((opt) => (
+                <CommandItem key={opt.value} value={opt.label} className="text-xs"
+                  onSelect={() => { onChange(opt.value); setOpen(false); }}>
+                  <CheckIcon className={cn("mr-2 h-3.5 w-3.5", value === opt.value ? "opacity-100" : "opacity-0")} />
+                  {opt.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function ProjectManagement({
   projects: initialProjects,
   initialProjectTypes,
@@ -1227,46 +1267,6 @@ export function ProjectManagement({
       )}
     </div>
   );
-
-  // 可搜索下拉选择器
-  const FilterCombobox = ({ value, onChange, options, placeholder, width = "w-[120px]" }: {
-    value: string; onChange: (v: string) => void; options: { value: string; label: string }[];
-    placeholder: string; width?: string;
-  }) => {
-    const [open, setOpen] = useState(false);
-    const selectedLabel = options.find(o => o.value === value)?.label || placeholder;
-    return (
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button className={cn(
-            "inline-flex items-center justify-between rounded-md border text-[11px] h-7 px-2.5 transition-colors hover:bg-accent hover:text-accent-foreground flex-shrink-0",
-            width,
-            value !== "all" ? "border-blue-400 bg-blue-50 text-blue-700" : "border-input bg-transparent text-muted-foreground"
-          )}>
-            <span className="truncate">{selectedLabel}</span>
-            <ChevronDown className="w-3 h-3 ml-1 opacity-50 flex-shrink-0" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="p-0 w-[200px]" align="start">
-          <Command>
-            <CommandInput placeholder={`搜索${placeholder}...`} className="h-8 text-xs" />
-            <CommandList>
-              <CommandEmpty className="text-xs py-3">无匹配选项</CommandEmpty>
-              <CommandGroup>
-                {options.map((opt) => (
-                  <CommandItem key={opt.value} value={opt.label} className="text-xs"
-                    onSelect={() => { onChange(opt.value); setOpen(false); }}>
-                    <CheckIcon className={cn("mr-2 h-3.5 w-3.5", value === opt.value ? "opacity-100" : "opacity-0")} />
-                    {opt.label}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-    );
-  };
 
   // 阶段对应顶部装饰色
   const STAGE_ACCENT: Record<string, string> = {
