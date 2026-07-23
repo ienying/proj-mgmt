@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
-import { Inspector } from 'react-dev-inspector';
 import { Toaster } from 'sonner';
 import { ChunkErrorHandler } from '@/components/chunk-error-handler';
 import { AuthProvider } from '@/components/auth-context';
+import { DevInspector } from '@/components/dev-inspector';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -35,7 +35,7 @@ export default function RootLayout({
       <body className={`antialiased`}>
         <AuthProvider>
           <ChunkErrorHandler />
-          {isDev && <Inspector />}
+          {isDev && <DevInspector />}
           {children}
           <Toaster richColors position="top-center" />
         </AuthProvider>
