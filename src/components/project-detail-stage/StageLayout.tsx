@@ -71,7 +71,13 @@ export function StageLayout({
       .then((r) => r.json())
       .then((d) => {
         const defs = (d.data || []).filter(
-          (def: Record<string, unknown>) => !String(def.table_code || "").startsWith("task_")
+          (def: Record<string, unknown>) => {
+            if (String(def.table_code || "").startsWith("task_")) return false;
+            // 按项目类型过滤：只显示匹配当前项目类型或无类型限制的表
+            const types = def.apply_project_types as string[] | null | undefined;
+            if (types && types.length > 0 && !types.includes(project.project_type)) return false;
+            return true;
+          }
         );
         setTableDefs(defs);
       })
