@@ -108,6 +108,8 @@ export function StageLayout({
           try {
             const r = await fetch(`/api/project-data?projectSchema=${project.project_schema}&tableCode=${def.table_code}`);
             const d = await r.json();
+            // 表不存在（exists=false）时跳过，不加入缓存
+            if (d.exists === false) continue;
             const recs = (d.data || []) as Array<Record<string, unknown>>;
             recordsCache[def.table_code] = recs;
             if (!recs.length) continue;

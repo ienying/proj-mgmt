@@ -73,10 +73,11 @@ export async function GET(request: NextRequest) {
     });
 
     if (error) {
-      // 表不存在(42P01)时静默返回空数据，其他错误才记录日志
-      if ((error as { code?: string }).code !== '42P01') {
-        console.error("查询表数据失败:", error);
+      // 表不存在(42P01)时返回标记，让调用方区分"无数据"和"表不存在"
+      if ((error as { code?: string }).code === '42P01') {
+        return NextResponse.json({ data: null, exists: false });
       }
+      console.error("查询表数据失败:", error);
       return NextResponse.json({ data: [] });
     }
 
