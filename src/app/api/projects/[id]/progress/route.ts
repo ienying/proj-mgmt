@@ -1,5 +1,7 @@
 import { createServerClient } from "@/storage/database/pg-client";
 import { NextRequest, NextResponse } from "next/server";
+import { verifyAuth } from "@/lib/auth-utils";
+import { canEditProject } from "@/lib/project-permission";
 
 // 辅助: 根据 project_id 获取 project_schema
 async function getProjectSchema(client: Awaited<ReturnType<typeof createServerClient>>, projectId: string): Promise<string | null> {
@@ -50,14 +52,25 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ── 鉴权 + 权限检查 ──
+    const authResult = await verifyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+
     const { id: projectId } = await params;
-    const client = await createServerClient();
     const body = await request.json();
-    const { content, user_id, user_name } = body;
+    const { content } = body;
 
     if (!content) {
       return NextResponse.json({ error: "内容不能为空" }, { status: 400 });
     }
+
+    const client = await createServerClient();
+
+    const permCheck = await canEditProject(projectId, authResult.userId, authResult.role, authResult.userName);
+    if (!permCheck.allowed) {
+      return NextResponse.json({ error: permCheck.reason || "无权限提交进展" }, { status: 403 });
+    }
+    // ── 权限检查结束 ──
 
     const projectSchema = await getProjectSchema(client, projectId);
     if (!projectSchema) {
@@ -79,8 +92,8 @@ export async function POST(
       p_table: `${projectSchema}.progress_updates`,
       p_data: {
         content,
-        user_id: user_id || null,
-        user_name: user_name || "",
+        user_id: authResult.userId,
+        user_name: authResult.userName,
       },
     });
 

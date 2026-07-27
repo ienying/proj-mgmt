@@ -11,7 +11,7 @@ import { toast } from "sonner";
 export default function AIConfigPanel() {
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
-  const [model, setModel] = useState("deepseek-chat");
+  const [model, setModel] = useState("deepseek-v4-pro");
   const [baseUrl, setBaseUrl] = useState("https://api.deepseek.com");
   const [maskedKey, setMaskedKey] = useState("");
   const [configured, setConfigured] = useState(false);
@@ -27,7 +27,7 @@ export default function AIConfigPanel() {
       if (json.data?.configured) {
         setConfigured(true);
         setMaskedKey(json.data.maskedKey || "");
-        setModel(json.data.model || "deepseek-chat");
+        setModel(json.data.model || "deepseek-v4-pro");
         setBaseUrl(json.data.baseUrl || "https://api.deepseek.com");
       }
     } catch { /* ignore */ }
@@ -99,7 +99,7 @@ export default function AIConfigPanel() {
     }
   };
 
-  const voiceAvailable = model === "deepseek-chat";
+  const voiceAvailable = model === "deepseek-v4-pro";
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -175,8 +175,8 @@ export default function AIConfigPanel() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="deepseek-chat">deepseek-chat — 通用对话，适合数据分析与文字整理</SelectItem>
-              <SelectItem value="deepseek-reasoner">deepseek-reasoner — 深度推理，适合复杂报表分析</SelectItem>
+              <SelectItem value="deepseek-v4-pro">deepseek-v4-pro — 高性能版，复杂推理与代码分析首选</SelectItem>
+              <SelectItem value="deepseek-v4-flash">deepseek-v4-flash — 极速版，通用对话与文字整理，性价比高</SelectItem>
             </SelectContent>
           </Select>
         </div>

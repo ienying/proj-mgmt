@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const proj = project as Record<string, unknown>;
     const projectCode = String(proj.project_code || "");
     const projectName = String(proj.project_name || "");
-    const schema = `yuansu_${projectCode.toLowerCase()}`;
+    const schema = `yuansu_${projectCode}`;
 
     // 2. 列出项目 schema 下的所有表
     const { data: tables } = await client.rpc("execute_sql", {

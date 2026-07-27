@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
 import { rmSync, existsSync } from "fs";
 import path from "path";
+import { verifyAuth, extractJwtPayload } from "@/lib/auth-utils";
+import { canEditProject } from "@/lib/project-permission";
 
 function mapColumnTypeToSQL(type: string): string {
   const typeMap: Record<string, string> = {
@@ -431,13 +433,24 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const client = await createServerClient();
+    // ── 鉴权 + 权限检查 ──
+    const authResult = await verifyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+
     const body = await request.json();
-    const { id, _sync_schema, members, integration_list, ...updateData } = body;
+    const { id, _sync_schema, members, ...updateData } = body;
 
     if (!id) {
       return NextResponse.json({ error: "ID required" }, { status: 400 });
     }
+
+    const permCheck = await canEditProject(id, authResult.userId, authResult.role, authResult.userName);
+    if (!permCheck.allowed) {
+      return NextResponse.json({ error: permCheck.reason || "无权限编辑该项目" }, { status: 403 });
+    }
+    // ── 权限检查结束 ──
+
+    const client = await createServerClient();
 
     // 更新项目数据（排除非项目表字段）
     const { data, error } = await client.rpc("dp_update", {
@@ -572,6 +585,12 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    // ── 鉴权 ──
+    const payload = extractJwtPayload(request);
+    if (!payload) {
+      return NextResponse.json({ error: "未提供Token或Token无效" }, { status: 401 });
+    }
+
     const client = await createServerClient();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
@@ -580,14 +599,27 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "ID required" }, { status: 400 });
     }
 
+    // 查项目信息，获取 created_by
     const { data: project, error: queryError } = await client.rpc("dp_get_by_id", {
       p_table: "projects",
       p_id: id,
     });
 
     if (queryError) {
-      return NextResponse.json({ error: queryError.message }, { status: 500 });
+      return NextResponse.json({ error: (queryError as { message: string }).message }, { status: 500 });
     }
+    if (!project) {
+      return NextResponse.json({ error: "项目不存在" }, { status: 404 });
+    }
+
+    const proj = project as Record<string, unknown>;
+    const createdBy = String(proj.created_by || "");
+
+    // 权限判断：超级管理员 OR 项目创建人
+    if (payload.role !== "super_admin" && payload.userId !== createdBy) {
+      return NextResponse.json({ error: "仅超级管理员或项目创建人可删除项目" }, { status: 403 });
+    }
+    // ── 鉴权结束 ──
 
     const projectSchema = (project as Record<string, unknown>)?.project_schema as string;
     let uploadsCleaned = false;

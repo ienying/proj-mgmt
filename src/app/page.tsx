@@ -108,7 +108,7 @@ const mockStandards = [
 ];
 
 export default function HomePage() {
-  const { user, isLoading, isAuthenticated, logout: authLogout } = useAuth();
+  const { user, isLoading, isAuthenticated, logout: authLogout, token } = useAuth();
   const [projectTypes, setProjectTypes] = useState<{ code: string; name: string }[]>([]);
   const [projectStages, setProjectStages] = useState<{ code: string; name: string; sort_order?: number }[]>([]);
   const [procurementModules, setProcurementModules] = useState<{ code: string; name: string; product_name?: string; vendor?: string; model_spec?: string }[]>([]);
@@ -362,31 +362,36 @@ export default function HomePage() {
   };
 
   const handleProjectDelete = async (id: string) => {
-    console.log("handleProjectDelete called with id:", id);
     try {
-      // 调用后端 API 删除项目（包括成员、Schema 等）
       const response = await fetch(`/api/projects/${id}?id=${id}`, {
         method: "DELETE",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       });
-      console.log("Delete response status:", response.status);
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "删除失败");
+        if (response.status === 403) {
+          toast.error(errorData.error || "您没有权限删除此项目，仅超级管理员和项目创建人可删除");
+        } else if (response.status === 401) {
+          toast.error("请先登录后再操作");
+        } else {
+          throw new Error(errorData.error || "删除失败");
+        }
+        return;
       }
 
       const result = await response.json();
-      console.log("Delete result:", result);
-      
+
       // 从前端状态中移除
       setProjects((prev) => prev.filter((p) => p.id !== id));
-      
+
       const parts = ["项目删除成功"];
       if (result.deletedSchema) parts.push(`已清理 Schema: ${result.deletedSchema}`);
       if (result.uploadsCleaned) parts.push("已清理上传文件目录");
       toast.success(parts.join("，"));
     } catch (error: any) {
-      console.error("Delete error:", error);
       toast.error("删除失败: " + error.message);
     }
   };
@@ -648,7 +653,7 @@ export default function HomePage() {
                     project_code: project.project_code,
                     project_type: project.project_type,
                     project_stage: project.project_stage,
-                    project_schema: project.project_schema || `yuansu_${project.project_code.toLowerCase()}`,
+                    project_schema: project.project_schema || `yuansu_${project.project_code}`,
                     status: project.status || "active",
                     created_at: project.created_at || "",
                     customer_info: project.customer_info as { company_name?: string; contact_person?: string; contact_phone?: string; contact_email?: string } | undefined,

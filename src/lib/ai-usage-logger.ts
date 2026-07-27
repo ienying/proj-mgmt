@@ -17,7 +17,7 @@ export async function logAIUsage(params: {
         user_name: params.userName || null,
         feature: params.feature,
         tokens_used: params.tokensUsed || 0,
-        model: params.model || "deepseek-chat",
+        model: params.model || "deepseek-v4-pro",
         project_id: params.projectId || null,
       },
     });

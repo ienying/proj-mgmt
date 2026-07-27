@@ -301,8 +301,8 @@ export function HeroSection({ project, projectTypes, projectStages, customerType
                 {stat.value}
               </div>
               <div
-                className="text-[11px] uppercase tracking-[1.5px]"
-                style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}
+                className="text-[13px] uppercase tracking-[1.5px] font-bold"
+                style={{ color: "#3b82f6", fontFamily: "var(--font-mono, monospace)" }}
               >
                 {stat.label}
               </div>
@@ -315,42 +315,42 @@ export function HeroSection({ project, projectTypes, projectStages, customerType
       <div className="flex gap-px" style={{ backgroundColor: "var(--s-border)" }}>
         {/* 最终客户 (NEW) */}
         <div className="flex-1 p-5 flex flex-col gap-2.5" style={{ backgroundColor: "var(--s-bg)" }}>
-          <span className="text-[9px] uppercase tracking-[1.5px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+          <span className="text-[12px] uppercase tracking-[1.5px] font-bold" style={{ color: "#3b82f6", fontFamily: "var(--font-mono, monospace)" }}>
             最终客户
           </span>
           <span className="text-sm font-semibold" style={{ color: "var(--s-text)" }}>{finalCustomer}</span>
         </div>
         {/* 客户类型 */}
         <div className="flex-1 p-5 flex flex-col gap-2.5" style={{ backgroundColor: "var(--s-bg)" }}>
-          <span className="text-[9px] uppercase tracking-[1.5px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+          <span className="text-[12px] uppercase tracking-[1.5px] font-bold" style={{ color: "#3b82f6", fontFamily: "var(--font-mono, monospace)" }}>
             客户类型
           </span>
           <span className="text-sm font-semibold" style={{ color: "var(--s-text)" }}>{customerTypeDisplay}</span>
         </div>
         {/* 业务部署模式 — 不加框 */}
         <div className="flex-1 p-5 flex flex-col gap-2.5" style={{ backgroundColor: "var(--s-bg)" }}>
-          <span className="text-[9px] uppercase tracking-[1.5px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+          <span className="text-[12px] uppercase tracking-[1.5px] font-bold" style={{ color: "#3b82f6", fontFamily: "var(--font-mono, monospace)" }}>
             业务部署模式
           </span>
           <span className="text-sm font-semibold" style={{ color: "var(--s-text)" }}>{deployMode}</span>
         </div>
         {/* 负责人 */}
         <div className="flex-1 p-5 flex flex-col gap-2.5" style={{ backgroundColor: "var(--s-bg)" }}>
-          <span className="text-[9px] uppercase tracking-[1.5px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+          <span className="text-[12px] uppercase tracking-[1.5px] font-bold" style={{ color: "#3b82f6", fontFamily: "var(--font-mono, monospace)" }}>
             负责人
           </span>
           <span className="text-sm font-semibold" style={{ color: "var(--s-text)" }}>{salesPerson}</span>
         </div>
         {/* 项目要求时间 (NEW) */}
         <div className="flex-1 p-5 flex flex-col gap-2.5" style={{ backgroundColor: "var(--s-bg)" }}>
-          <span className="text-[9px] uppercase tracking-[1.5px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+          <span className="text-[12px] uppercase tracking-[1.5px] font-bold" style={{ color: "#3b82f6", fontFamily: "var(--font-mono, monospace)" }}>
             要求时间
           </span>
           <span className="text-sm font-semibold" style={{ color: "var(--s-text)" }}>{requiredDateDisplay}</span>
         </div>
         {/* 倒计时 (NEW) */}
         <div className="flex-1 p-5 flex flex-col gap-2.5" style={{ backgroundColor: "var(--s-bg)" }}>
-          <span className="text-[9px] uppercase tracking-[1.5px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+          <span className="text-[12px] uppercase tracking-[1.5px] font-bold" style={{ color: "#3b82f6", fontFamily: "var(--font-mono, monospace)" }}>
             距离要求时间
           </span>
           <span className="text-sm font-semibold" style={{ color: countdownUrgent ? "var(--s-red)" : "var(--s-green)", fontFamily: "var(--font-mono, monospace)" }}>
@@ -359,7 +359,7 @@ export function HeroSection({ project, projectTypes, projectStages, customerType
         </div>
         {/* 团队 */}
         <div className="flex-[1.3] p-5 flex flex-col gap-2.5" style={{ backgroundColor: "var(--s-bg)" }}>
-          <span className="text-[9px] uppercase tracking-[1.5px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+          <span className="text-[12px] uppercase tracking-[1.5px] font-bold" style={{ color: "#3b82f6", fontFamily: "var(--font-mono, monospace)" }}>
             团队
           </span>
           <span className="text-sm font-medium leading-relaxed" style={{ color: "var(--s-text)" }}>{teamDisplay}</span>

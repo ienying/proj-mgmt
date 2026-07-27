@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useAuth } from "@/components/auth-context";
 import { copyToClipboard } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -236,51 +237,52 @@ function SearchableUserSelect({
     : users;
 
   const selectedUser = users.find((u) => u.name === value);
+  const displayText = selectedUser?.name || value || "";
+
+  const handleSelect = (u: { id: string; name: string; phone?: string }) => {
+    onChange(u.name);
+    onSelectFull?.(u);
+    setOpen(false);
+    setSearch("");
+  };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) setSearch(""); }}>
       <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          className="w-full justify-between text-sm font-normal"
+        <button
+          type="button"
+          className={`flex w-full items-center justify-between rounded-md border text-sm h-8 px-3 transition-colors hover:bg-accent hover:text-accent-foreground ${displayText ? "border-input bg-transparent" : "border-input bg-transparent text-muted-foreground"}`}
         >
-          {selectedUser?.name || (
-            <span className="text-muted-foreground">{placeholder || "搜索选择人员..."}</span>
-          )}
-          <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
+          <span className="truncate text-left">{displayText || placeholder || "搜索选择人员..."}</span>
+          <Search className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+        </button>
       </PopoverTrigger>
       <PopoverContent className="w-[250px] p-0" align="start">
-        <Command shouldFilter={false}>
-          <CommandInput
+        <div className="p-1">
+          <Input
             placeholder="搜索人员..."
             value={search}
-            onValueChange={setSearch}
-            className="h-9"
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-8 text-sm"
           />
-          <CommandList className="max-h-[200px]">
-            <CommandEmpty className="py-2 text-center text-sm">未找到匹配人员</CommandEmpty>
-            <CommandGroup>
-              {filtered.map((u) => (
-                <CommandItem
-                  key={u.id}
-                  value={u.id}
-                  onSelect={() => {
-                    onChange(u.name);
-                    onSelectFull?.(u);
-                    setOpen(false);
-                    setSearch("");
-                  }}
-                  className="text-sm"
-                >
-                  {u.name}
-                  {u.phone && <span className="ml-2 text-xs text-slate-400">{u.phone}</span>}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
+        </div>
+        <div className="max-h-[200px] overflow-y-auto border-t">
+          {filtered.length === 0 ? (
+            <div className="py-2 text-center text-sm text-slate-400">未找到匹配人员</div>
+          ) : (
+            filtered.map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                className={`flex w-full items-center px-3 py-2 text-sm hover:bg-accent transition-colors ${u.name === value ? "bg-blue-50 text-blue-700" : ""}`}
+                onClick={() => handleSelect(u)}
+              >
+                <span className="flex-1 text-left truncate">{u.name}</span>
+                {u.phone && <span className="ml-2 text-xs text-slate-400 flex-shrink-0">{u.phone}</span>}
+              </button>
+            ))
+          )}
+        </div>
       </PopoverContent>
     </Popover>
   );
@@ -375,6 +377,7 @@ export function ProjectForm({
   users,
   initialData,
 }: ProjectFormProps) {
+  const { token, user: currentUser } = useAuth();
   const isEditMode = !!initialData?.id;
   // 注入聚焦样式
   useEffect(() => {
@@ -608,7 +611,7 @@ export function ProjectForm({
 
       // 解析并填充表单
       setProjectName(get("项目名称"));
-      setProjectCode(get("项目编号").replace(/[^a-z0-9_]/g, ""));
+      setProjectCode(get("项目编号").replace(/[^a-zA-Z0-9_]/g, ""));
 
       // 按名称查找 code
       const typeMatch = projectTypes.find(t => t.name === get("项目类型"));
@@ -939,8 +942,10 @@ export function ProjectForm({
       setChannelCompanies([{ id: "", company_name: "", contact_person: "", contact_phone: "", remark: "" }]);
       setConstructionUnits([]);
       setSelectedModules([]); setProcurementAmount(""); setSoftwareAmount(""); setHardwareAmount("");
+      setModuleQuantities({});
       setHasIntegration(false); setIntegrationList([]);
-    setHasCustomDev(false); setCustomDevItems([]);
+      setHasCustomDev(false); setCustomDevItems([]);
+      setConstructionUnits([{ id: "", company_name: "", contact_person: "", contact_phone: "", construction_content: "" }]);
     }
   }, [open, initialData]);
 
@@ -1106,7 +1111,7 @@ export function ProjectForm({
 
   // 更新渠道公司
   const updateChannelCompany = (id: string, field: keyof ChannelCompany, value: string) => {
-    setChannelCompanies(channelCompanies.map((cc) => (cc.id === id ? { ...cc, [field]: value } : cc)));
+    setChannelCompanies((prev) => prev.map((cc) => (cc.id === id ? { ...cc, [field]: value } : cc)));
   };
 
   // 删除渠道公司
@@ -1130,7 +1135,7 @@ export function ProjectForm({
 
   // 更新施工单位
   const updateConstructionUnit = (id: string, field: keyof ConstructionUnit, value: string) => {
-    setConstructionUnits(constructionUnits.map((cu) => (cu.id === id ? { ...cu, [field]: value } : cu)));
+    setConstructionUnits((prev) => prev.map((cu) => (cu.id === id ? { ...cu, [field]: value } : cu)));
   };
 
   // 删除施工单位
@@ -1173,9 +1178,9 @@ export function ProjectForm({
     }
   };
 
-  // 验证项目编号格式（仅小写英文+数字）
+  // 验证项目编号格式（英文+数字+下划线，支持大小写）
   const validateProjectCode = (code: string): boolean => {
-    return /^[a-z0-9_]+$/.test(code);
+    return /^[a-zA-Z0-9_]+$/.test(code);
   };
 
   // 添加对接信息
@@ -1221,8 +1226,8 @@ export function ProjectForm({
   };
 
   const updateIntegration = (id: string, field: keyof IntegrationItem, value: string | IntegrationDoc[]) => {
-    setIntegrationList(
-      integrationList.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    setIntegrationList((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
     );
   };
 
@@ -1291,8 +1296,8 @@ export function ProjectForm({
   };
 
   const updateCustomDev = (id: string, field: keyof CustomDevItem, value: string | IntegrationDoc[]) => {
-    setCustomDevItems(
-      customDevItems.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    setCustomDevItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
     );
   };
 
@@ -1347,7 +1352,7 @@ export function ProjectForm({
       return;
     }
     if (!validateProjectCode(projectCode)) {
-      toast.error("项目编号只能包含小写英文、数字和下划线");
+      toast.error("项目编号只能包含英文、数字和下划线");
       return;
     }
     if (!projectType) {
@@ -1360,6 +1365,10 @@ export function ProjectForm({
     }
     if (!projectStatus) {
       toast.error("请选择项目状态");
+      return;
+    }
+    if (!entryDate) {
+      toast.error("请选择项目进场时间");
       return;
     }
     if (selectedModules.length === 0) {
@@ -1384,6 +1393,7 @@ export function ProjectForm({
       final_acceptance_date: finalAcceptanceDate || null,
       required_date: requiredDate || null,
       final_customer: finalCustomer || null,
+      created_by: currentUser?.id || undefined,
       customer_info: {
         company_name: companyName,
         contact_persons: contactPersons.filter((cp) => cp.name || cp.phone),
@@ -1409,8 +1419,8 @@ export function ProjectForm({
       procurement_amount: procurementAmount ? parseFloat(procurementAmount) : null,
       software_amount: softwareAmount ? parseFloat(softwareAmount) : null,
       hardware_amount: hardwareAmount ? parseFloat(hardwareAmount) : null,
-      integration_list: hasIntegration ? integrationList.filter((i) => i.vendor_name) : [],
-      custom_dev_info: hasCustomDev ? customDevItems.filter((c) => c.product_module) : [],
+      integration_list: hasIntegration ? integrationList : [],
+      custom_dev_info: hasCustomDev ? customDevItems : [],
     };
 
     // 编辑模式下检测类型/阶段/状态是否变更
@@ -1468,7 +1478,7 @@ export function ProjectForm({
 
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(requestBody),
       });
 
@@ -1593,10 +1603,10 @@ export function ProjectForm({
                     <Input
                       value={projectCode}
                       onChange={(e) => {
-                        const val = e.target.value.replace(/[^a-z0-9_]/g, "");
+                        const val = e.target.value.replace(/[^a-zA-Z0-9_]/g, "");
                         setProjectCode(val);
                       }}
-                      placeholder="小写英文+下划线+数字"
+                      placeholder="英文+下划线+数字"
                     />
                   )}
                 </div>
@@ -1780,7 +1790,7 @@ export function ProjectForm({
             >
               <div className="grid grid-cols-4 gap-5">
                 <div className="space-y-1.5">
-                  <Label>项目进场时间</Label>
+                  <Label>项目进场时间 <span className="text-red-500">*</span></Label>
                   <Input
                     type="date"
                     value={entryDate}
@@ -2323,10 +2333,10 @@ export function ProjectForm({
                             />
                             <div className="flex-1 min-w-0">
                               <div className="font-medium text-sm truncate">{module.module_name}</div>
+                              {module.scope && <div className="text-[11px] text-blue-600 font-medium truncate">范围：{module.scope}</div>}
                               <div className="text-xs text-slate-400 truncate">{module.product_name}</div>
                               {module.model_spec && <div className="text-[11px] text-slate-400 truncate">型号规格：{module.model_spec}</div>}
                               <div className="text-[11px] text-slate-400 truncate">厂商：{module.vendor || "未指定"}</div>
-                              {module.scope && <div className="text-[11px] text-slate-400 truncate">范围：{module.scope}</div>}
                             </div>
                           </label>
                           {selectedModules.includes(module.module_code) && (

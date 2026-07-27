@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
     const client = await createServerClient();
     const { searchParams } = new URL(request.url);
     const includeTaskTables = searchParams.get("include_task_tables") === "true";
+    const projectType = searchParams.get("project_type");
 
     const { data, error } = await client.rpc("dp_select", {
       p_table: "data_table_definitions",
@@ -61,11 +62,19 @@ export async function GET(request: NextRequest) {
 
     // 默认过滤掉任务表单自动生成的 task_ 临时表
     const rows = (data || []) as Array<Record<string, unknown>>;
-    const filtered = includeTaskTables
+    let filtered = includeTaskTables
       ? rows
       : rows.filter(
           (d) => !String(d.table_code || "").startsWith("task_")
         );
+
+    // 按项目类型过滤适用范围（空的 apply_project_types 表示适用于所有类型）
+    if (projectType) {
+      filtered = filtered.filter((d) => {
+        const types = (d.apply_project_types as string[]) || [];
+        return types.length === 0 || types.includes(projectType);
+      });
+    }
 
     // 按 sort_order 排序
     const sortedData = filtered.sort(

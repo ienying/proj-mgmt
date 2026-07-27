@@ -665,6 +665,11 @@ export function ProjectManagement({
              matchImplUnit && matchSales && matchPresales && matchMarketProduct && matchCustomerTypes &&
              matchEntryDate && matchInitialDate && matchFinalDate &&
              matchChannel && matchMembers && matchProcurement && matchIntegration && matchCustomDev;
+    }).sort((a, b) => {
+      // 默认按进场时间降序：最近的在上，时间久远在下
+      const da = a.entry_date ? new Date(a.entry_date).getTime() : 0;
+      const db = b.entry_date ? new Date(b.entry_date).getTime() : 0;
+      return db - da;
     });
   }, [projects, searchQuery, filterType, filterStage, filterStatus, filterDept, filterDeployMode, filterManager,
       filterImplementationUnit, filterSales, filterPresales, filterMarketProduct, filterCustomerTypes,
@@ -1221,7 +1226,7 @@ export function ProjectManagement({
               className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50" 
               size="sm"
               onClick={async () => {
-                if (confirm("确定要删除此项目吗？此操作不可恢复。")) {
+                if (confirm(`⚠️ 确定要删除项目「${selectedProject.project_name}」吗？\n\n此操作将永久删除该项目及其所有数据（Schema、成员、上传文件），不可恢复！\n\n只有超级管理员和项目创建人可以执行此操作。`)) {
                   await onProjectDelete(selectedProject.id);
                   setSelectedProject(null);
                 }
@@ -1256,6 +1261,7 @@ export function ProjectManagement({
                 <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">类型</th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">阶段</th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">状态</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">进场时间</th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">经理</th>
                 <th className="w-12"></th>
               </tr>
@@ -1289,6 +1295,7 @@ export function ProjectManagement({
                     <td className="px-4 py-2.5 text-xs text-slate-600">{projectTypes.find(t => t.code === project.project_type)?.name || project.project_type}</td>
                     <td className="px-4 py-2.5 text-xs text-slate-600">{projectStages.find(s => s.code === project.project_stage)?.name || project.project_stage}</td>
                     <td className="px-4 py-2.5">{getStatusBadge(project.project_status || project.status)}</td>
+                    <td className="px-4 py-2.5 text-xs text-slate-500">{project.entry_date ? String(project.entry_date).slice(0, 10) : '-'}</td>
                     <td className="px-4 py-2.5 text-xs text-slate-600">{project.role_project_manager || '-'}</td>
                     <td className="px-2 py-2.5">
                       <DropdownMenu>
@@ -1304,7 +1311,7 @@ export function ProjectManagement({
                           <DropdownMenuItem className="text-red-600"
                             onClick={async (e) => {
                               e.stopPropagation();
-                              if (confirm("确定要删除此项目吗？此操作不可恢复。")) {
+                              if (confirm(`⚠️ 确定要删除项目「${project.project_name}」吗？\n\n此操作将永久删除该项目及其所有数据（Schema、成员、上传文件），不可恢复！\n\n只有超级管理员和项目创建人可以执行此操作。`)) {
                                 await onProjectDelete(project.id);
                               }
                             }}>

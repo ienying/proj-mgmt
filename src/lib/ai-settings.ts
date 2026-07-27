@@ -13,7 +13,7 @@ export async function ensureAITables() {
           key_name TEXT,
           api_key TEXT,
           base_url TEXT DEFAULT 'https://api.deepseek.com',
-          model TEXT DEFAULT 'deepseek-chat',
+          model TEXT DEFAULT 'deepseek-v4-pro',
           is_active BOOLEAN DEFAULT true,
           created_at TIMESTAMPTZ DEFAULT NOW(),
           updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -32,7 +32,7 @@ export async function ensureAITables() {
           user_name TEXT,
           feature TEXT,
           tokens_used INTEGER DEFAULT 0,
-          model TEXT DEFAULT 'deepseek-chat',
+          model TEXT DEFAULT 'deepseek-v4-pro',
           project_id TEXT,
           created_at TIMESTAMPTZ DEFAULT NOW()
         )
@@ -270,7 +270,7 @@ export async function getAISettings(): Promise<{
     return {
       apiKey: raw,
       baseUrl: String(active.base_url || "https://api.deepseek.com"),
-      model: String(active.model || "deepseek-chat"),
+      model: String(active.model || "deepseek-v4-pro"),
       maskedKey,
     };
   } catch {
@@ -303,7 +303,7 @@ export async function saveAISettings(params: {
       key_name: "DeepSeek",
       api_key: params.apiKey,
       base_url: params.baseUrl || "https://api.deepseek.com",
-      model: params.model || "deepseek-chat",
+      model: params.model || "deepseek-v4-pro",
       is_active: true,
     },
   });

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { useAuth } from "@/components/auth-context";
 import { GanttChart } from "./GanttChart";
 
 interface TableDataViewProps {
@@ -40,6 +41,7 @@ function isColEditable(col: { type: string; readonly?: boolean }, row?: Record<s
 }
 
 export function TableDataView({ tableName, tableCode, projectSchema, tableDef, onBack, userName }: TableDataViewProps) {
+  const { token } = useAuth();
   const [records, setRecords] = useState<Array<Record<string, unknown>>>([]);
   const [loading, setLoading] = useState(true);
   const [ganttExpanded, setGanttExpanded] = useState(true);
@@ -92,7 +94,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
     try {
       const res = await fetch("/api/project-data", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ projectSchema, tableCode, rowId: row.id, data: { [colName]: val }, user_name: userName || "" }),
       });
       if (res.ok) {
@@ -122,7 +124,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
       });
       const res = await fetch("/api/project-data", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ projectSchema, tableCode, data: initData, user_name: userName || "" }),
       });
       if (res.ok) {
@@ -138,7 +140,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
     if (row.allow_delete === false) return;
     if (!confirm("确定删除？")) return;
     try {
-      const res = await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema || "")}&tableCode=${tableCode}&rowId=${row.id}&user_name=${encodeURIComponent(userName || "")}`, { method: "DELETE" });
+      const res = await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema || "")}&tableCode=${tableCode}&rowId=${row.id}`, { method: "DELETE", headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
       if (res.ok) setRecords((prev) => prev.filter((_, i) => i !== rowIdx));
     } catch {}
   };
@@ -150,7 +152,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
       const row = records[ri];
       if (!row?.id || row.allow_delete === false) continue;
       try {
-        await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema || "")}&tableCode=${tableCode}&rowId=${row.id}&user_name=${encodeURIComponent(userName || "")}`, { method: "DELETE" });
+        await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema || "")}&tableCode=${tableCode}&rowId=${row.id}`, { method: "DELETE", headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
       } catch {}
     }
     setRecords(prev => prev.filter((_, i) => !selectedIds.has(i)));
@@ -235,7 +237,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
         try {
           const res = await fetch("/api/project-data", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
             body: JSON.stringify({ projectSchema, tableCode, data: row }),
           });
           if (res.ok) imported++; else {
@@ -509,7 +511,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
           const ud = await ur.json();
           if (ud.key) {
             await fetch("/api/project-data", { method: "PUT",
-              headers: { "Content-Type": "application/json" },
+              headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
               body: JSON.stringify({ projectSchema, tableCode, rowId: records[rowIdx]?.id, data: { [colName]: ud.key } }),
             });
             setRecords((prev) => { const u = [...prev]; u[rowIdx] = { ...u[rowIdx], [colName]: ud.key }; return u; });

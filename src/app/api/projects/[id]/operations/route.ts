@@ -1,5 +1,6 @@
 import { createServerClient } from "@/storage/database/pg-client";
 import { NextRequest, NextResponse } from "next/server";
+import { verifyAuth } from "@/lib/auth-utils";
 
 async function getProjectSchema(client: Awaited<ReturnType<typeof createServerClient>>, projectId: string): Promise<string | null> {
   try {
@@ -38,10 +39,14 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ── 鉴权 ──
+    const authResult = await verifyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+
     const { id: projectId } = await params;
     const client = await createServerClient();
     const body = await request.json();
-    const { action, target_type, target_name, detail, user_name } = body;
+    const { action, target_type, target_name, detail } = body;
 
     const projectSchema = await getProjectSchema(client, projectId);
     if (!projectSchema) return NextResponse.json({ error: "项目不存在" }, { status: 404 });
@@ -63,7 +68,8 @@ export async function POST(
         target_type: target_type || null,
         target_name: target_name || null,
         detail: detail || null,
-        user_name: user_name || "",
+        user_id: authResult.userId,
+        user_name: authResult.userName,
       },
     });
 

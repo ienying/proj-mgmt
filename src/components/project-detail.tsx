@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Fragment, useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useAuth } from "@/components/auth-context";
 import { createPortal } from "react-dom";
 import {
   ArrowLeft, FolderKanban, Users, Building2,
@@ -379,6 +380,7 @@ export function ProjectDetail({
   onBack,
   onSwitchLayout,
 }: ProjectDetailProps) {
+  const { token } = useAuth();
   const [activeModule, setActiveModule] = useState("scope");
   
   // 动态模块列表（根据项目类型+阶段从API获取）
@@ -438,7 +440,7 @@ export function ProjectDetail({
     try {
       const res = await fetch("/api/ai/analyze-project", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
           projectSchema: project.project_schema,
           projectName: project.project_name,
@@ -493,7 +495,7 @@ export function ProjectDetail({
     try {
       const res = await fetch("/api/ai/analyze-project", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
           projectSchema: project.project_schema,
           question: q,
@@ -775,8 +777,10 @@ export function ProjectDetail({
       const schemaCheckData = await schemaCheckRes.json();
       const existingTableSet = new Set<string>((schemaCheckData.tables || []) as string[]);
 
-      // 1. 获取表定义
-      const defResponse = await fetch("/api/standards");
+      // 1. 获取表定义（按项目类型过滤适用范围）
+      const defParams = new URLSearchParams();
+      if (project.project_type) defParams.set("project_type", project.project_type);
+      const defResponse = await fetch(`/api/standards?${defParams.toString()}`);
       const defData = await defResponse.json();
       
       if (defData.data) {
@@ -832,7 +836,7 @@ export function ProjectDetail({
           try {
             await fetch("/api/project-data/sync-references", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
               body: JSON.stringify({ projectSchema: project.project_schema }),
             });
             // 同步后重新获取相关表数据
@@ -967,7 +971,7 @@ export function ProjectDetail({
     try {
       const response = await fetch("/api/project-data", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
           projectSchema: project.project_schema,
           tableCode,
@@ -1043,7 +1047,7 @@ export function ProjectDetail({
     try {
       const response = await fetch("/api/project-data", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
           projectSchema: project.project_schema,
           tableCode: currentTableForAdd.table_code,
@@ -1085,7 +1089,7 @@ export function ProjectDetail({
     try {
       const response = await fetch(
         `/api/project-data?projectSchema=${project.project_schema}&tableCode=${tableCode}&rowId=${rowId}`,
-        { method: "DELETE" }
+        { method: "DELETE", headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } }
       );
       
       if (!response.ok) throw new Error("删除失败");
@@ -2123,6 +2127,7 @@ export function ProjectDetail({
                 try {
                   const res = await fetch(`/api/project-data/import?projectSchema=${project.project_schema}&tableCode=${table.table_code}`, {
                     method: "POST",
+                    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
                     body: formData,
                   });
                   const result = await res.json();

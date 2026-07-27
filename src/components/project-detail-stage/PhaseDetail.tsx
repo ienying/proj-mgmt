@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useRef, useEffect } from "react";
+import { useAuth } from "@/components/auth-context";
 
 // Docx/PPTX 客户端预览组件（使用 CDN 加载 mammoth.js）
 function DocxPreview({ src, fn }: { src: string; fn: string }) {
@@ -79,6 +80,7 @@ interface PhaseDetailProps {
 }
 
 export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema, projectStages = [], currentStageCode, onRecordsUpdate, onDataChange, userName }: PhaseDetailProps) {
+  const { token } = useAuth();
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [tableRecords, setTableRecords] = useState<Record<string, Array<Record<string, unknown>>>>({});
   const [loadingTable, setLoadingTable] = useState<string | null>(null);
@@ -127,7 +129,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
     try {
       const res = await fetch("/api/project-data", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
           projectSchema,
           tableCode,
@@ -172,7 +174,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       });
       const res = await fetch("/api/project-data", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ projectSchema, tableCode, data: initData, user_name: userName || "" }),
       });
       if (res.ok) {
@@ -192,7 +194,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
     const row = tableRecords[tableCode]?.[rowIdx];
     if (!row?.id) return;
     try {
-      const res = await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(tableCode)}&rowId=${row.id}&user_name=${encodeURIComponent(userName || "")}`, { method: "DELETE" });
+      const res = await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(tableCode)}&rowId=${row.id}`, { method: "DELETE", headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
       if (res.ok) {
         const currentRecords = tableRecords[tableCode] || [];
         const updated = currentRecords.filter((_, i) => i !== rowIdx);
@@ -253,7 +255,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       // 保存 key 到数据库
       const saveRes = await fetch("/api/project-data", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ projectSchema, tableCode, rowId: row.id, data: { [colName]: fileKey } }),
       });
       if (!saveRes.ok) {
@@ -303,7 +305,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
           // 先同步引用数据
           await fetch("/api/project-data/sync-references", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
             body: JSON.stringify({ projectSchema }),
           }).catch(() => {});
           // 加载数据
@@ -440,7 +442,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                         const { tableCode, rowIdx, colName } = editingCell;
                         fetch("/api/project-data", {
                           method: "PUT",
-                          headers: { "Content-Type": "application/json" },
+                          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
                           body: JSON.stringify({ projectSchema, tableCode, rowId: row.id, data: { [colName]: newVal } }),
                         }).then((r) => {
                           if (r.ok) { onDataChange?.(); setTableRecords((prev) => {
@@ -577,7 +579,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                 const newVal = "";
                 fetch("/api/project-data", {
                   method: "PUT",
-                  headers: { "Content-Type": "application/json" },
+                  headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
                   body: JSON.stringify({ projectSchema, tableCode, rowId: row.id, data: { [col.name]: newVal } }),
                 }).then((r) => {
                   if (r.ok) setTableRecords((prev) => {
@@ -1292,7 +1294,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                       className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-orange)", color: "var(--s-orange)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>编辑</button>
                     <button onClick={async () => {
                       if (!projectSchema || !record.id) return;
-                      await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(drawerTableCode)}&rowId=${record.id}`, { method: "DELETE" });
+                      await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(drawerTableCode)}&rowId=${record.id}`, { method: "DELETE", headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
                       const updated = records.filter((_,i) => i !== drawerRowIdx);
                       setTableRecords(prev => ({ ...prev, [drawerTableCode]: updated }));
                       onRecordsUpdate?.(drawerTableCode, updated);

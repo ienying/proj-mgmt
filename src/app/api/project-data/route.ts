@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
+import { verifyAuth } from "@/lib/auth-utils";
+import { canEditProjectBySchema } from "@/lib/project-permission";
 
 // 缓存表名和列名映射
 const tableMetaCache = new Map<string, { name: string; colLabels: Record<string, string> }>();
@@ -98,6 +100,10 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // ── 鉴权 + 权限检查 ──
+    const authResult = await verifyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+
     const client = await createServerClient();
     const body = await request.json();
     const { projectSchema, tableCode, data } = body;
@@ -105,6 +111,12 @@ export async function POST(request: NextRequest) {
     if (!projectSchema || !tableCode || !data) {
       return NextResponse.json({ error: "projectSchema, tableCode and data required" }, { status: 400 });
     }
+
+    const permCheck = await canEditProjectBySchema(projectSchema, authResult.userId, authResult.role, authResult.userName);
+    if (!permCheck.allowed) {
+      return NextResponse.json({ error: permCheck.reason || "无权限编辑该项目数据" }, { status: 403 });
+    }
+    // ── 权限检查结束 ──
 
     const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema;
 
@@ -157,6 +169,10 @@ export async function POST(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
+    // ── 鉴权 + 权限检查 ──
+    const authResult = await verifyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+
     const client = await createServerClient();
     const body = await request.json();
     const { projectSchema, tableCode, rowId, data } = body;
@@ -164,6 +180,12 @@ export async function PUT(request: NextRequest) {
     if (!projectSchema || !tableCode || !rowId || !data) {
       return NextResponse.json({ error: "projectSchema, tableCode, rowId and data required" }, { status: 400 });
     }
+
+    const permCheck = await canEditProjectBySchema(projectSchema, authResult.userId, authResult.role, authResult.userName);
+    if (!permCheck.allowed) {
+      return NextResponse.json({ error: permCheck.reason || "无权限编辑该项目数据" }, { status: 403 });
+    }
+    // ── 权限检查结束 ──
 
     const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema;
 
@@ -268,6 +290,10 @@ export async function PUT(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
+    // ── 鉴权 + 权限检查 ──
+    const authResult = await verifyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+
     const client = await createServerClient();
     const { searchParams } = new URL(request.url);
     const projectSchema = searchParams.get("projectSchema");
@@ -277,6 +303,12 @@ export async function DELETE(request: NextRequest) {
     if (!projectSchema || !tableCode || !rowId) {
       return NextResponse.json({ error: "projectSchema, tableCode and rowId required" }, { status: 400 });
     }
+
+    const permCheck = await canEditProjectBySchema(projectSchema, authResult.userId, authResult.role, authResult.userName);
+    if (!permCheck.allowed) {
+      return NextResponse.json({ error: permCheck.reason || "无权限编辑该项目数据" }, { status: 403 });
+    }
+    // ── 权限检查结束 ──
 
     const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema;
 

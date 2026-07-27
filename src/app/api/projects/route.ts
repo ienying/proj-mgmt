@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. 生成项目 Schema 名称
-    const projectSchema = `yuansu_${project_code.toLowerCase()}`;
+    const projectSchema = `yuansu_${project_code}`;
 
     // 2. 插入项目主表
     const insertData: Record<string, unknown> = {

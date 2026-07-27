@@ -33,7 +33,7 @@ export async function PUT(request: Request) {
 
     await saveAISettings({
       apiKey: api_key,
-      model: model || "deepseek-chat",
+      model: model || "deepseek-v4-pro",
       baseUrl: base_url || "https://api.deepseek.com",
     });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Editor, Toolbar } from "@wangeditor/editor-for-react";
 import type { IDomEditor, IEditorConfig } from "@wangeditor/editor";
 import "@wangeditor/editor/dist/css/style.css";
@@ -164,7 +164,39 @@ function extractExternalImageUrls(html: string, plainText: string): string[] {
 
 var uploadedPaths = new Set<string>();
 
-export default function RichTextEditor(props: RichTextEditorProps) {
+// Error boundary to catch Slate.js DOM resolution errors from wangeditor
+class EditorErrorBoundary extends React.Component<{ children: React.ReactNode; onError?: () => void }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: Error) {
+    console.error('RichTextEditor crashed:', error.message);
+  }
+  handleRetry = () => {
+    this.setState({ hasError: false });
+    if (this.props.onError) this.props.onError();
+  };
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-48 border border-red-200 rounded-lg bg-red-50 text-sm">
+          <p className="text-red-600 font-medium mb-1">编辑器加载异常</p>
+          <p className="text-red-400 text-xs mb-2">请刷新页面后重试</p>
+          <button
+            onClick={this.handleRetry}
+            className="px-3 py-1 text-xs bg-white border border-red-200 rounded hover:bg-red-100 text-red-600"
+          >
+            重试
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function RichTextEditorInner(props: RichTextEditorProps) {
   var value = props.value;
   var onChange = props.onChange;
   var placeholder = props.placeholder;
@@ -174,15 +206,23 @@ export default function RichTextEditor(props: RichTextEditorProps) {
   var _editorState = useState<IDomEditor | null>(null);
   var editor = _editorState[0];
   var setEditor = _editorState[1];
+  // Track paste handler so we can clean it up on editor destroy
+  var pasteCleanupRef = useRef<(() => void) | null>(null);
 
   var handleCreated = useCallback(function (ed: IDomEditor) {
     setEditor(ed);
     if (onEditorCreated) onEditorCreated(ed);
 
+    // Clean up previous paste listener if any (e.g. StrictMode double-mount)
+    if (pasteCleanupRef.current) {
+      pasteCleanupRef.current();
+      pasteCleanupRef.current = null;
+    }
+
     var el = ed.getEditableContainer();
     if (!el) return;
 
-    el.addEventListener("paste", function (e: Event) {
+    function handlePaste(e: Event) {
       const clipboardEvent = e as ClipboardEvent;
       var clipboard = clipboardEvent.clipboardData;
       if (!clipboard) return;
@@ -284,7 +324,12 @@ export default function RichTextEditor(props: RichTextEditorProps) {
         }
         insertNext();
       }, 100);
-    }, true);
+    } // end handlePaste
+
+    el.addEventListener("paste", handlePaste, true);
+    pasteCleanupRef.current = function () {
+      el.removeEventListener("paste", handlePaste, true);
+    };
   }, [onEditorCreated, onFileUploaded]);
 
   var editorConfig: Partial<IEditorConfig> = {
@@ -311,11 +356,27 @@ export default function RichTextEditor(props: RichTextEditorProps) {
 
   var handleContainerClick = function () { if (editor) editor.focus(); };
 
+  // Cleanup paste listener on unmount
+  useEffect(function () {
+    return function () {
+      if (pasteCleanupRef.current) {
+        pasteCleanupRef.current();
+        pasteCleanupRef.current = null;
+      }
+    };
+  }, []);
+
   return (
-    <div className={`border border-gray-300 rounded-lg overflow-hidden focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-200 flex flex-col max-h-[calc(100vh-250px)] ${props.className || ""}`} onClick={handleContainerClick}>
-      <style>{`.w-e-text-container h1{font-size:2em!important;font-weight:700!important;margin:0.67em 0!important;line-height:1.3!important}.w-e-text-container h2{font-size:1.5em!important;font-weight:700!important;margin:0.83em 0!important;line-height:1.4!important;border-bottom:1px solid #e5e7eb;padding-bottom:0.3em}.w-e-text-container h3{font-size:1.25em!important;font-weight:600!important;margin:1em 0!important;line-height:1.5!important}.w-e-text-container h4{font-size:1.1em!important;font-weight:600!important;margin:0.8em 0!important}`}</style>
-      <Toolbar editor={editor} defaultConfig={TOOLBAR_CONFIG} style={{ borderBottom: "1px solid #e5e7eb", position: "sticky", top: 0, zIndex: 10, background: "#fff" }} />
-      <Editor value={value} onChange={function (ed) { onChange(normalizeHtml(ed.getHtml())); }} onCreated={handleCreated} defaultConfig={editorConfig} style={{ minHeight: 180, overflowY: "auto", flex: 1 }} />
-    </div>
+    <EditorErrorBoundary>
+      <div className={`border border-gray-300 rounded-lg overflow-hidden focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-200 flex flex-col max-h-[calc(100vh-250px)] ${props.className || ""}`} onClick={handleContainerClick}>
+        <style>{`.w-e-text-container h1{font-size:2em!important;font-weight:700!important;margin:0.67em 0!important;line-height:1.3!important}.w-e-text-container h2{font-size:1.5em!important;font-weight:700!important;margin:0.83em 0!important;line-height:1.4!important;border-bottom:1px solid #e5e7eb;padding-bottom:0.3em}.w-e-text-container h3{font-size:1.25em!important;font-weight:600!important;margin:1em 0!important;line-height:1.5!important}.w-e-text-container h4{font-size:1.1em!important;font-weight:600!important;margin:0.8em 0!important}`}</style>
+        <Toolbar editor={editor} defaultConfig={TOOLBAR_CONFIG} style={{ borderBottom: "1px solid #e5e7eb", position: "sticky", top: 0, zIndex: 10, background: "#fff" }} />
+        <Editor value={value} onChange={function (ed) { onChange(normalizeHtml(ed.getHtml())); }} onCreated={handleCreated} defaultConfig={editorConfig} style={{ minHeight: 180, overflowY: "auto", flex: 1 }} />
+      </div>
+    </EditorErrorBoundary>
   );
+}
+
+export default function RichTextEditor(props: RichTextEditorProps) {
+  return <RichTextEditorInner {...props} />;
 }

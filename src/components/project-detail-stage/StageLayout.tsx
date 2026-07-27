@@ -28,7 +28,7 @@ export function StageLayout({
   onBack,
   onSwitchLayout,
 }: StageLayoutProps) {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, token } = useAuth();
   const userName = currentUser?.name || "";
   const [activePanel, setActivePanel] = useState<PanelKey>("scope");
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
@@ -67,7 +67,9 @@ export function StageLayout({
     columns_config?: Array<{ name: string; type: string; readonly?: boolean }>;
   }>>([]);
   useEffect(() => {
-    fetch("/api/standards")
+    const params = new URLSearchParams();
+    if (project.project_type) params.set("project_type", project.project_type);
+    fetch(`/api/standards?${params.toString()}`)
       .then((r) => r.json())
       .then((d) => {
         const defs = (d.data || []).filter(
@@ -76,7 +78,7 @@ export function StageLayout({
         setTableDefs(defs);
       })
       .catch(() => {});
-  }, [project.id]);
+  }, [project.id, project.project_type]);
 
   // 当 projectStages 加载完成后，按 sort_order 排序后定位到当前阶段
   useEffect(() => {
@@ -187,13 +189,19 @@ export function StageLayout({
     try {
       await fetch(`/api/projects/${project.id}/progress`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ content: progressContent.trim() }),
       });
       // 写入操作日志
       await fetch(`/api/projects/${project.id}/operations`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           action: "publish",
           target_type: "progress",
@@ -205,7 +213,7 @@ export function StageLayout({
       fetchProgress();
       fetchOperations();
     } catch { /* ignore */ }
-  }, [progressContent, project.id, fetchProgress, fetchOperations]);
+  }, [progressContent, project.id, fetchProgress, fetchOperations, token]);
 
   useEffect(() => {
     fetchProgress();
