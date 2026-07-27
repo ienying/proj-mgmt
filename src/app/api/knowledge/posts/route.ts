@@ -2,6 +2,19 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
 import { randomUUID } from "crypto";
 
+function parseTags(tags: unknown): string[] {
+  if (!tags) return [];
+  if (Array.isArray(tags)) return tags.map(String).filter(Boolean);
+  if (typeof tags === "string") {
+    const s = tags.trim();
+    if (!s) return [];
+    try { const parsed = JSON.parse(s); if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean); } catch {}
+    if (s.startsWith("{") && s.endsWith("}")) return s.slice(1, -1).split(",").map(t => t.trim()).filter(Boolean);
+    return s.split(",").map(t => t.trim()).filter(Boolean);
+  }
+  return [];
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -11,6 +24,7 @@ export async function GET(request: Request) {
     const isPinned = searchParams.get("is_pinned");
     const authorId = searchParams.get("author_id");
     const statusFilter = searchParams.get("status");
+    const tag = searchParams.get("tag") || "";
     const page = parseInt(searchParams.get("page") || "1");
     const pageSize = parseInt(searchParams.get("page_size") || "50");
 
@@ -43,6 +57,12 @@ export async function GET(request: Request) {
     if (statusFilter === "draft") items = items.filter((i) => i.status === "draft");
     else if (statusFilter === "published") items = items.filter((i) => i.status !== "draft");
     else items = items.filter((i) => i.status !== "draft"); // default: only published
+    if (tag) {
+      items = items.filter((i) => {
+        const postTags = parseTags(i.tags);
+        return postTags.some((t: string) => t === tag);
+      });
+    }
     if (keyword) {
       const kw = keyword.toLowerCase();
       items = items.filter(

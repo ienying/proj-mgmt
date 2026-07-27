@@ -1,12 +1,27 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
 
+// Parse tags from any storage format (same logic as tag-utils.ts but inlined for API)
+function parseTags(tags: unknown): string[] {
+  if (!tags) return [];
+  if (Array.isArray(tags)) return tags.map(String).filter(Boolean);
+  if (typeof tags === "string") {
+    const s = tags.trim();
+    if (!s) return [];
+    try { const parsed = JSON.parse(s); if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean); } catch {}
+    if (s.startsWith("{") && s.endsWith("}")) return s.slice(1, -1).split(",").map(t => t.trim()).filter(Boolean);
+    return s.split(",").map(t => t.trim()).filter(Boolean);
+  }
+  return [];
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const keyword = searchParams.get("keyword") || "";
     const categoryId = searchParams.get("category_id");
     const categoryType = searchParams.get("category_type");
+    const tag = searchParams.get("tag") || "";
 
     const client = await createServerClient();
     const { data, error } = await client.rpc("dp_select", {
@@ -31,6 +46,14 @@ export async function GET(request: Request) {
           .map((c) => String(c.id))
       );
       items = items.filter((i) => matchingIds.has(String(i.category_id || "")));
+    }
+
+    // Filter by post tag
+    if (tag) {
+      items = items.filter((i) => {
+        const postTags = parseTags(i.tags);
+        return postTags.some((t) => t === tag);
+      });
     }
 
     // Search across title, content, and attachment file names

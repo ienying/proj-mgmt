@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   ArrowLeft, Plus, Search, Eye, MessageCircle,
-  User, Clock, FileText, Download, Pin, Trash2, Edit, Package
+  User, Clock, FileText, Download, Pin, Trash2, Edit, Package, Tag, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,6 +82,32 @@ export default function ListView({
   const [loading, setLoading] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [total, setTotal] = useState(0);
+  const [popularTags, setPopularTags] = useState<Array<{ name: string; count: number }>>([]);
+  const [activeTag, setActiveTag] = useState("");
+
+  // Load available tags for this category
+  const loadTags = useCallback(async () => {
+    if (isDraft) return;
+    try {
+      const url = `/api/knowledge/posts?category_id=${categoryId}&page_size=999`;
+      const res = await fetch(url);
+      const json = await res.json();
+      const allPosts = (json.data || []) as Array<{ tags?: string }>;
+      const tagCounts: Record<string, number> = {};
+      allPosts.forEach((p) => {
+        const tags = parseTags(p.tags);
+        tags.forEach((t) => { tagCounts[t] = (tagCounts[t] || 0) + 1; });
+      });
+      const sorted = Object.entries(tagCounts)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count);
+      setPopularTags(sorted);
+    } catch {
+      // silent
+    }
+  }, [categoryId, isDraft]);
+
+  useEffect(() => { loadTags(); }, [loadTags]);
 
   const loadPosts = useCallback(async () => {
     setLoading(true);
@@ -90,6 +116,7 @@ export default function ListView({
         ? `/api/knowledge/posts?status=draft&page_size=50`
         : `/api/knowledge/posts?category_id=${categoryId}&page_size=50`;
       if (searchKeyword) url += `&keyword=${encodeURIComponent(searchKeyword)}`;
+      if (activeTag) url += `&tag=${encodeURIComponent(activeTag)}`;
       const res = await fetch(url);
       const json = await res.json();
       if (json.data) {
@@ -100,11 +127,19 @@ export default function ListView({
       console.error("Failed to load posts:", e);
     }
     setLoading(false);
-  }, [categoryId, searchKeyword]);
+  }, [categoryId, searchKeyword, activeTag, isDraft]);
 
   useEffect(() => {
     loadPosts();
   }, [loadPosts]);
+
+  const handleTagClick = (tagName: string) => {
+    if (activeTag === tagName) {
+      setActiveTag("");
+    } else {
+      setActiveTag(tagName);
+    }
+  };
 
   const handleSearch = () => {
     loadPosts();
@@ -164,6 +199,35 @@ export default function ListView({
           <Search className="w-3 h-3 mr-1" /> 搜索
         </Button>
       </div>
+
+      {/* Post Tag Chips */}
+      {popularTags.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Tag className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+          {popularTags.map((t) => (
+            <button
+              key={t.name}
+              onClick={() => handleTagClick(t.name)}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200 ${
+                activeTag === t.name
+                  ? "bg-indigo-100 text-indigo-700 shadow-sm"
+                  : "bg-gray-100 text-gray-600 hover:bg-indigo-50 hover:text-indigo-600"
+              }`}
+            >
+              {t.name}
+              <span className="opacity-60">{t.count}</span>
+            </button>
+          ))}
+          {activeTag && (
+            <button
+              onClick={() => setActiveTag("")}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs text-gray-400 hover:text-red-500 transition-colors"
+            >
+              <X className="w-3 h-3" /> 清除
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Post List */}
       {loading ? (

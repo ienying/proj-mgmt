@@ -4,13 +4,14 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Search, ChevronRight, FileText, BookOpen, Wrench, CheckCircle, FileEdit,
   BarChart3, Eye, ThumbsUp, MessageCircle, Download, User, Users, X,
-  Video,
+  Video, Tag,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import InfoBanner from "./info-banner";
+import { parseTags } from "./tag-utils";
 
 interface Category {
   id: string;
@@ -145,6 +146,8 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
   const [statsData, setStatsData] = useState<StatsData | null>(null);
   const [expandedContributor, setExpandedContributor] = useState<number | null>(null);
   const [videoCount, setVideoCount] = useState(0);
+  const [popularTags, setPopularTags] = useState<Array<{ name: string; count: number }>>([]);
+  const [activeTag, setActiveTag] = useState("");
 
   const loadData = useCallback(async () => {
     // 进入信息广场时更新最后访问时间，清除角标
@@ -172,12 +175,24 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
       setCategories(cats);
 
       const postsJson = await postsRes.json();
-      const posts = (postsJson.data || []) as Array<{ category_id: string }>;
+      const posts = (postsJson.data || []) as Array<{ category_id: string; tags?: string }>;
       const counts: Record<string, number> = {};
       cats.forEach((c) => {
         counts[c.id] = posts.filter((p) => p.category_id === c.id).length;
       });
       setPostCounts(counts);
+
+      // Extract popular tags from all posts
+      const tagCounts: Record<string, number> = {};
+      posts.forEach((p) => {
+        const tags = parseTags(p.tags);
+        tags.forEach((t) => { tagCounts[t] = (tagCounts[t] || 0) + 1; });
+      });
+      const sortedTags = Object.entries(tagCounts)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 15); // top 15 tags
+      setPopularTags(sortedTags);
 
       const statsJson = await statsRes.json();
       if (statsJson.data) setStatsData(statsJson.data);
@@ -197,13 +212,16 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
   const [searchResults, setSearchResults] = useState<Array<Record<string, unknown>> | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
 
-  const handleSearch = async () => {
-    if (!searchKeyword.trim()) return;
+  const handleSearch = async (tagOverride?: string) => {
+    const tag = tagOverride ?? activeTag;
+    const hasKeyword = searchKeyword.trim().length > 0;
+    if (!hasKeyword && !tag) return;
     setSearchLoading(true);
     try {
       const params = new URLSearchParams();
-      params.set("keyword", searchKeyword);
+      if (hasKeyword) params.set("keyword", searchKeyword);
       if (searchCategory !== "all") params.set("category_id", searchCategory);
+      if (tag) params.set("tag", tag);
       const res = await fetch(`/api/knowledge/search?${params.toString()}`);
       const json = await res.json();
       if (json.data) setSearchResults(json.data);
@@ -213,9 +231,21 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
     setSearchLoading(false);
   };
 
+  const handleTagClick = (tagName: string) => {
+    if (activeTag === tagName) {
+      // Toggle off: clear tag filter and results
+      setActiveTag("");
+      setSearchResults(null);
+    } else {
+      setActiveTag(tagName);
+      handleSearch(tagName);
+    }
+  };
+
   const clearSearch = () => {
     setSearchResults(null);
     setSearchKeyword("");
+    setActiveTag("");
   };
 
   // Build uniform card list
@@ -287,7 +317,7 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
             ))}
           </SelectContent>
         </Select>
-        <Button onClick={handleSearch} size="lg" className="h-12 px-6 rounded-xl">
+        <Button onClick={() => handleSearch()} size="lg" className="h-12 px-6 rounded-xl">
           <Search className="w-4 h-4 mr-2" /> 搜索
         </Button>
         {/* Stats button — icon only, top-right corner */}
@@ -302,12 +332,46 @@ export default function HomeView({ onEnterCategory, onPostClick, onEnterDrafts, 
         </Button>
       </div>
 
+      {/* Post Tag Chips */}
+      {popularTags.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Tag className="w-4 h-4 text-gray-400 shrink-0" />
+          {popularTags.map((t) => (
+            <button
+              key={t.name}
+              onClick={() => handleTagClick(t.name)}
+              className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+                activeTag === t.name
+                  ? "bg-indigo-100 text-indigo-700 shadow-sm"
+                  : "bg-gray-100 text-gray-600 hover:bg-indigo-50 hover:text-indigo-600"
+              }`}
+            >
+              {t.name}
+              <span className="opacity-60">{t.count}</span>
+            </button>
+          ))}
+          {activeTag && (
+            <button
+              onClick={() => { setActiveTag(""); setSearchResults(null); }}
+              className="inline-flex items-center gap-1 px-2 py-1.5 rounded-full text-xs text-gray-400 hover:text-red-500 transition-colors"
+            >
+              <X className="w-3 h-3" /> 清除
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Search Results */}
       {searchResults !== null && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-800">
-              搜索 "{searchKeyword}" — {searchResults.length} 条结果
+              {activeTag && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 mr-2 rounded-full bg-indigo-100 text-indigo-700 text-sm">
+                  <Tag className="w-3.5 h-3.5" /> {activeTag}
+                </span>
+              )}
+              {searchKeyword ? <>搜索 &ldquo;{searchKeyword}&rdquo;</> : <>标签筛选</>} — {searchResults.length} 条结果
             </h3>
             <Button variant="ghost" size="sm" onClick={clearSearch}>
               <X className="w-4 h-4 mr-1" /> 返回首页

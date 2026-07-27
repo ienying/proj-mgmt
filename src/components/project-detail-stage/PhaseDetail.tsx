@@ -257,23 +257,40 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
         return;
       }
       const fileKey = uploadData.key || "";
+      const fileName = uploadData.name || file.name || "file";
+      const fileSize = uploadData.size || file.size || 0;
       if (!fileKey) { setUploadingCell(null); return; }
 
-      // 保存 key 到数据库
+      // 支持多文件：已有值转数组并追加
+      const existingVal = String(row[colName] ?? "");
+      let filesArray: Array<{ key: string; name: string; size: number }> = [];
+      try {
+        const parsed = JSON.parse(existingVal);
+        filesArray = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        // 旧格式：单个字符串 key，转为数组
+        if (existingVal && existingVal.length > 5) {
+          filesArray = [{ key: existingVal, name: existingVal.split("/").pop()?.replace(/^\d+_/, "") || "file", size: 0 }];
+        }
+      }
+      filesArray.push({ key: fileKey, name: fileName, size: fileSize });
+
+      // 保存数组到数据库
       const saveRes = await fetch("/api/project-data", {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ projectSchema, tableCode, rowId: row.id, data: { [colName]: fileKey } }),
+        body: JSON.stringify({ projectSchema, tableCode, rowId: row.id, data: { [colName]: JSON.stringify(filesArray) } }),
       });
       if (!saveRes.ok) {
-        console.error("保存文件key失败");
+        const errText = await saveRes.text();
+        console.error("保存文件key失败", saveRes.status, errText);
         setUploadingCell(null);
         return;
       }
 
       const currentRecords = tableRecords[tableCode] || [];
       const updated = [...currentRecords];
-      updated[rowIdx] = { ...updated[rowIdx], [colName]: fileKey };
+      updated[rowIdx] = { ...updated[rowIdx], [colName]: JSON.stringify(filesArray) };
       setTableRecords((prev) => ({ ...prev, [tableCode]: updated }));
       onRecordsUpdate?.(tableCode, updated);
       onDataChange?.();
@@ -535,80 +552,70 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       );
     }
 
-    // 附件/视频类型：上传+预览+下载+删除
+    // 附件/视频类型：支持多文件上传
     if (col.type === "attachment" || col.type === "video") {
-      const value = String(row[col.name] ?? "");
-      const hasFile = value && value !== "undefined" && value !== "null" && value.length > 5;
+      const rawValue = String(row[col.name] ?? "");
       const isUploading = uploadingCell?.tableCode === tableCode && uploadingCell?.rowIdx === rowIdx && uploadingCell?.colName === col.name;
-      const fileName = (value.split("/").pop()?.split("?")[0] || "文件").replace(/^\d+_/, "");
-      const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i.test(fileName);
-      const isVideo = /\.(mp4|webm|mov|avi|mkv)$/i.test(fileName) || col.type === "video";
+
+      // 解析多文件数组（兼容旧单文件格式）
+      let files: Array<{ key: string; name: string; size: number }> = [];
+      try {
+        const parsed = JSON.parse(rawValue);
+        files = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        if (rawValue && rawValue.length > 5 && rawValue !== "undefined" && rawValue !== "null") {
+          const fn = rawValue.split("/").pop()?.split("?")[0]?.replace(/^\d+_/, "") || "文件";
+          files = [{ key: rawValue, name: fn, size: 0 }];
+        }
+      }
+
+      const saveFiles = (newFiles: typeof files) => {
+        const val = newFiles.length > 0 ? JSON.stringify(newFiles) : "";
+        fetch("/api/project-data", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ projectSchema, tableCode, rowId: row.id, data: { [col.name]: val } }),
+        }).then((r) => {
+          if (r.ok) setTableRecords((prev) => {
+            const updated = [...(prev[tableCode] || [])];
+            updated[rowIdx] = { ...updated[rowIdx], [col.name]: val };
+            return { ...prev, [tableCode]: updated };
+          });
+        });
+      };
 
       return (
-        <div className="flex items-center gap-1 min-w-[60px]">
-          {isUploading ? (
-            <span className="text-[10px] text-muted-foreground">⏳ 上传中...</span>
-          ) : hasFile ? (
-            <div className="flex items-center gap-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPreviewFile({ key: value, name: fileName });
-                }}
-                className="text-[11px] text-blue-600 hover:underline truncate max-w-[100px] cursor-pointer bg-transparent border-none"
-                title="点击预览">
-                {isImage ? "🖼 " : isVideo ? "🎬 " : "📄 "}{fileName}
-              </button>
-              <button onClick={async (e) => {
-                e.stopPropagation();
-                if (value.startsWith("http") || value.startsWith("uploads/")) {
-                  window.open(value.startsWith("http") ? value : `/${value}`, "_blank");
-                } else {
-                  const res = await fetch(`/api/files/download?key=${encodeURIComponent(value)}`);
+        <div className="flex flex-col gap-1 min-w-[60px]">
+          {isUploading && <span className="text-[10px] text-muted-foreground">⏳ 上传中...</span>}
+          {files.map((f, fi) => {
+            const isImg = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i.test(f.name);
+            const isVid = /\.(mp4|webm|mov|avi|mkv)$/i.test(f.name) || col.type === "video";
+            return (
+              <div key={f.key || fi} className="flex items-center gap-1">
+                <button onClick={(e) => { e.stopPropagation(); setPreviewFile({ key: f.key, name: f.name }); }}
+                  className="text-[11px] text-blue-600 hover:underline truncate max-w-[120px] cursor-pointer bg-transparent border-none" title={f.name}>
+                  {isImg ? "🖼 " : isVid ? "🎬 " : "📄 "}{f.name}
+                </button>
+                <button onClick={async (e) => { e.stopPropagation();
+                  const res = await fetch(`/api/files/download?key=${encodeURIComponent(f.key)}`);
                   const data = await res.json();
                   if (data.url) window.open(data.url, "_blank");
-                }
-              }}
-                className="text-[10px] text-muted-foreground hover:text-primary"
-                title="下载">⬇</button>
-              <button onClick={(e) => {
-                e.stopPropagation();
-                uploadTargetRef.current = { tableCode, rowIdx, colName: col.name };
-                fileInputRef.current?.click();
-              }}
-                className="text-[10px] text-muted-foreground hover:text-primary"
-                title="替换">↻</button>
-              <button onClick={(e) => {
-                e.stopPropagation();
-                if (!confirm("确定删除该文件？")) return;
-                const delUrl = value.startsWith("uploads/") ? `/${value}` : value;
-                fetch(`/api/files/download?key=${encodeURIComponent(value)}`, { method: "DELETE" }).catch(() => {});
-                const newVal = "";
-                fetch("/api/project-data", {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                  body: JSON.stringify({ projectSchema, tableCode, rowId: row.id, data: { [col.name]: newVal } }),
-                }).then((r) => {
-                  if (r.ok) setTableRecords((prev) => {
-                    const updated = [...(prev[tableCode] || [])];
-                    updated[rowIdx] = { ...updated[rowIdx], [col.name]: newVal };
-                    return { ...prev, [tableCode]: updated };
-                  });
-                });
-              }}
-                className="text-[10px] text-red-500 hover:text-red-700"
-                title="删除文件">✕</button>
-            </div>
-          ) : (
-            <button onClick={(e) => {
-              e.stopPropagation();
-              uploadTargetRef.current = { tableCode, rowIdx, colName: col.name };
-              fileInputRef.current?.click();
-            }}
-              className="text-[10px] cursor-pointer hover:text-primary text-muted-foreground">
-              📎 上传
-            </button>
-          )}
+                }} className="text-[10px] text-muted-foreground hover:text-primary" title="下载">⬇</button>
+                <button onClick={(e) => { e.stopPropagation();
+                  if (!confirm(`确定删除「${f.name}」？`)) return;
+                  fetch(`/api/files/download?key=${encodeURIComponent(f.key)}`, { method: "DELETE" }).catch(() => {});
+                  saveFiles(files.filter((_, i) => i !== fi));
+                }} className="text-[10px] text-red-500 hover:text-red-700" title="删除">✕</button>
+              </div>
+            );
+          })}
+          <button onClick={(e) => {
+            e.stopPropagation();
+            uploadTargetRef.current = { tableCode, rowIdx, colName: col.name };
+            fileInputRef.current?.click();
+          }} className="text-[10px] cursor-pointer hover:text-primary text-muted-foreground self-start">
+            {files.length > 0 ? `+ 添加 (${files.length})` : "📎 上传"}
+          </button>
         </div>
       );
     }
