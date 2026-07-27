@@ -380,7 +380,18 @@ export function ProjectDetail({
   onBack,
   onSwitchLayout,
 }: ProjectDetailProps) {
-  const { token } = useAuth();
+  const { token, user: currentUser } = useAuth();
+
+  const PERM_DENIED_MSG = "没有编辑权限，仅超级管理员、项目经理和项目成员可编辑";
+  const canEdit = useMemo(() => {
+    if (!currentUser) return false;
+    if (currentUser.role === "super_admin") return true;
+    const p = project as Record<string, any>;
+    if (currentUser.name && currentUser.name === (p.role_project_manager || "")) return true;
+    const members = Array.isArray(p.members) ? p.members : [];
+    return members.some((m: any) => m.user_id === currentUser.id);
+  }, [currentUser, project]);
+
   const [activeModule, setActiveModule] = useState("scope");
   
   // 动态模块列表（根据项目类型+阶段从API获取）
@@ -913,6 +924,7 @@ export function ProjectDetail({
 
   // 开始编辑单元格
   const startEdit = (tableCode: string, rowId: string, column: string, value: unknown) => {
+    if (!canEdit) { toast.error(PERM_DENIED_MSG); return; }
     if (isCellReadonly(tableCode, rowId, column)) return;
     setEditingCell({ tableCode, rowId, column });
     setEditValue(String(value ?? ""));
@@ -953,6 +965,7 @@ export function ProjectDetail({
   };
 
   const startEditCell = (tableCode: string, rowId: string, column: string) => {
+    if (!canEdit) { toast.error(PERM_DENIED_MSG); return; }
     if (isCellReadonly(tableCode, rowId, column)) return;
     const data = tableDataMap[tableCode] || [];
     const row = data.find((r: Record<string, unknown>) => r.id === rowId);
@@ -963,6 +976,7 @@ export function ProjectDetail({
 
   // 保存编辑
   const saveEdit = async (overrideValue?: string) => {
+    if (!canEdit) { toast.error(PERM_DENIED_MSG); setEditingCell(null); return; }
     if (!editingCell) return;
     
     const { tableCode, rowId, column } = editingCell;
@@ -1006,6 +1020,7 @@ export function ProjectDetail({
 
   // 打开新增对话框
   const openAddDialog = (table: TableDefinition) => {
+    if (!canEdit) { toast.error(PERM_DENIED_MSG); return; }
     setCurrentTableForAdd(table);
     const initialData: Record<string, string> = {};
     table.columns_config.forEach(col => {
@@ -1084,6 +1099,7 @@ export function ProjectDetail({
 
   // 删除记录
   const handleDeleteRow = async (tableCode: string, rowId: string) => {
+    if (!canEdit) { toast.error(PERM_DENIED_MSG); return; }
     if (!confirm("确定要删除这条记录吗？")) return;
     
     try {

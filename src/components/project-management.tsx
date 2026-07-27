@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useAuth } from "@/components/auth-context";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   FolderKanban, Plus, Search, Clock, Users, Calendar,
   AlertCircle, X, UserPlus, Shield, Check,
@@ -38,6 +40,7 @@ interface Project {
   project_stage: string;
   status?: string;
   created_at?: string;
+  created_by?: string;
   project_schema?: string;
   description?: string;
   customer_info?: {
@@ -93,6 +96,10 @@ interface ProjectManagementProps {
   users: { id: string; name: string; phone?: string; email?: string; position?: string }[];
   onProjectDelete: (id: string) => Promise<void>;
   onViewProject?: (project: Project) => void;
+  projectPage?: number;
+  projectTotal?: number;
+  pageSize?: number;
+  onPageChange?: (page: number) => void;
 }
 
 interface ProjectType {
@@ -317,8 +324,13 @@ export function ProjectManagement({
   users,
   onProjectDelete,
   onViewProject,
+  projectPage = 1,
+  projectTotal = 0,
+  pageSize = 10,
+  onPageChange,
 }: ProjectManagementProps) {
   const router = useRouter();
+  const { user: currentUser, token } = useAuth();
   const [projects, setProjects] = useState<Project[]>(initialProjects);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [showProjectForm, setShowProjectForm] = useState(false);
@@ -362,7 +374,6 @@ export function ProjectManagement({
 
   // 成员与权限管理
   const [projectMembers, setProjectMembers] = useState<Array<Record<string, unknown>>>([]);
-  const [memberPermissions, setMemberPermissions] = useState<Record<string, string[]>>({});
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -372,31 +383,13 @@ export function ProjectManagement({
   const [descDialogOpen, setDescDialogOpen] = useState(false);
   const [descDialogContent, setDescDialogContent] = useState("");
   const [progressMap, setProgressMap] = useState<Record<string, number>>({});
-  const [expandedMember, setExpandedMember] = useState<string | null>(null);
-
-  // 加载项目成员和权限
+  // 加载项目成员
   const loadProjectMembers = useCallback(async (projectId: string) => {
     setLoadingMembers(true);
     try {
-      // 加载成员
       const memRes = await fetch(`/api/projects/${projectId}/members`);
       const memData = await memRes.json();
-      const members = (memData.data || []) as Array<Record<string, unknown>>;
-      setProjectMembers(members);
-
-      // 加载每个成员的权限
-      const permMap: Record<string, string[]> = {};
-      for (const m of members) {
-        const userId = String(m.user_id || m.id);
-        try {
-          const permRes = await fetch(`/api/projects/${projectId}/members/${userId}/permissions`);
-          if (permRes.ok) {
-            const permData = await permRes.json();
-            permMap[userId] = (permData.data || []).map((p: Record<string, unknown>) => String(p.permission_key));
-          }
-        } catch { /* ignore */ }
-      }
-      setMemberPermissions(permMap);
+      setProjectMembers((memData.data || []) as Array<Record<string, unknown>>);
     } catch (err) {
       console.error("加载成员失败:", err);
     } finally {
@@ -410,7 +403,7 @@ export function ProjectManagement({
     try {
       const res = await fetch(`/api/projects/${selectedProject.id}/members`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ user_id: selectedUserId, role_type: selectedRoleType || "成员" }),
       });
       if (res.ok) {
@@ -426,34 +419,27 @@ export function ProjectManagement({
 
   // 移除成员
   const handleRemoveMember = async (memberId: string) => {
-    if (!selectedProject) return;
+    if (!selectedProject || !currentUser) return;
+    const isCreator = selectedProject.created_by && selectedProject.created_by === currentUser.id;
+    const isPM = currentUser.name && selectedProject.role_project_manager && currentUser.name === selectedProject.role_project_manager;
+    const isSuperAdmin = currentUser.role === "super_admin";
+    if (!isCreator && !isPM && !isSuperAdmin) {
+      toast.error("不是项目创建人、超管以及项目经理不能进行添加");
+      return;
+    }
     try {
-      const res = await fetch(`/api/projects/${selectedProject.id}/members/${memberId}`, { method: "DELETE" });
+      const res = await fetch(`/api/projects/${selectedProject.id}/members/${memberId}`, {
+        method: "DELETE",
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
       if (res.ok) {
         await loadProjectMembers(selectedProject.id);
+      } else if (res.status === 403) {
+        const err = await res.json();
+        toast.error(err.error || "无权限移除成员");
       }
     } catch (err) {
       console.error("移除成员失败:", err);
-    }
-  };
-
-  // 切换权限
-  const handleTogglePermission = async (userId: string, permissionKey: string) => {
-    if (!selectedProject) return;
-    const currentPerms = memberPermissions[userId] || [];
-    const newPerms = currentPerms.includes(permissionKey)
-      ? currentPerms.filter((k) => k !== permissionKey)
-      : [...currentPerms, permissionKey];
-
-    try {
-      await fetch(`/api/projects/${selectedProject.id}/members/${userId}/permissions`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ permissions: newPerms }),
-      });
-      setMemberPermissions((prev) => ({ ...prev, [userId]: newPerms }));
-    } catch (err) {
-      console.error("更新权限失败:", err);
     }
   };
 
@@ -762,7 +748,15 @@ export function ProjectManagement({
   }, [initialProjectTypes, initialProjectStages, initialProcurementModules]);
 
   // 切换项目时清空搜索
-  useEffect(() => { setModSearch(""); }, [selectedProject?.id]);
+  useEffect(() => {
+    setModSearch("");
+    setProjectMembers([]);
+    setShowAddMember(false);
+    setSelectedUserId("");
+    if (selectedProject?.id) {
+      loadProjectMembers(selectedProject.id);
+    }
+  }, [selectedProject?.id, loadProjectMembers]);
 
   const getStatusBadge = (status?: string) => {
     const styles: Record<string, string> = {
@@ -1017,7 +1011,17 @@ export function ProjectManagement({
                 size="sm"
                 variant="outline"
                 className="h-6 text-xs px-2"
-                onClick={() => setShowAddMember(!showAddMember)}
+                onClick={() => {
+                  if (!currentUser) return;
+                  const isCreator = selectedProject.created_by && selectedProject.created_by === currentUser.id;
+                  const isPM = currentUser.name && selectedProject.role_project_manager && currentUser.name === selectedProject.role_project_manager;
+                  const isSuperAdmin = currentUser.role === "super_admin";
+                  if (!isCreator && !isPM && !isSuperAdmin) {
+                    toast.error("不是项目创建人、超管以及项目经理不能进行添加");
+                    return;
+                  }
+                  setShowAddMember(!showAddMember);
+                }}
               >
                 <UserPlus className="w-3 h-3 mr-1" />
                 添加
@@ -1105,96 +1109,26 @@ export function ProjectManagement({
                 const memberId = String(m.user_id || m.id);
                 const memberName = String(m.name || "未知");
                 const roleType = String(m.role_type || "成员");
-                const perms = memberPermissions[memberId] || [];
-                const isExpanded = expandedMember === memberId;
 
                 return (
-                  <div key={memberId} className="border rounded-lg overflow-hidden">
-                    <div
-                      className="flex items-center justify-between p-2.5 cursor-pointer hover:bg-slate-50"
-                      onClick={() => setExpandedMember(isExpanded ? null : memberId)}
-                    >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                          <span className="text-xs font-medium text-blue-600">{memberName[0]}</span>
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-slate-800 truncate">{memberName}</div>
-                          <div className="flex items-center gap-1.5">
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-                              {roleType}
-                            </Badge>
-                            <span className="text-[10px] text-slate-400">{perms.length} 项权限</span>
-                          </div>
-                        </div>
+                  <div key={memberId} className="flex items-center justify-between p-2.5 border rounded-lg">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                        <span className="text-xs font-medium text-blue-600">{memberName[0]}</span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          className="p-1 hover:bg-red-50 rounded"
-                          onClick={(e) => { e.stopPropagation(); handleRemoveMember(memberId); }}
-                        >
-                          <X className="w-3 h-3 text-slate-400 hover:text-red-500" />
-                        </button>
-                        <ChevronDown className={cn("w-3.5 h-3.5 text-slate-400 transition-transform", isExpanded && "rotate-180")} />
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-slate-800 truncate">{memberName}</div>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                          {roleType}
+                        </Badge>
                       </div>
                     </div>
-
-                    {/* 权限设置展开 */}
-                    {isExpanded && (
-                      <div className="px-3 pb-3 border-t border-slate-100">
-                        <div className="pt-2 space-y-1.5">
-                          {PROJECT_PERMISSIONS.map((perm) => (
-                            <label key={perm.key} className="flex items-center gap-2 cursor-pointer py-0.5">
-                              <Checkbox
-                                checked={perms.includes(perm.key)}
-                                onCheckedChange={() => handleTogglePermission(memberId, perm.key)}
-                                className="h-3.5 w-3.5"
-                              />
-                              <div className="flex-1">
-                                <span className="text-xs text-slate-700">{perm.label}</span>
-                                <span className="text-[10px] text-slate-400 ml-1.5">{perm.desc}</span>
-                              </div>
-                            </label>
-                          ))}
-                          {/* 快捷：全选/清空 */}
-                          <div className="flex gap-2 pt-1 border-t border-slate-100">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 text-[10px] px-2"
-                              onClick={async () => {
-                                if (!selectedProject) return;
-                                const allKeys = PROJECT_PERMISSIONS.map((p) => p.key);
-                                await fetch(`/api/projects/${selectedProject.id}/members/${memberId}/permissions`, {
-                                  method: "PUT",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ permissions: allKeys }),
-                                });
-                                setMemberPermissions((prev) => ({ ...prev, [memberId]: allKeys }));
-                              }}
-                            >
-                              <Check className="w-3 h-3 mr-0.5" /> 全选
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 text-[10px] px-2"
-                              onClick={async () => {
-                                if (!selectedProject) return;
-                                await fetch(`/api/projects/${selectedProject.id}/members/${memberId}/permissions`, {
-                                  method: "PUT",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ permissions: [] }),
-                                });
-                                setMemberPermissions((prev) => ({ ...prev, [memberId]: [] }));
-                              }}
-                            >
-                              清空
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                    <button
+                      className="p-1 hover:bg-red-50 rounded shrink-0"
+                      onClick={(e) => { e.stopPropagation(); handleRemoveMember(memberId); }}
+                    >
+                      <X className="w-3 h-3 text-slate-400 hover:text-red-500" />
+                    </button>
                   </div>
                 );
               })}
@@ -1673,6 +1607,61 @@ export function ProjectManagement({
         <div className="flex-1 px-6 py-3 overflow-y-auto">
           {viewMode === "list" ? renderListView() : renderCardView()}
         </div>
+
+        {/* 分页控件 */}
+        {projectTotal > pageSize && onPageChange && (
+          <div className="flex items-center justify-between px-6 py-2.5 border-t border-slate-100 bg-white shrink-0">
+            <span className="text-xs text-slate-400">
+              共 {projectTotal} 个项目，第 {projectPage}/{Math.ceil(projectTotal / pageSize)} 页
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                disabled={projectPage <= 1}
+                onClick={() => onPageChange(1)}
+                className="px-2 py-1 text-xs border rounded hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                首页
+              </button>
+              <button
+                disabled={projectPage <= 1}
+                onClick={() => onPageChange(projectPage - 1)}
+                className="px-2 py-1 text-xs border rounded hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                ‹ 上一页
+              </button>
+              {Array.from({ length: Math.min(5, Math.ceil(projectTotal / pageSize)) }, (_, i) => {
+                const totalPages = Math.ceil(projectTotal / pageSize);
+                let start = Math.max(1, projectPage - 2);
+                if (start + 4 > totalPages) start = Math.max(1, totalPages - 4);
+                const p = start + i;
+                if (p > totalPages) return null;
+                return (
+                  <button
+                    key={p}
+                    onClick={() => onPageChange(p)}
+                    className={`w-7 h-7 text-xs border rounded ${p === projectPage ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-slate-50'}`}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+              <button
+                disabled={projectPage >= Math.ceil(projectTotal / pageSize)}
+                onClick={() => onPageChange(projectPage + 1)}
+                className="px-2 py-1 text-xs border rounded hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                下一页 ›
+              </button>
+              <button
+                disabled={projectPage >= Math.ceil(projectTotal / pageSize)}
+                onClick={() => onPageChange(Math.ceil(projectTotal / pageSize))}
+                className="px-2 py-1 text-xs border rounded hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                末页
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 右侧项目详情面板 */}

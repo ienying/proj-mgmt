@@ -124,6 +124,9 @@ export default function HomePage() {
   });
   const [layoutSelectorOpen, setLayoutSelectorOpen] = useState(false);
   const [projects, setProjects] = useState(mockProjects);
+  const [projectPage, setProjectPage] = useState(1);
+  const [projectTotal, setProjectTotal] = useState(0);
+  const PAGE_SIZE = 10;
   const [users, setUsers] = useState<{ id: string; username: string; name: string; phone?: string; email?: string; department?: string; position?: string; avatar?: string; role?: "super_admin" | "sub_admin" | "user"; is_active: boolean; created_at: string }[]>([]);
   const [standards, setStandards] = useState<TableDefinition[]>([]);
   const [badges, setBadges] = useState<{ issues: number; messages: number; tasks: number; videos: number }>({ issues: 0, messages: 0, tasks: 0, videos: 0 });
@@ -204,19 +207,22 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, [user?.id]);
 
-  // 从 API 获取基础数据
+  // 从 API 获取基础数据（并行请求）
   useEffect(() => {
     const fetchBaseData = async () => {
       try {
-        // 获取项目类型
-        const typesRes = await fetch("/api/dicts?type=project_types");
+        // 4 个字典请求并行
+        const [typesRes, stagesRes, modulesRes, ctRes] = await Promise.all([
+          fetch("/api/dicts?type=project_types"),
+          fetch("/api/dicts?type=project_stages"),
+          fetch("/api/dicts?type=product_module_types"),
+          fetch("/api/dicts?type=customer_types"),
+        ]);
+
         if (typesRes.ok) {
           const typesData = await typesRes.json();
           setProjectTypes((typesData.data || []).filter((item: any) => item.code));
         }
-
-        // 获取项目阶段
-        const stagesRes = await fetch("/api/dicts?type=project_stages");
         if (stagesRes.ok) {
           const stagesData = await stagesRes.json();
           setProjectStages(
@@ -225,53 +231,39 @@ export default function HomePage() {
               .sort((a: any, b: any) => (a.sort_order ?? 99) - (b.sort_order ?? 99))
           );
         }
-
-        // 获取采购模块（来源于产品目录数据）
-        const modulesRes = await fetch("/api/dicts?type=product_module_types");
         if (modulesRes.ok) {
           const modulesData = await modulesRes.json();
-          // 转换为 { code, name } 格式，只显示模块名称
-          const modules = (modulesData.data || []).map((item: any) => ({
+          setProcurementModules((modulesData.data || []).map((item: any) => ({
             code: item.code,
             name: item.module_name || item.product_name || item.code,
             product_name: item.product_name || "",
             vendor: item.vendor || "",
             model_spec: item.model_spec || "",
             scope: item.scope || "",
-          }));
-          setProcurementModules(modules);
+          })));
         }
-
-        // 获取客户类型
-        const ctRes = await fetch("/api/dicts?type=customer_types");
         if (ctRes.ok) {
           const ctData = await ctRes.json();
-          setCustomerTypes(
-            (ctData.data || []).map((item: any) => ({ code: item.code, name: item.name || item.code }))
-          );
+          setCustomerTypes((ctData.data || []).map((item: any) => ({ code: item.code, name: item.name || item.code })));
         }
 
-        // 获取用户列表
-        const usersRes = await fetch("/api/users");
-        if (usersRes.ok) {
-          const usersData = await usersRes.json();
-          setUsers(usersData.data || []);
-        }
+        // 用户、规范、项目列表并行
+        const [usersRes, standardsRes, projectsRes] = await Promise.all([
+          fetch("/api/users"),
+          fetch("/api/standards"),
+          fetch(`/api/projects?page=1&pageSize=${PAGE_SIZE}`),
+        ]);
 
-        // 获取规范表定义（过滤掉任务表单自动生成的 task_ 临时表）
-        const standardsRes = await fetch("/api/standards");
+        if (usersRes.ok) { const d = await usersRes.json(); setUsers(d.data || []); }
         if (standardsRes.ok) {
-          const standardsData = await standardsRes.json();
-          setStandards((standardsData.data || []).filter(
-            (d: Record<string, unknown>) => !String(d.table_code || "").startsWith("task_")
-          ));
+          const d = await standardsRes.json();
+          setStandards((d.data || []).filter((r: Record<string, unknown>) => !String(r.table_code || "").startsWith("task_")));
         }
-
-        // 获取项目列表
-        const projectsRes = await fetch("/api/projects");
         if (projectsRes.ok) {
-          const projectsData = await projectsRes.json();
-          setProjects(projectsData.data || []);
+          const d = await projectsRes.json();
+          setProjects(d.data || []);
+          setProjectTotal(d.total || 0);
+          setProjectPage(1);
         }
       } catch (error) {
         console.error("获取基础数据失败:", error);
@@ -289,7 +281,7 @@ export default function HomePage() {
         fetch("/api/dicts?type=project_stages"),
         fetch("/api/dicts?type=product_module_types"),
         fetch("/api/dicts?type=customer_types"),
-        fetch("/api/projects"),
+        fetch(`/api/projects?page=${projectPage}&pageSize=${PAGE_SIZE}`),
       ]);
 
       if (typesRes.ok) {
@@ -306,7 +298,6 @@ export default function HomePage() {
       }
       if (modulesRes.ok) {
         const modulesData = await modulesRes.json();
-        // 转换为 { code, name } 格式，只显示模块名称
         const modules = (modulesData.data || []).map((item: any) => ({
           code: item.code,
           name: item.module_name || item.product_name || item.code,
@@ -323,6 +314,7 @@ export default function HomePage() {
       if (projectsRes.ok) {
         const projectsData = await projectsRes.json();
         setProjects(projectsData.data || []);
+        setProjectTotal(projectsData.total || 0);
       }
     } catch (error) {
       console.error("刷新基础数据失败:", error);
@@ -684,6 +676,10 @@ export default function HomePage() {
                   users={users}
                   onProjectDelete={handleProjectDelete}
                   onViewProject={handleViewProject}
+                  projectPage={projectPage}
+                  projectTotal={projectTotal}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={(p) => { setProjectPage(p); refreshBaseData(); }}
                 />
               </ContentErrorBoundary>
             );
@@ -725,6 +721,10 @@ export default function HomePage() {
               users={users}
               onProjectDelete={handleProjectDelete}
               onViewProject={handleViewProject}
+              projectPage={projectPage}
+              projectTotal={projectTotal}
+              pageSize={PAGE_SIZE}
+              onPageChange={(p) => { setProjectPage(p); refreshBaseData(); }}
             />
           </ContentErrorBoundary>
         );

@@ -4,6 +4,7 @@ import { rmSync, existsSync } from "fs";
 import path from "path";
 import { verifyAuth, extractJwtPayload } from "@/lib/auth-utils";
 import { canEditProject } from "@/lib/project-permission";
+import { invalidateCacheByPrefix } from "@/lib/cache";
 
 function mapColumnTypeToSQL(type: string): string {
   const typeMap: Record<string, string> = {
@@ -575,6 +576,7 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    invalidateCacheByPrefix("projects");
     return NextResponse.json({ data });
   } catch (error: unknown) {
     const message =
@@ -659,6 +661,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    invalidateCacheByPrefix("projects");
     return NextResponse.json({
       success: true,
       deletedSchema: projectSchema || null,

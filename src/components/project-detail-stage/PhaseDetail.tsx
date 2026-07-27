@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useAuth } from "@/components/auth-context";
+import { toast } from "sonner";
 
 // Docx/PPTX 客户端预览组件（使用 CDN 加载 mammoth.js）
 function DocxPreview({ src, fn }: { src: string; fn: string }) {
@@ -77,9 +78,10 @@ interface PhaseDetailProps {
   onRecordsUpdate?: (tableCode: string, records: Array<Record<string, unknown>>) => void;
   onDataChange?: () => void;
   userName?: string;
+  canEdit?: boolean;
 }
 
-export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema, projectStages = [], currentStageCode, onRecordsUpdate, onDataChange, userName }: PhaseDetailProps) {
+export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema, projectStages = [], currentStageCode, onRecordsUpdate, onDataChange, userName, canEdit = false }: PhaseDetailProps) {
   const { token } = useAuth();
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [tableRecords, setTableRecords] = useState<Record<string, Array<Record<string, unknown>>>>({});
@@ -114,7 +116,10 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
 
   // 开始编辑单元格
+  const PERM_DENIED_MSG = "没有编辑权限，仅超级管理员、项目经理和项目成员可编辑";
+
   const startEdit = (tableCode: string, rowIdx: number, colName: string, currentValue: string) => {
+    if (!canEdit) { toast.error(PERM_DENIED_MSG); return; }
     setEditingCell({ tableCode, rowIdx, colName });
     setEditValue(currentValue);
   };
@@ -152,6 +157,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
 
   // 添加行
   const addRow = async (tableCode: string) => {
+    if (!canEdit) { toast.error(PERM_DENIED_MSG); return; }
     if (!projectSchema) return;
     const def = tableDefs.find(d => d.table_code === tableCode);
     if (def?.enable_drawer_form) {
@@ -190,6 +196,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
 
   // 删除行
   const deleteRow = async (tableCode: string, rowIdx: number) => {
+    if (!canEdit) { toast.error(PERM_DENIED_MSG); return; }
     if (!projectSchema) return;
     const row = tableRecords[tableCode]?.[rowIdx];
     if (!row?.id) return;
@@ -825,7 +832,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                     style={{ fontFamily: "var(--font-mono, monospace)" }}>
                     {tableRecords[expandedTable].length} 条
                   </span>
-                  {expandedDef.allow_add !== false && (
+                  {canEdit && expandedDef.allow_add !== false && (
                     <button onClick={() => addRow(expandedTable)}
                       className="text-[10px] px-2.5 py-1.5 border border-[var(--s-green)] text-[var(--s-green)] bg-transparent cursor-pointer hover:bg-[rgba(43,138,62,.06)] uppercase tracking-[0.5px] font-semibold"
                       style={{ fontFamily: "var(--font-mono, monospace)" }}>
@@ -932,7 +939,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                             {visibleColumns.map((col) => (
                               <td key={col.name} className="px-4 py-3 text-xs">{renderCell(expandedTable, ri, col, row)}</td>
                             ))}
-                            {expandedDef.allow_delete !== false && (
+                            {canEdit && expandedDef.allow_delete !== false && (
                               <td className="px-2 py-3">{!row._readonly && (
                                 <button onClick={(e) => { e.stopPropagation(); if (confirm("确定删除？")) deleteRow(expandedTable, ri); }}
                                   className="text-[10px] text-[var(--s-red)] hover:underline">删除</button>

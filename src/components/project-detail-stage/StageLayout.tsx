@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import type { PanelKey } from "./types";
 import type { StageLayoutProps } from "./types";
 import { LeftStrip } from "./LeftStrip";
@@ -30,6 +30,16 @@ export function StageLayout({
 }: StageLayoutProps) {
   const { user: currentUser, token } = useAuth();
   const userName = currentUser?.name || "";
+  const userId = currentUser?.id || "";
+
+  // 客户端权限判断：超管 / 项目经理 / 项目成员
+  const canEdit = useMemo(() => {
+    if (!currentUser) return false;
+    if (currentUser.role === "super_admin") return true;
+    if (currentUser.name && currentUser.name === (project.role_project_manager || "")) return true;
+    const members = Array.isArray(project.members) ? project.members : [];
+    return members.some((m: any) => m.user_id === currentUser.id);
+  }, [currentUser, project.role_project_manager, project.members]);
   const [activePanel, setActivePanel] = useState<PanelKey>("scope");
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
   const [activeModule, setActiveModule] = useState("scope");
@@ -501,15 +511,17 @@ export function StageLayout({
                   <textarea
                     value={progressContent}
                     onChange={(e) => setProgressContent(e.target.value)}
-                    placeholder="描述当前项目进展..."
+                    placeholder={canEdit ? "描述当前项目进展..." : "仅项目经理、项目成员和超级管理员可发布进展"}
+                    disabled={!canEdit}
                     className="w-full border flex-1 p-3 text-xs resize-y min-h-[100px] font-sans"
-                    style={{ borderColor: "var(--s-border)", backgroundColor: "var(--s-surface)", color: "var(--s-text)" }}
+                    style={{ borderColor: "var(--s-border)", backgroundColor: canEdit ? "var(--s-surface)" : "var(--s-surface2)", color: "var(--s-text)", opacity: canEdit ? 1 : 0.6 }}
                   />
                   <div className="flex justify-end">
                     <button
                       onClick={handleSubmitProgress}
-                      className="text-[10px] px-4 py-1.5 font-semibold uppercase tracking-[0.5px] border cursor-pointer transition-all"
-                      style={{ borderColor: "var(--s-orange)", color: "var(--s-orange)", backgroundColor: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}
+                      disabled={!canEdit}
+                      className="text-[10px] px-4 py-1.5 font-semibold uppercase tracking-[0.5px] border transition-all"
+                      style={{ borderColor: canEdit ? "var(--s-orange)" : "var(--s-border)", color: canEdit ? "var(--s-orange)" : "var(--s-text-muted)", backgroundColor: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)", opacity: canEdit ? 1 : 0.5, cursor: canEdit ? "pointer" : "not-allowed" }}
                     >
                       📤 发布进展
                     </button>
@@ -566,6 +578,7 @@ export function StageLayout({
               projectSchema={project.project_schema}
               projectStages={projectStages}
               currentStageCode={project.project_stage}
+              canEdit={canEdit}
               onRecordsUpdate={(code, records) => {
                 setAllTableRecords((prev) => ({ ...prev, [code]: records }));
               }}

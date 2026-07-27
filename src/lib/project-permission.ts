@@ -120,3 +120,47 @@ export async function canEditProjectBySchema(
 
   return { allowed: false, reason: "无权限编辑该项目", projectId };
 }
+
+/**
+ * 判断当前用户是否可以管理项目成员。
+ * 仅允许：超级管理员 / 项目创建人 / 项目经理
+ */
+export async function canManageMembers(
+  projectId: string,
+  userId: string,
+  role: string,
+  userName: string,
+): Promise<EditCheckResult> {
+  // 1. 超级管理员直接放行
+  if (role === "super_admin") {
+    return { allowed: true, projectId };
+  }
+
+  const client = await createServerClient();
+
+  // 2. 查项目信息
+  const { data: project } = await client.rpc("dp_get_by_id", {
+    p_table: "projects",
+    p_id: projectId,
+  });
+
+  if (!project) {
+    return { allowed: false, reason: "项目不存在", projectId };
+  }
+
+  const proj = project as Record<string, unknown>;
+
+  // 3. 项目创建人匹配
+  const createdBy = String(proj.created_by || "");
+  if (createdBy && createdBy === userId) {
+    return { allowed: true, projectId };
+  }
+
+  // 4. 项目经理姓名匹配
+  const pmName = String(proj.role_project_manager || "").trim();
+  if (pmName && pmName === userName.trim()) {
+    return { allowed: true, projectId };
+  }
+
+  return { allowed: false, reason: "不是项目创建人、超管以及项目经理不能进行添加", projectId };
+}

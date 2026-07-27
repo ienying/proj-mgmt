@@ -21,10 +21,10 @@ app.prepare().then(() => {
       res.end('Internal server error');
     }
   });
-  server.timeout = 0; // no socket timeout
-  server.keepAliveTimeout = 0; // never timeout idle connections
-  server.headersTimeout = 0; // never timeout waiting for headers (default 60s)
-  server.requestTimeout = 0; // never timeout incoming requests
+  server.timeout = 120_000;           // 2 分钟 socket 超时
+  server.keepAliveTimeout = 65_000;   // 65s 空闲连接关闭（略大于常见 60s LB 超时）
+  server.headersTimeout = 30_000;     // 30s 等待请求头
+  server.requestTimeout = 120_000;    // 2 分钟请求超时（Schema 同步等慢操作留足时间）
   server.on('connection', (socket) => {
     socket.on('close', () => {
       console.log(`[conn] socket closed, remote=${socket.remoteAddress}:${socket.remotePort}`);

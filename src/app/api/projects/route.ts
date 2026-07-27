@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
+import { getCached, TTL, invalidateCacheByPrefix } from "@/lib/cache";
 
 // 兼容 procurement_modules 新旧格式，统一转为 code 字符串数组
 function normalizeModules(modules: unknown): string[] {
@@ -16,45 +17,75 @@ function normalizeModules(modules: unknown): string[] {
     .filter(Boolean);
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const client = await createServerClient();
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const pageSize = parseInt(searchParams.get("pageSize") || "0", 10);
 
-    const { data, error } = await client.rpc("dp_select", {
-      p_table: "projects",
-    });
+    // 项目列表缓存 30 秒
+    const cacheKey = `projects:list:${page}:${pageSize}`;
+    const result = await getCached(cacheKey, 30_000, async () => {
+      const client = await createServerClient();
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+      // 列表查询只取必要字段，排除大 JSONB（customer_info/channel_info/school_photos 等）
+      const LIST_COLUMNS = [
+        "id","project_name","project_code","project_type","project_stage",
+        "project_schema","status","department","entry_date",
+        "initial_acceptance_date","final_acceptance_date","required_date",
+        "created_at","updated_at","created_by",
+        "role_sales","role_presales","role_market_product","role_project_manager",
+        "project_status","customer_type","deployment_mode","final_customer",
+        "implementation_unit","description",
+        "customer_location","longitude","latitude",
+        "procurement_amount","software_amount","hardware_amount",
+        "procurement_modules",
+      ].join(", ");
 
-    // 批量查询所有项目的成员
-    const projects = (data || []) as Array<Record<string, unknown>>;
-    if (projects.length > 0) {
-      // 标准化 procurement_modules
-      for (const p of projects) {
-        (p as Record<string, unknown>).procurement_modules = normalizeModules(p.procurement_modules);
+      // 先查总数
+      const { data: countResult } = await client.rpc("execute_sql", {
+        p_sql: "SELECT COUNT(*) as total FROM public.projects",
+      });
+      const total = countResult && Array.isArray(countResult)
+        ? Number((countResult[0] as Record<string, unknown>).total) : 0;
+
+      // 查分页数据
+      let sql = `SELECT ${LIST_COLUMNS} FROM public.projects ORDER BY entry_date DESC NULLS LAST`;
+      if (pageSize > 0) {
+        sql += ` LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`;
       }
 
-      const projectIds = projects.map((p) => `'${String(p.id).replace(/'/g, "''")}'`).join(",");
-      const { data: allMembers } = await client.rpc("execute_sql", {
-        p_sql: `SELECT project_id, role_type, name, phone, email FROM design_public.project_members WHERE project_id IN (${projectIds}) ORDER BY project_id`,
-      });
-      const membersByProject = new Map<string, Array<Record<string, unknown>>>();
-      if (Array.isArray(allMembers)) {
-        for (const m of allMembers as Array<Record<string, unknown>>) {
-          const pid = String(m.project_id || "");
-          if (!membersByProject.has(pid)) membersByProject.set(pid, []);
-          membersByProject.get(pid)!.push(m);
+      const { data, error } = await client.rpc("execute_sql", { p_sql: sql });
+      if (error) throw new Error(error.message);
+
+      let rows = (data || []) as Array<Record<string, unknown>>;
+
+      if (rows.length > 0) {
+        for (const p of rows) {
+          (p as Record<string, unknown>).procurement_modules = normalizeModules(p.procurement_modules);
+        }
+
+        const projectIds = rows.map((p) => `'${String(p.id).replace(/'/g, "''")}'`).join(",");
+        const { data: allMembers } = await client.rpc("execute_sql", {
+          p_sql: `SELECT project_id, user_id, role_type, name, phone, email FROM public.project_members WHERE project_id IN (${projectIds}) ORDER BY project_id`,
+        });
+        const membersByProject = new Map<string, Array<Record<string, unknown>>>();
+        if (Array.isArray(allMembers)) {
+          for (const m of allMembers as Array<Record<string, unknown>>) {
+            const pid = String(m.project_id || "");
+            if (!membersByProject.has(pid)) membersByProject.set(pid, []);
+            membersByProject.get(pid)!.push(m);
+          }
+        }
+        for (const p of rows) {
+          const pid = String(p.id || "");
+          (p as Record<string, unknown>).members = membersByProject.get(pid) || [];
         }
       }
-      for (const p of projects) {
-        const pid = String(p.id || "");
-        (p as Record<string, unknown>).members = membersByProject.get(pid) || [];
-      }
-    }
+      return { data: rows, total, page, pageSize };
+    });
 
-    return NextResponse.json({ data: projects });
+    return NextResponse.json(result);
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Unknown error";
@@ -283,6 +314,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    invalidateCacheByPrefix("projects");
     return NextResponse.json({ data }, { status: 201 });
   } catch (error: unknown) {
     const message =

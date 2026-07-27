@@ -1,13 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
+import { verifyAuth } from "@/lib/auth-utils";
+import { canManageMembers } from "@/lib/project-permission";
+import { invalidateCacheByPrefix } from "@/lib/cache";
 
 // DELETE: 移除项目成员
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string; userId: string }> }
 ) {
   try {
+    // ── 鉴权 + 权限检查 ──
+    const authResult = await verifyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+
     const { id: projectId, userId } = await params;
+
+    const permCheck = await canManageMembers(projectId, authResult.userId, authResult.role, authResult.userName);
+    if (!permCheck.allowed) {
+      return NextResponse.json({ error: permCheck.reason || "无权限管理项目成员" }, { status: 403 });
+    }
+    // ── 权限检查结束 ──
     const client = await createServerClient();
 
     // 查找成员记录
@@ -54,6 +67,7 @@ export async function DELETE(
       }
     }
 
+    invalidateCacheByPrefix("projects");
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Remove project member error:", err);

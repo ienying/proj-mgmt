@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
+import { getCached, TTL, invalidateCacheByPrefix } from "@/lib/cache";
 
 // 将字段类型映射为 PostgreSQL 类型
 function mapColumnType(type: string): string {
@@ -47,40 +48,36 @@ function buildCreateTableSQL(tableCode: string, columnsConfig: Array<{name: stri
 
 export async function GET(request: NextRequest) {
   try {
-    const client = await createServerClient();
     const { searchParams } = new URL(request.url);
     const includeTaskTables = searchParams.get("include_task_tables") === "true";
     const projectType = searchParams.get("project_type");
 
-    const { data, error } = await client.rpc("dp_select", {
-      p_table: "data_table_definitions",
-    });
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    // 默认过滤掉任务表单自动生成的 task_ 临时表
-    const rows = (data || []) as Array<Record<string, unknown>>;
-    let filtered = includeTaskTables
-      ? rows
-      : rows.filter(
-          (d) => !String(d.table_code || "").startsWith("task_")
-        );
-
-    // 按项目类型过滤适用范围（空的 apply_project_types 表示适用于所有类型）
-    if (projectType) {
-      filtered = filtered.filter((d) => {
-        const types = (d.apply_project_types as string[]) || [];
-        return types.length === 0 || types.includes(projectType);
+    // 规范表定义缓存 2 分钟
+    const cacheKey = `standards:${includeTaskTables}:${projectType || "all"}`;
+    const sortedData = await getCached(cacheKey, TTL.STANDARDS, async () => {
+      const client = await createServerClient();
+      const { data, error } = await client.rpc("dp_select", {
+        p_table: "data_table_definitions",
       });
-    }
 
-    // 按 sort_order 排序
-    const sortedData = filtered.sort(
-      (a: Record<string, unknown>, b: Record<string, unknown>) =>
-        ((a.sort_order as number) || 0) - ((b.sort_order as number) || 0)
-    );
+      if (error) throw new Error(error.message);
+
+      const rows = (data || []) as Array<Record<string, unknown>>;
+      let filtered = includeTaskTables
+        ? rows
+        : rows.filter((d) => !String(d.table_code || "").startsWith("task_"));
+
+      if (projectType) {
+        filtered = filtered.filter((d) => {
+          const types = (d.apply_project_types as string[]) || [];
+          return types.length === 0 || types.includes(projectType);
+        });
+      }
+
+      return filtered.sort(
+        (a, b) => ((a.sort_order as number) || 0) - ((b.sort_order as number) || 0)
+      );
+    });
 
     return NextResponse.json({ data: sortedData });
   } catch (error: unknown) {
@@ -169,6 +166,7 @@ export async function POST(request: NextRequest) {
       // 不回滚元数据插入，因为表定义已保存，可以稍后手动创建物理表
     }
 
+    invalidateCacheByPrefix("standards");
     return NextResponse.json({ data, physicalTable: `std_definition_${table_code}` }, { status: 201 });
   } catch (error: unknown) {
     const message =
@@ -209,6 +207,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: createError.message }, { status: 500 });
     }
 
+    invalidateCacheByPrefix("standards");
     return NextResponse.json({ success: true, physicalTable: `std_definition_${table_code}` });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";

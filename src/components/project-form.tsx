@@ -1343,6 +1343,18 @@ export function ProjectForm({
 
   // 提交表单
   const handleSubmit = async () => {
+    // 编辑模式检查权限
+    if (isEditMode && initialData) {
+      const isSuperAdmin = currentUser?.role === "super_admin";
+      const isPM = currentUser?.name && (initialData as Record<string, unknown>).role_project_manager === currentUser.name;
+      const members = ((initialData as Record<string, unknown>).members as Array<Record<string, unknown>>) || [];
+      const isMember = members.some((m: Record<string, unknown>) => m.user_id === currentUser?.id);
+      if (!isSuperAdmin && !isPM && !isMember) {
+        toast.error("没有编辑权限，仅超级管理员、项目经理和项目成员可编辑");
+        return;
+      }
+    }
+
     if (!projectName.trim()) {
       toast.error("请输入项目名称");
       return;

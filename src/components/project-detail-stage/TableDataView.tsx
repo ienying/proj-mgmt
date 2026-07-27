@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/components/auth-context";
+import { toast } from "sonner";
 import { GanttChart } from "./GanttChart";
 
 interface TableDataViewProps {
@@ -25,6 +26,7 @@ interface TableDataViewProps {
   };
   onBack: () => void;
   userName?: string;
+  canEdit?: boolean;
 }
 
 // 判断列是否可编辑
@@ -40,7 +42,7 @@ function isColEditable(col: { type: string; readonly?: boolean }, row?: Record<s
   return true;
 }
 
-export function TableDataView({ tableName, tableCode, projectSchema, tableDef, onBack, userName }: TableDataViewProps) {
+export function TableDataView({ tableName, tableCode, projectSchema, tableDef, onBack, userName, canEdit = false }: TableDataViewProps) {
   const { token } = useAuth();
   const [records, setRecords] = useState<Array<Record<string, unknown>>>([]);
   const [loading, setLoading] = useState(true);
@@ -85,7 +87,10 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
       .catch(() => setLoading(false));
   }, [projectSchema, tableCode]);
 
+  const PERM_DENIED_MSG = "没有编辑权限，仅超级管理员、项目经理和项目成员可编辑";
+
   const saveEdit = async (value?: string) => {
+    if (!canEdit) { toast.error(PERM_DENIED_MSG); setEditingCell(null); return; }
     if (!editingCell || !projectSchema) return;
     const { rowIdx, colName } = editingCell;
     const row = records[rowIdx];
@@ -105,6 +110,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
   };
 
   const addRow = async () => {
+    if (!canEdit) { toast.error(PERM_DENIED_MSG); return; }
     if (!projectSchema) return;
     if (tableDef?.enable_drawer_form) {
       setDrawerRowIdx(-1); setDrawerEditing(true);
@@ -135,6 +141,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
   };
 
   const deleteRow = async (rowIdx: number) => {
+    if (!canEdit) { toast.error(PERM_DENIED_MSG); return; }
     const row = records[rowIdx];
     if (!row?.id || !projectSchema) return;
     if (row.allow_delete === false) return;

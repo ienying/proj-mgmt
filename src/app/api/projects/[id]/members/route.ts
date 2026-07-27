@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
+import { verifyAuth } from "@/lib/auth-utils";
+import { canManageMembers } from "@/lib/project-permission";
+import { invalidateCacheByPrefix } from "@/lib/cache";
 
-// GET: 获取项目成员列表
+// GET: 获取项目成员列表（公开查看）
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -35,10 +38,20 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ── 鉴权 + 权限检查 ──
+    const authResult = await verifyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+
     const { id: projectId } = await params;
     const client = await createServerClient();
     const body = await request.json();
     const { user_id, role_type = "成员" } = body;
+
+    const permCheck = await canManageMembers(projectId, authResult.userId, authResult.role, authResult.userName);
+    if (!permCheck.allowed) {
+      return NextResponse.json({ error: permCheck.reason || "无权限管理项目成员" }, { status: 403 });
+    }
+    // ── 权限检查结束 ──
 
     if (!user_id) {
       return NextResponse.json({ error: "请选择用户" }, { status: 400 });
@@ -83,6 +96,19 @@ export async function POST(
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // 自动赋予默认权限：项目编辑
+    try {
+      await client.rpc("dp_insert", {
+        p_table: "project_member_permissions",
+        p_data: {
+          project_id: projectId,
+          user_id,
+          permission_key: "project_edit",
+        },
+      });
+    } catch { /* 权限插入失败不影响成员添加 */ }
+
+    invalidateCacheByPrefix("projects");
     return NextResponse.json({ data }, { status: 201 });
   } catch (err) {
     console.error("Add project member error:", err);
