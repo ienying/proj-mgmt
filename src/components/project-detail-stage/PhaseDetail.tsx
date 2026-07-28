@@ -87,7 +87,6 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
   const [tableRecords, setTableRecords] = useState<Record<string, Array<Record<string, unknown>>>>({});
   const [loadingTable, setLoadingTable] = useState<string | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<{ tableCode: string; rowIdx: number } | null>(null);
-  const [taskViewMode, setTaskViewMode] = useState<Record<string, "card" | "table">>({});
   const [editingCell, setEditingCell] = useState<{
     tableCode: string; rowIdx: number; colName: string;
   } | null>(null);
@@ -334,7 +333,8 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
           }).catch(() => {});
           // 加载数据
           const res = await fetch(
-            `/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(tableCode)}`
+            `/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(tableCode)}`,
+            { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } }
           );
           const data = await res.json();
           setTableRecords((prev) => ({ ...prev, [tableCode]: data.data || [] }));
@@ -848,15 +848,6 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                   )}
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <button onClick={() => setTaskViewMode((prev) => ({ ...prev, [expandedTable]: prev[expandedTable] === "table" ? "card" : "table" }))}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] bg-transparent border border-[var(--s-border)] text-[var(--s-text-secondary)] cursor-pointer hover:bg-[var(--s-surface2)]"
-                    style={{ fontFamily: "var(--font-mono, monospace)" }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-                      <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-                    </svg>
-                    {taskViewMode[expandedTable] === "table" ? "切换表格视图" : "切换卡片视图"}
-                  </button>
                   <button onClick={() => {
                     const cols = visibleColumns.map((c) => c.name);
                     const BOM = "﻿"; let csv = BOM + cols.join(",") + "\n";
@@ -913,17 +904,13 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                 </div>
               )}
 
-              {/* ── 卡片视图 (V27) ── */}
-              {taskViewMode[expandedTable] !== "table" && (
-                <>
+              {/* ── 卡片视图 ── */}
                   {/* 步骤明细表 */}
                   <div className="td-steps-section">
-                    <div className="flex items-center justify-between cursor-pointer py-3"
-                      onClick={() => setTaskViewMode((prev) => ({ ...prev, [expandedTable]: "table" }))}>
+                    <div className="flex items-center justify-between py-3">
                       <span className="text-[11px] font-bold text-[var(--s-text-secondary)] uppercase tracking-[1px]" style={{ fontFamily: "var(--font-mono, monospace)" }}>
                         步骤明细 · {tableRecords[expandedTable].length} 条
                       </span>
-                      <span className="text-[11px] text-[var(--s-text-muted)]" style={{ fontFamily: "var(--font-mono, monospace)" }}>▼ 展开</span>
                     </div>
                     <table className="w-full border-collapse">
                       <thead>
@@ -957,78 +944,6 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                       </tbody>
                     </table>
                   </div>
-                </>
-              )}
-
-              {/* ── 表格视图 (V28) ── */}
-              {taskViewMode[expandedTable] === "table" && (
-                <div>
-                  <table className="w-full border-collapse text-xs">
-                    <thead>
-                      <tr>
-                        <th className="text-left px-4 py-[11px] text-[10px] uppercase tracking-[1px] font-medium bg-[var(--s-surface)] border-b-2 border-[var(--s-border)] text-[var(--s-text-muted)]"
-                          style={{ fontFamily: "var(--font-mono, monospace)" }}>{expandedDef.table_name}</th>
-                        {visibleColumns.map((col) => (
-                          <th key={col.name} className="text-left px-4 py-[11px] text-[10px] uppercase tracking-[1px] font-medium bg-[var(--s-surface)] border-b-2 border-[var(--s-border)] text-[var(--s-text-muted)]"
-                            style={{ fontFamily: "var(--font-mono, monospace)" }}>{col.name}</th>
-                        ))}
-                        {expandedDef.allow_delete !== false && <th className="w-10 px-2 py-[11px] text-[10px] uppercase tracking-[1px] font-medium bg-[var(--s-surface)] border-b-2 border-[var(--s-border)]"></th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tableRecords[expandedTable].map((row: Record<string, unknown>, ri: number) => (
-                        <tr key={ri} onClick={() => handleRecordClick(expandedTable, ri)}
-                          className={`cursor-pointer hover:bg-[var(--s-surface)] border-b border-[var(--s-border)] ${
-                            selectedRecord?.tableCode === expandedTable && selectedRecord?.rowIdx === ri ? "bg-[rgba(28,126,214,.04)] border-l-2 border-l-[var(--s-blue)]" : ""}`}>
-                          <td className="px-4 py-3 text-xs font-semibold text-[var(--s-text)]">{ri === 0 ? expandedDef.table_name : ""}</td>
-                          {visibleColumns.map((col) => (
-                            <td key={col.name} className={`px-4 py-3 text-xs truncate max-w-[200px]`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isColumnEditable(col, row)) startEdit(expandedTable, ri, col.name, String(row[col.name] ?? ""));
-                              }}>
-                              {editingCell?.tableCode === expandedTable && editingCell?.rowIdx === ri && editingCell?.colName === col.name
-                                ? <input type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)}
-                                    onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter") saveEdit((e.target as HTMLInputElement).value); }}
-                                    onBlur={(e) => saveEdit((e.target as HTMLInputElement).value)}
-                                    className="w-full px-1 py-0.5 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] outline-none"
-                                    autoFocus onClick={(e) => e.stopPropagation()} />
-                                : <span className={isColumnEditable(col, row) ? "cursor-pointer" : ""}
-                                    style={{ color: "var(--s-text)", backgroundColor: isColumnEditable(col, row) ? "transparent" : "#fef9e7" }}>
-                                    {(col.type === "date" ? (String(row[col.name] ?? "").split(/[T ]/)[0] || "—") : String(row[col.name] ?? "—")).slice(0, 28)}{String(row[col.name] ?? "").length > 28 ? "…" : ""}
-                                  </span>
-                              }
-                            </td>
-                          ))}
-                          {expandedDef.allow_delete !== false && (
-                            <td className="px-2 py-3">{!row._readonly && (
-                              <button onClick={(e) => { e.stopPropagation(); if (confirm("确定删除？")) deleteRow(expandedTable, ri); }}
-                                className="text-[10px] text-[var(--s-red)] hover:underline">删除</button>
-                            )}</td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {/* V28 行详情面板 */}
-                  {selectedRecord?.tableCode === expandedTable && selectedRecord.rowIdx != null && (
-                    <div className="mt-2 bg-[var(--s-surface)] border border-[var(--s-border)] p-6">
-                      <div className="grid grid-cols-2 gap-4">
-                        {visibleColumns.map((col) => (
-                          <div key={col.name} className={`flex flex-col gap-1.5 ${visibleColumns.length === 1 ? "col-span-2" : ""}`}>
-                            <span className="text-[10px] uppercase tracking-[1px] text-[var(--s-text-muted)]" style={{ fontFamily: "var(--font-mono, monospace)" }}>{col.name}</span>
-                            <span className="text-sm text-[var(--s-text)]">{String(tableRecords[expandedTable][selectedRecord.rowIdx][col.name] || "—")}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="mt-4 pt-3 border-t border-[var(--s-border-light)] text-[10px] text-[var(--s-text-muted)]" style={{ fontFamily: "var(--font-mono, monospace)" }}>
-                        第 {selectedRecord.rowIdx + 1} 条 · {expandedDef.table_name}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* 收起按钮 */}
               <div className="mt-4 pt-4 border-t border-[var(--s-border)]">
                 <button onClick={() => { setExpandedTable(null); setSelectedRecord(null); }}

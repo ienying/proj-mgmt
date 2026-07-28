@@ -22,9 +22,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "项目不存在" }, { status: 404 });
     }
     const proj = project as Record<string, unknown>;
-    const projectCode = String(proj.project_code || "");
     const projectName = String(proj.project_name || "");
-    const schema = `yuansu_${projectCode}`;
+    const schema = String(proj.project_schema || "").toLowerCase();
 
     // 2. 列出项目 schema 下的所有表
     const { data: tables } = await client.rpc("execute_sql", {

@@ -104,24 +104,59 @@ export function StageLayout({
   // 计算每个阶段的日期范围 + 缓存表数据
   const [phaseDates, setPhaseDates] = useState<Record<number, { planStart?: string; planEnd?: string; actualStart?: string; actualEnd?: string }>>({});
   const [allTableRecords, setAllTableRecords] = useState<Record<string, Array<Record<string, unknown>>>>({});
+  const [loadProgress, setLoadProgress] = useState({ loaded: 0, total: 0 });
   // 只显示实际存在于项目 schema 中的表
   const existingTableDefs = tableDefs.filter((d) => d.table_code in allTableRecords);
   useEffect(() => {
     if (tableDefs.length === 0 || !project.project_schema) return;
     const sorted = [...projectStages].sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99));
+
+    // 计算总表数
+    const allTables: string[] = [];
+    const seen = new Set<string>();
+    for (const sc of sorted) {
+      for (const def of tableDefs) {
+        if (def.apply_project_stages?.includes(sc.code) && !seen.has(def.table_code)) {
+          seen.add(def.table_code);
+          allTables.push(def.table_code);
+        }
+      }
+    }
+    setLoadProgress({ loaded: 0, total: allTables.length });
+
+    const fetchWithRetry = async (url: string, retries = 3): Promise<Response> => {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        try {
+          const r = await fetch(url);
+          if (r.ok) return r;
+          if (r.status === 503) {
+            await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+            continue;
+          }
+          return r;
+        } catch {
+          if (attempt < retries - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+          }
+        }
+      }
+      return fetch(url).catch(() => new Response(null, { status: 503 })); // last attempt
+    };
+
     (async () => {
       const dates: Record<number, { planStart?: string; planEnd?: string; actualStart?: string; actualEnd?: string }> = {};
       const recordsCache: Record<string, Array<Record<string, unknown>>> = {};
+      let loaded = 0;
       for (let i = 0; i < sorted.length; i++) {
         const sc = sorted[i].code;
         const pts = tableDefs.filter((def) => def.apply_project_stages?.includes(sc));
         let ps = "", pe = "", as = "", ae = "";
         for (const def of pts) {
           try {
-            const r = await fetch(`/api/project-data?projectSchema=${project.project_schema}&tableCode=${def.table_code}`);
+            const r = await fetchWithRetry(`/api/project-data?projectSchema=${project.project_schema}&tableCode=${def.table_code}`);
+            if (!r.ok) { loaded++; continue; }
             const d = await r.json();
-            // 表不存在（exists=false）时跳过，不加入缓存
-            if (d.exists === false) continue;
+            if (d.exists === false) { loaded++; continue; }
             const recs = (d.data || []) as Array<Record<string, unknown>>;
             recordsCache[def.table_code] = recs;
             if (!recs.length) continue;
@@ -129,12 +164,14 @@ export function StageLayout({
             if (def.stage_plan_end_col) { const ds = recs.map((r) => String(r[def.stage_plan_end_col!] || "")).filter(Boolean).sort(); if (ds[ds.length - 1] && (!pe || ds[ds.length - 1] > pe)) pe = ds[ds.length - 1]; }
             if (def.stage_actual_start_col) { const ds = recs.map((r) => String(r[def.stage_actual_start_col!] || "")).filter(Boolean).sort(); if (ds[0] && (!as || ds[0] < as)) as = ds[0]; }
             if (def.stage_actual_end_col) { const ds = recs.map((r) => String(r[def.stage_actual_end_col!] || "")).filter(Boolean).sort(); if (ds[ds.length - 1] && (!ae || ds[ds.length - 1] > ae)) ae = ds[ds.length - 1]; }
-          } catch {}
+          } catch { loaded++; setLoadProgress({ loaded, total: allTables.length }); }
+          setLoadProgress({ loaded, total: allTables.length });
         }
         if (ps || pe) dates[i] = { planStart: ps, planEnd: pe, actualStart: as, actualEnd: ae };
       }
       setPhaseDates(dates);
       setAllTableRecords(recordsCache);
+      setLoadProgress({ loaded: 0, total: 0 }); // 完成
     })();
   }, [tableDefs, project.project_schema, projectStages]);
 
@@ -435,6 +472,7 @@ export function StageLayout({
             tableDef={tableDefs.find((d) => d.table_code === subContent.key.replace("table:", ""))}
             onBack={handleCloseSubContent}
             userName={userName}
+            canEdit={canEdit}
           />
         ) : (
           <SubContentArea
@@ -443,6 +481,27 @@ export function StageLayout({
             onBack={handleCloseSubContent}
           />
         )
+      ) : loadProgress.total > 0 ? (
+        /* 数据加载进度条 */
+        <div className="flex items-center justify-center" style={{ minHeight: "60vh" }}>
+          <div className="text-center max-w-md px-6">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center" style={{ backgroundColor: "var(--s-surface2)" }}>
+              <svg className="w-8 h-8 animate-spin" style={{ color: "var(--s-orange)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </div>
+            <h2 className="text-lg font-semibold mb-2" style={{ color: "var(--s-text)" }}>正在加载项目数据...</h2>
+            <div className="h-2 rounded-sm overflow-hidden mb-2" style={{ backgroundColor: "var(--s-surface2)" }}>
+              <div className="h-full transition-all duration-300 rounded-sm" style={{
+                width: `${Math.round((loadProgress.loaded / loadProgress.total) * 100)}%`,
+                backgroundColor: "var(--s-orange)",
+              }} />
+            </div>
+            <p className="text-xs" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+              {loadProgress.loaded} / {loadProgress.total} 张表
+            </p>
+          </div>
+        </div>
       ) : tableDefs.length === 0 ? (
         /* 无任何规则匹配或未配置规则，Schema 为空，显示空状态引导 */
         <div className="flex items-center justify-center" style={{ minHeight: "60vh" }}>
@@ -601,7 +660,7 @@ export function StageLayout({
             </div>
 
             {/* 总览网格 */}
-            <OverviewGrid stages={projectStages} tableDefs={tableDefs} tableRecords={allTableRecords} />
+            <OverviewGrid stages={projectStages} tableDefs={existingTableDefs} tableRecords={allTableRecords} />
 
             {/* 图表区域 */}
             <ChartsSection stages={projectStages} tableDefs={tableDefs} tableRecords={allTableRecords} />

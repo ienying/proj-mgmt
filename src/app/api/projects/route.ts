@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
 import { getCached, TTL, invalidateCacheByPrefix } from "@/lib/cache";
+import { verifyAuth } from "@/lib/auth-utils";
 
 // 兼容 procurement_modules 新旧格式，统一转为 code 字符串数组
 function normalizeModules(modules: unknown): string[] {
@@ -19,6 +20,9 @@ function normalizeModules(modules: unknown): string[] {
 
 export async function GET(request: NextRequest) {
   try {
+    const authResult = await verifyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1", 10);
     const pageSize = parseInt(searchParams.get("pageSize") || "0", 10);
@@ -174,8 +178,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. 生成项目 Schema 名称
-    const projectSchema = `yuansu_${project_code}`;
+    // 1. 生成项目 Schema 名称: yuansu_proj_时间戳_项目编号小写
+    const projectSchema = `yuansu_proj_${Date.now().toString(36)}_${project_code.toLowerCase()}`;
 
     // 2. 插入项目主表
     const insertData: Record<string, unknown> = {

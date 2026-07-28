@@ -1275,7 +1275,7 @@ export function ProjectManagement({
 
   // 渲染卡片视图
   const renderCardView = () => (
-    <div className="grid grid-cols-3 gap-3.5">
+    <div className="grid grid-cols-4 gap-3.5">
       {filteredProjects.length === 0 ? (
         <div className="col-span-3 bg-white border border-slate-200 rounded-xl p-10 text-center">
           <FolderKanban className="w-10 h-10 text-slate-300 mx-auto mb-3" />

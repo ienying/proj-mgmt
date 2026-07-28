@@ -13,15 +13,13 @@ export async function POST(request: NextRequest) {
 
     const client = await createServerClient();
     const body = await request.json();
-    const { projectCode, tableCode, recordId, columnName, value } = body;
+    const { projectSchema, tableCode, recordId, columnName, value } = body;
 
-    if (!projectCode || !tableCode || !recordId || !columnName) {
+    if (!projectSchema || !tableCode || !recordId || !columnName) {
       return NextResponse.json({ error: "缺少参数" }, { status: 400 });
     }
 
-    const schema = `yuansu_${String(projectCode)}`;
-
-    const permCheck = await canEditProjectBySchema(schema, authResult.userId, authResult.role, authResult.userName);
+    const permCheck = await canEditProjectBySchema(projectSchema, authResult.userId, authResult.role, authResult.userName);
     if (!permCheck.allowed) {
       return NextResponse.json({ error: permCheck.reason || "无权限编辑该项目数据" }, { status: 403 });
     }
@@ -30,7 +28,7 @@ export async function POST(request: NextRequest) {
     const safeCol = String(columnName).replace(/'/g, "''");
 
     const { error } = await client.rpc("execute_sql", {
-      p_sql: `UPDATE ${schema}."${tableCode}" SET "${safeCol}" = '${safeVal}' WHERE id = '${String(recordId)}'`,
+      p_sql: `UPDATE ${projectSchema}."${tableCode}" SET "${safeCol}" = '${safeVal}' WHERE id = '${String(recordId)}'`,
     });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

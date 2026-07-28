@@ -33,7 +33,7 @@ async function logOperation(
   detail?: string,
 ) {
   try {
-    const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema;
+    const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema.toLowerCase();
     const { error: createErr } = await client.rpc("execute_sql", {
       p_sql: `CREATE TABLE IF NOT EXISTS ${safeSchema}.operation_logs (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
 
     const client = await createServerClient();
 
-    const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema;
+    const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema.toLowerCase();
 
     // 先检查表是否存在
     const { data: tableCheck } = await client.rpc("execute_sql", {
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
     }
     // ── 权限检查结束 ──
 
-    const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema;
+    const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema.toLowerCase();
 
     // 如果调用方未指定 data_source/allow_delete，则设置默认值
     const dataWithMeta = { 
@@ -187,7 +187,7 @@ export async function PUT(request: NextRequest) {
     }
     // ── 权限检查结束 ──
 
-    const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema;
+    const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema.toLowerCase();
 
     // 只读防护：根据表定义的 readonly_mode 过滤被锁定列
     let filteredData = data;
@@ -310,7 +310,7 @@ export async function DELETE(request: NextRequest) {
     }
     // ── 权限检查结束 ──
 
-    const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema;
+    const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema.toLowerCase();
 
     const deleteSQL = `
       DELETE FROM ${safeSchema}."${tableCode}"

@@ -126,7 +126,7 @@ export default function HomePage() {
   const [projects, setProjects] = useState(mockProjects);
   const [projectPage, setProjectPage] = useState(1);
   const [projectTotal, setProjectTotal] = useState(0);
-  const PAGE_SIZE = 10;
+  const PAGE_SIZE = 20;
   const [users, setUsers] = useState<{ id: string; username: string; name: string; phone?: string; email?: string; department?: string; position?: string; avatar?: string; role?: "super_admin" | "sub_admin" | "user"; is_active: boolean; created_at: string }[]>([]);
   const [standards, setStandards] = useState<TableDefinition[]>([]);
   const [badges, setBadges] = useState<{ issues: number; messages: number; tasks: number; videos: number }>({ issues: 0, messages: 0, tasks: 0, videos: 0 });
@@ -207,16 +207,18 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, [user?.id]);
 
-  // 从 API 获取基础数据（并行请求）
+  // 从 API 获取基础数据（token 就绪后才加载）
   useEffect(() => {
+    if (!token) return;
     const fetchBaseData = async () => {
       try {
+        const h = { Authorization: `Bearer ${token}` };
         // 4 个字典请求并行
         const [typesRes, stagesRes, modulesRes, ctRes] = await Promise.all([
-          fetch("/api/dicts?type=project_types"),
-          fetch("/api/dicts?type=project_stages"),
-          fetch("/api/dicts?type=product_module_types"),
-          fetch("/api/dicts?type=customer_types"),
+          fetch("/api/dicts?type=project_types", { headers: h }),
+          fetch("/api/dicts?type=project_stages", { headers: h }),
+          fetch("/api/dicts?type=product_module_types", { headers: h }),
+          fetch("/api/dicts?type=customer_types", { headers: h }),
         ]);
 
         if (typesRes.ok) {
@@ -249,9 +251,9 @@ export default function HomePage() {
 
         // 用户、规范、项目列表并行
         const [usersRes, standardsRes, projectsRes] = await Promise.all([
-          fetch("/api/users"),
-          fetch("/api/standards"),
-          fetch(`/api/projects?page=1&pageSize=${PAGE_SIZE}`),
+          fetch("/api/users", { headers: h }),
+          fetch("/api/standards", { headers: h }),
+          fetch(`/api/projects?page=1&pageSize=${PAGE_SIZE}`, { headers: h }),
         ]);
 
         if (usersRes.ok) { const d = await usersRes.json(); setUsers(d.data || []); }
@@ -271,17 +273,19 @@ export default function HomePage() {
     };
 
     fetchBaseData();
-  }, []);
+  }, [token]);
 
   // 刷新基础数据的方法
-  const refreshBaseData = async () => {
+  const refreshBaseData = async (page?: number) => {
     try {
+      const p = page ?? projectPage;
+      const h = token ? { Authorization: `Bearer ${token}` } : undefined;
       const [typesRes, stagesRes, modulesRes, ctRes, projectsRes] = await Promise.all([
-        fetch("/api/dicts?type=project_types"),
-        fetch("/api/dicts?type=project_stages"),
-        fetch("/api/dicts?type=product_module_types"),
-        fetch("/api/dicts?type=customer_types"),
-        fetch(`/api/projects?page=${projectPage}&pageSize=${PAGE_SIZE}`),
+        fetch("/api/dicts?type=project_types", { headers: h }),
+        fetch("/api/dicts?type=project_stages", { headers: h }),
+        fetch("/api/dicts?type=product_module_types", { headers: h }),
+        fetch("/api/dicts?type=customer_types", { headers: h }),
+        fetch(`/api/projects?page=${p}&pageSize=${PAGE_SIZE}`, { headers: h }),
       ]);
 
       if (typesRes.ok) {
@@ -334,7 +338,7 @@ export default function HomePage() {
     try {
       const response = await fetch("/api/projects", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(data),
       });
 
@@ -645,7 +649,7 @@ export default function HomePage() {
                     project_code: project.project_code,
                     project_type: project.project_type,
                     project_stage: project.project_stage,
-                    project_schema: project.project_schema || `yuansu_${project.project_code}`,
+                    project_schema: project.project_schema || "",
                     status: project.status || "active",
                     created_at: project.created_at || "",
                     customer_info: project.customer_info as { company_name?: string; contact_person?: string; contact_phone?: string; contact_email?: string } | undefined,
@@ -679,7 +683,7 @@ export default function HomePage() {
                   projectPage={projectPage}
                   projectTotal={projectTotal}
                   pageSize={PAGE_SIZE}
-                  onPageChange={(p) => { setProjectPage(p); refreshBaseData(); }}
+                  onPageChange={(p) => { setProjectPage(p); refreshBaseData(p); }}
                 />
               </ContentErrorBoundary>
             );
@@ -724,7 +728,7 @@ export default function HomePage() {
               projectPage={projectPage}
               projectTotal={projectTotal}
               pageSize={PAGE_SIZE}
-              onPageChange={(p) => { setProjectPage(p); refreshBaseData(); }}
+              onPageChange={(p) => { setProjectPage(p); refreshBaseData(p); }}
             />
           </ContentErrorBoundary>
         );

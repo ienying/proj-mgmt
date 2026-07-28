@@ -52,9 +52,9 @@ export async function GET(request: NextRequest) {
     const includeTaskTables = searchParams.get("include_task_tables") === "true";
     const projectType = searchParams.get("project_type");
 
-    // 规范表定义缓存 2 分钟
-    const cacheKey = `standards:${includeTaskTables}:${projectType || "all"}`;
-    const sortedData = await getCached(cacheKey, TTL.STANDARDS, async () => {
+    // 规范表定义缓存 2 分钟（无 projectType 不缓存，防止全量数据污染）
+    const cacheKey = projectType ? `standards:${includeTaskTables}:${projectType}` : null;
+    const fetcher = async () => {
       const client = await createServerClient();
       const { data, error } = await client.rpc("dp_select", {
         p_table: "data_table_definitions",
@@ -77,7 +77,11 @@ export async function GET(request: NextRequest) {
       return filtered.sort(
         (a, b) => ((a.sort_order as number) || 0) - ((b.sort_order as number) || 0)
       );
-    });
+    };
+
+    const sortedData = cacheKey
+      ? await getCached(cacheKey, TTL.STANDARDS, fetcher)
+      : await fetcher();
 
     return NextResponse.json({ data: sortedData });
   } catch (error: unknown) {
