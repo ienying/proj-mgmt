@@ -162,6 +162,7 @@ export interface StageLayoutProps {
     role_presales?: string | null;
     role_market_product?: string | null;
     role_project_manager?: string | null;
+    created_by?: string | null;
     members?: Array<{
       name?: string;
       role?: string;

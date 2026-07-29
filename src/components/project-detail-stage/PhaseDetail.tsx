@@ -115,7 +115,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
 
   // 开始编辑单元格
-  const PERM_DENIED_MSG = "没有编辑权限，仅超级管理员、项目经理和项目成员可编辑";
+  const PERM_DENIED_MSG = "没有编辑权限，仅超级管理员、项目创建人、项目经理和项目成员可编辑";
 
   const startEdit = (tableCode: string, rowIdx: number, colName: string, currentValue: string) => {
     if (!canEdit) { toast.error(PERM_DENIED_MSG); return; }
@@ -260,25 +260,32 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       const fileSize = uploadData.size || file.size || 0;
       if (!fileKey) { setUploadingCell(null); return; }
 
-      // 支持多文件：已有值转数组并追加
-      const existingVal = String(row[colName] ?? "");
+      // 支持多文件：已有值转数组并追加（兼容 JSONB 数组和旧字符串格式）
+      const rawExisting = row[colName];
       let filesArray: Array<{ key: string; name: string; size: number }> = [];
-      try {
-        const parsed = JSON.parse(existingVal);
-        filesArray = Array.isArray(parsed) ? parsed : [];
-      } catch {
-        // 旧格式：单个字符串 key，转为数组
-        if (existingVal && existingVal.length > 5) {
-          filesArray = [{ key: existingVal, name: existingVal.split("/").pop()?.replace(/^\d+_/, "") || "file", size: 0 }];
+      if (Array.isArray(rawExisting)) {
+        // JSONB 列直接返回数组
+        filesArray = rawExisting as Array<{ key: string; name: string; size: number }>;
+      } else {
+        const existingVal = String(rawExisting ?? "");
+        try {
+          const parsed = JSON.parse(existingVal);
+          filesArray = Array.isArray(parsed) ? parsed : [];
+        } catch {
+          // 旧格式：单个字符串 key，转为数组
+          if (existingVal && existingVal.length > 5) {
+            filesArray = [{ key: existingVal, name: existingVal.split("/").pop()?.replace(/^\d+_/, "") || "file", size: 0 }];
+          }
         }
       }
       filesArray.push({ key: fileKey, name: fileName, size: fileSize });
 
       // 保存数组到数据库
+      const saveBody = { projectSchema, tableCode, rowId: row.id, data: { [colName]: filesArray } };
       const saveRes = await fetch("/api/project-data", {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ projectSchema, tableCode, rowId: row.id, data: { [colName]: JSON.stringify(filesArray) } }),
+        body: JSON.stringify(saveBody),
       });
       if (!saveRes.ok) {
         const errText = await saveRes.text();
@@ -289,6 +296,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
 
       const currentRecords = tableRecords[tableCode] || [];
       const updated = [...currentRecords];
+      // 本地状态存储 JSON 字符串以保证兼容性（数据库存储为 JSONB 数组）
       updated[rowIdx] = { ...updated[rowIdx], [colName]: JSON.stringify(filesArray) };
       setTableRecords((prev) => ({ ...prev, [tableCode]: updated }));
       onRecordsUpdate?.(tableCode, updated);
@@ -320,7 +328,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
               .catch(() => {});
           }
           if (userList.length === 0) {
-            fetch("/api/users")
+            fetch("/api/users", { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
               .then((r) => r.json())
               .then((d) => setUserList((d.data || d.users || []).map((u: any) => ({ id: u.id, name: u.name || u.username }))))
               .catch(() => {});
@@ -402,17 +410,18 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       })()
     : null;
 
-  // 判断列是否可编辑（与 API PUT 只读逻辑完全一致）
+  // 判断列是否可编辑（遵循规范管理的只读配置：AND/OR 模式）
   const isColumnEditable = (col: { type: string; readonly?: boolean }, row?: Record<string, unknown>) => {
     if (!["text", "number", "date", "textarea", "select", "multiple_select", "procurement_module", "user"].includes(col.type)) return false;
+    const colReadonly = col.readonly === true;
+    const rowReadonly = row?._readonly === true;
     const isOrMode = expandedDef?.readonly_mode === "or";
     if (isOrMode) {
-      // OR: 行列任一满足即锁定
-      if (row?._readonly) return false; // 行只读 → 所有列锁
-      if (col.readonly) return false;    // 列只读 → 该列锁
+      // OR: 列只读 OR 行只读 → 锁定
+      if (colReadonly || rowReadonly) return false;
     } else {
-      // AND: 行列同时满足才锁定
-      if (col.readonly && row?._readonly) return false;
+      // AND（默认）: 列只读 AND 行只读 → 锁定
+      if (colReadonly && rowReadonly) return false;
     }
     return true;
   };
@@ -486,7 +495,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
             );
           })()
           ) : col.type === "procurement_module" ? (
-            <div className="flex flex-col gap-1 w-full max-w-[200px]">
+            <div className="flex flex-col gap-1 w-full" style={{ minWidth: "150px" }}>
               <input type="text" value={pmSearch} onChange={(e) => setPmSearch(e.target.value)}
                 placeholder="搜索模块..."
                 className="w-full px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none"
@@ -505,7 +514,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
               </div>
             </div>
           ) : col.type === "user" ? (
-            <div className="flex flex-col gap-1 w-full max-w-[200px]">
+            <div className="flex flex-col gap-1 w-full" style={{ minWidth: "150px" }}>
               <input type="text" value={userSearch} onChange={(e) => setUserSearch(e.target.value)}
                 placeholder="搜索用户..."
                 className="w-full px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none"
@@ -527,25 +536,29 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
             <textarea value={editValue} onChange={(e) => setEditValue(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit((e.target as HTMLTextAreaElement).value); } }}
               onBlur={(e) => saveEdit((e.target as HTMLTextAreaElement).value)}
-              className="flex-1 px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none resize-none min-h-[24px]"
+              className="w-full px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none resize-y min-h-[24px]"
+              style={{ minWidth: "120px" }}
               autoFocus />
           ) : col.type === "number" ? (
             <input type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter") saveEdit((e.target as HTMLInputElement).value); }}
               onBlur={(e) => saveEdit((e.target as HTMLInputElement).value)}
               className="w-full px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none"
+              style={{ minWidth: "100px" }}
               autoFocus />
           ) : col.type === "date" ? (
             <input type="date" value={editValue} onChange={(e) => setEditValue(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); }}
               onBlur={(e) => saveEdit((e.target as HTMLInputElement).value)}
               className="w-full px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none"
+              style={{ minWidth: "120px" }}
               autoFocus />
           ) : (
             <input type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter") saveEdit((e.target as HTMLInputElement).value); }}
               onBlur={(e) => saveEdit((e.target as HTMLInputElement).value)}
               className="w-full px-2 py-1 text-xs border border-[var(--s-orange)] bg-[var(--s-surface)] text-[var(--s-text)] outline-none"
+              style={{ minWidth: "120px" }}
               autoFocus />
           )}
         </div>
@@ -557,26 +570,32 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
       const rawValue = String(row[col.name] ?? "");
       const isUploading = uploadingCell?.tableCode === tableCode && uploadingCell?.rowIdx === rowIdx && uploadingCell?.colName === col.name;
 
-      // 解析多文件数组（兼容旧单文件格式）
+      // 解析多文件数组（兼容旧单文件格式 + JSONB 直接返回的数组）
       let files: Array<{ key: string; name: string; size: number }> = [];
-      try {
-        const parsed = JSON.parse(rawValue);
-        files = Array.isArray(parsed) ? parsed : [];
-      } catch {
-        if (rawValue && rawValue.length > 5 && rawValue !== "undefined" && rawValue !== "null") {
-          const fn = rawValue.split("/").pop()?.split("?")[0]?.replace(/^\d+_/, "") || "文件";
-          files = [{ key: rawValue, name: fn, size: 0 }];
+      if (Array.isArray(rawValue)) {
+        // JSONB 列 PostgreSQL 驱动直接返回数组
+        files = rawValue as unknown as Array<{ key: string; name: string; size: number }>;
+      } else if (typeof rawValue === "string") {
+        try {
+          const parsed = JSON.parse(rawValue);
+          files = Array.isArray(parsed) ? parsed : [];
+        } catch {
+          if (rawValue && rawValue.length > 5 && rawValue !== "undefined" && rawValue !== "null") {
+            const fn = rawValue.split("/").pop()?.split("?")[0]?.replace(/^\d+_/, "") || "文件";
+            files = [{ key: rawValue, name: fn, size: 0 }];
+          }
         }
       }
 
       const saveFiles = (newFiles: typeof files) => {
-        const val = newFiles.length > 0 ? JSON.stringify(newFiles) : "";
+        // 直接传数组对象，由后端自动转为 JSONB
         fetch("/api/project-data", {
           method: "PUT",
           headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          body: JSON.stringify({ projectSchema, tableCode, rowId: row.id, data: { [col.name]: val } }),
+          body: JSON.stringify({ projectSchema, tableCode, rowId: row.id, data: { [col.name]: newFiles.length > 0 ? newFiles : [] } }),
         }).then((r) => {
           if (r.ok) setTableRecords((prev) => {
+            const val = JSON.stringify(newFiles);
             const updated = [...(prev[tableCode] || [])];
             updated[rowIdx] = { ...updated[rowIdx], [col.name]: val };
             return { ...prev, [tableCode]: updated };
@@ -621,13 +640,20 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
     }
 
     // 非编辑态的显示
+    const renderEmpty = () => {
+      if (editable) {
+        return <span className="text-[var(--s-text-muted)] cursor-pointer" title="点击编辑">点击编辑</span>;
+      }
+      return <span className="text-[var(--s-text-muted)]">—</span>;
+    };
+
     if (col.type === "select" || col.type === "multiple_select") {
       return (
         <span
           className={editable ? "cursor-pointer hover:bg-[var(--s-surface2)] px-1 -mx-1 rounded" : ""}
           style={{ color: "var(--s-text)" }}
           onClick={() => editable && startEdit(tableCode, rowIdx, col.name, value)}>
-          {value || "—"}
+          {value || renderEmpty()}
         </span>
       );
     }
@@ -638,7 +664,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
         style={{ color: "var(--s-text)" }}
         onClick={() => editable && startEdit(tableCode, rowIdx, col.name, value)}
         title={editable ? "点击编辑" : "只读-该记录由管理员设置"}>
-        {value || "—"}
+        {value || renderEmpty()}
       </span>
     );
   };
@@ -888,7 +914,25 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                   <div key={sf.column} className="bg-[var(--s-bg)] px-5 py-5 flex flex-col gap-1.5">
                     <span className="text-[10px] uppercase tracking-[1px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)", fontWeight: 700 }}>{sf.column}</span>
                     <span className="text-[13px] font-bold" style={{ color: "var(--s-text)" }}>
-                      {[...new Set(tableRecords[expandedTable].map((r) => String(r[sf.column] || "—")))].filter(Boolean).join(" · ")}
+                      {(() => {
+                        const fmtDate = (v: string) => { const d = v.split(/[T ]/)[0]; return d || v; };
+                        const vals = [...new Set(tableRecords[expandedTable].map((r) => {
+                          const raw = r[sf.column];
+                          if (!raw) return "—";
+                          // 附件类型：提取文件名显示
+                          try {
+                            const arr = Array.isArray(raw) ? raw : JSON.parse(String(raw));
+                            if (Array.isArray(arr) && arr.length > 0 && arr[0].name) {
+                              return arr.map((f: any) => f.name || "文件").join("、");
+                            }
+                          } catch {}
+                          const str = String(raw);
+                          // 日期类型：只显示日期部分
+                          if (/^\d{4}-\d{2}-\d{2}T/.test(str)) return fmtDate(str);
+                          return str;
+                        }))].filter(Boolean);
+                        return vals.join(" · ");
+                      })()}
                     </span>
                   </div>
                 ))}
@@ -915,13 +959,13 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                     <table className="w-full border-collapse">
                       <thead>
                         <tr>
-                          <th className="text-left px-4 py-[11px] text-[10px] uppercase tracking-[1px] font-medium bg-[var(--s-surface)] border-b-2 border-[var(--s-border)] text-[var(--s-text-muted)]"
+                          <th className="text-left px-4 py-[11px] text-[10px] uppercase tracking-[1px] font-medium bg-[var(--s-surface)] border-b-2 border-[var(--s-border)] text-[var(--s-text-muted)] whitespace-nowrap"
                             style={{ fontFamily: "var(--font-mono, monospace)" }}>#</th>
                           {visibleColumns.map((col) => (
-                            <th key={col.name} className="text-left px-4 py-[11px] text-[10px] uppercase tracking-[1px] font-medium bg-[var(--s-surface)] border-b-2 border-[var(--s-border)] text-[var(--s-text-muted)]"
-                              style={{ fontFamily: "var(--font-mono, monospace)" }}>{col.name}</th>
+                            <th key={col.name} className="text-left px-4 py-[11px] text-[10px] uppercase tracking-[1px] font-medium bg-[var(--s-surface)] border-b-2 border-[var(--s-border)] text-[var(--s-text-muted)] whitespace-nowrap"
+                              style={{ fontFamily: "var(--font-mono, monospace)", minWidth: "100px" }}>{col.name}</th>
                           ))}
-                          {expandedDef.allow_delete !== false && <th className="w-10 px-2 py-[11px] text-[10px] uppercase tracking-[1px] font-medium bg-[var(--s-surface)] border-b-2 border-[var(--s-border)]"></th>}
+                          {canEdit && expandedDef.allow_delete !== false && <th className="w-10 px-2 py-[11px] text-[10px] uppercase tracking-[1px] font-medium bg-[var(--s-surface)] border-b-2 border-[var(--s-border)]"></th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -934,7 +978,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                               <td key={col.name} className="px-4 py-3 text-xs">{renderCell(expandedTable, ri, col, row)}</td>
                             ))}
                             {canEdit && expandedDef.allow_delete !== false && (
-                              <td className="px-2 py-3">{!row._readonly && (
+                              <td className="px-2 py-3">{!row._readonly && row.allow_delete !== false && (
                                 <button onClick={(e) => { e.stopPropagation(); if (confirm("确定删除？")) deleteRow(expandedTable, ri); }}
                                   className="text-[10px] text-[var(--s-red)] hover:underline">删除</button>
                               )}</td>
@@ -1070,7 +1114,8 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
         }
 
         const handleDrawerSave = async () => {
-          if (!projectSchema) return;
+          if (!projectSchema) { toast.error("无法保存：项目Schema未加载"); return; }
+          if (!canEdit) { toast.error(PERM_DENIED_MSG); return; }
           const rowId = isNew ? null : record.id;
           try {
             const url = "/api/project-data";
@@ -1078,7 +1123,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
             const body: Record<string, unknown> = isNew
               ? { projectSchema, tableCode: drawerTableCode, data: drawerEditData }
               : { projectSchema, tableCode: drawerTableCode, rowId, data: drawerEditData };
-            const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            const res = await fetch(url, { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
             if (res.ok) {
               const json = await res.json();
               const saved = json.data || drawerEditData;
@@ -1093,9 +1138,19 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                 onRecordsUpdate?.(drawerTableCode, updated);
               }
               onDataChange?.();
+              toast.success(isNew ? "添加成功" : "保存成功");
               closeDrawer();
+            } else {
+              const errText = await res.text();
+              let errMsg = errText;
+              try { const parsed = JSON.parse(errText); errMsg = parsed.error || errText; } catch {}
+              console.error("抽屉表单保存失败", res.status, errText);
+              toast.error(`保存失败: ${errMsg}`);
             }
-          } catch {}
+          } catch (e: any) {
+            console.error("抽屉表单保存异常", e);
+            toast.error(`保存异常: ${e?.message || "未知错误"}`);
+          }
         };
 
         const handlePrint = () => {
@@ -1219,8 +1274,10 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                 <div className="flex-1" />
                 {!drawerEditing ? (
                   <>
-                    <button onClick={() => { setDrawerEditing(true); const init: Record<string,string> = {}; cols.forEach(c => { init[c.name] = String(record[c.name] ?? ""); }); setDrawerEditData(init); }}
-                      className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-orange)", color: "var(--s-orange)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>编辑</button>
+                    {canEdit && (
+                      <button onClick={() => { setDrawerEditing(true); const init: Record<string,string> = {}; cols.forEach(c => { init[c.name] = String(record[c.name] ?? ""); }); setDrawerEditData(init); }}
+                        className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-orange)", color: "var(--s-orange)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>编辑</button>
+                    )}
                     <button onClick={async () => {
                       if (!projectSchema || !record.id) return;
                       await fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=${encodeURIComponent(drawerTableCode)}&rowId=${record.id}`, { method: "DELETE", headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });

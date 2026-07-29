@@ -382,11 +382,12 @@ export function ProjectDetail({
 }: ProjectDetailProps) {
   const { token, user: currentUser } = useAuth();
 
-  const PERM_DENIED_MSG = "没有编辑权限，仅超级管理员、项目经理和项目成员可编辑";
+  const PERM_DENIED_MSG = "没有编辑权限，仅超级管理员、项目创建人、项目经理和项目成员可编辑";
   const canEdit = useMemo(() => {
     if (!currentUser) return false;
     if (currentUser.role === "super_admin") return true;
     const p = project as Record<string, any>;
+    if (currentUser.id && currentUser.id === (p.created_by || "")) return true;
     if (currentUser.name && currentUser.name === (p.role_project_manager || "")) return true;
     const members = Array.isArray(p.members) ? p.members : [];
     return members.some((m: any) => m.user_id === currentUser.id);
@@ -925,10 +926,13 @@ export function ProjectDetail({
   // 开始编辑单元格
   const startEdit = (tableCode: string, rowId: string, column: string, value: unknown) => {
     if (!canEdit) { toast.error(PERM_DENIED_MSG); return; }
-    if (isCellReadonly(tableCode, rowId, column)) return;
+    if (isCellReadonly(tableCode, rowId, column)) { return; }
     setEditingCell({ tableCode, rowId, column });
     setEditValue(String(value ?? ""));
   };
+
+  // 新建行的 data_source 默认为 "manual"，始终允许编辑
+  // 从采购模块同步的数据 _readonly 可能为 true，由 isCellReadonly 控制
 
   // 简易编辑入口（自动从数据中取值）
   // 判断某列在某行是否只读（AND/OR 模式）
@@ -943,8 +947,12 @@ export function ProjectDetail({
     const rowReadonly = row?._readonly === true;
     const isOrMode = table.readonly_mode === "or";
 
-    if (isOrMode) return true;      // OR 模式: 列只读即锁定
-    return rowReadonly;             // AND 模式: 列只读 + 行只读才锁定
+    // OR 模式 & AND 模式统一逻辑：仅当 列只读 AND 行只读 同时满足才锁定
+    // 用户手动添加的数据 _readonly 默认为 false，始终可二次编辑
+    if (rowReadonly && col.readonly) return true;
+    // OR 模式额外：如果行被标记为只读，所有列都锁定
+    if (isOrMode && rowReadonly) return true;
+    return false;
   };
 
   // 判断整行是否全部锁定（用于决定是否隐藏编辑按钮）

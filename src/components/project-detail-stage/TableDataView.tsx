@@ -32,12 +32,15 @@ interface TableDataViewProps {
 // 判断列是否可编辑
 function isColEditable(col: { type: string; readonly?: boolean }, row?: Record<string, unknown>, tableDef?: TableDataViewProps["tableDef"]) {
   if (!["text", "number", "date", "textarea", "select", "multiple_select", "procurement_module", "user"].includes(col.type)) return false;
+  const colReadonly = col.readonly === true;
+  const rowReadonly = row?._readonly === true;
   const isOrMode = tableDef?.readonly_mode === "or";
   if (isOrMode) {
-    if (row?._readonly) return false;
-    if (col.readonly) return false;
+    // OR: 列只读 OR 行只读 → 锁定
+    if (colReadonly || rowReadonly) return false;
   } else {
-    if (col.readonly && row?._readonly) return false;
+    // AND（默认）: 列只读 AND 行只读 → 锁定
+    if (colReadonly && rowReadonly) return false;
   }
   return true;
 }
@@ -87,7 +90,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
       .catch(() => setLoading(false));
   }, [projectSchema, tableCode]);
 
-  const PERM_DENIED_MSG = "没有编辑权限，仅超级管理员、项目经理和项目成员可编辑";
+  const PERM_DENIED_MSG = "没有编辑权限，仅超级管理员、项目创建人、项目经理和项目成员可编辑";
 
   const saveEdit = async (value?: string) => {
     if (!canEdit) { toast.error(PERM_DENIED_MSG); setEditingCell(null); return; }
@@ -294,7 +297,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
       const result = col.calc_operator === "-" ? (l - r) : col.calc_operator === "*" ? (l * r) : col.calc_operator === "/" ? (r ? l / r : 0) : (l + r);
       return <span className="font-mono text-xs" style={{ color: "var(--s-text)" }}>{String(result)}</span>;
     }
-    const rawVal = String(row[col.name] ?? "—");
+    const rawVal = (row[col.name] != null && row[col.name] !== "") ? String(row[col.name]) : "—";
     const val = col.type === "date" && rawVal !== "—" ? fmtDate(rawVal) : rawVal;
     const editable = isColEditable(col, row, tableDef);
     const isEditing = editingCell?.rowIdx === ri && editingCell?.colName === col.name;
@@ -359,7 +362,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
         style={{ color: "var(--s-text)" }}
         onClick={(e) => { if (editable) { e.stopPropagation(); setEditingCell({ rowIdx: ri, colName: col.name }); setEditValue(rawVal === "—" ? "" : rawVal); } }}
         title={editable ? "点击编辑" : "只读-该记录由管理员设置"}>
-        {displayVal}
+        {rawVal === "—" ? (editable ? <span className="text-gray-400 cursor-pointer">点击编辑</span> : "—") : displayVal}
       </span>
     );
   };
@@ -422,7 +425,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
       {/* 表格/操作 */}
       <div className="px-16 py-6">
         <div className="flex items-center gap-2 mb-3 flex-wrap">
-          {(tableDef?.allow_add !== false) && (
+          {canEdit && tableDef?.allow_add !== false && (
             <button onClick={addRow}
               className="inline-flex items-center gap-1 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border border-[var(--s-green)] text-[var(--s-green)] cursor-pointer hover:bg-[rgba(43,138,62,.06)]"
               style={{ fontFamily: "var(--font-mono, monospace)" }}>
@@ -494,7 +497,7 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
                     <td key={col.name} className="px-4 py-3 text-xs">{renderValue(col, row, ri)}</td>
                   ))}
                   <td className="px-2 py-3">
-                    {records[ri].allow_delete !== false && !row._readonly && (
+                    {canEdit && records[ri].allow_delete !== false && !row._readonly && (
                       <button onClick={(e) => { e.stopPropagation(); deleteRow(ri); }}
                         className="text-[10px] text-[var(--s-red)] hover:underline">删除</button>
                     )}
@@ -542,19 +545,22 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
         }
         const closeDrawer = () => { setDrawerOpen(false); setDrawerEditing(false); };
         const handleDrawerSave = async () => {
-          if (!projectSchema) return;
+          if (!projectSchema) { console.error("TableDataView drawer: projectSchema missing"); return; }
           try {
             const url = "/api/project-data";
             const method = isNew ? "POST" : "PUT";
             const body = isNew ? { projectSchema, tableCode, data: drawerEditData } : { projectSchema, tableCode, rowId: record.id, data: drawerEditData };
-            const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            const res = await fetch(url, { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
             if (res.ok) {
               const json = await res.json();
               if (isNew) setRecords(prev => [...prev, json.data || drawerEditData]);
               else setRecords(prev => { const u = [...prev]; u[drawerRowIdx] = { ...u[drawerRowIdx], ...drawerEditData }; return u; });
               closeDrawer();
+            } else {
+              const errText = await res.text();
+              console.error("TableDataView 抽屉保存失败", res.status, errText);
             }
-          } catch {}
+          } catch (e) { console.error("TableDataView 抽屉保存异常", e); }
         };
         const handlePrint = () => {
           const w = window.open("", "_blank", "width=800,height=600");
@@ -631,8 +637,10 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
                 <div className="flex-1" />
                 {!drawerEditing ? (
                   <>
-                    <button onClick={() => { setDrawerEditing(true); const init: Record<string,string> = {}; cols.forEach(c => { init[c.name] = String(record[c.name]??""); }); setDrawerEditData(init); }} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-orange)", color: "var(--s-orange)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>编辑</button>
-                    {!isNew && <button onClick={() => { deleteRow(drawerRowIdx); closeDrawer(); }} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-red)", color: "var(--s-red)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>删除</button>}
+                    {canEdit && (
+                      <button onClick={() => { setDrawerEditing(true); const init: Record<string,string> = {}; cols.forEach(c => { init[c.name] = String(record[c.name]??""); }); setDrawerEditData(init); }} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-orange)", color: "var(--s-orange)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>编辑</button>
+                    )}
+                    {!isNew && canEdit && record.allow_delete !== false && !record._readonly && <button onClick={() => { deleteRow(drawerRowIdx); closeDrawer(); }} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] border cursor-pointer" style={{ borderColor: "var(--s-red)", color: "var(--s-red)", background: "var(--s-surface)", fontFamily: "var(--font-mono, monospace)" }}>删除</button>}
                   </>
                 ) : (
                   <>

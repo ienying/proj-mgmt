@@ -39,13 +39,19 @@ export async function canEditProject(
 
   const proj = project as Record<string, unknown>;
 
-  // 3. 项目经理姓名匹配
+  // 3. 项目创建人匹配
+  const createdBy = String(proj.created_by || "");
+  if (createdBy && createdBy === userId) {
+    return { allowed: true, projectId };
+  }
+
+  // 4. 项目经理姓名匹配
   const pmName = String(proj.role_project_manager || "").trim();
   if (pmName && pmName === userName.trim()) {
     return { allowed: true, projectId };
   }
 
-  // 4. 检查是否是项目成员（project_members 表）
+  // 5. 检查是否是项目成员（project_members 表）
   const { data: members } = await client.rpc("dp_select", {
     p_table: "project_members",
   });
@@ -101,6 +107,12 @@ export async function canEditProjectBySchema(
   // 项目经理姓名匹配
   const pmName = String(project.role_project_manager || "").trim();
   if (pmName && pmName === userName.trim()) {
+    return { allowed: true, projectId };
+  }
+
+  // 检查是否是项目创建人
+  const createdBy2 = String(project.created_by || "");
+  if (createdBy2 && createdBy2 === userId) {
     return { allowed: true, projectId };
   }
 

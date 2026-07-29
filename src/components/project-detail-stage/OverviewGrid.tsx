@@ -4,6 +4,7 @@ interface TableDef {
   table_code: string;
   table_name: string;
   apply_project_stages: string[];
+  stage_display_mode?: string;
   stage_progress_column?: string;
   stage_progress_target?: string;
 }
@@ -28,7 +29,8 @@ export function OverviewGrid({ stages = [], tableDefs = [], tableRecords = {} }:
         style={{ gridTemplateColumns: `repeat(${stages.length}, 1fr)`, backgroundColor: "var(--s-border)" }}>
         {stages.map((stage) => {
           const phaseTables = tableDefs.filter((def) =>
-            def.apply_project_stages?.includes(stage.code)
+            def.apply_project_stages?.includes(stage.code) &&
+            (!def.stage_display_mode || def.stage_display_mode === "phase" || def.stage_display_mode === "both")
           );
           let totalRecords = 0;
           let completedRecords = 0;

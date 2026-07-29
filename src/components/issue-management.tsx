@@ -280,13 +280,14 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
   // 数据加载
   const loadDicts = useCallback(async () => {
     try {
+      const token = localStorage.getItem("auth_token");
       const [catRes, urgRes, warRes, userRes, modRes, projRes] = await Promise.all([
         fetch("/api/issue-dicts/categories"),
         fetch("/api/issue-dicts/urgency"),
         fetch("/api/issue-dicts/warranty"),
-        fetch("/api/users"),
+        fetch("/api/users", { headers: token ? { Authorization: `Bearer ${token}` } : {} as Record<string, string> }),
         fetch("/api/dicts?type=product_module_types"),
-        fetch("/api/projects"),
+        fetch("/api/projects", { headers: token ? { Authorization: `Bearer ${token}` } : {} as Record<string, string> }),
       ]);
       if (catRes.ok) { const d = await catRes.json(); setCategories(d.data || []); }
       if (urgRes.ok) { const d = await urgRes.json(); setUrgencyList(d.data || []); }

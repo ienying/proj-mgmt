@@ -454,6 +454,9 @@ export function ProjectForm({
   const [softwareAmount, setSoftwareAmount] = useState("");
   const [hardwareAmount, setHardwareAmount] = useState("");
   const [procurementSearch, setProcurementSearch] = useState("");
+  const [procurementProductFilter, setProcurementProductFilter] = useState("");
+  const [procurementScopeFilter, setProcurementScopeFilter] = useState("");
+  const [procurementVendorFilter, setProcurementVendorFilter] = useState("");
 
   // 采购模块 Excel 导入文件引用
   const procurementFileRef = useRef<HTMLInputElement>(null);
@@ -1346,11 +1349,12 @@ export function ProjectForm({
     // 编辑模式检查权限
     if (isEditMode && initialData) {
       const isSuperAdmin = currentUser?.role === "super_admin";
+      const isCreator = currentUser?.id && (initialData as Record<string, unknown>).created_by === currentUser.id;
       const isPM = currentUser?.name && (initialData as Record<string, unknown>).role_project_manager === currentUser.name;
       const members = ((initialData as Record<string, unknown>).members as Array<Record<string, unknown>>) || [];
       const isMember = members.some((m: Record<string, unknown>) => m.user_id === currentUser?.id);
-      if (!isSuperAdmin && !isPM && !isMember) {
-        toast.error("没有编辑权限，仅超级管理员、项目经理和项目成员可编辑");
+      if (!isSuperAdmin && !isCreator && !isPM && !isMember) {
+        toast.error("没有编辑权限，仅超级管理员、项目创建人、项目经理和项目成员可编辑");
         return;
       }
     }
@@ -2310,23 +2314,55 @@ export function ProjectForm({
                     className="h-8 text-sm"
                   />
                 </div>
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  <select
+                    value={procurementProductFilter}
+                    onChange={(e) => setProcurementProductFilter(e.target.value)}
+                    className="h-8 text-sm border border-input rounded-md bg-transparent px-2 text-muted-foreground"
+                  >
+                    <option value="">产品名称筛选</option>
+                    {[...new Set(productModules.map(m => m.product_name).filter(Boolean))].sort().map(v => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={procurementScopeFilter}
+                    onChange={(e) => setProcurementScopeFilter(e.target.value)}
+                    className="h-8 text-sm border border-input rounded-md bg-transparent px-2 text-muted-foreground"
+                  >
+                    <option value="">范围筛选</option>
+                    {[...new Set(productModules.map(m => m.scope).filter(Boolean))].sort().map(v => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={procurementVendorFilter}
+                    onChange={(e) => setProcurementVendorFilter(e.target.value)}
+                    className="h-8 text-sm border border-input rounded-md bg-transparent px-2 text-muted-foreground"
+                  >
+                    <option value="">厂家筛选</option>
+                    {[...new Set(productModules.map(m => m.vendor).filter(Boolean))].sort().map(v => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
+                </div>
                 {(() => {
-                  const filtered = procurementSearch
-                    ? productModules.filter(
-                        (m) =>
-                          m.module_name.toLowerCase().includes(procurementSearch.toLowerCase()) ||
-                          m.product_name.toLowerCase().includes(procurementSearch.toLowerCase())
-                      )
-                    : productModules;
+                  const filtered = productModules.filter((m) => {
+                    if (procurementSearch && !m.module_name.toLowerCase().includes(procurementSearch.toLowerCase()) && !m.product_name.toLowerCase().includes(procurementSearch.toLowerCase())) return false;
+                    if (procurementProductFilter && !(m.product_name || "").toLowerCase().includes(procurementProductFilter.toLowerCase())) return false;
+                    if (procurementScopeFilter && !(m.scope || "").toLowerCase().includes(procurementScopeFilter.toLowerCase())) return false;
+                    if (procurementVendorFilter && !(m.vendor || "").toLowerCase().includes(procurementVendorFilter.toLowerCase())) return false;
+                    return true;
+                  });
                   if (filtered.length === 0) {
                     return (
                       <div className="text-center py-6 text-slate-400 text-sm">
-                        {procurementSearch ? "未找到匹配模块" : "暂无可选模块"}
+                        {procurementSearch || procurementProductFilter || procurementScopeFilter || procurementVendorFilter ? "未找到匹配模块" : "暂无可选模块"}
                       </div>
                     );
                   }
                   return (
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-3 gap-3 max-h-[400px] overflow-y-auto pr-1">
                       {filtered.map((module) => (
                         <div
                           key={module.module_code}

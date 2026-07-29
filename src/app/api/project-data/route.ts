@@ -127,16 +127,17 @@ export async function POST(request: NextRequest) {
       allow_delete: data.allow_delete !== undefined ? data.allow_delete : true 
     };
 
-    // 构建插入 SQL
+    // 构建插入 SQL（使用唯一美元标签避免任何冲突）
+    const dq = `q_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
     const columns = Object.keys(dataWithMeta).map(k => `"${k}"`);
     const values = Object.values(dataWithMeta).map((v) => {
       if (v === null || v === undefined || v === "") return "NULL";
       if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
       if (typeof v === "number") return String(v);
       if (Array.isArray(v) || (typeof v === "object" && v !== null)) {
-        return `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`;
+        return `$${dq}$${JSON.stringify(v)}$${dq}$`;
       }
-      return `'${String(v).replace(/'/g, "''")}'`;
+      return `$${dq}$${String(v)}$${dq}$`;
     });
 
     const insertSQL = `
@@ -189,17 +190,19 @@ export async function PUT(request: NextRequest) {
 
     const safeSchema = projectSchema.includes('-') ? `"${projectSchema}"` : projectSchema.toLowerCase();
 
-    // 只读防护：根据表定义的 readonly_mode 过滤被锁定列
+    // 只读防护：根据表定义的 readonly_mode 过滤被锁定列（与前端 isColumnEditable 逻辑一致）
     let filteredData = data;
     try {
       const { data: tableDef } = await client.rpc("dp_select", { p_table: "data_table_definitions" });
-      const def = (tableDef as Array<{ table_code: string; columns_config: Array<{ name: string; readonly?: boolean }>; readonly_mode?: string }>)?.find(
+      const def = (tableDef as Array<{ table_code: string; columns_config: Array<{ name: string; type: string; readonly?: boolean }>; readonly_mode?: string }>)?.find(
         (t) => t.table_code === tableCode
       );
       if (def) {
-        const readonlyMode = (def as Record<string, unknown>).readonly_mode || "and";
-        const isOrMode = readonlyMode === "or";
-        const readonlyColNames = (def.columns_config || []).filter(c => c.readonly).map(c => c.name);
+        const isOrMode = (def as Record<string, unknown>).readonly_mode === "or";
+        // 严格 === true 与前端保持一致，但附件/视频列不受只读限制
+        const readonlyColNames = (def.columns_config || [])
+          .filter(c => c.readonly === true && c.type !== "attachment" && c.type !== "video")
+          .map(c => c.name);
 
         // 获取当前记录的行只读状态
         let rowReadonly = false;
@@ -211,12 +214,14 @@ export async function PUT(request: NextRequest) {
           rowReadonly = rows?.[0]?._readonly === true;
         } catch { /* _readonly 列不存在则忽略 */ }
 
-        // 决定锁定列
+        // 决定锁定列（与前端 PhaseDetail isColumnEditable 一致）
         const lockedColumns = (() => {
           if (isOrMode) {
+            // OR: 行只读 → 全部锁；列只读 → 仅锁该列
             if (rowReadonly) return (def.columns_config || []).map(c => c.name);
             return readonlyColNames;
           }
+          // AND（默认）: 列只读 AND 行只读 → 锁该列
           return rowReadonly ? readonlyColNames : [];
         })();
 
@@ -228,36 +233,21 @@ export async function PUT(request: NextRequest) {
       }
     } catch { /* 只读防护失败不影响主流程 */ }
 
-    // 构建更新 SQL
-    const setClauses = Object.entries(filteredData).map(([key, value]) => {
-      if (value === null || value === undefined || value === "") {
-        return `"${key}" = NULL`;
-      }
-      if (typeof value === "boolean") {
-        return `"${key}" = ${value ? "TRUE" : "FALSE"}`;
-      }
-      if (typeof value === "number") {
-        return `"${key}" = ${value}`;
-      }
-      if (Array.isArray(value) || (typeof value === "object" && value !== null)) {
-        return `"${key}" = '${JSON.stringify(value).replace(/'/g, "''")}'::jsonb`;
-      }
-      return `"${key}" = '${String(value).replace(/'/g, "''")}'`;
-    });
+    // 使用 dp_update 直接传 JSON 数据，避免 SQL 拼接转义问题
+    if (Object.keys(filteredData).length === 0) {
+      return NextResponse.json({ error: "所有更新列均为只读，已跳过" }, { status: 403 });
+    }
 
-    const updateSQL = `
-      UPDATE ${safeSchema}."${tableCode}"
-      SET ${setClauses.join(", ")}, updated_at = NOW()
-      WHERE id = '${rowId}'
-      RETURNING *
-    `;
-
-    const { data: result, error } = await client.rpc("execute_sql", {
-      p_sql: updateSQL,
+    const plainSchema = projectSchema.includes('-') ? projectSchema : projectSchema.toLowerCase();
+    const { data: result, error } = await client.rpc("dp_update", {
+      p_table: `${plainSchema}.${tableCode}`,
+      p_id: rowId,
+      p_data: filteredData,
     });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("❌ [PUT dp_update ERROR]", JSON.stringify(error));
+      return NextResponse.json({ error: error.message || String(error) }, { status: 500 });
     }
 
     // 编辑时同步引用关系：检查被更新的表是否有引用关系
@@ -400,7 +390,7 @@ async function syncEditReferences(
           if (value === null || value === undefined) return `"${key}" = NULL`;
           if (typeof value === "boolean") return `"${key}" = ${value ? "TRUE" : "FALSE"}`;
           if (typeof value === "number") return `"${key}" = ${value}`;
-          return `"${key}" = '${String(value).replace(/'/g, "''")}'`;
+          return `"${key}" = $dquote$${String(value)}$dquote$`;
         });
         await client.rpc("execute_sql", {
           p_sql: `UPDATE ${safeSchema}."${ref.source_table_code}" SET ${setClauses.join(", ")}, updated_at = NOW() WHERE id = '${srcRows[0].id}'`,
@@ -444,7 +434,7 @@ async function syncEditReferences(
           if (value === null || value === undefined) return `"${key}" = NULL`;
           if (typeof value === "boolean") return `"${key}" = ${value ? "TRUE" : "FALSE"}`;
           if (typeof value === "number") return `"${key}" = ${value}`;
-          return `"${key}" = '${String(value).replace(/'/g, "''")}'`;
+          return `"${key}" = $dquote$${String(value)}$dquote$`;
         });
         await client.rpc("execute_sql", {
           p_sql: `UPDATE ${safeSchema}."${def.table_code}" SET ${setClauses.join(", ")}, updated_at = NOW() WHERE id = '${tgtRows[0].id}'`,

@@ -793,7 +793,8 @@ function DispatchersConfig() {
 
   const loadUsers = async () => {
     try {
-      const res = await fetch("/api/users");
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch("/api/users", { headers: token ? { Authorization: `Bearer ${token}` } : {} as Record<string, string> });
       const json = await res.json();
       if (json.data) {
         setUsers((json.data || []).map((u: Record<string, unknown>) => ({
@@ -955,7 +956,8 @@ function ExternalReceiversConfig() {
 
   const loadUsers = async () => {
     try {
-      const res = await fetch("/api/users");
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch("/api/users", { headers: token ? { Authorization: `Bearer ${token}` } : {} as Record<string, string> });
       const json = await res.json();
       if (json.data) {
         setUsers((json.data || []).map((u: Record<string, unknown>) => ({

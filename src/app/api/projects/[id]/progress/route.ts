@@ -108,3 +108,50 @@ export async function POST(
     return NextResponse.json({ error: "创建进展记录失败" }, { status: 500 });
   }
 }
+
+// PUT: 编辑已有的进展同步记录
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const authResult = await verifyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+
+    const { id: projectId } = await params;
+    const body = await request.json();
+    const { progressId, content } = body;
+
+    if (!progressId || !content) {
+      return NextResponse.json({ error: "progressId 和 content 不能为空" }, { status: 400 });
+    }
+
+    const client = await createServerClient();
+
+    const permCheck = await canEditProject(projectId, authResult.userId, authResult.role, authResult.userName);
+    if (!permCheck.allowed) {
+      return NextResponse.json({ error: permCheck.reason || "无权限编辑进展" }, { status: 403 });
+    }
+
+    const projectSchema = await getProjectSchema(client, projectId);
+    if (!projectSchema) {
+      return NextResponse.json({ error: "项目不存在" }, { status: 404 });
+    }
+
+    const { data, error } = await client.rpc("dp_update", {
+      p_table: `${projectSchema}.progress_updates`,
+      p_id: progressId,
+      p_data: { content },
+    });
+
+    if (error) {
+      console.error("Update progress error:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ data });
+  } catch (err) {
+    console.error("Update progress error:", err);
+    return NextResponse.json({ error: "编辑进展记录失败" }, { status: 500 });
+  }
+}

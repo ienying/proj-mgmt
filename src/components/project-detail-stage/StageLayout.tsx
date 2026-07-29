@@ -36,10 +36,11 @@ export function StageLayout({
   const canEdit = useMemo(() => {
     if (!currentUser) return false;
     if (currentUser.role === "super_admin") return true;
+    if (currentUser.id && currentUser.id === (project.created_by || "")) return true;
     if (currentUser.name && currentUser.name === (project.role_project_manager || "")) return true;
     const members = Array.isArray(project.members) ? project.members : [];
     return members.some((m: any) => m.user_id === currentUser.id);
-  }, [currentUser, project.role_project_manager, project.members]);
+  }, [currentUser, project.role_project_manager, project.members, project.created_by]);
   const [activePanel, setActivePanel] = useState<PanelKey>("scope");
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
   const [activeModule, setActiveModule] = useState("scope");
@@ -54,6 +55,8 @@ export function StageLayout({
   const [issueRiskOpen, setIssueRiskOpen] = useState(false);
   const [progressContent, setProgressContent] = useState("");
   const [progressList, setProgressList] = useState<Array<{ id: string; content: string; user_name: string; created_at: string }>>([]);
+  const [editingProgressId, setEditingProgressId] = useState<string | null>(null);
+  const [editProgressContent, setEditProgressContent] = useState("");
   const [operationLogs, setOperationLogs] = useState<Array<{ id: string; action: string; user_name: string; target_name: string; detail: string; created_at: string }>>([]);
 
   // 获取规范管理的数据表定义
@@ -261,6 +264,23 @@ export function StageLayout({
       fetchOperations();
     } catch { /* ignore */ }
   }, [progressContent, project.id, fetchProgress, fetchOperations, token]);
+
+  const handleUpdateProgress = useCallback(async (progressId: string) => {
+    if (!editProgressContent.trim()) return;
+    try {
+      await fetch(`/api/projects/${project.id}/progress`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ progressId, content: editProgressContent.trim() }),
+      });
+      setEditingProgressId(null);
+      setEditProgressContent("");
+      fetchProgress();
+    } catch { /* ignore */ }
+  }, [editProgressContent, project.id, fetchProgress, token]);
 
   useEffect(() => {
     fetchProgress();
@@ -593,13 +613,36 @@ export function StageLayout({
                   ) : (
                     <div className="space-y-1">
                       {progressList.map((item, i) => (
-                        <div key={item.id || i} className="relative pl-5 pb-3 text-xs" style={{ color: "var(--s-text-secondary)" }}>
+                        <div key={item.id || i} className="relative pl-5 pb-3 text-xs group" style={{ color: "var(--s-text-secondary)" }}>
                           <div className="absolute left-1 top-1.5 w-[7px] h-[7px] rounded-full opacity-50" style={{ backgroundColor: "var(--s-orange)" }} />
                           {i < progressList.length - 1 && <div className="absolute left-[3.5px] top-[10px] bottom-0 w-[2px]" style={{ backgroundColor: "var(--s-border)" }} />}
-                          <div className="text-[9px] mb-0.5 tracking-[0.3px]" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+                          <div className="text-[9px] mb-0.5 tracking-[0.3px] flex items-center gap-1" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
                             {item.created_at ? new Date(item.created_at).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
+                            {canEdit && (
+                              <button
+                                onClick={() => { setEditingProgressId(item.id); setEditProgressContent(item.content); }}
+                                className="text-[9px] opacity-0 group-hover:opacity-100 transition-opacity hover:text-[var(--s-orange)]"
+                                style={{ color: "var(--s-text-muted)" }}
+                              >✎ 编辑</button>
+                            )}
                           </div>
-                          <div style={{ whiteSpace: "pre-wrap" }}>{item.content}</div>
+                          {editingProgressId === item.id ? (
+                            <div className="flex flex-col gap-1.5">
+                              <textarea value={editProgressContent} onChange={(e) => setEditProgressContent(e.target.value)}
+                                className="w-full border p-1.5 text-xs resize-y min-h-[50px] font-sans"
+                                style={{ borderColor: "var(--s-border)", backgroundColor: "var(--s-surface)", color: "var(--s-text)" }} />
+                              <div className="flex gap-1.5">
+                                <button onClick={() => handleUpdateProgress(item.id)}
+                                  className="text-[9px] px-2 py-0.5 font-semibold uppercase border"
+                                  style={{ borderColor: "var(--s-orange)", color: "var(--s-orange)", backgroundColor: "var(--s-surface)" }}>保存</button>
+                                <button onClick={() => { setEditingProgressId(null); setEditProgressContent(""); }}
+                                  className="text-[9px] px-2 py-0.5 font-semibold uppercase border"
+                                  style={{ borderColor: "var(--s-border)", color: "var(--s-text-muted)", backgroundColor: "var(--s-surface)" }}>取消</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ whiteSpace: "pre-wrap" }}>{item.content}</div>
+                          )}
                         </div>
                       ))}
                     </div>

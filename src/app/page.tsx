@@ -142,6 +142,7 @@ export default function HomePage() {
     status: string;
     created_at: string;
     project_status?: string | null;
+    created_by?: string | null;
     customer_info?: { company_name?: string; contact_person?: string; contact_phone?: string; contact_email?: string; contact_persons?: Array<{ name?: string; phone?: string }> } | null;
     customer_location?: { province?: string; city?: string; district?: string; town?: string; village?: string } | null;
     customer_type?: string[] | null;
@@ -308,6 +309,7 @@ export default function HomePage() {
           product_name: item.product_name || "",
           vendor: item.vendor || "",
           model_spec: item.model_spec || "",
+          scope: item.scope || "",
         }));
         setProcurementModules(modules);
       }
@@ -652,9 +654,11 @@ export default function HomePage() {
                     project_schema: project.project_schema || "",
                     status: project.status || "active",
                     created_at: project.created_at || "",
+                    created_by: (project as any).created_by || null,
                     customer_info: project.customer_info as { company_name?: string; contact_person?: string; contact_phone?: string; contact_email?: string } | undefined,
                     channel_info: project.channel_info as Array<{ company_name: string; contact_person?: string; contact_phone?: string }> | undefined,
                     procurement_modules: project.procurement_modules as string[] | undefined,
+                    members: (project as any).members as any[] | undefined,
                     description: project.description,
                   });
                   if (layoutMode === null) {

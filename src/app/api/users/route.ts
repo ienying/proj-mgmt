@@ -48,10 +48,9 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 普通用户只看到自己
-    const self = rows.find((u) => u.id === authResult.userId);
+    // 普通用户看到全部用户（脱敏后），用于人员选择器等场景
     return NextResponse.json({
-      data: self ? [sanitizeUser(self, false)] : [],
+      data: rows.map((u) => sanitizeUser(u, false)),
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
