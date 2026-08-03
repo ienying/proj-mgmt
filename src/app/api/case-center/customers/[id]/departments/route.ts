@@ -51,7 +51,7 @@ export async function PUT(
       };
 
       const textFields = [
-        "daily_work", "workflow", "pain_points", "tools", "expectations", "department_summary", "department_name",
+        "daily_work", "workflow", "pain_points", "tools", "expectations", "group_names", "department_summary", "department_name",
       ];
 
       for (const field of textFields) {

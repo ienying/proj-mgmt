@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Download, School, TrendingUp, Users, FileText, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LeftFloatNav, type NavSection } from "./left-float-nav";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -147,10 +148,45 @@ export function ProductCases() {
     );
   }
 
+  const pcNavSections: NavSection[] = [
+    { id: "pc-ranking", icon: "📊", label: "产品排名" },
+    { id: "pc-dist", icon: "🗺", label: "分布分析" },
+    { id: "pc-leaderboard-sec", icon: "🏆", label: "使用率排行" },
+    { id: "pc-schools-sec", icon: "📋", label: "学校列表" },
+  ];
+
   return (
-    <div className="p-4 space-y-4">
+    <div>
+      <LeftFloatNav sections={pcNavSections} />
+      <div className="max-w-[820px] mx-auto px-6 pb-16 pt-4">
+        {/* Newspaper masthead */}
+        <div className="text-center pt-8 pb-5 border-b-[3px] border-double border-red-700 mb-6">
+          <h1 className="text-4xl font-black text-red-700 tracking-[6px]" style={{fontFamily:"STSong, Songti SC, Noto Serif SC, serif"}}>
+            产品案例
+          </h1>
+          <p className="text-[11px] text-amber-700/60 tracking-[3px] mt-1">
+            PRODUCT CASE ANALYTICS
+          </p>
+          <p className="text-xs text-gray-400 mt-2">按产品目录维度分析模块覆盖率、使用率与落地情况</p>
+        </div>
+
+        {/* Stats row */}
+        <div className="grid grid-cols-4 gap-3 mb-5">
+          {[
+            { n: totalSchools, l: "落地学校" },
+            { n: avgUsage + "%", l: "平均使用率" },
+            { n: totalActiveUsers, l: "活跃用户" },
+            { n: totalMaterials, l: "素材总数" },
+          ].map((s, i) => (
+            <div key={i} className="bg-[#fdfcf8] border border-[#d1c7b7] p-3 text-center">
+              <div className="text-2xl font-bold text-red-900">{s.n}</div>
+              <div className="text-[10px] text-gray-400 tracking-wide mt-0.5">{s.l}</div>
+            </div>
+          ))}
+        </div>
+
       {/* 筛选栏 */}
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center gap-3 flex-wrap mb-4">
         <Select value={department} onValueChange={(v) => { setDepartment(v); setModule("all"); }}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="选择科室" />
@@ -187,46 +223,6 @@ export function ProductCases() {
         <Button variant="outline" size="sm" className="ml-auto" onClick={fetchData}>
           刷新
         </Button>
-      </div>
-
-      {/* 统计卡片 */}
-      <div className="grid grid-cols-4 gap-3">
-        <Card>
-          <CardContent className="p-3 flex items-center gap-3">
-            <School className="w-8 h-8 text-blue-500" />
-            <div>
-              <div className="text-lg font-bold">{totalSchools}</div>
-              <div className="text-xs text-muted-foreground">落地学校</div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 flex items-center gap-3">
-            <TrendingUp className="w-8 h-8 text-green-500" />
-            <div>
-              <div className="text-lg font-bold">{avgUsage}%</div>
-              <div className="text-xs text-muted-foreground">平均使用率</div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 flex items-center gap-3">
-            <Users className="w-8 h-8 text-orange-500" />
-            <div>
-              <div className="text-lg font-bold">{totalActiveUsers.toLocaleString()}</div>
-              <div className="text-xs text-muted-foreground">活跃用户</div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 flex items-center gap-3">
-            <FileText className="w-8 h-8 text-purple-500" />
-            <div>
-              <div className="text-lg font-bold">{totalMaterials}</div>
-              <div className="text-xs text-muted-foreground">素材总数</div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* 模块统计 */}
@@ -408,8 +404,8 @@ export function ProductCases() {
         const total = provinceDistribution.reduce((sum, p) => sum + Number(p.school_count), 0);
         const maxCount = Math.max(...provinceDistribution.map((p) => Number(p.school_count)));
         return (
-          <Card>
-            <CardContent className="p-4">
+          <div className="bg-[#fdfcf8] border border-[#d1c7b7]">
+            <div className="p-4">
               <h3 className="text-sm font-medium mb-3 flex items-center gap-1.5">
                 <BarChart3 className="w-4 h-4 text-muted-foreground" />
                 省份画像分布
@@ -456,8 +452,8 @@ export function ProductCases() {
                 <span>■ 块面积 = 画像数量</span>
                 <span>颜色深浅 = 数量多/少</span>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         );
       })()}
 
@@ -480,8 +476,8 @@ export function ProductCases() {
         ];
 
         return (
-          <Card>
-            <CardContent className="p-4">
+          <div className="bg-[#fdfcf8] border border-[#d1c7b7]">
+            <div className="p-4">
               <h3 className="text-sm font-medium mb-3 flex items-center gap-1.5">
                 <School className="w-4 h-4 text-muted-foreground" />
                 学校分布地图
@@ -527,16 +523,16 @@ export function ProductCases() {
                   <span className="inline-block w-3 h-3 rounded bg-indigo-800" /> 多
                 </span>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         );
       })()}
 
       {/* 学校类型分布 + 使用率排行 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* 学校类型分布 */}
-        <Card>
-          <CardContent className="p-4">
+        <div className="bg-[#fdfcf8] border border-[#d1c7b7]">
+          <div className="p-4">
             <h3 className="text-sm font-medium mb-3">学校类型分布</h3>
             {typeDistribution.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">暂无数据</p>
@@ -557,12 +553,12 @@ export function ProductCases() {
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* 使用率排行 */}
-        <Card>
-          <CardContent className="p-4">
+        <div className="bg-[#fdfcf8] border border-[#d1c7b7]">
+          <div className="p-4">
             <h3 className="text-sm font-medium mb-3">使用率排行</h3>
             <div className="space-y-2 max-h-[300px] overflow-y-auto">
               {ranking.slice(0, 10).map((r, i) => (
@@ -584,8 +580,8 @@ export function ProductCases() {
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* 学校列表 */}
@@ -672,6 +668,7 @@ export function ProductCases() {
           onClose={() => setShowCompare(false)}
         />
       )}
+    </div>
     </div>
   );
 }

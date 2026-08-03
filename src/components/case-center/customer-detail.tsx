@@ -1,1030 +1,400 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Pencil, FileText, History, Building2, Users, Target, AlertCircle, CheckCircle2, XCircle, Download, Play, FileText as FileIcon, Columns2, MapPin, Wifi, Server, BarChart3 } from "lucide-react";
+import { History, Pencil, AlertCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { SCHOOL_TYPE_DEPARTMENTS } from "@/lib/case-center-constants";
 import { toast } from "sonner";
 import { VersionHistory } from "./version-history";
-import { WeeklyReportForm } from "./weekly-report-form";
+// WeeklyReportForm removed
+import { LeftFloatNav, type NavSection } from "./left-float-nav";
 
+interface CampusData {
+  name: string; type: string; address: string;
+  hardware?: Record<string, string>; network?: Record<string, string>;
+}
+interface SubSchoolData {
+  name: string; types: string; location: { district: string; address: string }; description: string;
+  hardware_info?: Record<string, string>; network_info?: Record<string, string>;
+  campus_mode?: string; campuses?: CampusData[];
+}
 interface CustomerData {
-  id: string;
-  school_name: string;
-  customer_types: string[];
-  school_type: string;
-  location: Record<string, string>;
-  description: string;
-  hardware_info: Record<string, unknown>;
-  network_info: Record<string, unknown>;
-  updated_at: string;
+  id: string; school_name: string; customer_types: string[]; school_type: string;
+  location: Record<string, string>; description: string;
+  hardware_info: Record<string, unknown>; network_info: Record<string, unknown>; updated_at: string;
+  campus_mode?: string; campuses?: CampusData[];
+  sub_schools?: SubSchoolData[];
 }
-
 interface DepartmentData {
-  id: string;
-  customer_id: string;
-  department_code: string;
-  department_name: string;
+  id: string; customer_id: string; department_code: string; department_name: string;
   personnel: Array<{ name: string; role: string; phone: string; attitude?: string }>;
-  daily_work: string;
-  workflow: string;
-  pain_points: string;
-  tools: string;
-  expectations: string;
-  department_summary: string;
-  metrics?: Array<{ indicator: string; value: string; source: string; period: string }>;
-  sort_order: number;
+  daily_work: string; workflow: string; pain_points: string; tools: string;
+  expectations: string; department_summary: string;
+  metrics?: Array<{ indicator: string; value: string; source: string; period: string }>; sort_order: number;
+  campus_id?: string; dept_scope?: string;
 }
-
 interface ModuleData {
-  id: string;
-  customer_department_id: string;
-  customer_id: string;
-  module_code: string;
-  module_name: string;
-  status: string;
-  usage_rate: number;
-  active_users: number;
-  effect: string;
-  issues: string;
-  current_practice: string;
-  collaborating_departments: string[];
+  id: string; customer_department_id: string; customer_id: string; module_code: string; module_name: string;
+  status: string; usage_rate: number; active_users: number; effect: string; issues: string;
+  current_practice: string; collaborating_departments: string[];
   materials: Array<{ key: string; name: string; size: number; type?: string }>;
-  department_name?: string;
-  department_code?: string;
-  sort_order: number;
+  department_name?: string; department_code?: string; sort_order: number;
 }
+interface CustomerDetailProps { customerId: string; onBack: () => void; onEdit: (id: string) => void; currentUser: { id: string; name: string }; }
 
-// 侧边栏导航项（macOS Dock 风格）
-function DockNavItem({
-  icon,
-  label,
-  active,
-  onClick,
-  badge,
-  dotColor,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active?: boolean;
-  onClick: () => void;
-  badge?: string;
-  dotColor?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="relative flex flex-col items-center py-0.5 px-1 w-full transition-all duration-200 group"
-      title={label}
-    >
-      {/* 选中指示点 */}
-      {active && (
-        <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-blue-500" />
-      )}
-      <div
-        className={cn(
-          "relative flex items-center justify-center rounded-2xl transition-all duration-200",
-          active
-            ? "scale-110 bg-white dark:bg-white shadow-xl shadow-blue-300/60 ring-2 ring-blue-300/50"
-            : "bg-white/80 dark:bg-zinc-200/80 group-hover:scale-105 group-hover:bg-white group-hover:shadow-lg group-hover:shadow-blue-200/50",
-        )}
-        style={{ width: 22, height: 22 }}
-      >
-        <span className="text-sm">{icon}</span>
-        {/* 状态圆点 */}
-        {dotColor && (
-          <div className={cn(
-            "absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-white dark:border-zinc-300",
-            dotColor
-          )} />
-        )}
-      </div>
-      <span className={cn(
-        "text-[9px] leading-none text-center truncate w-full",
-        active ? "text-blue-700 dark:text-blue-200 font-bold" : "text-slate-500 dark:text-slate-300"
-      )}>
-        {label.length > 6 ? label.slice(0, 6) : label}
-      </span>
-      {/* Tooltip */}
-      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 z-50 bg-white dark:bg-zinc-800 border rounded-xl shadow-xl p-3 w-52 pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-150 text-left">
-        <div className="text-sm font-semibold">{label}</div>
-        {badge && (
-          <div className="text-xs text-muted-foreground mt-0.5">{badge} 模块</div>
-        )}
-      </div>
-    </button>
-  );
-}
-
-interface CustomerDetailProps {
-  customerId: string;
-  onBack: () => void;
-  onEdit: (id: string) => void;
-  currentUser: { id: string; name: string };
-}
+// Section labels and keys
+const SECTIONS = [
+  { key: "daily_work", label: "日常核心工作" },
+  { key: "workflow", label: "业务流程" },
+  { key: "pain_points", label: "当前痛点" },
+  { key: "tools", label: "在用工具/系统" },
+  { key: "expectations", label: "信息化期望" },
+];
 
 export function CustomerDetail({ customerId, onBack, onEdit, currentUser }: CustomerDetailProps) {
   const [customer, setCustomer] = useState<CustomerData | null>(null);
   const [departments, setDepartments] = useState<DepartmentData[]>([]);
   const [modules, setModules] = useState<ModuleData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeDept, setActiveDept] = useState("overview");
   const [showVersionHistory, setShowVersionHistory] = useState(false);
-  const [showWeeklyReport, setShowWeeklyReport] = useState(false);
-  const [filterLandedOnly, setFilterLandedOnly] = useState(false);
-  const [compareDepts, setCompareDepts] = useState<string[]>([]);
-  const [showCompare, setShowCompare] = useState(false);
   const [projectLocation, setProjectLocation] = useState<Record<string, string> | null>(null);
-  const [locationSynced, setLocationSynced] = useState(false);
+  // Modal state — which dept + which section
+  const [modal, setModal] = useState<{ dept: DepartmentData; sectionKey: string; sectionLabel: string } | null>(null);
+  // Campus state
+  const [campusIndex, setCampusIndex] = useState(0);
+  // Sub-school state (教育局模式)
+  const [subSchoolIdx, setSubSchoolIdx] = useState<number | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [res, projRes] = await Promise.all([
-        fetch(`/api/case-center/customers/${customerId}`),
-        fetch("/api/projects"),
-      ]);
+      const token = localStorage.getItem("auth_token");
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const [res, projRes] = await Promise.all([fetch(`/api/case-center/customers/${customerId}`), fetch("/api/projects", { headers })]);
       if (res.ok) {
         const { data } = await res.json();
-        setCustomer(data.customer);
-        setDepartments(data.departments || []);
-        setModules(data.modules || []);
-        if (data.departments?.length > 0) {
-          setActiveDept(data.departments[0].department_code);
-        }
-
-        // 查找匹配项目，同步位置信息
+        setCustomer(data.customer); setDepartments(data.departments || []); setModules(data.modules || []);
         if (projRes.ok) {
           const projData = await projRes.json();
-          const projects = (projData.data || []) as Array<{
-            project_name: string;
-            customer_location: Record<string, string>;
-            longitude: string;
-            latitude: string;
-          }>;
-          const matched = projects.find(
-            (p) => p.project_name === data.customer.school_name
-          );
-          if (matched) {
-            setProjectLocation({
-              province: matched.customer_location?.province || "",
-              city: matched.customer_location?.city || "",
-              district: matched.customer_location?.district || "",
-              town: matched.customer_location?.town || "",
-              village: matched.customer_location?.village || "",
-              longitude: matched.longitude || "",
-              latitude: matched.latitude || "",
-            });
-            setLocationSynced(true);
-          } else {
-            setProjectLocation(null);
-            setLocationSynced(false);
-          }
+          const projects = (projData.data || []) as Array<{ project_name: string; customer_location: Record<string, string>; longitude: string; latitude: string }>;
+          const matched = projects.find((p) => p.project_name === data.customer.school_name);
+          if (matched) setProjectLocation({ province: matched.customer_location?.province || "", city: matched.customer_location?.city || "", district: matched.customer_location?.district || "", town: matched.customer_location?.town || "", village: matched.customer_location?.village || "", longitude: matched.longitude || "", latitude: matched.latitude || "" });
         }
       }
-    } catch {
-      toast.error("加载客户详情失败");
-    } finally {
-      setLoading(false);
-    }
+    } catch { toast.error("加载客户详情失败"); }
+    finally { setLoading(false); }
   }, [customerId]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-700 mr-2" />加载中...</div>;
+  if (!customer) return <div className="flex flex-col items-center justify-center h-64 text-gray-400"><AlertCircle className="w-10 h-10 mb-3 text-red-400" /><p>客户不存在</p><Button variant="outline" size="sm" className="mt-3" onClick={onBack}>返回列表</Button></div>;
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64 text-muted-foreground">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-current mr-2" />
-        加载中...
-      </div>
-    );
-  }
+  const deptIcons: Record<string, string> = { school_leader: "🏫", academic_affairs: "📋", teaching_research: "📚", student_affairs: "👥", it_center: "🖥️", hr: "👔", finance: "💰", logistics: "🔧", security: "🛡️", admissions: "🎓", employment: "💼", supervision: "📊", psychology: "💚", dormitory: "🏠", school_office: "📝", grade_group: "🏢" };
 
-  if (!customer) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-        <AlertCircle className="w-10 h-10 mb-3 text-red-400" />
-        <p>客户不存在</p>
-        <Button variant="outline" size="sm" className="mt-3" onClick={onBack}>返回列表</Button>
-      </div>
-    );
-  }
+  // Campus filtering
+  const campusMode = customer.campus_mode || "single";
+  const campuses = Array.isArray(customer.campuses) ? customer.campuses as CampusData[] : [];
+  const isMultiCampus = campusMode !== "single" && campuses.length > 0;
+  const activeCampus = isMultiCampus ? campuses[campusIndex] : null;
 
-  // 统计数据
-  const totalModules = modules.length;
-  const landedModules = modules.filter((m) => m.status === "已落地");
-  const notLandedModules = modules.filter((m) => m.status === "未落地");
-  const modulesWithMaterials = landedModules.filter(
-    (m) => Array.isArray(m.materials) && m.materials.length > 0
-  );
-  const materialCoverage = landedModules.length > 0
-    ? Math.round((modulesWithMaterials.length / landedModules.length) * 100)
-    : 0;
+  // Filter departments by campus
+  const filteredDepts = isMultiCampus && activeCampus
+    ? departments.filter((d) => !d.campus_id || d.campus_id === activeCampus.name || d.dept_scope === "school_wide")
+    : departments;
+  const filteredModules = isMultiCampus && activeCampus
+    ? modules.filter((m) => {
+        const dept = departments.find((d) => d.id === m.customer_department_id);
+        return dept && filteredDepts.includes(dept);
+      })
+    : modules;
 
-  // 当前选中科室的模块
-  const deptModules = modules.filter((m) => {
-    const dept = departments.find((d) => d.department_code === activeDept);
-    return dept && m.customer_department_id === dept.id;
-  });
+  // Campus-specific hardware
+  const displayHw = (isMultiCampus && activeCampus?.hardware && Object.keys(activeCampus.hardware).length > 0)
+    ? activeCampus.hardware : (customer.hardware_info || {}) as Record<string, unknown>;
+  const displayNw = (isMultiCampus && activeCampus?.network && Object.keys(activeCampus.network).length > 0)
+    ? activeCampus.network : (customer.network_info || {}) as Record<string, unknown>;
 
-  const currentDept = departments.find((d) => d.department_code === activeDept);
+  const subSchools = Array.isArray(customer.sub_schools) ? customer.sub_schools as SubSchoolData[] : [];
+  const isEduBureau = (customer.customer_types || []).includes("教育局");
 
-  const toggleCompareDept = (code: string) => {
-    setCompareDepts((prev) => {
-      if (prev.includes(code)) return prev.filter((c) => c !== code);
-      if (prev.length >= 4) {
-        toast.error("最多选择4个科室进行对比");
-        return prev;
-      }
-      return [...prev, code];
+  const leftNavSections: NavSection[] = [
+    { id: "detail-hw", icon: "📰", label: "硬件与网络" },
+    { separator: true, label: isEduBureau ? "教育局科室" : "科室",
+      items: filteredDepts.map((dept) => {
+        const deptMods = filteredModules.filter((m) => m.customer_department_id === dept.id);
+        const landedCount = deptMods.filter((m) => m.status === "已落地").length;
+        const hasLanded = landedCount > 0;
+        const hasTrialOnly = !hasLanded && deptMods.some((m) => m.status === "未落地");
+        return { id: `detail-dept-${dept.department_code}`, icon: deptIcons[dept.department_code] || "📌", label: dept.department_name, dot: hasLanded ? "#16a34a" : hasTrialOnly ? "#ea580c" : "#94a3b8" };
+      }),
+    },
+  ];
+  // Add sub-schools to nav
+  if (isEduBureau && subSchools.length > 0) {
+    leftNavSections.push({
+      separator: true, label: "下属学校",
+      items: subSchools.map((s, i) => ({
+        id: `detail-sub-${i}`, icon: "🏫", label: s.name || `学校${i + 1}`,
+        dot: subSchoolIdx === i ? "#16a34a" : "#94a3b8",
+      })),
     });
+  }
+
+  const loc = (projectLocation || customer.location || {}) as Record<string, string>;
+  const hwEntries = Object.entries(displayHw).filter(([k, v]) => v != null && v !== "" && !k.startsWith("_"));
+  const nwEntries = Object.entries(displayNw).filter(([k, v]) => v != null && v !== "" && !k.startsWith("_"));
+
+  const openSectionModal = (dept: DepartmentData, sectionKey: string, sectionLabel: string) => {
+    setModal({ dept, sectionKey, sectionLabel });
+  };
+
+  // Get content for a section — handle grouped entries (separated by <!--SECTION-->)
+  const SECTION_SEP = "\n<!--SECTION-->\n";
+  const getSectionContent = (dept: DepartmentData, key: string): string => {
+    const d = dept as unknown as Record<string, string>;
+    return d[key] || "";
+  };
+  const getSectionGroups = (dept: DepartmentData, key: string): string[] => {
+    const content = getSectionContent(dept, key);
+    if (!content) return [""];
+    return content.split(SECTION_SEP).filter(g => g.trim());
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* 顶部栏 — 左对齐与内容区一致 (100px dock + 16px padding) */}
-      <div className="flex items-center gap-3 pl-[116px] pr-4 py-2.5 border-b bg-card">
-        <div className="flex items-center gap-2">
-          <Building2 className="w-5 h-5 text-muted-foreground" />
-          <h2 className="font-semibold text-lg">{customer.school_name}</h2>
-          {(customer.customer_types || []).map((t) => (
-            <Badge key={t} variant="secondary">{t}</Badge>
-          ))}
+    <div>
+      <LeftFloatNav sections={leftNavSections} onBack={onBack} />
+      <div className="max-w-[820px] mx-auto px-6 pt-4 pb-16">
+
+        {/* Masthead */}
+        <div className="text-center pt-8 pb-5 border-b-[3px] border-double border-red-700 mb-6">
+          <h1 className="text-4xl font-black text-red-700 tracking-[6px]" style={{ fontFamily: "STSong, Songti SC, Noto Serif SC, serif" }}>{customer.school_name}</h1>
+          <p className="text-[11px] text-amber-700/60 tracking-[3px] mt-1">CUSTOMER PROFILE · DEPARTMENT DOSSIER</p>
+          <div className="flex items-center justify-center gap-4 mt-2 text-[11px] text-gray-400 tracking-wide flex-wrap">
+            {(customer.customer_types || []).map((t: string) => (<span key={t}>{t}</span>))}
+            <span>{[loc.province, loc.city].filter(Boolean).join(" ")}</span>
+            <span>{new Date(customer.updated_at).toLocaleDateString("zh-CN")}</span>
+          </div>
+          <div className="flex items-center justify-center gap-2 mt-3">
+            <Button variant="outline" size="sm" className="h-7 text-[11px] border-[#d1c7b7] text-gray-500" onClick={() => setShowVersionHistory(true)}><History className="w-3 h-3 mr-1" />版本</Button>
+            <Button size="sm" className="h-7 text-[11px] bg-red-700 hover:bg-red-800" onClick={() => onEdit(customerId)}><Pencil className="w-3 h-3 mr-1" />编辑画像</Button>
+          </div>
         </div>
-        <span className="text-xs text-muted-foreground">
-          更新: {new Date(customer.updated_at).toLocaleDateString("zh-CN")}
-        </span>
-        <div className="flex items-center gap-2 ml-auto">
-          <Button variant="outline" size="sm" onClick={() => setShowWeeklyReport(true)}>
-            <FileText className="w-4 h-4 mr-1" />
-            本周周报
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowVersionHistory(true)}>
-            <History className="w-4 h-4 mr-1" />
-            版本历史
-          </Button>
-          <Button size="sm" onClick={() => onEdit(customerId)}>
-            <Pencil className="w-4 h-4 mr-1" />
-            编辑画像
-          </Button>
-        </div>
-      </div>
 
-      {/* 主体：Dock 侧栏 + 内容区（flex 布局，Dock 占据空间不遮挡） */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* 左侧 Dock 栏 */}
-        <div className="w-[100px] flex-shrink-0 flex items-center py-1 bg-gradient-to-r from-blue-100/60 to-blue-50/30 dark:from-blue-950/40 dark:to-blue-950/10">
-          <div className="flex flex-col items-start pl-1 w-full">
-            <div className="flex flex-col items-center gap-[2px] bg-blue-200/60 dark:bg-blue-800/50 backdrop-blur-xl rounded-[16px] shadow-lg shadow-blue-300/30 dark:shadow-black/30 border border-blue-300/40 dark:border-blue-600/30 p-1">
-              {/* 返回 */}
-              <DockNavItem
-                icon={<ArrowLeft className="w-4 h-4" />}
-                label="返回"
-                onClick={onBack}
-              />
+        {/* Campus tabs — only show for multi-campus */}
+        {isMultiCampus && (
+          <div className="flex justify-center gap-1 mb-5">
+            {campuses.map((c: CampusData, i: number) => (
+              <button key={i} onClick={() => setCampusIndex(i)}
+                className={`px-4 py-1.5 text-xs border transition-colors ${
+                  i === campusIndex
+                    ? "bg-red-700 text-white border-red-700"
+                    : "bg-white text-gray-500 border-[#d1c7b7] hover:bg-red-50"
+                }`}>
+                🏫 {c.name}{c.type ? ` · ${c.type}` : ""}
+              </button>
+            ))}
+          </div>
+        )}
 
-              <div className="w-8 h-px bg-blue-300/30 dark:bg-blue-600/30 my-0.5" />
-
-              {/* 总览 */}
-              <DockNavItem
-                icon="📊"
-                label="总览"
-                active={activeDept === "overview"}
-                onClick={() => setActiveDept("overview")}
-              />
-
-              <div className="w-8 h-px bg-blue-200/30 dark:bg-blue-600/20 my-0.5" />
-
-              {/* 科室 */}
-              {departments.map((dept) => {
-                const deptMods = modules.filter((m) => m.customer_department_id === dept.id);
-                const landedCount = deptMods.filter((m) => m.status === "已落地").length;
-                const totalCount = deptMods.length;
-                const hasLanded = landedCount > 0;
-                const hasTrialOnly = !hasLanded && deptMods.some((m) => m.status === "未落地");
-                const dotColor = hasLanded ? "bg-green-500" : hasTrialOnly ? "bg-amber-500" : "bg-slate-400";
-
-                const deptIcons: Record<string, string> = {
-                  school_leader: "🏫", academic_affairs: "📋", teaching_research: "📚",
-                  student_affairs: "👥", it_center: "🖥️", hr: "👔", finance: "💰",
-                  logistics: "🔧", security: "🛡️", admissions: "🎓", employment: "💼",
-                  supervision: "📊", psychology: "💚", dormitory: "🏠",
-                  school_office: "📝", grade_group: "🏢",
-                };
-                const icon = deptIcons[dept.department_code] || "📌";
-
-                return (
-                  <DockNavItem
-                    key={dept.department_code}
-                    icon={icon}
-                    label={dept.department_name}
-                    active={activeDept === dept.department_code}
-                    onClick={() => setActiveDept(dept.department_code)}
-                    badge={`${landedCount}/${totalCount}`}
-                  />
-                );
-              })}
-
-              <div className="w-8 h-px bg-blue-200/30 dark:bg-blue-600/20 my-0.5" />
-
-              {/* 版本 / 周报 */}
-              <DockNavItem
-                icon="📜"
-                label="版本"
-                onClick={() => setShowVersionHistory(true)}
-              />
-              <DockNavItem
-                icon="📝"
-                label="周报"
-                onClick={() => setShowWeeklyReport(true)}
-              />
+        {/* HW */}
+        <div className="bg-[#fdfcf8] border border-[#d1c7b7] mb-8" id="detail-hw">
+          <div className="bg-red-700 text-white px-5 py-2 text-xs font-semibold tracking-wider">位置 · 硬件 · 网络</div>
+          <div className="p-5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 text-xs">
+              <div className="text-gray-400 font-semibold tracking-wide col-span-full border-b border-[#e8e0d0] pb-1 mb-1">位置信息</div>
+              <div><span className="text-gray-400">省/直辖市</span><div className="text-gray-800 font-medium mt-0.5">{loc.province || "—"}</div></div>
+              <div><span className="text-gray-400">市</span><div className="text-gray-800 font-medium mt-0.5">{loc.city || "—"}</div></div>
+              <div><span className="text-gray-400">区/县</span><div className="text-gray-800 font-medium mt-0.5">{loc.district || "—"}</div></div>
+              <div><span className="text-gray-400">镇/乡</span><div className="text-gray-800 font-medium mt-0.5">{loc.town || "—"}</div></div>
+              {hwEntries.length > 0 && <><div className="text-gray-400 font-semibold tracking-wide col-span-full border-b border-[#e8e0d0] pb-1 mb-1 mt-2">校园规模</div>{hwEntries.map(([k, v]) => (<div key={k}><span className="text-gray-400">{k}</span><div className="text-gray-800 font-medium mt-0.5">{String(v)}</div></div>))}</>}
+              {nwEntries.length > 0 && <><div className="text-gray-400 font-semibold tracking-wide col-span-full border-b border-[#e8e0d0] pb-1 mb-1 mt-2">网络基础设施</div>{nwEntries.map(([k, v]) => (<div key={k}><span className="text-gray-400">{k}</span><div className="text-gray-800 font-medium mt-0.5">{String(v)}</div></div>))}</>}
             </div>
           </div>
         </div>
 
-        {/* 右侧内容区 */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="px-4 pt-3">
-          {/* 统计卡片 */}
-          {activeDept === "overview" && (
-            <div className="grid grid-cols-4 gap-3 mb-4">
-              <Card className="overflow-hidden border-0 shadow-sm bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-500/10 flex items-center justify-center">
-                    <Target className="w-5 h-5 text-slate-500" />
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold tracking-tight">{totalModules}</div>
-                    <div className="text-xs text-muted-foreground">已购模块</div>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="overflow-hidden border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400">{landedModules.length}</div>
-                    <div className="text-xs text-emerald-600/70 dark:text-emerald-400/70">已落地</div>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="overflow-hidden border-0 shadow-sm bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                    <AlertCircle className="w-5 h-5 text-amber-600" />
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold tracking-tight text-amber-700 dark:text-amber-400">{notLandedModules.length}</div>
-                    <div className="text-xs text-amber-600/70 dark:text-amber-400/70">未落地</div>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="overflow-hidden border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                    <FileIcon className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold tracking-tight text-blue-700 dark:text-blue-400">{materialCoverage}%</div>
-                    <div className="text-xs text-blue-600/70 dark:text-blue-400/70">素材覆盖率</div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {/* 科室速览卡片（overview 时显示） */}
-          {activeDept === "overview" && (
-            <>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-muted-foreground">勾选 2-4 个科室可进行对比</span>
-                {compareDepts.length >= 2 && (
-                  <Button size="sm" variant="outline" onClick={() => setShowCompare(true)} className="h-7 text-xs">
-                    <Columns2 className="w-3.5 h-3.5 mr-1" />
-                    对比选中科室 ({compareDepts.length})
-                  </Button>
-                )}
-              </div>
-              <div className="flex gap-3 overflow-x-auto pb-3 mb-3">
-                {departments.map((dept) => {
-                  const deptMods = modules.filter((m) => m.customer_department_id === dept.id);
-                  const landed = deptMods.filter((m) => m.status === "已落地").length;
-                  const total = deptMods.length;
-                  const isCompared = compareDepts.includes(dept.department_code);
-                  return (
-                    <div key={dept.id} className="relative flex-shrink-0">
-                      <button
-                        className={cn(
-                          "w-40 border rounded-lg p-3 text-left hover:border-primary/50 hover:bg-muted/30 transition-colors",
-                          isCompared && "border-primary/50 bg-primary/5"
-                        )}
-                        onClick={() => setActiveDept(dept.department_code)}
-                      >
-                        <div className="font-medium text-sm mb-1 truncate">{dept.department_name}</div>
-                        <div className="flex items-center gap-1.5">
-                          <div className="flex gap-0.5">
-                            {deptMods.map((m) => (
-                              <div
-                                key={m.id}
-                                className={cn(
-                                  "w-2.5 h-2.5 rounded-full",
-                                  m.status === "已落地" ? "bg-green-500" : m.status === "未落地" ? "bg-orange-400" : "bg-gray-300"
-                                )}
-                                title={`${m.module_name}: ${m.status}`}
-                              />
-                            ))}
-                          </div>
-                          <span className="text-xs text-muted-foreground">{landed}/{total}</span>
-                        </div>
-                      </button>
-                      <label className="absolute top-1 right-1 flex items-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          className="rounded w-3.5 h-3.5"
-                          checked={isCompared}
-                          onChange={() => toggleCompareDept(dept.department_code)}
-                        />
-                      </label>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
+        {/* Issue nav */}
+        <div className="flex flex-wrap border border-[#d1c7b7] rounded-md overflow-hidden mb-6">
+          {filteredDepts.map((dept) => {
+            const deptMods = filteredModules.filter((m) => m.customer_department_id === dept.id);
+            const landedCount = deptMods.filter((m) => m.status === "已落地").length;
+            return (<button key={dept.department_code} onClick={() => document.getElementById(`detail-dept-${dept.department_code}`)?.scrollIntoView({ behavior: "smooth", block: "start" })} className="flex-1 min-w-[70px] py-2 px-1 text-center text-[10px] text-gray-500 hover:bg-red-50 hover:text-red-700 border-r border-[#e8e0d0] last:border-r-0 transition-colors"><span className="block text-sm mb-0.5">{deptIcons[dept.department_code] || "📌"}</span>{dept.department_name}<span className="block text-[9px] text-gray-400">{landedCount}/{deptMods.length}</span></button>);
+          })}
         </div>
 
-        {/* 内容 */}
-        <div>
-          {activeDept === "overview" && <>
-            {/* 总览仪表盘 KPI 卡片 */}
-            {(() => {
-              const allMods = modules;
-              const totalMods = allMods.length;
-              const landedMods = allMods.filter((m) => m.status === "已落地").length;
-              const trialMods = allMods.filter((m) => m.status === "未落地").length;
-              const notPurchasedMods = allMods.filter((m) => m.status === "未购").length;
-              const coverageRate = totalMods > 0 ? Math.round((landedMods / totalMods) * 100) : 0;
-              return (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                  <Card className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
-                    <CardContent className="p-3">
-                      <div className="text-[11px] text-muted-foreground mb-1">已购模块</div>
-                      <div className="text-2xl font-bold text-slate-700 dark:text-slate-300">{totalMods}</div>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950">
-                    <CardContent className="p-3">
-                      <div className="text-[11px] text-muted-foreground mb-1">🟢 正式使用</div>
-                      <div className="text-2xl font-bold text-green-700 dark:text-green-400">{landedMods}</div>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-950">
-                    <CardContent className="p-3">
-                      <div className="text-[11px] text-muted-foreground mb-1">🔵 试用中</div>
-                      <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">{trialMods}</div>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950 dark:to-orange-950">
-                    <CardContent className="p-3">
-                      <div className="text-[11px] text-muted-foreground mb-1">覆盖率</div>
-                      <div className="text-2xl font-bold text-amber-700 dark:text-amber-400">{coverageRate}%</div>
-                    </CardContent>
-                  </Card>
-                </div>
-              );
-            })()}
+        {/* Editions */}
+        {filteredDepts.map((dept) => {
+          const deptMods = filteredModules.filter((m) => m.customer_department_id === dept.id);
+          const personnel = Array.isArray(dept.personnel) ? dept.personnel : [];
 
-            {customer.description && (
-              <div className="mb-4 p-4 border rounded-lg bg-muted/30">
-                <p className="text-sm text-muted-foreground">{customer.description}</p>
+          return (
+            <div key={dept.department_code} id={`detail-dept-${dept.department_code}`} className="scroll-mt-[100px] mb-8 bg-[#fdfcf8] border border-[#d1c7b7] shadow-sm">
+              <div className="bg-red-700 text-white px-5 py-2 flex items-center justify-between text-xs tracking-wider">
+                <span className="font-semibold">{deptIcons[dept.department_code] || "📌"} {dept.department_name}</span>
+                <span>{deptMods.length} 个模块 · {deptMods.filter((m) => m.status === "已落地").length} 已落地</span>
               </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              {/* 位置信息 */}
-              <Card>
-                <CardHeader className="py-2.5 px-4">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-muted-foreground" />
-                    <CardTitle className="text-sm">位置信息</CardTitle>
-                    {locationSynced && (
-                      <Badge variant="secondary" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
-                        来源于项目数据
-                      </Badge>
-                    )}
+              <div className="p-5">
+                {/* Personnel */}
+                {personnel.length > 0 && (
+                  <div className="mb-4 pb-3 border-b border-[#e8e0d0]">
+                    <span className="text-xs font-bold text-red-700">【科室人员】</span>
+                    <div className="flex flex-wrap gap-1.5 mt-1">{personnel.map((p, j) => (<span key={j} className="text-[11px] bg-amber-50 border border-amber-100 px-2 py-0.5 rounded">{p.name} · {p.role}</span>))}</div>
                   </div>
-                </CardHeader>
-                <CardContent className="px-4 pb-3 pt-0">
-                  {(() => {
-                    const loc = projectLocation || customer.location || {};
-                    const parts = [loc.province, loc.city, loc.district, loc.town, loc.village].filter(Boolean);
+                )}
+
+                {/* Each section with its own preview + 阅读全文 */}
+                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                  {SECTIONS.map((sec) => {
+                    const content = getSectionContent(dept, sec.key);
+                    const isEmpty = !content || content === "待填写";
                     return (
-                      <div className="space-y-1.5">
-                        <p className="text-sm">{parts.length > 0 ? parts.join(" / ") : "未设置"}</p>
-                        {(loc.longitude || loc.latitude) && (
-                          <p className="text-xs text-muted-foreground">
-                            经度: {loc.longitude || "-"} / 纬度: {loc.latitude || "-"}
-                          </p>
+                      <div key={sec.key} className={sec.key === "daily_work" || sec.key === "expectations" ? "col-span-2" : ""}>
+                        <span className="text-xs font-bold text-red-700">【{sec.label}】</span>
+                        {isEmpty ? (
+                          <p className="text-xs text-gray-300 italic mt-1">待填写</p>
+                        ) : (
+                          <>
+                            {content && content.startsWith("<") ? (
+                              <div className="mt-1 text-[12px] text-gray-600 leading-relaxed line-clamp-3" dangerouslySetInnerHTML={{ __html: content }} />
+                            ) : (
+                              <p className="mt-1 text-[12px] text-gray-600 leading-relaxed line-clamp-3 whitespace-pre-wrap">{content}</p>
+                            )}
+                            <button onClick={() => openSectionModal(dept, sec.key, sec.label)} className="text-[10px] text-red-600 hover:text-red-800 hover:underline mt-0.5 inline-block">阅读全文 →</button>
+                          </>
                         )}
                       </div>
                     );
-                  })()}
-                </CardContent>
-              </Card>
-
-              {/* 硬件信息 */}
-              <Card>
-                <CardHeader className="py-2.5 px-4">
-                  <div className="flex items-center gap-2">
-                    <Server className="w-4 h-4 text-muted-foreground" />
-                    <CardTitle className="text-sm">硬件信息</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="px-4 pb-3 pt-0">
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                    {(() => {
-                      const hw = (customer.hardware_info || {}) as Record<string, unknown>;
-                      const keys = ["总人数", "教师人数", "学生人数", "班级数量", "教室数量", "功能教室数量", "总面积", "宿舍楼栋数", "校区数量", "校门数量", "食堂数量", "二级学院数"];
-                      const items = keys.filter((k) => hw[k]).map((k) => ({ label: k, value: String(hw[k]) }));
-                      if (items.length === 0) return <span className="text-muted-foreground col-span-2">未设置</span>;
-                      return items.map((item) => (
-                        <div key={item.label} className="flex justify-between">
-                          <span className="text-muted-foreground">{item.label}</span>
-                          <span className="font-medium">{item.value}</span>
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* 网络信息 */}
-              <Card className="md:col-span-2">
-                <CardHeader className="py-2.5 px-4">
-                  <div className="flex items-center gap-2">
-                    <Wifi className="w-4 h-4 text-muted-foreground" />
-                    <CardTitle className="text-sm">网络基础设施</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="px-4 pb-3 pt-0">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1 text-xs">
-                    {(() => {
-                      const nw = (customer.network_info || {}) as Record<string, unknown>;
-                      const keys = ["带宽", "服务器数量", "虚拟化平台", "存储", "数据库", "公网IP", "无线覆盖", "堡垒机", "内网IP段"];
-                      const items = keys.filter((k) => nw[k]).map((k) => ({ label: k, value: String(nw[k]) }));
-                      if (items.length === 0) return <span className="text-muted-foreground col-span-4">未设置</span>;
-                      return items.map((item) => (
-                        <div key={item.label} className="flex justify-between">
-                          <span className="text-muted-foreground">{item.label}</span>
-                          <span className="font-medium">{item.value}</span>
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <p className="text-sm text-muted-foreground text-center py-4 border-t">
-              选择一个科室查看详细画像信息
-            </p>
-          </>}
-
-          {(() => {
-            const activeDeptData = departments.find((d) => d.department_code === activeDept);
-            if (activeDeptData) {
-              return (
-                <DepartmentDetailView
-                  key={activeDeptData.department_code}
-                  department={activeDeptData}
-                  modules={modules.filter((m) => m.customer_department_id === activeDeptData.id)}
-                  allDepartments={departments}
-                  filterLandedOnly={filterLandedOnly}
-                  onToggleFilter={() => setFilterLandedOnly(!filterLandedOnly)}
-                  onEditDept={() => onEdit(customerId)}
-                />
-              );
-            }
-            return null;
-          })()}
-        </div>
-      </div>
-      </div>
-
-      {/* 弹窗 */}
-      {showVersionHistory && (
-        <VersionHistory
-          customerId={customerId}
-          onClose={() => setShowVersionHistory(false)}
-        />
-      )}
-      {showWeeklyReport && (
-        <WeeklyReportForm
-          customerId={customerId}
-          customerName={customer.school_name}
-          currentUser={currentUser}
-          onClose={() => setShowWeeklyReport(false)}
-        />
-      )}
-
-      {/* 跨科室对比弹窗 */}
-      {showCompare && (
-        <DepartmentCompareDialog
-          departments={departments.filter((d) => compareDepts.includes(d.department_code))}
-          allModules={modules}
-          onClose={() => setShowCompare(false)}
-        />
-      )}
-    </div>
-  );
-}
-
-// 单个科室视图
-function DepartmentDetailView({
-  department,
-  modules,
-  allDepartments,
-  filterLandedOnly,
-  onToggleFilter,
-  onEditDept,
-}: {
-  department: DepartmentData;
-  modules: ModuleData[];
-  allDepartments: DepartmentData[];
-  filterLandedOnly: boolean;
-  onToggleFilter: () => void;
-  onEditDept: () => void;
-}) {
-  const personnel = Array.isArray(department.personnel) ? department.personnel : [];
-  const filteredModules = filterLandedOnly ? modules.filter((m) => m.status === "已落地") : modules;
-
-  const mainModules = filteredModules.filter(
-    (m) => !Array.isArray(m.collaborating_departments) || m.collaborating_departments.length === 0
-  );
-  const collabModules = filteredModules.filter(
-    (m) => Array.isArray(m.collaborating_departments) && m.collaborating_departments.length > 0
-  );
-
-  return (
-    <div className="space-y-4">
-      {/* 科室名称栏 + 编辑按钮 */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          {department.department_name}
-        </h3>
-        <Button variant="outline" size="sm" onClick={onEditDept}>
-          <Pencil className="w-3.5 h-3.5 mr-1" />
-          编辑此科室
-        </Button>
-      </div>
-
-      {/* 科室人员 */}
-      {personnel.length > 0 && (
-        <div>
-          <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
-            <Users className="w-4 h-4 text-muted-foreground" />
-            科室人员
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {personnel.map((p, i) => (
-              <Card key={i} className="p-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-sm font-medium">
-                    {p.name?.slice(0, 1) || "?"}
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium">{p.name}</div>
-                    <div className="text-xs text-muted-foreground">{p.role} · {p.phone}</div>
-                    {p.attitude && (
-                      <Badge variant="secondary" className="text-[10px] mt-0.5">{p.attitude}</Badge>
-                    )}
-                  </div>
+                  })}
                 </div>
-              </Card>
-            ))}
+
+                {/* Module tags */}
+                <div className="flex flex-wrap gap-1.5 items-center mt-4 pt-3 border-t border-[#e8e0d0]">
+                  <span className="text-[10px] text-gray-400 tracking-wide mr-1">模块</span>
+                  {deptMods.map((m) => {
+                    const isLanded = m.status === "已落地"; const isTrial = m.status === "未落地";
+                    return <span key={m.id} className={cn("text-[10px] px-2 py-0.5 border rounded-sm", isLanded ? "border-green-300 bg-green-50 text-green-700" : isTrial ? "border-orange-300 bg-orange-50 text-orange-700" : "border-gray-200 bg-gray-50 text-gray-400")}>{isLanded ? "✓ " : isTrial ? "● " : "○ "}{m.module_name}</span>;
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Section Detail Modal */}
+      {modal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setModal(null)}>
+          <div className="bg-[#fdfcf8] border-2 border-[#d1c7b7] shadow-2xl w-full max-w-[700px] max-h-[85vh] overflow-y-auto mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-red-700 text-white px-6 py-3 flex items-center justify-between sticky top-0 z-10">
+              <div>
+                <span className="font-bold text-lg tracking-wider" style={{ fontFamily: "STSong, Songti SC, Noto Serif SC, serif" }}>{deptIcons[modal.dept.department_code] || "📌"} {modal.dept.department_name}</span>
+                <span className="text-red-200 text-xs ml-3">· {modal.sectionLabel}</span>
+              </div>
+              <button onClick={() => setModal(null)} className="text-white/70 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-8">
+              <div className="text-center mb-6">
+                <div className="text-[11px] text-gray-400 tracking-[3px] uppercase mb-1">Department Dossier · Section Detail</div>
+                <h2 className="text-2xl font-black text-red-700 tracking-[4px]" style={{ fontFamily: "STSong, Songti SC, Noto Serif SC, serif" }}>【{modal.sectionLabel}】</h2>
+                <div className="w-16 h-[3px] bg-red-700 mx-auto mt-3 mb-4" />
+              </div>
+              <div className="text-[14px] leading-[2.2] text-gray-800 text-justify" style={{ fontFamily: "STSong, Songti SC, Noto Serif SC, serif" }}>
+                {(() => {
+                  const c = getSectionContent(modal.dept, modal.sectionKey) || "待填写";
+                  // Split by section separator and render each group
+                  const groups = c ? c.split("\n<!--SECTION-->\n").filter(g => g.trim()) : [];
+                  if (groups.length === 0) return <p className="text-gray-400">待填写</p>;
+                  return groups.map((g, i) => (
+                    <div key={i}>
+                      {i > 0 && <hr className="my-4 border-[#d1c7b7]" />}
+                      {g.startsWith("<") ? <div dangerouslySetInnerHTML={{ __html: g }} /> : <div className="whitespace-pre-wrap">{g}</div>}
+                    </div>
+                  ));
+                })()}
+              </div>
+              <div className="border-t border-[#d1c7b7] mt-6 pt-3 flex justify-between text-[10px] text-gray-400 tracking-wide">
+                <span>本刊编辑：{currentUser.name} · {new Date(customer.updated_at).toLocaleDateString("zh-CN")}</span>
+                <span>{new Date().toLocaleDateString("zh-CN")}</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* 业务描述 */}
-      <div>
-        <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
-          <Target className="w-4 h-4 text-muted-foreground" />
-          业务描述
-        </h4>
-        <Card className="p-4 space-y-3">
-          {department.daily_work && (
-            <div>
-              <span className="text-xs font-medium text-muted-foreground">日常做什么：</span>
-              <p className="text-sm mt-0.5">{department.daily_work}</p>
+      {/* Sub-schools display (教育局模式) */}
+      {isEduBureau && subSchools.length > 0 && (
+        <div className="mt-8" id="detail-sub-schools">
+          <div className="bg-[#fdfcf8] border border-[#d1c7b7]">
+            <div className="bg-red-700 text-white px-5 py-2 text-xs font-semibold tracking-wider">
+              下属学校 · {subSchools.length}所
             </div>
-          )}
-          {department.workflow && (
-            <div>
-              <span className="text-xs font-medium text-muted-foreground">业务流程：</span>
-              <p className="text-sm mt-0.5">{department.workflow}</p>
-            </div>
-          )}
-          {department.pain_points && (
-            <div>
-              <span className="text-xs font-medium text-muted-foreground">痛点：</span>
-              <p className="text-sm mt-0.5">{department.pain_points}</p>
-            </div>
-          )}
-          {department.tools && (
-            <div>
-              <span className="text-xs font-medium text-muted-foreground">在用工具：</span>
-              <p className="text-sm mt-0.5">{department.tools}</p>
-            </div>
-          )}
-          {department.expectations && (
-            <div>
-              <span className="text-xs font-medium text-muted-foreground">信息化期望：</span>
-              <p className="text-sm mt-0.5">{department.expectations}</p>
-            </div>
-          )}
-          {!department.daily_work && !department.pain_points && (
-            <p className="text-sm text-muted-foreground text-center py-4">尚未录入科室业务信息</p>
-          )}
-        </Card>
-      </div>
-
-      {/* 匹配模块 */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="text-sm font-medium flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4 text-muted-foreground" />
-            匹配模块（{filteredModules.length}个）
-          </h4>
-          <Button variant="ghost" size="sm" className="text-xs h-7" onClick={onToggleFilter}>
-            {filterLandedOnly ? "全部" : "只显示已落地"}
-          </Button>
-        </div>
-
-        {filteredModules.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8 border rounded-lg">
-            暂无匹配模块
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {filteredModules.map((mod) => (
-              <ModuleCard
-                key={mod.id}
-                module={mod}
-                allDepartments={allDepartments}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 核心数据 */}
-      {Array.isArray(department.metrics) && department.metrics.length > 0 && (
-        <div>
-          <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
-            <BarChart3 className="w-4 h-4 text-muted-foreground" />
-            核心数据
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {(department.metrics as Array<{ indicator: string; value: string; source: string; period: string }>).map((m, i) => (
-              <Card key={i} className="p-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-medium">{m.indicator || "未命名指标"}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {m.period && <span>{m.period} · </span>}
-                      数据来源：{m.source || "人工统计"}
+            <div className="p-5">
+              <div className="flex flex-wrap gap-2 mb-4">
+                {subSchools.map((s, i) => (
+                  <button key={i} id={`detail-sub-${i}`}
+                    onClick={() => setSubSchoolIdx(subSchoolIdx === i ? null : i)}
+                    className={`px-4 py-1.5 text-xs border transition-colors ${
+                      subSchoolIdx === i ? "bg-red-700 text-white border-red-700" : "bg-white text-gray-500 border-[#d1c7b7] hover:bg-red-50"
+                    }`}>
+                    🏫 {s.name || `学校${i + 1}`}
+                  </button>
+                ))}
+              </div>
+              {subSchoolIdx !== null && (() => {
+                const s = subSchools[subSchoolIdx];
+                const types = (s.types || "").split(/[,，、]/).map((x: string) => x.trim()).filter(Boolean);
+                return (
+                  <div className="bg-white border border-[#d1c7b7] p-4">
+                    <div className="text-center mb-4">
+                      <h3 className="text-xl font-bold text-gray-900">🏫 {s.name}</h3>
+                      <div className="flex items-center justify-center gap-2 mt-1">
+                        {types.map((t: string) => (<span key={t} className="text-[10px] bg-red-50 text-red-700 px-2 py-0.5 rounded">{t}</span>))}
+                        <span className="text-[11px] text-gray-400">{s.location?.district}</span>
+                      </div>
+                    </div>
+                    {s.description && (
+                      <div className="text-sm text-gray-600 leading-relaxed bg-gray-50 rounded-lg p-4">
+                        {s.description.startsWith("<") ? <div dangerouslySetInnerHTML={{ __html: s.description }} /> : <div className="whitespace-pre-wrap">{s.description}</div>}
+                      </div>
+                    )}
+                    {/* HW/NW info for sub-school */}
+                    {((s.hardware_info && Object.keys(s.hardware_info).length > 0) || (s.network_info && Object.keys(s.network_info).length > 0)) && (
+                      <div className="mt-3 pt-3 border-t border-[#e8e0d0]">
+                        <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">基本信息</div>
+                        <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-xs">
+                          {Object.entries(s.hardware_info || {}).filter(([,v]) => v).map(([k, v]) => (
+                            <div key={k}><span className="text-gray-400">{k}</span> <span className="font-medium">{v}</span></div>
+                          ))}
+                          {Object.entries(s.network_info || {}).filter(([,v]) => v).map(([k, v]) => (
+                            <div key={k}><span className="text-gray-400">{k}</span> <span className="font-medium">{v}</span></div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* Campus info for sub-school */}
+                    {s.campus_mode === "multi_independent" && Array.isArray(s.campuses) && s.campuses.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-[#e8e0d0]">
+                        <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">校区 · {s.campuses.length}个</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {s.campuses.map((c, ci) => (
+                            <span key={ci} className="text-[11px] bg-amber-50 border border-amber-100 px-2 py-1 rounded">
+                              🏫 {c.name || `校区${ci + 1}`}{c.address ? ` · ${c.address}` : ""}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="text-xs text-gray-400 mt-3 text-center">
+                      📍 {[s.location?.district, s.location?.address].filter(Boolean).join(" · ") || "位置未设置"}
                     </div>
                   </div>
-                  <div className="text-xl font-bold">{m.value || "-"}</div>
-                </div>
-              </Card>
-            ))}
+                );
+              })()}
+            </div>
           </div>
         </div>
       )}
 
-      {/* 科室总结 */}
-      {department.department_summary && (
-        <div>
-          <h4 className="text-sm font-medium mb-2">该科室总结</h4>
-          <Card className="p-4 bg-muted/20">
-            <p className="text-sm">{department.department_summary}</p>
-          </Card>
-        </div>
-      )}
+      {showVersionHistory && <VersionHistory customerId={customerId} onClose={() => setShowVersionHistory(false)} />}
     </div>
-  );
-}
-
-// 模块卡片
-function ModuleCard({
-  module,
-  allDepartments,
-}: {
-  module: ModuleData;
-  allDepartments: DepartmentData[];
-}) {
-  const collabDepts = Array.isArray(module.collaborating_departments)
-    ? module.collaborating_departments
-    : [];
-  const materials = Array.isArray(module.materials) ? module.materials : [];
-
-  const statusConfig = {
-    "已落地": { icon: CheckCircle2, borderColor: "border-l-green-500", bgColor: "bg-green-50", badge: "bg-green-100 text-green-700" },
-    "未落地": { icon: AlertCircle, borderColor: "border-l-orange-400", bgColor: "bg-orange-50", badge: "bg-orange-100 text-orange-700" },
-    "未购": { icon: XCircle, borderColor: "border-l-gray-300", bgColor: "bg-gray-50", badge: "bg-gray-100 text-gray-600" },
-  };
-  const config = statusConfig[module.status as keyof typeof statusConfig] || statusConfig["未购"];
-  const StatusIcon = config.icon;
-
-  return (
-    <Card className={cn("border-l-4", config.borderColor, config.bgColor)}>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <StatusIcon className={cn(
-              "w-5 h-5",
-              module.status === "已落地" ? "text-green-600" : module.status === "未落地" ? "text-orange-500" : "text-gray-400"
-            )} />
-            <span className="font-medium">{module.module_name}</span>
-            <Badge className={cn("text-xs", config.badge)}>{module.status}</Badge>
-          </div>
-          {module.status === "已落地" && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>使用率</span>
-              <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-green-500 rounded-full"
-                  style={{ width: `${module.usage_rate}%` }}
-                />
-              </div>
-              <span className="font-medium text-foreground">{module.usage_rate}%</span>
-            </div>
-          )}
-        </div>
-
-        {module.status === "已落地" && (
-          <>
-            <div className="text-xs text-muted-foreground mb-1">
-              活跃用户：{module.active_users}人
-            </div>
-            {module.effect && (
-              <div className="text-sm mt-1">
-                <span className="text-xs font-medium text-muted-foreground">落地效果：</span>
-                {module.effect}
-              </div>
-            )}
-            {module.issues && (
-              <div className="text-sm mt-1">
-                <span className="text-xs font-medium text-muted-foreground">问题：</span>
-                {module.issues}
-              </div>
-            )}
-          </>
-        )}
-
-        {module.status === "未落地" && module.issues && (
-          <div className="text-sm text-orange-600 mt-1">
-            原因：{module.issues}
-          </div>
-        )}
-
-        {module.status === "未购" && module.current_practice && (
-          <div className="text-sm text-muted-foreground mt-1">
-            当前做法：{module.current_practice}
-          </div>
-        )}
-
-        {/* 协同科室 */}
-        {collabDepts.length > 0 && (
-          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-            <span className="text-xs text-muted-foreground">协同科室：</span>
-            {collabDepts.map((code) => {
-              const dept = allDepartments.find((d) => d.department_code === code);
-              return (
-                <Badge key={code} variant="secondary" className="text-[10px]">
-                  {dept?.department_name || code}
-                </Badge>
-              );
-            })}
-          </div>
-        )}
-
-        {/* 素材 */}
-        {materials.length > 0 && (
-          <div className="flex items-center gap-2 mt-2">
-            <FileIcon className="w-3.5 h-3.5 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">素材：{materials.length}个文件</span>
-            {materials.map((m, i) => (
-              <Badge key={i} variant="outline" className="text-[10px] cursor-pointer" title={m.name}>
-                {m.name.length > 20 ? m.name.slice(0, 20) + "..." : m.name}
-              </Badge>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// 跨科室对比弹窗
-function DepartmentCompareDialog({
-  departments,
-  allModules,
-  onClose,
-}: {
-  departments: DepartmentData[];
-  allModules: ModuleData[];
-  onClose: () => void;
-}) {
-  const rows = [
-    { label: "匹配模块", render: (d: DepartmentData) => String(allModules.filter((m) => m.customer_department_id === d.id).length) + "个" },
-    {
-      label: "已落地",
-      render: (d: DepartmentData) => {
-        const mods = allModules.filter((m) => m.customer_department_id === d.id);
-        const landed = mods.filter((m) => m.status === "已落地").length;
-        return `${landed} (${mods.length > 0 ? Math.round((landed / mods.length) * 100) : 0}%)`;
-      },
-    },
-    {
-      label: "使用率均值",
-      render: (d: DepartmentData) => {
-        const landedMods = allModules.filter((m) => m.customer_department_id === d.id && m.status === "已落地");
-        if (landedMods.length === 0) return "-";
-        const avg = Math.round(landedMods.reduce((sum, m) => sum + m.usage_rate, 0) / landedMods.length);
-        return `${avg}%`;
-      },
-    },
-    {
-      label: "素材数",
-      render: (d: DepartmentData) => {
-        const mods = allModules.filter((m) => m.customer_department_id === d.id);
-        return String(mods.reduce((sum, m) => sum + (Array.isArray(m.materials) ? m.materials.length : 0), 0));
-      },
-    },
-    { label: "核心痛点", render: (d: DepartmentData) => d.pain_points ? d.pain_points.slice(0, 30) + (d.pain_points.length > 30 ? "..." : "") : "-" },
-    {
-      label: "人员态度",
-      render: (d: DepartmentData) => {
-        const personnel = Array.isArray(d.personnel) ? d.personnel : [];
-        if (personnel.length === 0) return "未采集";
-        return personnel[0]?.attitude || "未标注";
-      },
-    },
-  ];
-
-  return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-base">科室对比（{departments.length}个科室）</DialogTitle>
-        </DialogHeader>
-        <div className="border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="text-left px-4 py-2 font-medium w-24" />
-                {departments.map((d) => (
-                  <th key={d.department_code} className="text-center px-4 py-2 font-medium">
-                    {d.department_name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.label} className="border-t">
-                  <td className="px-4 py-2 text-xs text-muted-foreground font-medium">{row.label}</td>
-                  {departments.map((d) => (
-                    <td key={d.department_code} className="px-4 py-2 text-center text-xs">
-                      {row.render(d)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="text-xs text-muted-foreground text-center py-1">
-          结论：{departments.map((d) => {
-            const mods = allModules.filter((m) => m.customer_department_id === d.id);
-            const landed = mods.filter((m) => m.status === "已落地").length;
-            return `${d.department_name}(${landed}/${mods.length})`;
-          }).join(" vs ")}
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }

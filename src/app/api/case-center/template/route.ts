@@ -28,13 +28,11 @@ export async function GET() {
     "功能教室数量", "学校总面积(m²)", "宿舍楼栋数", "校区数量",
     "校门数量", "食堂数量", "二级学院/学部数",
     "学校网络带宽", "服务器总量(台)", "虚拟化平台", "存储品牌及容量",
-    "数据库类型及版本", "公网IP及带宽", "内网IP段",
-    "无线覆盖（全覆盖/部分覆盖/无）", "堡垒机（有/无）",
+    "公网IP及带宽", "内网IP段", "无线覆盖（全覆盖/部分覆盖/无）",
   ];
   const hwExample = [
     3000, 200, 2800, 60, 50, 15, 50000, 4, 1, 3, 2, 5,
-    "1000M", 10, "VMware", "华为 50TB", "MySQL 8.0", "1.2.3.4 100M", "192.168.1.0/24",
-    "全覆盖", "有",
+    "1000M", 10, "VMware", "华为 50TB", "1.2.3.4 100M", "192.168.1.0/24", "全覆盖",
   ];
   const hwSheet = XLSX.utils.aoa_to_sheet([hwHeaders, hwExample]);
   hwSheet["!cols"] = hwHeaders.map(() => ({ wch: 20 }));
@@ -44,8 +42,8 @@ export async function GET() {
   const deptHeaders = [
     "科室名称", "日常核心工作", "业务流程（怎么做的）", "当前痛点",
     "在用工具/系统", "信息化期望", "科室总结",
-    "人员1姓名", "人员1职务", "人员1电话", "人员1态度",
-    "人员2姓名", "人员2职务", "人员2电话", "人员2态度",
+    "人员1姓名", "人员1职务", "人员1电话",
+    "人员2姓名", "人员2职务", "人员2电话",
   ];
   // 以中职为例预填科室行
   const defaultDeptNames = CUSTOMER_TYPE_DEPARTMENTS["中职"] || [];
@@ -53,10 +51,10 @@ export async function GET() {
     const deptDef = ALL_DEPARTMENTS.find((d) => d.name === name);
     const code = deptDef?.code || name;
     return [
-      name, // 科室名称（可修改）
-      "", "", "", "", "", "",
-      "", "", "", "",
-      "", "", "", "",
+      name, // 科室名称
+      "", "", "", "", "", "", // 6 text fields
+      "", "", "", // personnel 1: name, role, phone
+      "", "", "", // personnel 2: name, role, phone
     ];
   });
   const deptSheet = XLSX.utils.aoa_to_sheet([deptHeaders, ...deptRows]);

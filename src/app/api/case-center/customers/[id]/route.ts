@@ -57,7 +57,7 @@ export async function PUT(
     const allowedFields = [
       "school_name", "customer_types", "location",
       "description", "hardware_info", "network_info",
-      "campus_mode", "campuses",
+      "campus_mode", "campuses", "sub_schools", "school_nature",
     ];
 
     for (const field of allowedFields) {

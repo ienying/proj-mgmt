@@ -14,6 +14,8 @@ import { AIInputDialog } from "./ai-input-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import { LeftFloatNav, type NavSection, type NavItem } from "./left-float-nav";
+import RichTextEditor from "@/components/rich-text-editor";
 import {
   CUSTOMER_TYPE_OPTIONS,
   MULTI_SELECT_CUSTOMER_TYPES,
@@ -36,6 +38,7 @@ interface DepartmentData {
   pain_points: string;
   tools: string;
   expectations: string;
+  group_names: string;
   department_summary: string;
   metrics: Array<{ indicator: string; value: string; source: string; period: string }>;
   dept_scope: string;
@@ -63,6 +66,196 @@ interface CustomerFormProps {
   currentUser: { id: string; name: string };
 }
 
+// 添加科室按钮 — 支持预定义 + 自定义名称
+function AddDepartmentButton({ addedNames, predefined, onAdd }: {
+  addedNames: Set<string>; predefined: Array<{ code: string; name: string }>; onAdd: (name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const available = predefined.filter(d => !addedNames.has(d.name));
+
+  const handleAddCustom = () => {
+    const name = customName.trim();
+    if (name && !addedNames.has(name)) { onAdd(name); setCustomName(""); setOpen(false); }
+  };
+
+  return (
+    <div className="mt-4">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" className="h-8 text-xs border-[#d1c7b7] text-red-700 hover:bg-red-50">
+            <Plus className="w-3 h-3 mr-1" />添加科室
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[240px] p-0" align="start">
+          <Command>
+            <CommandInput placeholder="搜索或输入自定义名称..." className="h-8 text-xs" />
+            <CommandList className="max-h-[200px]">
+              <CommandEmpty className="text-xs py-2 text-center">无匹配结果，可自定义添加</CommandEmpty>
+              <CommandGroup heading="预定义科室">
+                {available.map((d) => (
+                  <CommandItem key={d.code} value={d.name} className="text-xs" onSelect={() => { onAdd(d.name); setOpen(false); }}>
+                    {d.name}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+              <div className="border-t border-[#e8e0d0] p-2 flex items-center gap-2">
+                <Input className="h-7 text-xs flex-1" value={customName} placeholder="输入自定义科室名称"
+                  onChange={(e) => setCustomName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddCustom(); }} />
+                <Button size="sm" className="h-7 text-[10px] bg-red-700 hover:bg-red-800 shrink-0" onClick={handleAddCustom}>添加</Button>
+              </div>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+// Multi-group business fields — stores groups using <!--SECTION--> separator across all fields
+const SECTION_SEP = "\n<!--SECTION-->\n";
+function splitSections(val: string): string[] {
+  if (!val) return [""];
+  const parts = val.split(SECTION_SEP);
+  return parts.length === 0 ? [""] : parts;
+}
+function joinSections(parts: string[]): string {
+  // Preserve empty entries so group count is maintained. Only collapse to "" when all parts are empty.
+  if (parts.every(p => !p.trim())) return "";
+  return parts.join(SECTION_SEP);
+}
+
+const BUSINESS_FIELDS = [
+  { key: "daily_work", label: "日常核心工作", placeholder: "描述该科室日常核心工作内容...", colSpan: true },
+  { key: "workflow", label: "业务流程", placeholder: "描述该科室主要业务流程...", colSpan: false },
+  { key: "pain_points", label: "当前痛点", placeholder: "描述该科室当前面临的痛点和挑战...", colSpan: false },
+  { key: "tools", label: "在用工具/系统", placeholder: "列出该科室当前使用的工具和系统...", colSpan: false },
+  { key: "expectations", label: "信息化期望", placeholder: "描述该科室对信息化的期望和需求...", colSpan: true },
+];
+
+// BusinessGroups — renders all 5 business fields as named, coordinated groups.
+// One "添加业务组" adds a complete set; removing a group removes all fields at that index.
+// Each group has a name input stored in the group_names field (SECTION_SEP-delimited).
+function BusinessGroups({ code, dept, updateDepartment }: {
+  code: string;
+  dept: DepartmentData;
+  updateDepartment: (code: string, field: string, value: unknown) => void;
+}) {
+  // Read all 5 fields + group_names and split each into sections
+  const allSections = BUSINESS_FIELDS.map(f => splitSections((dept as unknown as Record<string, string>)[f.key] || ""));
+  const nameSections = splitSections(dept.group_names || "");
+  const maxGroups = Math.max(...allSections.map(s => s.length), nameSections.length, 1);
+
+  // Normalize all field arrays to the same length
+  const normalized = allSections.map(s => {
+    const arr = [...s];
+    while (arr.length < maxGroups) arr.push("");
+    return arr;
+  });
+  // Normalize names too
+  const normalizedNames = [...nameSections];
+  while (normalizedNames.length < maxGroups) normalizedNames.push("");
+
+  // Build groups: each group is {daily_work, workflow, pain_points, tools, expectations, name}
+  const groups = Array.from({ length: maxGroups }, (_, gi) => {
+    const group: Record<string, string> = {};
+    BUSINESS_FIELDS.forEach((f, fi) => { group[f.key] = normalized[fi][gi]; });
+    group._name = normalizedNames[gi];
+    return group;
+  });
+
+  const updateGroupField = (groupIndex: number, fieldKey: string, value: string) => {
+    const fieldIdx = BUSINESS_FIELDS.findIndex(f => f.key === fieldKey);
+    const arr = [...normalized[fieldIdx]];
+    arr[groupIndex] = value;
+    updateDepartment(code, fieldKey, joinSections(arr));
+  };
+
+  const updateGroupName = (groupIndex: number, name: string) => {
+    const arr = [...normalizedNames];
+    arr[groupIndex] = name;
+    updateDepartment(code, "group_names", joinSections(arr));
+  };
+
+  const addGroup = () => {
+    BUSINESS_FIELDS.forEach(f => {
+      const arr = [...splitSections((dept as unknown as Record<string, string>)[f.key] || "")];
+      arr.push("");
+      updateDepartment(code, f.key, joinSections(arr));
+    });
+    const nameArr = [...splitSections(dept.group_names || "")];
+    nameArr.push("");
+    updateDepartment(code, "group_names", joinSections(nameArr));
+  };
+
+  const removeGroup = (groupIndex: number) => {
+    if (maxGroups <= 1) return;
+    BUSINESS_FIELDS.forEach(f => {
+      const arr = splitSections((dept as unknown as Record<string, string>)[f.key] || "");
+      if (arr.length > 1) {
+        arr.splice(groupIndex, 1);
+        updateDepartment(code, f.key, joinSections(arr));
+      }
+    });
+    const nameArr = splitSections(dept.group_names || "");
+    if (nameArr.length > 1) {
+      nameArr.splice(groupIndex, 1);
+      updateDepartment(code, "group_names", joinSections(nameArr));
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <Label className="text-xs font-medium">业务描述</Label>
+        <Button variant="ghost" size="sm" className="h-6 text-xs text-red-700 hover:bg-red-50" onClick={addGroup}>
+          <Plus className="w-3 h-3 mr-0.5" />添加业务组
+        </Button>
+      </div>
+      <div className="space-y-3">
+        {groups.map((group, gi) => (
+          <div key={gi} className="border border-[#d1c7b7] bg-white p-3 relative">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Input
+                  className="h-7 w-40 text-xs font-semibold border-[#d1c7b7]"
+                  placeholder={`业务组 ${gi + 1}`}
+                  value={group._name}
+                  onChange={(e) => updateGroupName(gi, e.target.value)}
+                />
+              </div>
+              {groups.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-[10px] text-red-400 hover:text-red-600 hover:bg-red-50"
+                  onClick={() => removeGroup(gi)}
+                >
+                  <Trash2 className="w-3 h-3 mr-0.5" />移除此组
+                </Button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {BUSINESS_FIELDS.map(f => (
+                <div key={f.key} className={cn("space-y-1.5", f.colSpan && "col-span-2")}>
+                  <Label className="text-[11px]">{f.label}</Label>
+                  <RichTextEditor
+                    className="min-h-[100px] rounded-none"
+                    value={group[f.key]}
+                    onChange={(v: string) => updateGroupField(gi, f.key, v)}
+                    placeholder={f.placeholder}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // 模块名称搜索选择器（数据来源：系统设置-基础数据-产品名称-模块名称）
 function ModuleSearchSelect({
   value,
@@ -71,7 +264,7 @@ function ModuleSearchSelect({
 }: {
   value: string;
   onChange: (code: string, name: string) => void;
-  options: Array<{ code: string; module_name: string }>;
+  options: Array<{ code: string; module_name: string; category_name?: string }>;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -114,7 +307,12 @@ function ModuleSearchSelect({
                   }}
                   className="text-xs"
                 >
-                  {opt.module_name}
+                  <div>
+                    <span>{opt.module_name}</span>
+                    {opt.category_name && (
+                      <span className="text-[10px] text-gray-400 ml-1.5">{opt.category_name}</span>
+                    )}
+                  </div>
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -130,8 +328,10 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
 
   // 基础信息
   const [schoolName, setSchoolName] = useState("");
+  const [schoolPopoverOpen, setSchoolPopoverOpen] = useState(false);
   const [customerTypes, setCustomerTypes] = useState<string[]>(["中职"]);
   const [description, setDescription] = useState("");
+  const [schoolNature, setSchoolNature] = useState(""); // 办学性质: 公办/民办
 
   // AI 录入弹窗
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
@@ -172,6 +372,78 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
   // 硬件/网络信息
   const [hardwareInfo, setHardwareInfo] = useState<Record<string, string>>({});
   const [networkInfo, setNetworkInfo] = useState<Record<string, string>>({});
+
+  // 下属学校（教育局模式）
+  const isEducationBureau = customerTypes.includes("教育局");
+  const [subSchools, setSubSchools] = useState<Array<{
+    name: string; types: string; location: { district: string; address: string }; description: string;
+    hardware_info: Record<string, string>; network_info: Record<string, string>;
+    campus_mode: string; campuses: Array<{ name: string; type: string; address: string; hardware: Record<string, string>; network: Record<string, string> }>;
+  }>>([]);
+  const [subDepts, setSubDepts] = useState<Record<number, Record<string, DepartmentData>>>({});
+  const [subModules, setSubModules] = useState<Record<number, Record<string, ModuleFormData[]>>>({});
+  const [subExpanded, setSubExpanded] = useState<Record<string, boolean>>({});
+
+  const addSubSchool = () => {
+    const idx = subSchools.length;
+    setSubSchools(prev => [...prev, { name: "", types: "", location: { district: "", address: "" }, description: "", hardware_info: {}, network_info: {}, campus_mode: "single", campuses: [] }]);
+    setSubDepts(prev => ({ ...prev, [idx]: {} }));
+    setSubModules(prev => ({ ...prev, [idx]: {} }));
+  };
+  const removeSubSchool = (idx: number) => {
+    setSubSchools(prev => prev.filter((_, i) => i !== idx));
+    setSubDepts(prev => { const n = { ...prev }; delete n[idx]; return n; });
+    setSubModules(prev => { const n = { ...prev }; delete n[idx]; return n; });
+  };
+  const updateSubSchool = (idx: number, field: string, value: unknown) => {
+    setSubSchools(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
+  };
+  const updateSubSchoolLocation = (idx: number, field: string, value: string) => {
+    setSubSchools(prev => prev.map((s, i) => i === idx ? { ...s, location: { ...s.location, [field]: value } } : s));
+  };
+  const addSubSchoolCampus = (schoolIdx: number) => {
+    setSubSchools(prev => prev.map((s, i) => i === schoolIdx ? { ...s, campuses: [...s.campuses, { name: "", type: "", address: "", hardware: {}, network: {} }] } : s));
+  };
+  const removeSubSchoolCampus = (schoolIdx: number, campusIdx: number) => {
+    setSubSchools(prev => prev.map((s, i) => i === schoolIdx ? { ...s, campuses: s.campuses.filter((_, ci) => ci !== campusIdx) } : s));
+  };
+  const updateSubSchoolCampus = (schoolIdx: number, campusIdx: number, field: string, value: unknown) => {
+    setSubSchools(prev => prev.map((s, i) => i === schoolIdx ? { ...s, campuses: s.campuses.map((c, ci) => ci === campusIdx ? { ...c, [field]: value as string } : c) } : s));
+  };
+  const addSubDept = (schoolIdx: number, deptName: string) => {
+    const deptDef = ALL_DEPARTMENTS.find(d => d.name === deptName);
+    const code = deptDef?.code || deptName;
+    setSubDepts(prev => {
+      const schoolDepts = { ...(prev[schoolIdx] || {}) };
+      if (!schoolDepts[code]) {
+        schoolDepts[code] = {
+          department_code: code, department_name: deptName,
+          personnel: [{ name: "", role: "", phone: "", attitude: "支持" }],
+          daily_work: "", workflow: "", pain_points: "", tools: "", expectations: "", group_names: "", department_summary: "",
+          metrics: [], dept_scope: "school_wide", campus_id: "",
+        };
+        // Auto-generate 1 default module
+        const modNames = DEFAULT_MODULES_BY_DEPT[deptName] || [];
+        const firstMod = modNames.length > 0 ? [modNames[0]] : [];
+        setSubModules(prev2 => {
+          const schoolMods = { ...(prev2[schoolIdx] || {}) };
+          schoolMods[code] = firstMod.map(m => ({
+            module_code: m, module_name: m, status: "未购" as const,
+            usage_rate: 0, active_users: 0, effect: "", issues: "", current_practice: "",
+            collaborating_departments: [] as string[], materials: [] as Array<{ key: string; name: string; size: number }>,
+          }));
+          return { ...prev2, [schoolIdx]: schoolMods };
+        });
+      }
+      return { ...prev, [schoolIdx]: schoolDepts };
+    });
+  };
+  const removeSubDept = (schoolIdx: number, code: string) => {
+    setSubDepts(prev => {
+      const schoolDepts = { ...prev[schoolIdx] }; delete schoolDepts[code];
+      return { ...prev, [schoolIdx]: schoolDepts };
+    });
+  };
 
   // 科室数据
   const [departments, setDepartments] = useState<Record<string, DepartmentData>>({});
@@ -227,7 +499,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
           const hw: Record<string, string> = {};
           const hwKeys = ["总人数","教师人数","学生人数","班级数量","教室数量","功能教室数量","总面积","宿舍楼栋数","校区数量","校门数量","食堂数量","二级学院数"];
           const nw: Record<string, string> = {};
-          const nwKeys = ["带宽","服务器数量","虚拟化平台","存储","数据库","公网IP","无线覆盖","堡垒机","内网IP段"];
+          const nwKeys = ["带宽","服务器数量","虚拟化平台","存储","公网IP","无线覆盖","内网IP段"];
 
           hwKeys.forEach((k, i) => { if (r[i] !== undefined && r[i] !== "") hw[k] = String(r[i]); });
           nwKeys.forEach((k, i) => { const v = r[12 + i]; if (v !== undefined && v !== "") nw[k] = String(v); });
@@ -258,10 +530,11 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
             pain_points: String(r[3] || ""),
             tools: String(r[4] || ""),
             expectations: String(r[5] || ""),
+            group_names: "",
             department_summary: String(r[6] || ""),
             personnel: [
-              { name: String(r[7] || ""), role: String(r[8] || ""), phone: String(r[9] || ""), attitude: String(r[10] || "") },
-              { name: String(r[11] || ""), role: String(r[12] || ""), phone: String(r[13] || ""), attitude: String(r[14] || "") },
+              { name: String(r[7] || ""), role: String(r[8] || ""), phone: String(r[9] || ""), attitude: "支持" },
+              { name: String(r[10] || ""), role: String(r[11] || ""), phone: String(r[12] || ""), attitude: "支持" },
             ].filter((p) => p.name),
             metrics: [],
             dept_scope: "school_wide",
@@ -314,12 +587,13 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
   const [projectList, setProjectList] = useState<Array<{
     id: string;
     project_name: string;
+    final_customer: string;
     customer_type: string;
     customer_location: { province: string; city: string; district: string; town: string; village: string };
     longitude: string;
     latitude: string;
   }>>([]);
-  const [moduleTypeList, setModuleTypeList] = useState<Array<{ code: string; module_name: string }>>([]);
+  const [moduleTypeList, setModuleTypeList] = useState<Array<{ code: string; module_name: string; category_name?: string }>>([]);
 
   // 从多个客户类型合并科室列表（去重保持顺序）
   // 科室板块颜色映射（看板风格）
@@ -342,27 +616,62 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
     grade_group:        { bg: "bg-lime-50 dark:bg-lime-950", border: "border-l-lime-400", header: "bg-lime-100 dark:bg-lime-900", accent: "bg-lime-500" },
   };
 
-  const applicableDepts = (() => {
+  // Dynamic department list — allows add/remove
+  const [applicableDepts, setApplicableDepts] = useState<string[]>([]);
+  const [deptListInitialized, setDeptListInitialized] = useState(false);
+
+  // Initialize dept list when customerTypes changes
+  useEffect(() => {
     const seen = new Set<string>();
     const merged: string[] = [];
     for (const ct of customerTypes) {
       const depts = CUSTOMER_TYPE_DEPARTMENTS[ct] || [];
       for (const d of depts) {
-        if (!seen.has(d)) {
-          seen.add(d);
-          merged.push(d);
-        }
+        if (!seen.has(d)) { seen.add(d); merged.push(d); }
       }
     }
-    return merged;
-  })();
+    setApplicableDepts(merged);
+  }, [customerTypes]);
+
+  const addDepartment = (deptName: string) => {
+    setApplicableDepts(prev => { if (prev.includes(deptName)) return prev; return [...prev, deptName]; });
+    // Initialize department data if not exists
+    const deptDef = ALL_DEPARTMENTS.find(d => d.name === deptName);
+    const code = deptDef?.code || deptName;
+    if (!departments[code]) {
+      const modNames = DEFAULT_MODULES_BY_DEPT[deptName] || [];
+      const firstMod = modNames.length > 0 ? [modNames[0]] : [];
+      setDepartments(prev => ({ ...prev, [code]: {
+        department_code: code, department_name: deptName,
+        personnel: [{ name: "", role: "", phone: "", attitude: "支持" }],
+        daily_work: "", workflow: "", pain_points: "", tools: "", expectations: "", group_names: "", department_summary: "",
+        metrics: [], dept_scope: "school_wide", campus_id: "",
+      }}));
+      setModules(prev => ({ ...prev, [code]: firstMod.map(m => ({
+        module_code: m, module_name: m, status: "未购" as const,
+        usage_rate: 0, active_users: 0, effect: "", issues: "", current_practice: "",
+        collaborating_departments: [] as string[], materials: [] as Array<{ key: string; name: string; size: number }>,
+      })) }));
+      setExpandedDepts(prev => ({ ...prev, [code]: true }));
+    }
+  };
+
+  const removeDepartment = (deptName: string) => {
+    setApplicableDepts(prev => prev.filter(n => n !== deptName));
+    const deptDef = ALL_DEPARTMENTS.find(d => d.name === deptName);
+    const code = deptDef?.code || deptName;
+    setDepartments(prev => { const n = { ...prev }; delete n[code]; return n; });
+    setModules(prev => { const n = { ...prev }; delete n[code]; return n; });
+  };
 
   // 加载项目列表和模块类型列表
   useEffect(() => {
     const fetchDropdownData = async () => {
       try {
+        const token = localStorage.getItem("auth_token");
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
         const [projRes, modRes] = await Promise.all([
-          fetch("/api/projects"),
+          fetch("/api/projects", { headers }),
           fetch("/api/dicts?type=product_module_types"),
         ]);
         if (projRes.ok) {
@@ -371,7 +680,8 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
             const loc = (p.customer_location as Record<string, string>) || {};
             return {
               id: p.id,
-              project_name: p.project_name,
+              project_name: (p.project_name as string) || "",
+              final_customer: (p.final_customer as string) || (p.project_name as string) || "",
               customer_type: p.customer_type || "",
               customer_location: {
                 province: loc.province || "",
@@ -394,6 +704,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
             .map((m: Record<string, unknown>) => ({
               code: (m.code as string) || "",
               module_name: (m.module_name as string) || (m.product_name as string) || "",
+              category_name: (m.category_name as string) || (m.product_category as string) || "",
             }))
             .filter((m: { code: string; module_name: string }) => {
               if (!m.code || !m.module_name || seen.has(m.module_name)) return false;
@@ -432,21 +743,23 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
         newDepts[code] = {
           department_code: code,
           department_name: name,
-          personnel: [],
+          personnel: [{ name: "", role: "", phone: "", attitude: "支持" }],
           daily_work: "",
           workflow: "",
           pain_points: "",
           tools: "",
           expectations: "",
+          group_names: "",
           department_summary: "",
           metrics: [],
           dept_scope: "school_wide",
           campus_id: "",
         };
 
-        // 自动生成默认模块
+        // 自动生成默认模块（仅1个）
         const defaultModuleNames = DEFAULT_MODULES_BY_DEPT[name] || [];
-        newModules[code] = defaultModuleNames.map((modName, i) => ({
+        const firstModule = defaultModuleNames.length > 0 ? [defaultModuleNames[0]] : [];
+        newModules[code] = firstModule.map((modName) => ({
           module_code: modName,
           module_name: modName,
           status: "未购" as const,
@@ -477,9 +790,11 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
 
     setFetching(true);
     // 同时加载客户数据和项目列表，确保能同步最新位置
+    const token = localStorage.getItem("auth_token");
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
     Promise.all([
       fetch(`/api/case-center/customers/${customerId}`).then((res) => res.json()),
-      fetch("/api/projects").then((res) => res.json()),
+      fetch("/api/projects", { headers }).then((res) => res.json()),
     ])
       .then(([{ data }, projResult]) => {
         if (!data) return;
@@ -490,7 +805,8 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
             const loc = (p.customer_location as Record<string, string>) || {};
             return {
               id: p.id,
-              project_name: p.project_name,
+              project_name: (p.project_name as string) || "",
+              final_customer: (p.final_customer as string) || (p.project_name as string) || "",
               customer_type: p.customer_type || "",
               customer_location: {
                 province: loc.province || "",
@@ -507,6 +823,10 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
 
         const c = data.customer;
         setSchoolName(c.school_name || "");
+        // Load school_nature and sub_schools from hardware_info (temporary storage)
+        const hwInfo = (c.hardware_info || {}) as Record<string, unknown>;
+        setSchoolNature((hwInfo._school_nature as string) || "");
+        try { const ss = JSON.parse((hwInfo._sub_schools as string) || "[]"); if (Array.isArray(ss)) setSubSchools(ss); } catch {}
 
         // 查找匹配项目，优先使用项目最新位置
         const allProjects = ((projResult.data || []) as Record<string, unknown>[]).map((p: Record<string, unknown>) => {
@@ -574,9 +894,17 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
             if (!deptSeen.has(n)) { deptSeen.add(n); deptNames.push(n); }
           }
         }
+        // Also include custom departments from saved data (user-added ones)
+        for (const savedDept of (data.departments || [])) {
+          const name = (savedDept as { department_name: string }).department_name;
+          if (name && !deptSeen.has(name)) { deptSeen.add(name); deptNames.push(name); }
+        }
         const newDepts: Record<string, DepartmentData> = {};
         const newModules: Record<string, ModuleFormData[]> = {};
         const newExpanded: Record<string, boolean> = {};
+
+        // init applicableDepts with loaded + custom
+        setApplicableDepts([...deptNames]);
 
         deptNames.forEach((name, index) => {
           const deptDef = ALL_DEPARTMENTS.find((d) => d.name === name);
@@ -597,6 +925,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
               pain_points: existingDept.pain_points || "",
               tools: existingDept.tools || "",
               expectations: existingDept.expectations || "",
+              group_names: existingDept.group_names || "",
               department_summary: existingDept.department_summary || "",
               metrics: Array.isArray(existingDept.metrics) ? existingDept.metrics as Array<{ indicator: string; value: string; source: string; period: string }> : [],
               dept_scope: (existingDept.dept_scope as string) || "school_wide",
@@ -623,19 +952,21 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
             newDepts[code] = {
               department_code: code,
               department_name: name,
-              personnel: [],
+              personnel: [{ name: "", role: "", phone: "", attitude: "支持" }],
               daily_work: "",
               workflow: "",
               pain_points: "",
               tools: "",
               expectations: "",
+              group_names: "",
               department_summary: "",
               metrics: [],
               dept_scope: "school_wide",
               campus_id: "",
             };
             const defaultModuleNames = DEFAULT_MODULES_BY_DEPT[name] || [];
-            newModules[code] = defaultModuleNames.map((modName) => ({
+            const firstModule = defaultModuleNames.length > 0 ? [defaultModuleNames[0]] : [];
+            newModules[code] = firstModule.map((modName) => ({
               module_code: modName,
               module_name: modName,
               status: "未购" as const,
@@ -685,10 +1016,11 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
   };
 
   useEffect(() => {
-    if (!customerId || customerTypes.length > 0) {
+    // Only init departments for new profiles — edit mode loads from API
+    if (!customerId) {
       initDepartments(customerTypes);
     }
-  }, [customerTypes]);
+  }, [customerTypes, customerId]);
 
   // 更新科室字段
   const updateDepartment = (code: string, field: string, value: unknown) => {
@@ -702,7 +1034,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
   const addPersonnel = (deptCode: string) => {
     updateDepartment(deptCode, "personnel", [
       ...(departments[deptCode]?.personnel || []),
-      { name: "", role: "", phone: "", attitude: "" },
+      { name: "", role: "", phone: "", attitude: "支持" },
     ]);
   };
 
@@ -798,6 +1130,20 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
       return;
     }
 
+    // Check duplicate — one profile per school name (only for new profiles)
+    if (!isEdit) {
+      try {
+        const checkRes = await fetch(`/api/case-center/customers?q=${encodeURIComponent(schoolName)}`);
+        if (checkRes.ok) {
+          const { data } = await checkRes.json();
+          if (data && data.length > 0) {
+            const exists = data.some((c: { school_name: string }) => c.school_name === schoolName);
+            if (exists) { toast.error(`"${schoolName}" 已有画像记录，请勿重复创建。如需修改请编辑已有画像。`); return; }
+          }
+        }
+      } catch { /* ignore check errors */ }
+    }
+
     setLoading(true);
     try {
       let cid = customerId;
@@ -814,7 +1160,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
               province, city, district, town, village, longitude, latitude,
             },
             description,
-            hardware_info: hardwareInfo,
+            hardware_info: { ...hardwareInfo, _school_nature: schoolNature, _sub_schools: JSON.stringify(subSchools) },
             network_info: networkInfo,
             campus_mode: campusMode,
             campuses,
@@ -837,11 +1183,46 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
             pain_points: d.pain_points,
             tools: d.tools,
             expectations: d.expectations,
+            group_names: d.group_names,
             department_summary: d.department_summary,
             metrics: d.metrics,
             dept_scope: d.dept_scope,
             campus_id: d.campus_id,
           }));
+
+        // Create custom departments (ones without IDs) first
+        const editCustomDepts = Object.values(departments).filter((d) => !d.id);
+        for (const cd of editCustomDepts) {
+          try {
+            const cdRes = await fetch(`/api/case-center/customers/${cid}/departments`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                customer_id: cid,
+                department_code: cd.department_code,
+                department_name: cd.department_name,
+                personnel: cd.personnel,
+                daily_work: cd.daily_work,
+                workflow: cd.workflow,
+                pain_points: cd.pain_points,
+                tools: cd.tools,
+                expectations: cd.expectations,
+                group_names: cd.group_names,
+                department_summary: cd.department_summary,
+                dept_scope: cd.dept_scope,
+                campus_id: cd.campus_id,
+              }),
+            });
+            if (cdRes.ok) {
+              const cdData = await cdRes.json();
+              if (cdData.data?.id) {
+                const updated = { ...departments };
+                updated[cd.department_code] = { ...cd, id: cdData.data.id };
+                setDepartments(updated);
+              }
+            }
+          } catch { /* skip */ }
+        }
 
         const deptPayload = buildDeptPayload(departments);
 
@@ -864,7 +1245,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
               province, city, district, town, village, longitude, latitude,
             },
             description,
-            hardware_info: hardwareInfo,
+            hardware_info: { ...hardwareInfo, _school_nature: schoolNature, _sub_schools: JSON.stringify(subSchools) },
             network_info: networkInfo,
             campus_mode: campusMode,
             campuses,
@@ -883,7 +1264,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
         const deptRes = await fetch(`/api/case-center/customers/${cid}/departments`);
         const deptData = await deptRes.json();
 
-        // 用新 ID 更新本地 state，同时更新科室名称
+        // 用新 ID 更新本地 state
         const newDepts = { ...departments };
         (deptData.data || []).forEach((d: { department_code: string; id: string }) => {
           if (newDepts[d.department_code]) {
@@ -892,7 +1273,39 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
         });
         setDepartments(newDepts);
 
-        // 更新科室业务字段（含可编辑的科室名称）
+        // Create custom departments (ones without IDs) first
+        const customDepts = Object.values(newDepts).filter((d) => !d.id);
+        for (const cd of customDepts) {
+          try {
+            const cdRes = await fetch(`/api/case-center/customers/${cid}/departments`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                customer_id: cid,
+                department_code: cd.department_code,
+                department_name: cd.department_name,
+                personnel: cd.personnel,
+                daily_work: cd.daily_work,
+                workflow: cd.workflow,
+                pain_points: cd.pain_points,
+                tools: cd.tools,
+                expectations: cd.expectations,
+                group_names: cd.group_names,
+                department_summary: cd.department_summary,
+                dept_scope: cd.dept_scope,
+                campus_id: cd.campus_id,
+              }),
+            });
+            if (cdRes.ok) {
+              const cdData = await cdRes.json();
+              if (cdData.data?.id) {
+                newDepts[cd.department_code] = { ...cd, id: cdData.data.id };
+              }
+            }
+          } catch { /* skip failed custom dept creation */ }
+        }
+
+        // Update ALL departments (now with IDs)
         const deptPayload = Object.values(newDepts).filter((d) => d.id).map((d) => ({
           id: d.id,
           personnel: d.personnel,
@@ -901,10 +1314,12 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
           pain_points: d.pain_points,
           tools: d.tools,
           expectations: d.expectations,
+          group_names: d.group_names,
           department_summary: d.department_summary,
           metrics: d.metrics,
           dept_scope: d.dept_scope,
           campus_id: d.campus_id,
+          department_name: d.department_name,
         }));
 
         if (deptPayload.length > 0) {
@@ -979,31 +1394,69 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
     );
   }
 
+  const deptIcons: Record<string, string> = {
+    school_leader: "🏫", academic_affairs: "📋", teaching_research: "📚", student_affairs: "👥",
+    it_center: "🖥️", hr: "👔", finance: "💰", logistics: "🔧", security: "🛡️",
+    admissions: "🎓", employment: "💼", supervision: "📊", psychology: "💚",
+    dormitory: "🏠", school_office: "📝", grade_group: "🏢",
+  };
+  const deptNavItems = applicableDepts.map((name) => {
+    const def = ALL_DEPARTMENTS.find((d) => d.name === name);
+    const c = def?.code || name;
+    const dept = departments[c];
+    const deptMods = modules[c] || [];
+    const landedCount = deptMods.filter((m) => m.status === "已落地").length;
+    // Use actual department name from state (may have been edited)
+    const displayName = dept?.department_name || name;
+    return { id: `form-dept-${c}`, icon: deptIcons[c] || "📌", label: `${displayName} · ${landedCount}/${deptMods.length}` };
+  });
+
+  // Build sub-school nav items for教育局 mode
+  const subSchoolNavItems: NavItem[] = subSchools.map((s, i) => ({
+    id: `form-sub-${i}`, icon: "🏫", label: s.name || `学校${i + 1}`,
+  }));
+
+  const navSections: NavSection[] = [
+    { id: "form-basic", icon: "📋", label: "基础信息" },
+    { id: "form-hw", icon: "🖥", label: "硬件与网络" },
+    { separator: true, label: isEducationBureau ? "教育局科室" : "科室", items: deptNavItems },
+  ];
+  if (isEducationBureau && subSchools.length > 0) {
+    navSections.push({ separator: true, label: "下属学校", items: subSchoolNavItems });
+  }
+
   return (
-    <div className="flex flex-col">
-      {/* 顶部操作栏 */}
-      <div className="flex items-center justify-between px-4 py-3 border-b bg-card sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            <ArrowLeft className="w-4 h-4 mr-1" />
+    <div>
+      <LeftFloatNav sections={navSections} onBack={onCancel} />
+      <div className="max-w-[820px] mx-auto px-6 pb-16">
+        {/* Newspaper masthead */}
+        <div className="text-center pt-8 pb-5 border-b-[3px] border-double border-red-700 mb-6">
+          <h1 className="text-4xl font-black text-red-700 tracking-[6px]" style={{fontFamily:"STSong, Songti SC, Noto Serif SC, serif"}}>
+            {isEdit ? "编辑画像" : "新建用户画像"}
+          </h1>
+          <p className="text-[11px] text-amber-700/60 tracking-[3px] mt-1">
+            {isEdit ? "EDIT CUSTOMER PROFILE" : "CREATE CUSTOMER PROFILE"}
+          </p>
+          <p className="text-xs text-gray-400 mt-2">按步骤填写学校信息，构建完整的客户画像档案</p>
+        </div>
+
+        {/* 顶部操作栏 */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={onCancel} className="text-xs text-gray-500">
+              <ArrowLeft className="w-4 h-4 mr-1" />
             返回
           </Button>
           <h2 className="font-semibold text-lg">{isEdit ? "编辑画像" : "新建画像"}</h2>
         </div>
         <div className="flex items-center gap-2">
-          {!isEdit && (
-            <>
-              <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
-                <Download className="w-4 h-4 mr-1" />
-                下载模板
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                <FileSpreadsheet className="w-4 h-4 mr-1" />
-                导入Excel
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
+          <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
+            <Download className="w-4 h-4 mr-1" />下载模板
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+            <FileSpreadsheet className="w-4 h-4 mr-1" />导入Excel
+          </Button>
+          <input ref={fileInputRef} type="file"
                 accept=".xlsx,.xls"
                 className="hidden"
                 onChange={(e) => {
@@ -1011,18 +1464,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                   if (file) handleImportExcel(file);
                 }}
               />
-            </>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-teal-600 border-teal-200 hover:bg-teal-50"
-            onClick={() => { setAiTargetDesc(""); setAiDialogOpen(true); }}
-          >
-            <Sparkles className="w-4 h-4 mr-1" />
-            AI 智能录入
-          </Button>
-          <Button variant="outline" size="sm" onClick={onCancel}>
+          <Button variant="outline" size="sm" className="border-[#d1c7b7] text-gray-500" onClick={onCancel}>
             取消
           </Button>
           <Button size="sm" onClick={handleSubmit} disabled={loading}>
@@ -1033,69 +1475,70 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
       </div>
 
       {/* 表单内容 */}
-      <div className="p-4 space-y-4">
+      <div className="space-y-6">
         {/* 基础信息 */}
-        <Card className="shadow-sm">
-          <CardHeader className="py-3">
-            <CardTitle className="text-base">基础信息</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* 学校名称（搜索下拉） */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">学校名称 *</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    className="h-9 w-[300px] justify-between text-xs font-normal"
-                  >
-                    {schoolName || "搜索选择项目学校..."}
-                    <Search className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-0" align="start">
-                  <Command>
-                    <CommandInput
-                      placeholder="搜索学校名称..."
-                      className="h-8 text-xs"
-                    />
-                    <CommandList className="max-h-[200px]">
-                      <CommandEmpty className="text-xs py-2 text-center">未找到匹配学校</CommandEmpty>
-                      <CommandGroup>
-                        {projectList.map((p) => (
-                          <CommandItem
-                            key={p.id}
-                            value={p.project_name}
-                            onSelect={() => {
-                              setSchoolName(p.project_name);
+        <div id="form-basic" className="bg-[#fdfcf8] border border-[#d1c7b7]">
+          <div className="bg-red-700 text-white px-5 py-2 text-xs font-semibold tracking-wider">基础信息</div>
+          <div className="p-5 space-y-4">
+            {/* 学校名称 + 校区模式 同一行 */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">学校名称 *</Label>
+                <Popover open={schoolPopoverOpen} onOpenChange={setSchoolPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" className="h-9 w-full justify-between text-xs font-normal">
+                      {schoolName || "搜索选择项目学校..."}
+                      <Search className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="搜索学校名称..." className="h-8 text-xs" />
+                      <CommandList className="max-h-[200px]">
+                        <CommandEmpty className="text-xs py-2 text-center">未找到匹配学校</CommandEmpty>
+                        <CommandGroup>
+                          {projectList.map((p) => (
+                            <CommandItem key={p.id} value={p.final_customer} onSelect={() => {
+                              setSchoolPopoverOpen(false);
+                              setSchoolName(p.final_customer);
                               if (p.customer_type && !isEdit) {
-                                setCustomerTypes([p.customer_type]);
+                                const types = p.customer_type.split(/[,，、]/).map((s: string) => s.trim()).filter(Boolean);
+                                // Only set if we got valid types that match known customer categories
+                                const validTypes = types.filter((t: string) => CUSTOMER_TYPE_OPTIONS.some(opt => opt.code === t));
+                                if (validTypes.length > 0) setCustomerTypes(validTypes);
                               }
-                              setProvince(p.customer_location.province || "");
-                              setCity(p.customer_location.city || "");
-                              setDistrict(p.customer_location.district || "");
-                              setTown(p.customer_location.town || "");
-                              setVillage(p.customer_location.village || "");
-                              setLongitude(p.longitude || "");
-                              setLatitude(p.latitude || "");
-                              setLocationSynced(true);
-                              setSyncedProjectName(p.project_name);
-                            }}
-                            className="text-xs"
-                          >
-                            <Check className={cn("mr-2 h-3.5 w-3.5", schoolName === p.project_name ? "opacity-100" : "opacity-0")} />
-                            {p.project_name}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              {!isEdit && (
-                <p className="text-[11px] text-muted-foreground">来源于已建项目，自动带出位置信息</p>
-              )}
+                              setProvince(p.customer_location.province || ""); setCity(p.customer_location.city || ""); setDistrict(p.customer_location.district || ""); setTown(p.customer_location.town || ""); setVillage(p.customer_location.village || ""); setLongitude(p.longitude || ""); setLatitude(p.latitude || ""); setLocationSynced(true); setSyncedProjectName(p.project_name);
+                            }} className="text-xs">
+                              <div>
+                                <span>{p.final_customer}</span>
+                                {p.final_customer !== p.project_name && (
+                                  <span className="text-[10px] text-gray-400 ml-1.5">{p.project_name}</span>
+                                )}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {!isEdit && (<p className="text-[11px] text-muted-foreground">来源于已建项目，自动带出位置信息</p>)}
+              </div>
+
+              {/* 校区模式（教育局隐藏） */}
+              {!customerTypes.includes("教育局") ? (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">校区模式</Label>
+                  <Select value={campusMode} onValueChange={setCampusMode}>
+                    <SelectTrigger className="h-9 w-full text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="single">单校区</SelectItem>
+                      <SelectItem value="multi_independent">多校区独立</SelectItem>
+                      <SelectItem value="multi_cross">多校区交叉</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : <div />}
             </div>
 
             {/* 客户类型（多选） */}
@@ -1128,144 +1571,17 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
               </p>
             </div>
 
-            {/* 校区模式（教育局隐藏） */}
+            {/* 办学性质（仅学校类型显示） */}
             {!customerTypes.includes("教育局") && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">校区模式</Label>
-                  <Select value={campusMode} onValueChange={setCampusMode}>
-                    <SelectTrigger className="h-8 w-[180px] text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="single">单校区</SelectItem>
-                      <SelectItem value="multi_independent">多校区独立</SelectItem>
-                      <SelectItem value="multi_cross">多校区交叉</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* 多校区列表配置 */}
-              {campusMode !== "single" && (
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs">校区列表</Label>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 text-xs"
-                      onClick={() => setCampuses((prev) => [...prev, { name: "", type: "中职", address: "", hardware: {}, network: {} }])}
-                    >
-                      <Plus className="w-3 h-3 mr-0.5" />
-                      添加校区
-                    </Button>
-                  </div>
-                  {campuses.map((campus, ci) => (
-                    <div key={ci} className="p-3 border rounded-md bg-muted/20 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Input
-                          className="flex-1 h-8 text-xs"
-                          placeholder="校区名称"
-                          value={campus.name}
-                          onChange={(e) => {
-                            const updated = [...campuses];
-                            updated[ci] = { ...updated[ci], name: e.target.value };
-                            setCampuses(updated);
-                          }}
-                        />
-                        <Select
-                          value={campus.type}
-                          onValueChange={(v) => {
-                            const updated = [...campuses];
-                            updated[ci] = { ...updated[ci], type: v };
-                            setCampuses(updated);
-                          }}
-                        >
-                          <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {CUSTOMER_TYPE_OPTIONS.map((t) => (
-                              <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          className="w-40 h-8 text-xs"
-                          placeholder="地址"
-                          value={campus.address}
-                          onChange={(e) => {
-                            const updated = [...campuses];
-                            updated[ci] = { ...updated[ci], address: e.target.value };
-                            setCampuses(updated);
-                          }}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 shrink-0"
-                          onClick={() => setCampuses((prev) => prev.filter((_, i) => i !== ci))}
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                        </Button>
-                      </div>
-                      {/* 校区硬件信息 */}
-                      <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                        {["总人数","教师人数","学生人数","班级数量","教室数量","功能教室数量","总面积","宿舍楼栋数","校区数量","校门数量","食堂数量","二级学院数"].map((key) => (
-                          <div key={key} className="space-y-0.5">
-                            <Label className="text-[10px]">{key}</Label>
-                            <Input
-                              className="h-7 text-[10px]"
-                              placeholder={key}
-                              value={campus.hardware?.[key] || ""}
-                              onChange={(e) => {
-                                const updated = [...campuses];
-                                updated[ci] = {
-                                  ...updated[ci],
-                                  hardware: { ...updated[ci].hardware, [key]: e.target.value },
-                                };
-                                setCampuses(updated);
-                              }}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                      {/* 校区网络信息 */}
-                      <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                        {[
-                          { key: "带宽", label: "网络带宽" },
-                          { key: "服务器数量", label: "服务器(台)" },
-                          { key: "虚拟化平台", label: "虚拟化平台" },
-                          { key: "存储", label: "存储品牌容量" },
-                          { key: "数据库", label: "数据库类型版本" },
-                          { key: "公网IP", label: "公网IP及带宽" },
-                          { key: "内网IP段", label: "内网IP段" },
-                        ].map(({ key, label }) => (
-                          <div key={key} className="space-y-0.5">
-                            <Label className="text-[10px]">{label}</Label>
-                            <Input
-                              className="h-7 text-[10px]"
-                              placeholder={label}
-                              value={campus.network?.[key] || ""}
-                              onChange={(e) => {
-                                const updated = [...campuses];
-                                updated[ci] = {
-                                  ...updated[ci],
-                                  network: { ...updated[ci].network, [key]: e.target.value },
-                                };
-                                setCampuses(updated);
-                              }}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                  {campuses.length === 0 && (
-                    <p className="text-[11px] text-muted-foreground">请添加至少一个校区</p>
-                  )}
-                </div>
-              )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">办学性质</Label>
+              <Select value={schoolNature} onValueChange={setSchoolNature}>
+                <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue placeholder="请选择" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="公办">公办</SelectItem>
+                  <SelectItem value="民办">民办</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             )}
 
@@ -1287,38 +1603,11 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
               )}
               <div className="grid grid-cols-3 gap-3">
                 <div className="relative" ref={provinceRef}>
-                  <Input
-                    value={province}
-                    onChange={(e) => { if (!locationSynced) { setProvince(e.target.value); setProvinceOpen(true); } }}
-                    onFocus={() => { if (!locationSynced) setProvinceOpen(true); }}
-                    placeholder="省/自治区/直辖市"
-                    className={cn("h-8 pr-6 text-xs", locationSynced && "bg-muted/50 text-muted-foreground cursor-default")}
-                    readOnly={locationSynced}
-                  />
-                  {province && !locationSynced && (
-                    <button
-                      type="button"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                      onClick={() => { setProvince(""); setProvinceOpen(false); }}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  )}
+                  <Input value={province} onChange={(e) => { if (!locationSynced) { setProvince(e.target.value); setProvinceOpen(true); } }} onFocus={() => { if (!locationSynced) setProvinceOpen(true); }} placeholder="省/自治区/直辖市" className={cn("h-8 pr-6 text-xs", locationSynced && "bg-muted/50 text-muted-foreground cursor-default")} readOnly={locationSynced} />
+                  {province && !locationSynced && (<button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" onClick={() => { setProvince(""); setProvinceOpen(false); }}><X className="h-3.5 w-3.5" /></button>)}
                   {provinceOpen && !locationSynced && (
                     <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-48 overflow-auto">
-                      {PROVINCES.filter((p) => !province || p.includes(province) || p.replace(/[省市自治区特别行政区壮族回族维吾尔]/g, "").includes(province)).map((p) => (
-                        <button
-                          key={p}
-                          type="button"
-                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                          onClick={() => { setProvince(p); setProvinceOpen(false); }}
-                        >
-                          {p}
-                        </button>
-                      ))}
-                      {PROVINCES.filter((p) => !province || p.includes(province) || p.replace(/[省市自治区特别行政区壮族回族维吾尔]/g, "").includes(province)).length === 0 && (
-                        <div className="px-3 py-2 text-xs text-slate-400">无匹配结果</div>
-                      )}
+                      {PROVINCES.filter((p) => !province || p.includes(province) || p.replace(/[省市自治区特别行政区壮族回族维吾尔]/g, "").includes(province)).map((p) => (<button key={p} type="button" className="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 hover:text-blue-600 transition-colors" onClick={() => { setProvince(p); setProvinceOpen(false); }}>{p}</button>))}
                     </div>
                   )}
                 </div>
@@ -1335,73 +1624,118 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
               </div>
             </div>
 
-            {/* 描述 */}
+            {/* 多校区列表配置 — placed after location info */}
+            {!customerTypes.includes("教育局") && campusMode !== "single" && (
+            <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">校区列表</Label>
+                    <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setCampuses((prev) => [...prev, { name: "", type: "中职", address: "", hardware: {}, network: {} }])}>
+                      <Plus className="w-3 h-3 mr-0.5" />添加校区
+                    </Button>
+                  </div>
+                  {campuses.map((campus, ci) => (
+                    <div key={ci} className="p-3 border rounded-md bg-muted/20 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Input className="flex-1 h-8 text-xs" value={campus.name} placeholder="校区名称（必填）" onChange={(e) => { const updated = [...campuses]; updated[ci] = { ...updated[ci], name: e.target.value }; setCampuses(updated); }} />
+                        <div className="flex flex-wrap gap-1">
+                          {CUSTOMER_TYPE_OPTIONS.filter(t => t.code !== "教育局").map((t) => {
+                            const types = (campus.type || "").split(/[,，、]/).map((s: string) => s.trim()).filter(Boolean); const selected = types.includes(t.code);
+                            return <Badge key={t.code} variant={selected ? "default" : "outline"} className="cursor-pointer text-[10px] py-0.5 px-1.5" onClick={() => { const updated = [...campuses]; let newTypes: string[]; if (selected) newTypes = types.filter((x) => x !== t.code); else newTypes = [...types, t.code]; updated[ci] = { ...updated[ci], type: newTypes.join(",") }; setCampuses(updated); }}>{t.name}</Badge>;
+                          })}
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setCampuses((prev) => prev.filter((_, i) => i !== ci))}><Trash2 className="w-3.5 h-3.5 text-red-500" /></Button>
+                      </div>
+                      <Input className="h-8 text-xs" value={campus.address} placeholder="校区地址（选填）" onChange={(e) => { const updated = [...campuses]; updated[ci] = { ...updated[ci], address: e.target.value }; setCampuses(updated); }} />
+                      {/* Campus hardware */}
+                      <div className="grid grid-cols-3 md:grid-cols-6 gap-1.5">
+                        {["总人数","教师人数","学生人数","班级数量","教室数量","功能教室数量","总面积","宿舍楼栋数"].map((key) => (
+                          <div key={key} className="space-y-0.5"><Label className="text-[9px]">{key}</Label>
+                            <Input type="number" inputMode="numeric" min="0" step="1" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} className="h-8 text-[10px]" value={campus.hardware?.[key] || ""}
+                              onChange={(e) => { const updated = [...campuses]; updated[ci] = { ...updated[ci], hardware: { ...updated[ci].hardware, [key]: e.target.value } }; setCampuses(updated); }} />
+                          </div>))}
+                      </div>
+                      {/* Campus network */}
+                      <div className="grid grid-cols-3 md:grid-cols-6 gap-1.5">
+                        {["带宽","服务器数量","虚拟化平台","存储","公网IP","无线覆盖","内网IP段"].map((key) => (
+                          <div key={key} className="space-y-0.5"><Label className="text-[9px]">{key}</Label>
+                            <Input className="h-8 text-[10px]" value={campus.network?.[key] || ""}
+                              onChange={(e) => { const updated = [...campuses]; updated[ci] = { ...updated[ci], network: { ...updated[ci].network, [key]: e.target.value } }; setCampuses(updated); }} />
+                          </div>))}
+                      </div>
+                    </div>
+                  ))}
+                  {campuses.length === 0 && (<p className="text-[11px] text-muted-foreground">请添加至少一个校区</p>)}
+                </div>
+            </div>
+            )}
+
+            {/* 描述 — rich text editor */}
             <div className="space-y-1.5">
               <Label className="text-xs">描述</Label>
-              <Textarea
+              <RichTextEditor
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(v: string) => setDescription(v)}
                 placeholder="学校简要描述..."
-                className="min-h-[140px] text-xs"
+                className="min-h-[160px]"
               />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* 硬件与网络信息 */}
-        <Card>
-          <CardHeader className="py-3">
-            <CardTitle className="text-base">硬件与网络信息</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        {/* 硬件与网络信息 — hidden when multi-campus */}
+        {campusMode === "single" && (
+        <div id="form-hw" className="bg-[#fdfcf8] border border-[#d1c7b7]">
+          <div className="bg-red-700 text-white px-5 py-2 text-xs font-semibold tracking-wider">硬件与网络信息</div>
+          <div className="p-5 space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">学校总人数</Label>
-                <Input className="h-8 text-xs" value={hardwareInfo["总人数"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "总人数": e.target.value }))} />
+                <Input type="number" inputMode="numeric" min="0" step="1" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} value={hardwareInfo["总人数"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "总人数": e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">教师人数</Label>
-                <Input className="h-8 text-xs" value={hardwareInfo["教师人数"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "教师人数": e.target.value }))} />
+                <Input type="number" inputMode="numeric" min="0" step="1" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} value={hardwareInfo["教师人数"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "教师人数": e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">学生人数</Label>
-                <Input className="h-8 text-xs" value={hardwareInfo["学生人数"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "学生人数": e.target.value }))} />
+                <Input type="number" inputMode="numeric" min="0" step="1" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} value={hardwareInfo["学生人数"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "学生人数": e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">班级数量</Label>
-                <Input className="h-8 text-xs" value={hardwareInfo["班级数量"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "班级数量": e.target.value }))} />
+                <Input type="number" inputMode="numeric" min="0" step="1" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} value={hardwareInfo["班级数量"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "班级数量": e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">教室数量</Label>
-                <Input className="h-8 text-xs" value={hardwareInfo["教室数量"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "教室数量": e.target.value }))} />
+                <Input type="number" inputMode="numeric" min="0" step="1" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} value={hardwareInfo["教室数量"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "教室数量": e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">功能教室数量</Label>
-                <Input className="h-8 text-xs" value={hardwareInfo["功能教室数量"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "功能教室数量": e.target.value }))} />
+                <Input type="number" inputMode="numeric" min="0" step="1" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} value={hardwareInfo["功能教室数量"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "功能教室数量": e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">学校总面积(m²)</Label>
-                <Input className="h-8 text-xs" value={hardwareInfo["总面积"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "总面积": e.target.value }))} />
+                <Input type="number" inputMode="numeric" min="0" step="1" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} value={hardwareInfo["总面积"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "总面积": e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">宿舍楼栋数</Label>
-                <Input className="h-8 text-xs" value={hardwareInfo["宿舍楼栋数"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "宿舍楼栋数": e.target.value }))} />
+                <Input type="number" inputMode="numeric" min="0" step="1" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} value={hardwareInfo["宿舍楼栋数"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "宿舍楼栋数": e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">校区数量</Label>
-                <Input className="h-8 text-xs" value={hardwareInfo["校区数量"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "校区数量": e.target.value }))} />
+                <Input type="number" inputMode="numeric" min="0" step="1" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} value={hardwareInfo["校区数量"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "校区数量": e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">校门数量</Label>
-                <Input className="h-8 text-xs" value={hardwareInfo["校门数量"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "校门数量": e.target.value }))} />
+                <Input type="number" inputMode="numeric" min="0" step="1" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} value={hardwareInfo["校门数量"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "校门数量": e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">食堂数量</Label>
-                <Input className="h-8 text-xs" value={hardwareInfo["食堂数量"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "食堂数量": e.target.value }))} />
+                <Input type="number" inputMode="numeric" min="0" step="1" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} value={hardwareInfo["食堂数量"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "食堂数量": e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">二级学院/学部数</Label>
-                <Input className="h-8 text-xs" value={hardwareInfo["二级学院数"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "二级学院数": e.target.value }))} />
+                <Input type="number" inputMode="numeric" min="0" step="1" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} value={hardwareInfo["二级学院数"] || ""} onChange={(e) => setHardwareInfo((prev) => ({ ...prev, "二级学院数": e.target.value }))} />
               </div>
             </div>
 
@@ -1410,11 +1744,11 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs">学校网络带宽</Label>
-                  <Input className="h-8 text-xs" value={networkInfo["带宽"] || ""} onChange={(e) => setNetworkInfo((prev) => ({ ...prev, "带宽": e.target.value }))} />
+                  <Input className="h-8 text-xs" value={networkInfo["带宽"] || ""} onChange={(e) => setNetworkInfo((prev) => ({ ...prev, "带宽": e.target.value }))} placeholder="例如：1000M" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">服务器总量(台)</Label>
-                  <Input className="h-8 text-xs" value={networkInfo["服务器数量"] || ""} onChange={(e) => setNetworkInfo((prev) => ({ ...prev, "服务器数量": e.target.value }))} />
+                  <Input type="number" inputMode="numeric" min="0" step="1" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} value={networkInfo["服务器数量"] || ""} onChange={(e) => setNetworkInfo((prev) => ({ ...prev, "服务器数量": e.target.value }))} />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">虚拟化平台</Label>
@@ -1425,32 +1759,19 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                   <Input className="h-8 text-xs" value={networkInfo["存储"] || ""} onChange={(e) => setNetworkInfo((prev) => ({ ...prev, "存储": e.target.value }))} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">数据库类型及版本</Label>
-                  <Input className="h-8 text-xs" value={networkInfo["数据库"] || ""} onChange={(e) => setNetworkInfo((prev) => ({ ...prev, "数据库": e.target.value }))} />
-                </div>
-                <div className="space-y-1.5">
                   <Label className="text-xs">公网IP及带宽</Label>
                   <Input className="h-8 text-xs" value={networkInfo["公网IP"] || ""} onChange={(e) => setNetworkInfo((prev) => ({ ...prev, "公网IP": e.target.value }))} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">无线覆盖 / 堡垒机</Label>
-                  <div className="flex gap-2">
-                    <Select value={networkInfo["无线覆盖"] || ""} onValueChange={(v) => setNetworkInfo((prev) => ({ ...prev, "无线覆盖": v }))}>
-                      <SelectTrigger className="h-8 flex-1 text-xs"><SelectValue placeholder="无线覆盖..." /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="全覆盖">全覆盖</SelectItem>
-                        <SelectItem value="部分覆盖">部分覆盖</SelectItem>
-                        <SelectItem value="无">无</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select value={networkInfo["堡垒机"] || ""} onValueChange={(v) => setNetworkInfo((prev) => ({ ...prev, "堡垒机": v }))}>
-                      <SelectTrigger className="h-8 flex-1 text-xs"><SelectValue placeholder="堡垒机..." /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="有">有</SelectItem>
-                        <SelectItem value="无">无</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <Label className="text-xs">无线覆盖</Label>
+                  <Select value={networkInfo["无线覆盖"] || ""} onValueChange={(v) => setNetworkInfo((prev) => ({ ...prev, "无线覆盖": v }))}>
+                    <SelectTrigger className="h-8 w-full text-xs"><SelectValue placeholder="无线覆盖..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="全覆盖">全覆盖</SelectItem>
+                      <SelectItem value="部分覆盖">部分覆盖</SelectItem>
+                      <SelectItem value="无">无</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">内网IP段</Label>
@@ -1458,8 +1779,9 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+        )}
 
         {/* 科室面板 */}
         {applicableDepts.map((deptName) => {
@@ -1479,13 +1801,13 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
               open={isExpanded}
               onOpenChange={(open) => setExpandedDepts((prev) => ({ ...prev, [code]: open }))}
             >
-              <Card className={cn("border-l-4 shadow-sm transition-colors", colors.bg, colors.border)}>
+              <div className="bg-[#fdfcf8] border border-[#d1c7b7] relative">
                 <CollapsibleTrigger className="w-full">
                   <CardHeader className={cn("py-3 cursor-pointer transition-colors rounded-tr-lg", colors.header)}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         {code === "school_leader" ? (
-                          <CardTitle className="text-base">{deptName}</CardTitle>
+                          <span className="text-base font-semibold">{deptName}</span>
                         ) : (
                           <div className="flex items-center gap-1.5">
                             <div className={cn("w-2 h-2 rounded-full", colors.accent)} />
@@ -1539,6 +1861,13 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                     </div>
                   </CardHeader>
                 </CollapsibleTrigger>
+                {/* Delete button outside trigger to avoid button-in-button */}
+                <button
+                  className="absolute top-3 right-3 z-10 inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-red-50 text-red-400 hover:text-red-600"
+                  onClick={(ev) => { ev.stopPropagation(); ev.preventDefault(); removeDepartment(deptName); }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
                 <CollapsibleContent>
                   <CardContent className="space-y-4 pt-0">
                     {/* 人员 */}
@@ -1559,7 +1888,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                             onChange={(e) => updatePersonnel(code, i, "name", e.target.value)}
                           />
                           <Input
-                            className="w-24 h-8 text-xs"
+                            className="w-36 h-8 text-xs"
                             placeholder="职务"
                             value={p.role}
                             onChange={(e) => updatePersonnel(code, i, "role", e.target.value)}
@@ -1570,12 +1899,6 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                             value={p.phone}
                             onChange={(e) => updatePersonnel(code, i, "phone", e.target.value)}
                           />
-                          <Input
-                            className="w-20 h-8 text-xs"
-                            placeholder="态度"
-                            value={p.attitude}
-                            onChange={(e) => updatePersonnel(code, i, "attitude", e.target.value)}
-                          />
                           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removePersonnel(code, i)}>
                             <Trash2 className="w-3.5 h-3.5 text-red-500" />
                           </Button>
@@ -1583,148 +1906,21 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                       ))}
                     </div>
 
-                    {/* 业务描述 */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">日常核心工作</Label>
-                        <Textarea
-                          className="h-36 text-xs"
-                          value={dept.daily_work}
-                          onChange={(e) => updateDepartment(code, "daily_work", e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">业务流程（怎么做的）</Label>
-                        <Textarea
-                          className="h-36 text-xs"
-                          value={dept.workflow}
-                          onChange={(e) => updateDepartment(code, "workflow", e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">当前痛点</Label>
-                        <Textarea
-                          className="h-36 text-xs"
-                          value={dept.pain_points}
-                          onChange={(e) => updateDepartment(code, "pain_points", e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">在用工具/系统</Label>
-                        <Textarea
-                          className="h-36 text-xs"
-                          value={dept.tools}
-                          onChange={(e) => updateDepartment(code, "tools", e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1.5 md:col-span-2">
-                        <Label className="text-xs">信息化期望</Label>
-                        <Textarea
-                          className="h-36 text-xs"
-                          value={dept.expectations}
-                          onChange={(e) => updateDepartment(code, "expectations", e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1.5 md:col-span-2">
-                        <Label className="text-xs">科室总结</Label>
-                        <Textarea
-                          className="h-36 text-xs"
-                          value={dept.department_summary}
-                          onChange={(e) => updateDepartment(code, "department_summary", e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    {/* 核心数据 */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <Label className="text-xs font-medium">核心数据</Label>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 text-xs"
-                          onClick={() => {
-                            const current = dept.metrics || [];
-                            updateDepartment(code, "metrics", [...current, { indicator: "", value: "", source: "人工统计", period: "" }]);
-                          }}
-                        >
-                          <Plus className="w-3 h-3 mr-0.5" />
-                          添加指标
-                        </Button>
-                      </div>
-                      {(dept.metrics || []).map((m, mi) => (
-                        <div key={mi} className="flex items-center gap-2 mb-2 p-2 border rounded-md bg-muted/20">
-                          <Input
-                            className="flex-1 h-8 text-xs"
-                            placeholder="指标名称（如：排课冲突率）"
-                            value={m.indicator}
-                            onChange={(e) => {
-                              const updated = [...(dept.metrics || [])];
-                              updated[mi] = { ...updated[mi], indicator: e.target.value };
-                              updateDepartment(code, "metrics", updated);
-                            }}
-                          />
-                          <Input
-                            className="w-24 h-8 text-xs"
-                            placeholder="数值"
-                            value={m.value}
-                            onChange={(e) => {
-                              const updated = [...(dept.metrics || [])];
-                              updated[mi] = { ...updated[mi], value: e.target.value };
-                              updateDepartment(code, "metrics", updated);
-                            }}
-                          />
-                          <Select
-                            value={m.source}
-                            onValueChange={(v) => {
-                              const updated = [...(dept.metrics || [])];
-                              updated[mi] = { ...updated[mi], source: v };
-                              updateDepartment(code, "metrics", updated);
-                            }}
-                          >
-                            <SelectTrigger className="w-28 h-8 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="人工统计">人工统计</SelectItem>
-                              <SelectItem value="系统自动统计">系统自动统计</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            className="w-20 h-8 text-xs"
-                            placeholder="周期"
-                            value={m.period}
-                            onChange={(e) => {
-                              const updated = [...(dept.metrics || [])];
-                              updated[mi] = { ...updated[mi], period: e.target.value };
-                              updateDepartment(code, "metrics", updated);
-                            }}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 shrink-0"
-                            onClick={() => {
-                              const updated = (dept.metrics || []).filter((_, i) => i !== mi);
-                              updateDepartment(code, "metrics", updated);
-                            }}
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
+                    {/* 业务描述 — supports multiple groups */}
+                    <BusinessGroups code={code} dept={dept} updateDepartment={updateDepartment} />
 
                     {/* 模块匹配表 */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <Label className="text-xs font-medium">模块匹配</Label>
-                        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => addModule(code)}>
+                        <Button variant="ghost" size="sm" className="h-6 text-xs text-red-700 hover:bg-red-50" onClick={() => addModule(code)}>
                           <Plus className="w-3 h-3 mr-0.5" />
                           添加模块
                         </Button>
                       </div>
                       <div className="space-y-2">
                         {deptModules.map((mod, mi) => (
-                          <div key={mi} className={cn("border rounded-lg p-3 relative", colors.bg, "border-l-2 border-l-slate-300 dark:border-l-slate-600")}>
+                          <div key={mi} className="bg-[#fdfcf8] border border-[#d1c7b7] p-3 relative">
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1769,22 +1965,14 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                               <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1">
                                   <Label className="text-[11px]">使用率(%)</Label>
-                                  <Input
-                                    className="h-8 text-xs"
-                                    type="number"
-                                    min="0"
-                                    max="100"
+                                  <Input className="h-8 text-xs" type="number" inputMode="numeric" min="0" max="100" step="1" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }}
                                     value={mod.usage_rate}
                                     onChange={(e) => updateModule(code, mi, "usage_rate", Number(e.target.value))}
                                   />
                                 </div>
                                 <div className="space-y-1">
                                   <Label className="text-[11px]">活跃用户</Label>
-                                  <Input
-                                    className="h-8 text-xs"
-                                    type="number"
-                                    min="0"
-                                    value={mod.active_users}
+                                  <Input className="h-8 text-xs" type="number" inputMode="numeric" min="0" step="1" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} value={mod.active_users}
                                     onChange={(e) => updateModule(code, mi, "active_users", Number(e.target.value))}
                                   />
                                 </div>
@@ -1795,11 +1983,8 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                             {mod.status === "未购" && (
                               <div className="space-y-1">
                                 <Label className="text-[11px]">当前替代做法</Label>
-                                <Textarea
-                                  className="min-h-[90px] text-xs"
-                                  value={mod.current_practice}
-                                  onChange={(e) => updateModule(code, mi, "current_practice", e.target.value)}
-                                />
+                                <RichTextEditor className="min-h-[80px] rounded-none" value={mod.current_practice} onChange={(v: string) => updateModule(code, mi, "current_practice", v)}
+                                  placeholder="例如：目前使用Excel手工管理，每周汇总一次..." />
                               </div>
                             )}
 
@@ -1809,23 +1994,15 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                                 <Label className="text-[11px]">
                                   {mod.status === "已落地" ? "落地效果" : mod.status === "未落地" ? "未落地原因" : "备注"}
                                 </Label>
-                                <Textarea
-                                  className="min-h-[90px] text-xs"
-                                  value={mod.status === "已落地" ? mod.effect : mod.status === "未落地" ? mod.issues : mod.current_practice}
-                                  onChange={(e) => {
-                                    if (mod.status === "已落地") updateModule(code, mi, "effect", e.target.value);
-                                    else if (mod.status === "未落地") updateModule(code, mi, "issues", e.target.value);
-                                    else updateModule(code, mi, "current_practice", e.target.value);
-                                  }}
-                                />
+                                <RichTextEditor className="min-h-[80px] rounded-none"
+                                  value={mod.status === "已落地" ? mod.effect : mod.status === "未落地" ? mod.issues : (mod.effect || "")}
+                                  onChange={(v: string) => { if (mod.status === "已落地") updateModule(code, mi, "effect", v); else if (mod.status === "未落地") updateModule(code, mi, "issues", v); else updateModule(code, mi, "effect", v); }}
+                                  placeholder={mod.status === "已落地" ? "例如：教师反馈积极，使用频率高..." : mod.status === "未落地" ? "例如：预算未批复、教师培训不足..." : "例如：暂无相关需求或计划..."} />
                               </div>
                               <div className="space-y-1">
                                 <Label className="text-[11px]">问题</Label>
-                                <Textarea
-                                  className="min-h-[90px] text-xs"
-                                  value={mod.issues}
-                                  onChange={(e) => updateModule(code, mi, "issues", e.target.value)}
-                                />
+                                <RichTextEditor className="min-h-[80px] rounded-none" value={mod.issues} onChange={(v: string) => updateModule(code, mi, "issues", v)}
+                                  placeholder="例如：系统响应速度慢、部分功能不完善、教师使用意愿低..." />
                               </div>
                             </div>
 
@@ -1860,18 +2037,17 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                                 })}
                             </div>
 
-                            {/* 素材上传 */}
-                            {mod.status === "已落地" && (
+                            {/* 素材上传 — available for all statuses */}
+                            {(
                               <div className="mt-2">
                                 <div className="flex items-center gap-2">
                                   <span className="text-[11px] text-muted-foreground">素材：</span>
                                   {(mod.materials || []).map((m, matIdx) => (
                                     <Badge key={matIdx} variant="secondary" className="text-[10px] gap-1">
-                                      {m.name.length > 15 ? m.name.slice(0, 15) + "..." : m.name}
-                                      <X
-                                        className="w-3 h-3 cursor-pointer"
-                                        onClick={() => removeMaterial(code, mi, matIdx)}
-                                      />
+                                      <a href={`/api/files/${m.key}`} download={m.name} className="hover:underline cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                                        {m.name.length > 15 ? m.name.slice(0, 15) + "..." : m.name}
+                                      </a>
+                                      <X className="w-3 h-3 cursor-pointer" onClick={() => removeMaterial(code, mi, matIdx)} />
                                     </Badge>
                                   ))}
                                   <label className="cursor-pointer">
@@ -1899,11 +2075,213 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                     </div>
                   </CardContent>
                 </CollapsibleContent>
-              </Card>
+              </div>
             </Collapsible>
           );
         })}
       </div>
+
+      {/* Add department button — supports predefined + custom */}
+      <AddDepartmentButton
+        addedNames={new Set(applicableDepts)}
+        predefined={ALL_DEPARTMENTS}
+        onAdd={(name) => addDepartment(name)}
+      />
+
+      {/* 下属学校（教育局模式） */}
+      {isEducationBureau && (
+        <div className="bg-[#fdfcf8] border border-[#d1c7b7] mt-6" id="form-sub-schools">
+          <div className="bg-red-700 text-white px-5 py-2 text-xs font-semibold tracking-wider flex items-center justify-between">
+            <span>下属学校</span>
+            <Button variant="ghost" size="sm" className="h-6 text-xs text-white hover:bg-red-600" onClick={addSubSchool}>＋ 添加下属学校</Button>
+          </div>
+          <div className="p-5 space-y-4">
+            {subSchools.length === 0 && (
+              <p className="text-xs text-gray-400 text-center py-4">暂无下属学校，点击上方按钮添加</p>
+            )}
+            {subSchools.map((school, si) => (
+              <div key={si} id={`form-sub-${si}`} className="bg-white border border-[#d1c7b7] p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-semibold text-red-700">🏫 下属学校 {si + 1}</span>
+                  <Button variant="ghost" size="sm" className="h-6 text-xs text-red-500" onClick={() => removeSubSchool(si)}>🗑 删除</Button>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">学校名称</Label>
+                    <div className="flex gap-1">
+                      <Input className="h-8 text-xs flex-1" value={school.name} onChange={(e) => updateSubSchool(si, "name", e.target.value)} placeholder="如：天河区第一小学" />
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="sm" className="h-8 text-[10px] shrink-0" title="从项目中选择">📋</Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[280px] p-0" align="end">
+                          <Command>
+                            <CommandInput placeholder="搜索项目学校..." className="h-8 text-xs" />
+                            <CommandList className="max-h-[160px]">
+                              <CommandEmpty className="text-xs py-2 text-center">未找到</CommandEmpty>
+                              <CommandGroup>
+                                {projectList.filter(p => p.final_customer !== schoolName).map((p) => (
+                                  <CommandItem key={p.id} value={p.final_customer} className="text-xs" onSelect={() => {
+                                    updateSubSchool(si, "name", p.final_customer);
+                                    updateSubSchool(si, "types", p.customer_type || "");
+                                    updateSubSchoolLocation(si, "district", p.customer_location?.district || "");
+                                    updateSubSchool(si, "description", (p as any).description || "");
+                                  }}>
+                                    {p.final_customer}
+                                    <span className="text-[10px] text-gray-400 ml-1">{p.customer_type}</span>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">学校类型</Label>
+                    <div className="flex flex-wrap gap-1">
+                      {CUSTOMER_TYPE_OPTIONS.filter(t => t.code !== "教育局").map((t) => {
+                        const types = (school.types || "").split(/[,，、]/).map((s: string) => s.trim()).filter(Boolean);
+                        const sel = types.includes(t.code);
+                        return <Badge key={t.code} variant={sel ? "default" : "outline"} className="cursor-pointer text-[10px] py-0.5 px-1.5" onClick={() => { const n = sel ? types.filter(x => x !== t.code) : [...types, t.code]; updateSubSchool(si, "types", n.join(",")); }}>{t.name}</Badge>;
+                      })}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">区/县</Label>
+                    <Input className="h-8 text-xs" value={school.location?.district || ""} onChange={(e) => updateSubSchoolLocation(si, "district", e.target.value)} placeholder="如：天河区" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">地址</Label>
+                    <Input className="h-8 text-xs" value={school.location?.address || ""} onChange={(e) => updateSubSchoolLocation(si, "address", e.target.value)} placeholder="详细地址" />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">学校描述</Label>
+                  <RichTextEditor className="min-h-[120px] rounded-none" value={school.description} onChange={(v: string) => updateSubSchool(si, "description", v)} placeholder="学校简要描述..." />
+                </div>
+                {/* Hardware & Network for sub-school — hidden when multi-campus */}
+                {(school.campus_mode || "single") === "single" && (
+                <div className="mt-3 pt-3 border-t border-[#e8e0d0]">
+                  <Label className="text-xs font-medium mb-2 block">基本信息</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {["总人数","教师人数","学生人数","班级数量","教室数量","功能教室数量","总面积"].map((key) => (
+                      <div key={key} className="space-y-0.5">
+                        <Label className="text-[10px]">{key}</Label>
+                        <Input type="number" inputMode="numeric" min="0" step="1" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} className="h-7 text-[10px]" placeholder={key}
+                          value={(school.hardware_info || {})[key] || ""}
+                          onChange={(e) => updateSubSchool(si, "hardware_info", { ...(school.hardware_info || {}), [key]: e.target.value })} />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    {["带宽","服务器数量","无线覆盖"].map((key) => (
+                      <div key={key} className="space-y-0.5">
+                        <Label className="text-[10px]">{key}</Label>
+                        <Input className="h-7 text-[10px]" placeholder={key}
+                          value={(school.network_info || {})[key] || ""}
+                          onChange={(e) => updateSubSchool(si, "network_info", { ...(school.network_info || {}), [key]: e.target.value })} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                )}
+                {/* Campus mode for sub-school */}
+                <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-[#e8e0d0]">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">校区模式</Label>
+                    <Select value={school.campus_mode || "single"} onValueChange={(v) => updateSubSchool(si, "campus_mode", v)}>
+                      <SelectTrigger className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="single">单校区</SelectItem>
+                        <SelectItem value="multi_independent">多校区独立</SelectItem>
+                        <SelectItem value="multi_cross">多校区交叉</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {(school.campus_mode === "multi_independent" || school.campus_mode === "multi_cross") && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">校区列表</Label>
+                      <Button variant="ghost" size="sm" className="h-6 text-xs text-red-700 hover:bg-red-50" onClick={() => addSubSchoolCampus(si)}>＋ 添加校区</Button>
+                    </div>
+                  )}
+                </div>
+                {/* Campus list with full hw/nw */}
+                {(school.campus_mode === "multi_independent" || school.campus_mode === "multi_cross") && school.campuses.map((campus, ci) => (
+                  <div key={ci} className="bg-gray-50 border border-[#e8e0d0] p-3 mt-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold">🏫 校区 {ci + 1}</span>
+                      <Button variant="ghost" size="sm" className="h-5 text-[10px] text-red-400" onClick={() => removeSubSchoolCampus(si, ci)}>✕</Button>
+                    </div>
+                    {/* Row 1: name */}
+                    <div className="space-y-0.5 mb-2">
+                      <Label className="text-[10px]">校区名称</Label>
+                      <Input className="h-7 text-[10px]" value={campus.name} placeholder="校区名称（必填）" onChange={(e) => updateSubSchoolCampus(si, ci, "name", e.target.value)} />
+                    </div>
+                    {/* Row 2: address */}
+                    <div className="space-y-0.5 mb-2">
+                      <Label className="text-[10px]">地址</Label>
+                      <Input className="h-7 text-[10px]" value={campus.address} placeholder="校区地址（选填）" onChange={(e) => updateSubSchoolCampus(si, ci, "address", e.target.value)} />
+                    </div>
+                    {/* Campus hardware */}
+                    <div className="text-[10px] font-medium text-gray-500 mt-2 mb-1">硬件信息</div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {["总人数","教师人数","学生人数","班级数量","教室数量","功能教室数量","总面积","宿舍楼栋数"].map((key) => (
+                        <div key={key} className="space-y-0.5"><Label className="text-[9px]">{key}</Label>
+                          <Input type="number" inputMode="numeric" min="0" step="1" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} className="h-7 text-[10px]" value={(campus.hardware || {})[key] || ""}
+                            onChange={(e) => { const hw = { ...(campus.hardware || {}), [key]: e.target.value }; setSubSchools(prev => prev.map((s, i) => i === si ? { ...s, campuses: s.campuses.map((c, j) => j === ci ? { ...c, hardware: hw } : c) } : s)); }} />
+                        </div>))}
+                    </div>
+                    {/* Campus network */}
+                    <div className="text-[10px] font-medium text-gray-500 mt-2 mb-1">网络信息</div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {["带宽","服务器数量","虚拟化平台","存储","无线覆盖"].map((key) => (
+                        <div key={key} className="space-y-0.5"><Label className="text-[9px]">{key}</Label>
+                          <Input className="h-7 text-[10px]" value={(campus.network || {})[key] || ""}
+                            onChange={(e) => { const nw = { ...(campus.network || {}), [key]: e.target.value }; setSubSchools(prev => prev.map((s, i) => i === si ? { ...s, campuses: s.campuses.map((c, j) => j === ci ? { ...c, network: nw } : c) } : s)); }} />
+                        </div>))}
+                    </div>
+                  </div>
+                ))}
+                {/* Sub-school departments */}
+                <div className="mt-3 pt-3 border-t border-[#e8e0d0]">
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-xs font-medium">科室（可选）</Label>
+                    <Button variant="ghost" size="sm" className="h-6 text-xs text-red-700 hover:bg-red-50" onClick={() => {
+                      // Pick first unadded dept
+                      const existing = Object.keys(subDepts[si] || {});
+                      const available = ALL_DEPARTMENTS.filter(d => !existing.includes(d.code));
+                      if (available.length > 0) addSubDept(si, available[0].name);
+                    }}>＋ 添加科室</Button>
+                  </div>
+                  {Object.keys(subDepts[si] || {}).length === 0 && (
+                    <p className="text-xs text-gray-400">暂未添加科室</p>
+                  )}
+                  {Object.entries(subDepts[si] || {}).map(([code, dept]) => (
+                    <div key={code} className="bg-[#fdfcf8] border border-[#e8e0d0] p-3 mb-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold">{deptIcons[code] || "📌"} {dept.department_name}</span>
+                        <Button variant="ghost" size="sm" className="h-5 text-[10px] text-red-400" onClick={() => removeSubDept(si, code)}>✕</Button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-[10px]">日常核心工作</Label>
+                          <RichTextEditor className="min-h-[80px] rounded-none" value={dept.daily_work || ""} onChange={(v: string) => setSubDepts(prev => ({ ...prev, [si]: { ...prev[si], [code]: { ...dept, daily_work: v } } }))} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px]">当前痛点</Label>
+                          <RichTextEditor className="min-h-[80px] rounded-none" value={dept.pain_points || ""} onChange={(v: string) => setSubDepts(prev => ({ ...prev, [si]: { ...prev[si], [code]: { ...dept, pain_points: v } } }))} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 底部操作栏 */}
       <div className="flex items-center justify-end gap-2 px-4 py-3 border-t bg-card sticky bottom-0 z-10">
@@ -1928,6 +2306,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
           { key: "remark", label: "备注" },
         ]}
       />
+      </div>{/* close max-w */}
     </div>
   );
 }
