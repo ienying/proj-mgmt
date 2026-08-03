@@ -406,11 +406,19 @@ async function syncProjectSchema(
   return { matched: true, tableCount: tablesToCopy.length };
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const client = await createServerClient();
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
+    // 优先从路由参数获取 id，兼容旧的 query string 方式
+    let id = searchParams.get("id");
+    if (!id) {
+      const resolvedParams = await params;
+      id = resolvedParams.id;
+    }
 
     if (id) {
       const { data, error } = await client.rpc("dp_get_by_id", {
@@ -421,6 +429,52 @@ export async function GET(request: NextRequest) {
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
+
+      // 同时获取项目成员数据
+      if (data) {
+        const projectData = data as Record<string, unknown>;
+        const safeId = (id as string).replace(/'/g, "''");
+        const projectSchema = projectData.project_schema as string | undefined;
+
+        const { data: members } = await client.rpc("execute_sql", {
+          p_sql: `SELECT id, project_id, user_id, role_type, name, phone, email FROM public.project_members WHERE project_id = '${safeId}' ORDER BY name`,
+        });
+        projectData.members = members || [];
+
+        // 优先从项目 Schema 表读取对接信息，回退到 projects 表 JSONB 字段
+        if (projectSchema) {
+          try {
+            const { data: intData } = await client.rpc("execute_sql", {
+              p_sql: `SELECT * FROM ${projectSchema}.integration_info ORDER BY created_at`,
+            });
+            if (intData && Array.isArray(intData) && intData.length > 0) {
+              projectData.integration_list = intData;
+            } else {
+              // Schema 表为空时，检查 projects 表 JSONB（兼容旧数据）
+              const existing = projectData.integration_list as Array<unknown> | null;
+              if (!existing || existing.length === 0) {
+                // 尝试从 public.integration_info 获取
+                const { data: pubData } = await client.rpc("execute_sql", {
+                  p_sql: `SELECT * FROM public.integration_info WHERE project_id = '${safeId}' ORDER BY created_at`,
+                });
+                if (pubData && Array.isArray(pubData) && pubData.length > 0) {
+                  projectData.integration_list = pubData;
+                }
+              }
+            }
+
+            const { data: cdData } = await client.rpc("execute_sql", {
+              p_sql: `SELECT * FROM ${projectSchema}.custom_dev_info ORDER BY created_at`,
+            });
+            if (cdData && Array.isArray(cdData) && cdData.length > 0) {
+              projectData.custom_dev_info = cdData;
+            }
+          } catch {
+            // Schema 表不存在时，使用 projects 表 JSONB 数据作为回退
+          }
+        }
+      }
+
       return NextResponse.json({ data });
     }
 
@@ -561,6 +615,98 @@ export async function PUT(request: NextRequest) {
       ];
       for (const sql of tables) {
         try { await client.rpc("execute_sql", { p_sql: sql }); } catch (e) { /* ignore */ }
+      }
+    }
+
+    // 确保项目 Schema 中存在对接信息和定制化信息表
+    if (updateData.project_schema) {
+      const schemaTables = [
+        `CREATE TABLE IF NOT EXISTS ${updateData.project_schema}.integration_info (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          vendor_name TEXT, product_module TEXT, integration_type TEXT,
+          brief_description TEXT, in_contract TEXT DEFAULT '是', contract_note TEXT,
+          our_req_contact TEXT, our_req_contact_phone TEXT,
+          our_product_contact TEXT, our_product_contact_phone TEXT,
+          our_dev_contact TEXT, our_dev_contact_phone TEXT,
+          our_responsibility TEXT,
+          their_req_contact TEXT, their_req_contact_phone TEXT,
+          their_req_contact_position TEXT, their_req_contact_note TEXT,
+          their_product_contact TEXT, their_product_contact_phone TEXT,
+          their_product_contact_position TEXT, their_product_contact_note TEXT,
+          their_dev_contact TEXT, their_dev_contact_phone TEXT,
+          their_dev_contact_position TEXT, their_dev_contact_note TEXT,
+          their_responsibility TEXT,
+          integration_docs JSONB DEFAULT '[]'::jsonb,
+          remark TEXT, created_at TIMESTAMPTZ DEFAULT now()
+        )`,
+        `CREATE TABLE IF NOT EXISTS ${updateData.project_schema}.custom_dev_info (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          product_module TEXT, custom_content TEXT,
+          in_contract TEXT DEFAULT '是', contract_note TEXT,
+          customer_req_contact TEXT, customer_req_contact_phone TEXT,
+          customer_req_contact_position TEXT, customer_req_contact_note TEXT,
+          internal_req_contact TEXT, internal_req_contact_phone TEXT,
+          internal_product_contact TEXT, internal_product_contact_phone TEXT,
+          req_docs JSONB DEFAULT '[]'::jsonb,
+          remark TEXT, created_at TIMESTAMPTZ DEFAULT now()
+        )`,
+      ];
+      for (const sql of schemaTables) {
+        try { await client.rpc("execute_sql", { p_sql: sql }); } catch (e) { /* ignore */ }
+      }
+
+      // 同步对接信息到项目 Schema 表
+      const integrationList = updateData.integration_list;
+      if (Array.isArray(integrationList)) {
+        try {
+          await client.rpc("execute_sql", {
+            p_sql: `DELETE FROM ${updateData.project_schema}.integration_info`,
+          });
+          for (const item of integrationList as Record<string, unknown>[]) {
+            const { id, integration_docs, ...rest } = item;
+            const columns = Object.keys(rest).filter(k => rest[k] !== undefined);
+            if (columns.length === 0) continue;
+            const values = columns.map(k => {
+              const v = rest[k];
+              if (v === null) return 'NULL';
+              return `'${String(v).replace(/'/g, "''")}'`;
+            });
+            const docsJson = integration_docs
+              ? `'${JSON.stringify(integration_docs).replace(/'/g, "''")}'`
+              : `'[]'`;
+            await client.rpc("execute_sql", {
+              p_sql: `INSERT INTO ${updateData.project_schema}.integration_info (${columns.join(", ")}, integration_docs)
+                VALUES (${values.join(", ")}, ${docsJson})`,
+            });
+          }
+        } catch (e) { console.error("同步对接信息到项目Schema失败:", e); }
+      }
+
+      // 同步定制化信息到项目 Schema 表
+      const customDevInfo = updateData.custom_dev_info;
+      if (Array.isArray(customDevInfo)) {
+        try {
+          await client.rpc("execute_sql", {
+            p_sql: `DELETE FROM ${updateData.project_schema}.custom_dev_info`,
+          });
+          for (const item of customDevInfo as Record<string, unknown>[]) {
+            const { id, req_docs, ...rest } = item;
+            const columns = Object.keys(rest).filter(k => rest[k] !== undefined);
+            if (columns.length === 0) continue;
+            const values = columns.map(k => {
+              const v = rest[k];
+              if (v === null) return 'NULL';
+              return `'${String(v).replace(/'/g, "''")}'`;
+            });
+            const docsJson = req_docs
+              ? `'${JSON.stringify(req_docs).replace(/'/g, "''")}'`
+              : `'[]'`;
+            await client.rpc("execute_sql", {
+              p_sql: `INSERT INTO ${updateData.project_schema}.custom_dev_info (${columns.join(", ")}, req_docs)
+                VALUES (${values.join(", ")}, ${docsJson})`,
+            });
+          }
+        } catch (e) { console.error("同步定制化信息到项目Schema失败:", e); }
       }
     }
 

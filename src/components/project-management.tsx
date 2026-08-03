@@ -527,7 +527,9 @@ export function ProjectManagement({
   // 从 API 刷新项目列表
   const refreshProjects = async () => {
     try {
-      const res = await fetch("/api/projects");
+      const token = localStorage.getItem("auth_token");
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch("/api/projects", { headers });
       if (res.ok) {
         const data = await res.json();
         const list = data.data || [];
@@ -1150,7 +1152,21 @@ export function ProjectManagement({
           )}
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" size="sm"
-              onClick={() => { setEditingProject(selectedProject); setShowProjectForm(true); }}
+              onClick={async () => {
+                // 先获取完整项目数据再打开编辑表单
+                try {
+                  const res = await fetch(`/api/projects/${selectedProject.id}`);
+                  const json = await res.json();
+                  if (json.data) {
+                    setEditingProject(json.data as Project);
+                  } else {
+                    setEditingProject(selectedProject);
+                  }
+                } catch {
+                  setEditingProject(selectedProject);
+                }
+                setShowProjectForm(true);
+              }}
             >
               <Edit className="w-4 h-4 mr-1" />
               编辑

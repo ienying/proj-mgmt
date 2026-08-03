@@ -216,6 +216,7 @@ export async function POST(request: NextRequest) {
       role_market_product: body.role_market_product || null,
       role_project_manager: body.role_project_manager || null,
       custom_dev_info: custom_dev_info || [],
+      integration_list: integration_list || [],
       construction_units_info: construction_units_info || [],
       final_customer: final_customer || null,
       required_date: required_date || null,
@@ -292,19 +293,102 @@ export async function POST(request: NextRequest) {
         detail TEXT,
         created_at TIMESTAMPTZ DEFAULT now()
       )`,
+      `CREATE TABLE IF NOT EXISTS ${projectSchema}.integration_info (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        vendor_name TEXT,
+        product_module TEXT,
+        integration_type TEXT,
+        brief_description TEXT,
+        in_contract TEXT DEFAULT '是',
+        contract_note TEXT,
+        our_req_contact TEXT,
+        our_req_contact_phone TEXT,
+        our_product_contact TEXT,
+        our_product_contact_phone TEXT,
+        our_dev_contact TEXT,
+        our_dev_contact_phone TEXT,
+        our_responsibility TEXT,
+        their_req_contact TEXT,
+        their_req_contact_phone TEXT,
+        their_req_contact_position TEXT,
+        their_req_contact_note TEXT,
+        their_product_contact TEXT,
+        their_product_contact_phone TEXT,
+        their_product_contact_position TEXT,
+        their_product_contact_note TEXT,
+        their_dev_contact TEXT,
+        their_dev_contact_phone TEXT,
+        their_dev_contact_position TEXT,
+        their_dev_contact_note TEXT,
+        their_responsibility TEXT,
+        integration_docs JSONB DEFAULT '[]'::jsonb,
+        remark TEXT,
+        created_at TIMESTAMPTZ DEFAULT now()
+      )`,
+      `CREATE TABLE IF NOT EXISTS ${projectSchema}.custom_dev_info (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        product_module TEXT,
+        custom_content TEXT,
+        in_contract TEXT DEFAULT '是',
+        contract_note TEXT,
+        customer_req_contact TEXT,
+        customer_req_contact_phone TEXT,
+        customer_req_contact_position TEXT,
+        customer_req_contact_note TEXT,
+        internal_req_contact TEXT,
+        internal_req_contact_phone TEXT,
+        internal_product_contact TEXT,
+        internal_product_contact_phone TEXT,
+        req_docs JSONB DEFAULT '[]'::jsonb,
+        remark TEXT,
+        created_at TIMESTAMPTZ DEFAULT now()
+      )`,
     ];
     for (const sql of projectTables) {
       try { await client.rpc("execute_sql", { p_sql: sql }); } catch (e) { console.error("建表失败:", e); }
     }
 
-    // 7. 保存对接信息
+    // 7. 保存对接信息到项目 Schema
     if (Array.isArray(integration_list) && integration_list.length > 0) {
       for (const item of integration_list as Record<string, unknown>[]) {
-        const { id, ...rest } = item;
-        await client.rpc("dp_insert", {
-          p_table: "integration_info",
-          p_data: { project_id: projectId, ...rest },
+        const { id, integration_docs, ...rest } = item;
+        const columns = Object.keys(rest).filter(k => rest[k] !== undefined);
+        const values = columns.map(k => {
+          const v = rest[k];
+          if (v === null) return 'NULL';
+          return `'${String(v).replace(/'/g, "''")}'`;
         });
+        const docsJson = integration_docs
+          ? `'${JSON.stringify(integration_docs).replace(/'/g, "''")}'`
+          : `'[]'`;
+        try {
+          await client.rpc("execute_sql", {
+            p_sql: `INSERT INTO ${projectSchema}.integration_info (${columns.join(", ")}, integration_docs)
+              VALUES (${values.join(", ")}, ${docsJson})`,
+          });
+        } catch (e) { console.error("保存对接信息到项目Schema失败:", e); }
+      }
+    }
+
+    // 8. 保存定制开发信息到项目 Schema
+    if (Array.isArray(custom_dev_info) && custom_dev_info.length > 0) {
+      for (const item of custom_dev_info as Record<string, unknown>[]) {
+        const { id, req_docs, ...rest } = item;
+        const columns = Object.keys(rest).filter(k => rest[k] !== undefined);
+        const values = columns.map(k => {
+          const v = rest[k];
+          if (v === null) return 'NULL';
+          return `'${String(v).replace(/'/g, "''")}'`;
+        });
+        const docsJson = req_docs
+          ? `'${JSON.stringify(req_docs).replace(/'/g, "''")}'`
+          : `'[]'`;
+        try {
+          await client.rpc("execute_sql", {
+            p_sql: `INSERT INTO ${projectSchema}.custom_dev_info (${columns.join(", ")}, req_docs)
+              VALUES (${values.join(", ")}, ${docsJson})`,
+          });
+        } catch (e) { console.error("保存定制化信息到项目Schema失败:", e); }
       }
     }
 

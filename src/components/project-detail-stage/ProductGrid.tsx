@@ -83,8 +83,45 @@ function FullscreenModal({ title, onClose, children }: { title: string; onClose:
   );
 }
 
+// ═══ 文档附件列表 ═══
+function DocList({ docs }: { docs: Array<Record<string, unknown>> }) {
+  if (!docs || docs.length === 0) return null;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      {docs.map((doc, i) => {
+        const name = String(doc.name || `文档 ${i + 1}`);
+        const type = String(doc.type || "file");
+        const url = String(doc.url || "");
+        const data = String(doc.data || "");
+
+        if (type === "link" && url) {
+          return (
+            <a key={i} href={url} target="_blank" rel="noreferrer"
+              style={{ fontSize: 11, color: "#2563eb", textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: 4, wordBreak: "break-all" }}>
+              🔗 {name}
+            </a>
+          );
+        }
+        if (type === "file" && data) {
+          return (
+            <a key={i} href={data} download={name}
+              style={{ fontSize: 11, color: "#16a34a", textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: 4, wordBreak: "break-all" }}>
+              📄 {name}
+            </a>
+          );
+        }
+        return (
+          <span key={i} style={{ fontSize: 11, color: "var(--s-text-muted)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+            📄 {name}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ProductGrid({ modules, moduleDict, project, onFullscreen, projectTypes, projectStages, customerTypeDict }: ProductGridProps) {
-  const [activeTab, setActiveTab] = useState<"procurement" | "info">("procurement");
+  const [activeTab, setActiveTab] = useState<"procurement" | "info" | "integration" | "custom">("procurement");
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [productDetails, setProductDetails] = useState<Record<string, { vendor?: string; scope?: string; model_spec?: string; product_name?: string }>>({});
   const [deploymentModes, setDeploymentModes] = useState<{ code: string; name: string }[]>([]);
@@ -207,21 +244,27 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
 
   return (
     <div className="px-16 py-6" style={{ borderBottom: "1px solid var(--s-border)" }}>
-      <div className="text-[9px] uppercase tracking-[2px] mb-4 flex items-center gap-2" style={{ color: "var(--s-orange)", fontFamily: "var(--font-mono, monospace)" }}>
+      <div className="text-[10px] uppercase tracking-[2px] mb-4 flex items-center gap-2 font-semibold" style={{ color: "#16a34a", fontFamily: "var(--font-mono, monospace)" }}>
         已采购产品清单 · {totalModules} 项 · 共 {totalQty} 套
-        <span className="flex-1 h-px" style={{ backgroundColor: "var(--s-border)" }} />
+        <span className="flex-1 h-px" style={{ backgroundColor: "#16a34a", opacity: 0.3 }} />
       </div>
 
       {/* Tab bar */}
       <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
-        <button onClick={() => setActiveTab("procurement")} style={{ padding: "8px 20px", fontSize: 11, fontWeight: 500, cursor: "pointer", border: "none", borderBottom: activeTab === "procurement" ? "2px solid var(--s-orange)" : "2px solid transparent", background: "transparent", color: activeTab === "procurement" ? "var(--s-orange)" : "var(--s-text-muted)", fontFamily: "var(--s-font-mono)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-          📦 采购清单 <span style={{ fontSize: 10, opacity: 0.6 }}>{totalModules}</span>
+        <button onClick={() => setActiveTab("procurement")} style={{ padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none", borderBottom: activeTab === "procurement" ? "2px solid #16a34a" : "2px solid transparent", background: "transparent", color: activeTab === "procurement" ? "#16a34a" : "var(--s-text-muted)", fontFamily: "var(--s-font-mono)", letterSpacing: "0.5px" }}>
+          📦 采购清单 <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 2 }}>{totalModules}</span>
         </button>
-        <button onClick={() => setActiveTab("info")} style={{ padding: "8px 20px", fontSize: 11, fontWeight: 500, cursor: "pointer", border: "none", borderBottom: activeTab === "info" ? "2px solid var(--s-orange)" : "2px solid transparent", background: "transparent", color: activeTab === "info" ? "var(--s-orange)" : "var(--s-text-muted)", fontFamily: "var(--s-font-mono)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+        <button onClick={() => setActiveTab("info")} style={{ padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none", borderBottom: activeTab === "info" ? "2px solid #16a34a" : "2px solid transparent", background: "transparent", color: activeTab === "info" ? "#16a34a" : "var(--s-text-muted)", fontFamily: "var(--s-font-mono)", letterSpacing: "0.5px" }}>
           📋 项目基本信息
         </button>
+        <button onClick={() => setActiveTab("integration")} style={{ padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none", borderBottom: activeTab === "integration" ? "2px solid #16a34a" : "2px solid transparent", background: "transparent", color: activeTab === "integration" ? "#16a34a" : "var(--s-text-muted)", fontFamily: "var(--s-font-mono)", letterSpacing: "0.5px" }}>
+          🔗 对接信息 <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 2 }}>{integrations.length}</span>
+        </button>
+        <button onClick={() => setActiveTab("custom")} style={{ padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none", borderBottom: activeTab === "custom" ? "2px solid #16a34a" : "2px solid transparent", background: "transparent", color: activeTab === "custom" ? "#16a34a" : "var(--s-text-muted)", fontFamily: "var(--s-font-mono)", letterSpacing: "0.5px" }}>
+          🔧 定制化信息 <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 2 }}>{customs.length}</span>
+        </button>
         <span style={{ flex: 1 }} />
-        <button onClick={handleFullscreen} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 14px", fontSize: 10, fontWeight: 600, cursor: "pointer", border: "1px solid var(--s-border)", background: "var(--s-surface)", color: "var(--s-text-muted)", fontFamily: "var(--s-font-mono)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+        <button onClick={handleFullscreen} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "6px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", border: "1px solid #16a34a", background: "var(--s-surface)", color: "#16a34a", fontFamily: "var(--s-font-mono)", letterSpacing: "0.5px" }}>
           ⛶ 全屏查看
         </button>
       </div>
@@ -248,7 +291,7 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
               </div>
             </div>
           )
-        ) : (
+        ) : activeTab === "info" ? (
           /* 项目基本信息 — 只展示基本分区，无滚动条 */
           <div style={{ border: "1px solid var(--s-border)", background: "var(--s-surface)" }}>
             <InfoSection title="基本信息" defaultOpen>
@@ -268,13 +311,97 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
               </div>
             </InfoSection>
           </div>
+        ) : activeTab === "integration" ? (
+          /* 对接信息 */
+          <div style={{ border: "1px solid var(--s-border)", background: "var(--s-surface)" }}>
+            {integrations.length === 0 ? (
+              <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--s-text-muted)", fontSize: 13 }}>暂无对接信息</div>
+            ) : (
+            <InfoSection title={`对接信息（${integrations.length}）`} defaultOpen>
+              {integrations.map((it, i) => (
+                <div key={i} style={{ padding: "16px 20px", borderBottom: i < integrations.length - 1 ? "1px solid var(--s-border-light)" : "none" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--s-text)", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ background: "var(--s-orange)", color: "#fff", width: 22, height: 22, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
+                    {s(it.product_module) || s(it.vendor_name) || `对接 #${i + 1}`}
+                    {it.in_contract === "是" ? (
+                      <span style={{ fontSize: 9, background: "rgba(34,197,94,.12)", color: "#16a34a", padding: "2px 6px", borderRadius: 3, fontWeight: 500 }}>合同内</span>
+                    ) : it.in_contract === "否" ? (
+                      <span style={{ fontSize: 9, background: "rgba(239,68,68,.12)", color: "#dc2626", padding: "2px 6px", borderRadius: 3, fontWeight: 500 }}>合同外</span>
+                    ) : null}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 20px" }}>
+                    <FieldBlock label="对接厂商" value={s(it.vendor_name)} />
+                    <FieldBlock label="产品目录" value={s(it.product_module)} />
+                    <FieldBlock label="对接类型" value={s(it.integration_type)} />
+                    <FieldBlock label="是否在合同内" value={s(it.in_contract) + (s(it.contract_note) ? ` (${s(it.contract_note)})` : "")} />
+                    <FieldBlock label="简述" value={s(it.brief_description)} span2 />
+                    <FieldBlock label="我方需求对接人" value={s(it.our_req_contact) + (s(it.our_req_contact_phone) ? ` / ${s(it.our_req_contact_phone)}` : "")} />
+                    <FieldBlock label="我方产品负责人" value={s(it.our_product_contact) + (s(it.our_product_contact_phone) ? ` / ${s(it.our_product_contact_phone)}` : "")} />
+                    <FieldBlock label="我方开发负责人" value={s(it.our_dev_contact) + (s(it.our_dev_contact_phone) ? ` / ${s(it.our_dev_contact_phone)}` : "")} />
+                    <FieldBlock label="我方负责内容" value={s(it.our_responsibility)} />
+                    <FieldBlock label="对方需求对接人" value={s(it.their_req_contact) + (s(it.their_req_contact_phone) ? ` / ${s(it.their_req_contact_phone)}` : "")} />
+                    <FieldBlock label="对方产品负责人" value={s(it.their_product_contact) + (s(it.their_product_contact_phone) ? ` / ${s(it.their_product_contact_phone)}` : "")} />
+                    <FieldBlock label="对方开发负责人" value={s(it.their_dev_contact) + (s(it.their_dev_contact_phone) ? ` / ${s(it.their_dev_contact_phone)}` : "")} />
+                    <FieldBlock label="对方负责内容" value={s(it.their_responsibility)} />
+                    {s(it.remark) && <FieldBlock label="备注" value={s(it.remark)} span2 />}
+                    {(it.integration_docs as Array<Record<string, unknown>>)?.length > 0 && (
+                      <div style={{ gridColumn: "span 2", padding: "12px 20px", borderBottom: "1px solid var(--s-border-light)", display: "flex", flexDirection: "column", gap: 3 }}>
+                        <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "1px", color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)", marginBottom: 4 }}>附件</div>
+                        <DocList docs={it.integration_docs as Array<Record<string, unknown>>} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </InfoSection>
+            )}
+          </div>
+        ) : (
+          /* 定制化信息 */
+          <div style={{ border: "1px solid var(--s-border)", background: "var(--s-surface)" }}>
+            {customs.length === 0 ? (
+              <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--s-text-muted)", fontSize: 13 }}>暂无定制化信息</div>
+            ) : (
+            <InfoSection title={`定制化信息（${customs.length}）`} defaultOpen>
+              {customs.map((cd, i) => (
+                <div key={i} style={{ padding: "16px 20px", borderBottom: i < customs.length - 1 ? "1px solid var(--s-border-light)" : "none" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--s-text)", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ background: "var(--s-amber)", color: "#fff", width: 22, height: 22, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
+                    {s(cd.product_module) || `定制 #${i + 1}`}
+                    {cd.in_contract === "是" ? (
+                      <span style={{ fontSize: 9, background: "rgba(34,197,94,.12)", color: "#16a34a", padding: "2px 6px", borderRadius: 3, fontWeight: 500 }}>合同内</span>
+                    ) : cd.in_contract === "否" ? (
+                      <span style={{ fontSize: 9, background: "rgba(239,68,68,.12)", color: "#dc2626", padding: "2px 6px", borderRadius: 3, fontWeight: 500 }}>合同外</span>
+                    ) : null}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 20px" }}>
+                    <FieldBlock label="产品目录" value={s(cd.product_module)} />
+                    <FieldBlock label="是否在合同内" value={s(cd.in_contract) + (s(cd.contract_note) ? ` (${s(cd.contract_note)})` : "")} />
+                    <FieldBlock label="定制内容" value={s(cd.custom_content)} span2 />
+                    <FieldBlock label="客户需求提出人" value={s(cd.customer_req_contact) + (s(cd.customer_req_contact_phone) ? ` / ${s(cd.customer_req_contact_phone)}` : "")} />
+                    <FieldBlock label="客户方职位" value={s(cd.customer_req_contact_position) + (s(cd.customer_req_contact_note) ? ` (${s(cd.customer_req_contact_note)})` : "")} />
+                    <FieldBlock label="内部需求对接人" value={s(cd.internal_req_contact) + (s(cd.internal_req_contact_phone) ? ` / ${s(cd.internal_req_contact_phone)}` : "")} />
+                    <FieldBlock label="内部产品负责人" value={s(cd.internal_product_contact) + (s(cd.internal_product_contact_phone) ? ` / ${s(cd.internal_product_contact_phone)}` : "")} />
+                    {s(cd.remark) && <FieldBlock label="备注" value={s(cd.remark)} span2 />}
+                    {(cd.req_docs as Array<Record<string, unknown>>)?.length > 0 && (
+                      <div style={{ gridColumn: "span 2", padding: "12px 20px", borderBottom: "1px solid var(--s-border-light)", display: "flex", flexDirection: "column", gap: 3 }}>
+                        <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "1px", color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)", marginBottom: 4 }}>需求文档</div>
+                        <DocList docs={cd.req_docs as Array<Record<string, unknown>>} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </InfoSection>
+            )}
+          </div>
         )}
       </div>
 
       {/* ═══ 全屏弹窗 ═══ */}
       {fullscreenOpen && (
         <FullscreenModal
-          title={activeTab === "procurement" ? `📦 已采购产品清单 · ${totalModules} 项 · 共 ${totalQty} 套` : "📋 项目基本信息"}
+          title={activeTab === "procurement" ? `📦 已采购产品清单 · ${totalModules} 项 · 共 ${totalQty} 套` : activeTab === "integration" ? `🔗 对接信息 · ${integrations.length} 条` : activeTab === "custom" ? `🔧 定制化信息 · ${customs.length} 条` : "📋 项目基本信息"}
           onClose={() => setFullscreenOpen(false)}
         >
           {activeTab === "procurement" ? (
@@ -384,7 +511,7 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
             </table>
             <div id="fs-no-result" style={{ display: "none", textAlign: "center", padding: 40, color: "var(--s-text-muted)", fontSize: 13 }}>没有匹配的记录</div>
             </>
-          ) : (
+          ) : activeTab === "info" ? (
             /* 项目信息完整版 */
             <div style={{ overflowY: "auto" }}>
               <InfoSection title="基本信息" defaultOpen>
@@ -485,6 +612,84 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
                     <FieldBlock label="硬件金额" value={fmtCurrency(p.hardware_amount)} />
                   </div>
                 </InfoSection>
+              )}
+            </div>
+          ) : activeTab === "integration" ? (
+            /* 对接信息完整版 */
+            <div style={{ overflowY: "auto", padding: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--s-text)", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ width: 4, height: 16, background: "var(--s-orange)", borderRadius: 2 }} />
+                对接信息 · {integrations.length} 条
+              </div>
+              {integrations.length === 0 ? (
+                <div style={{ padding: "60px 20px", textAlign: "center", color: "var(--s-text-muted)", fontSize: 15 }}>暂无对接信息</div>
+              ) : (
+                integrations.map((it, i) => (
+                <div key={i} style={{ marginBottom: 24, padding: 20, border: "1px solid var(--s-border)", background: "var(--s-surface)" }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--s-text)", marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ background: "var(--s-orange)", color: "#fff", width: 24, height: 24, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
+                    {s(it.product_module) || s(it.vendor_name) || `对接 #${i + 1}`}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px" }}>
+                    <FieldBlock label="对接厂商" value={s(it.vendor_name)} />
+                    <FieldBlock label="产品目录" value={s(it.product_module)} />
+                    <FieldBlock label="对接类型" value={s(it.integration_type)} />
+                    <FieldBlock label="是否在合同内" value={s(it.in_contract) + (s(it.contract_note) ? ` (${s(it.contract_note)})` : "")} />
+                    <FieldBlock label="简述" value={s(it.brief_description)} span2 />
+                    <FieldBlock label="我方需求对接人" value={s(it.our_req_contact) + (s(it.our_req_contact_phone) ? ` / ${s(it.our_req_contact_phone)}` : "")} />
+                    <FieldBlock label="我方产品负责人" value={s(it.our_product_contact) + (s(it.our_product_contact_phone) ? ` / ${s(it.our_product_contact_phone)}` : "")} />
+                    <FieldBlock label="我方开发负责人" value={s(it.our_dev_contact) + (s(it.our_dev_contact_phone) ? ` / ${s(it.our_dev_contact_phone)}` : "")} />
+                    <FieldBlock label="我方负责内容" value={s(it.our_responsibility)} />
+                    <FieldBlock label="对方需求对接人" value={s(it.their_req_contact) + (s(it.their_req_contact_phone) ? ` / ${s(it.their_req_contact_phone)}` : "")} />
+                    <FieldBlock label="对方产品负责人" value={s(it.their_product_contact) + (s(it.their_product_contact_phone) ? ` / ${s(it.their_product_contact_phone)}` : "")} />
+                    <FieldBlock label="对方开发负责人" value={s(it.their_dev_contact) + (s(it.their_dev_contact_phone) ? ` / ${s(it.their_dev_contact_phone)}` : "")} />
+                    <FieldBlock label="对方负责内容" value={s(it.their_responsibility)} />
+                    {s(it.remark) && <FieldBlock label="备注" value={s(it.remark)} span2 />}
+                    {(it.integration_docs as Array<Record<string, unknown>>)?.length > 0 && (
+                      <div style={{ gridColumn: "span 2", marginTop: 4 }}>
+                        <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "1px", color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)", marginBottom: 6 }}>附件</div>
+                        <DocList docs={it.integration_docs as Array<Record<string, unknown>>} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+              )}
+            </div>
+          ) : (
+            /* 定制化信息完整版 */
+            <div style={{ overflowY: "auto", padding: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--s-text)", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ width: 4, height: 16, background: "var(--s-amber)", borderRadius: 2 }} />
+                定制化信息 · {customs.length} 条
+              </div>
+              {customs.length === 0 ? (
+                <div style={{ padding: "60px 20px", textAlign: "center", color: "var(--s-text-muted)", fontSize: 15 }}>暂无定制化信息</div>
+              ) : (
+                customs.map((cd, i) => (
+                <div key={i} style={{ marginBottom: 24, padding: 20, border: "1px solid var(--s-border)", background: "var(--s-surface)" }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--s-text)", marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ background: "var(--s-amber)", color: "#fff", width: 24, height: 24, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
+                    {s(cd.product_module) || `定制 #${i + 1}`}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px" }}>
+                    <FieldBlock label="产品目录" value={s(cd.product_module)} />
+                    <FieldBlock label="是否在合同内" value={s(cd.in_contract) + (s(cd.contract_note) ? ` (${s(cd.contract_note)})` : "")} />
+                    <FieldBlock label="定制内容" value={s(cd.custom_content)} span2 />
+                    <FieldBlock label="客户需求提出人" value={s(cd.customer_req_contact) + (s(cd.customer_req_contact_phone) ? ` / ${s(cd.customer_req_contact_phone)}` : "")} />
+                    <FieldBlock label="客户方职位" value={s(cd.customer_req_contact_position) + (s(cd.customer_req_contact_note) ? ` (${s(cd.customer_req_contact_note)})` : "")} />
+                    <FieldBlock label="内部需求对接人" value={s(cd.internal_req_contact) + (s(cd.internal_req_contact_phone) ? ` / ${s(cd.internal_req_contact_phone)}` : "")} />
+                    <FieldBlock label="内部产品负责人" value={s(cd.internal_product_contact) + (s(cd.internal_product_contact_phone) ? ` / ${s(cd.internal_product_contact_phone)}` : "")} />
+                    {s(cd.remark) && <FieldBlock label="备注" value={s(cd.remark)} span2 />}
+                    {(cd.req_docs as Array<Record<string, unknown>>)?.length > 0 && (
+                      <div style={{ gridColumn: "span 2", marginTop: 4 }}>
+                        <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "1px", color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)", marginBottom: 6 }}>需求文档</div>
+                        <DocList docs={cd.req_docs as Array<Record<string, unknown>>} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
               )}
             </div>
           )}

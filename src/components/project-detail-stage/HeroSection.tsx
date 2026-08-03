@@ -357,12 +357,12 @@ export function HeroSection({ project, projectTypes, projectStages, customerType
             {countdownDisplay}
           </span>
         </div>
-        {/* 团队 */}
+        {/* 项目经理 */}
         <div className="flex-[1.3] p-5 flex flex-col gap-2.5" style={{ backgroundColor: "var(--s-bg)" }}>
           <span className="text-[12px] uppercase tracking-[1.5px] font-bold" style={{ color: "#3b82f6", fontFamily: "var(--font-mono, monospace)" }}>
-            团队
+            项目经理
           </span>
-          <span className="text-sm font-medium leading-relaxed" style={{ color: "var(--s-text)" }}>{teamDisplay}</span>
+          <span className="text-sm font-medium leading-relaxed" style={{ color: "var(--s-text)" }}>{s(project.role_project_manager) || "—"}</span>
         </div>
       </div>
     </div>

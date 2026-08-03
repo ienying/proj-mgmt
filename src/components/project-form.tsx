@@ -931,6 +931,20 @@ export function ProjectForm({
           remark: (item.remark as string) || "",
         })));
       }
+
+      // 项目成员
+      const members = d.members as Array<Record<string, unknown>> | null;
+      if (members && members.length > 0) {
+        setProjectMembers(members.map((m) => ({
+          id: (m.id as string) || String(Date.now()),
+          user_id: (m.user_id as string) || "",
+          name: (m.name as string) || "",
+          role_type: (m.role_type as string) || "",
+          phone: (m.phone as string) || "",
+        })));
+      } else {
+        setProjectMembers([]);
+      }
     } else if (open && !initialData) {
       // 新建模式：重置表单
       setProjectName(""); setProjectCode(""); setProjectType(""); setProjectStage("");
@@ -948,6 +962,7 @@ export function ProjectForm({
       setModuleQuantities({});
       setHasIntegration(false); setIntegrationList([]);
       setHasCustomDev(false); setCustomDevItems([]);
+      setProjectMembers([]);
       setConstructionUnits([{ id: "", company_name: "", contact_person: "", contact_phone: "", construction_content: "" }]);
     }
   }, [open, initialData]);
