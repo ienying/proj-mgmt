@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>案例中心</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --g50:#f9fafb;--g100:#f3f4f6;--g200:#e5e7eb;--g400:#9ca3af;--g500:#6b7280;--g600:#4b5563;--g700:#374151;--g900:#111827;
+  --b50:#eff6ff;--b100:#dbeafe;--b600:#2563eb;--b700:#1d4ed8;
+  --t50:#f0fdfa;--t100:#ccfbf1;--t600:#0d9488;--t700:#0f766e;
+  --gn50:#f0fdf4;--gn100:#dcfce7;--gn600:#16a34a;
+  --o50:#fff7ed;--o100:#ffedd5;--o600:#ea580c;
+  --r50:#fef2f2;--r600:#dc2626;
+  --v50:#f5f3ff;--v600:#7c3aed;
+  --a600:#d97706;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;background:#f5f5f5;color:var(--g900);line-height:1.7;-webkit-font-smoothing:antialiased;overflow-y:scroll}
+
+/* === TOP DOCK === */
+.top-dock{position:fixed;z-index:100;left:50%;transform:translateX(-50%);top:12px;display:flex;align-items:center;gap:2px;padding:4px 6px;border-radius:12px;background:#fff;border:1px solid var(--g200);box-shadow:0 4px 12px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06)}
+.top-dock .tk-logo{display:flex;align-items:center;gap:10px;padding-right:14px;margin-right:6px;border-right:1px solid var(--g100)}
+.top-dock .tk-logo .tk-icon{width:26px;height:26px;background:linear-gradient(135deg,#2563eb,#7c3aed);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700}
+.top-dock .tk-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:1px;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:500;white-space:nowrap;cursor:pointer;border:none;background:transparent;color:#000;font-family:inherit;transition:all .2s}
+.top-dock .tk-item:hover{background:var(--g100)}.top-dock .tk-item.act{color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.top-dock .tk-item.act.t-teal{background:#0d9488}.top-dock .tk-item.act.t-blue{background:#2563eb}.top-dock .tk-item.act.t-orange{background:#ea580c}.top-dock .tk-item.act.t-purple{background:#7c3aed}.top-dock .tk-item.act.t-violet{background:#6d28d9}.top-dock .tk-item.act.t-gray{background:#4b5563}.top-dock .tk-item.act.t-indigo{background:#4f46e5}.top-dock .tk-item.act.t-cyan{background:#0891b2}
+.top-dock .tk-item .tk-icon{font-size:15px;transition:transform .2s}.top-dock .tk-item.act .tk-icon{transform:scale(1.1)}
+.top-dock .tk-item .tk-badge{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:10px;font-size:9px;font-weight:700;color:#fff;background:#ef4444;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+.top-dock .tk-right{display:flex;align-items:center;gap:4px;padding-left:6px;margin-left:2px;border-left:1px solid var(--g100)}
+.top-dock .tk-right button{width:28px;height:28px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:.15s}
+.top-dock .tk-right button:hover{background:var(--g100)}
+.top-dock .tk-right .tk-user{display:flex;align-items:center;gap:6px;padding:2px 8px;border-radius:6px;cursor:pointer;font-size:11px;color:var(--g600)}.top-dock .tk-right .tk-user:hover{background:var(--g100)}
+.top-dock .tk-right .tk-user .tk-av{width:24px;height:24px;border-radius:50%;background:var(--b600);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+
+/* === MAIN TABS === */
+.mtabs{position:sticky;top:0;z-index:40;display:flex;justify-content:center;gap:8px;padding:72px 0 8px;background:linear-gradient(to bottom,#f5f5f5 60%,transparent)}
+.mtabs button{padding:8px 22px;border-radius:12px;font-size:13px;font-family:inherit;cursor:pointer;font-weight:500;transition:all .2s;border:none}
+.mtabs button.on{background:var(--b600);color:#fff;box-shadow:0 4px 12px rgba(37,99,235,.25);transform:scale(1.05)}
+.mtabs button:not(.on){background:#fff;color:var(--g500);border:1px solid var(--g200)}.mtabs button:not(.on):hover{background:var(--g50);color:var(--g700)}
+
+/* === LEFT FLOAT NAV — about-page style, ALL sections === */
+.left-nav{
+  position:fixed;left:24px;top:50%;transform:translateY(-50%);z-index:30;
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  background:rgba(255,255,255,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid var(--g200);border-radius:16px;padding:5px;
+  box-shadow:0 8px 30px rgba(0,0,0,.06);
+}
+.left-nav .ln-btn{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  width:34px;height:34px;border-radius:9px;border:none;cursor:pointer;
+  background:transparent;color:var(--g400);font-size:13px;transition:all .2s;
+}
+.left-nav .ln-btn:hover{background:var(--g100);color:var(--g600)}
+.left-nav .ln-btn.act{background:var(--b600);color:#fff;box-shadow:0 4px 10px rgba(37,99,235,.25)}
+.left-nav .ln-btn .ln-dot{position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%}
+.left-nav .ln-btn .ln-tip{
+  position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);
+  padding:5px 10px;background:var(--g900);color:#fff;font-size:11px;
+  border-radius:6px;white-space:nowrap;pointer-events:none;
+  opacity:0;transition:opacity .15s;
+}
+.left-nav .ln-btn:hover .ln-tip{opacity:1}
+.left-nav .ln-sep{width:20px;height:1px;background:var(--g200);margin:2px 0}
+.left-nav .ln-label{font-size:8px;color:var(--g400);text-transform:uppercase;letter-spacing:1px;margin:2px 0}
+
+/* === CONTENT === */
+.content{max-width:920px;margin:0 auto;padding:6px 28px 80px}
+.view{display:none}.view.on{display:block}
+
+.hero{border-radius:16px;padding:28px 32px;color:#fff;margin-bottom:24px}
+.hero h2{font-size:22px;font-weight:700;margin-bottom:2px}.hero .sub{font-size:12px;opacity:.8}
+.hero .hstats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px}
+.hero .hstats .hs{background:rgba(255,255,255,.15);border-radius:10px;padding:10px 12px;text-align:center}
+.hero .hstats .hs .n{font-size:22px;font-weight:700}.hero .hstats .hs .l{font-size:10px;opacity:.75;margin-top:2px}
+
+.sec{margin-top:28px;scroll-margin-top:130px}
+.sec-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.sec-head .num{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;flex-shrink:0}
+.sec-head .tx h2{font-size:18px;font-weight:700}.sec-head .tx p{font-size:12px;color:var(--g500);margin-top:1px}
+.sec-bar{font-size:10px;font-weight:600;color:var(--g400);text-transform:uppercase;letter-spacing:1px;padding:6px 0;margin:4px 0;border-bottom:1px solid var(--g100)}
+
+.card{border:1px solid var(--g200);border-radius:14px;background:#fff;overflow:hidden}
+.card-pad{padding:16px 20px}
+.toolbar{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--g100)}
+.toolbar .sch{flex:1;max-width:260px;height:32px;padding:0 10px 0 30px;border:1px solid var(--g200);border-radius:8px;font-size:13px;font-family:inherit;outline:none}
+.toolbar .sch:focus{border-color:var(--b600);box-shadow:0 0 0 3px rgba(37,99,235,.06)}
+.toolbar .sw{position:relative}.toolbar .sw svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--g400)}
+.toolbar select{height:32px;padding:0 26px 0 10px;border:1px solid var(--g200);border-radius:8px;font-size:12px;font-family:inherit;cursor:pointer;color:var(--g600);outline:none;background:#fff}
+.fx{flex:1}
+.btn{height:32px;padding:0 14px;border-radius:8px;font-size:12px;font-family:inherit;cursor:pointer;font-weight:500;border:none;display:inline-flex;align-items:center;gap:4px;transition:.15s}
+.btn-p{background:var(--b600);color:#fff}.btn-p:hover{background:var(--b700)}
+.btn-g{background:#fff;border:1px solid var(--g200);color:var(--g600)}.btn-g:hover{background:var(--g50)}
+.btn-sm{height:26px;padding:0 9px;border-radius:6px;font-size:11px}
+.btn-red{color:var(--r600);border-color:#fecaca;background:#fff}.btn-red:hover{background:var(--r50)}
+.btn-xs{height:22px;padding:0 7px;border-radius:5px;font-size:10px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:10px 12px;font-size:10px;font-weight:600;color:var(--g400);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--g100);background:var(--g50)}
+td{padding:10px 12px;font-size:12px;border-bottom:1px solid var(--g100)}
+tr:last-child td{border-bottom:none}tr{cursor:pointer;transition:background .15s}tr:hover td{background:#fafbfc}
+.cn{display:flex;align-items:center;gap:8px;font-weight:600}
+.cn .av{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
+.tag{display:inline-block;padding:2px 8px;border-radius:9px;font-size:10px;font-weight:500;margin-right:2px}
+.tK{background:#fce7f3;color:#be185d}.tP{background:#dcfce7;color:#15803d}.tC{background:#dbeafe;color:#1d4ed8}.tG{background:#f3e8ff;color:#7c3aed}.tZ{background:#fff7ed;color:#c2410c}.tGZ{background:#ccfbf1;color:#0f766e}.tJS{background:#fef3c7;color:#b45309}.tJY{background:#f1f5f9;color:#475569}
+.prog{display:flex;align-items:center;gap:6px;font-size:11px}
+.prog .bar{width:50px;height:5px;background:#e5e7eb;border-radius:3px;overflow:hidden}
+.prog .bar .f{height:100%;border-radius:3px}
+.fg{background:var(--gn600)}.fo{background:var(--o600)}.fy{background:#ccc}
+.ig2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ig3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.it{background:var(--g50);border-radius:10px;padding:12px 14px}
+.it .lbl{font-size:10px;color:var(--g400);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.it .val{font-size:13px;font-weight:500}
+
+/* === DEPT BLOCKS === */
+.dept-block{margin-top:24px;scroll-margin-top:130px}
+.dept-block .db-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.dept-block .db-header .db-bar{width:4px;height:22px;border-radius:2px;flex-shrink:0}
+.dept-block .db-header h3{font-size:18px;font-weight:700}
+.dept-block .db-header .db-meta{font-size:11px;color:var(--g500);margin-left:4px}
+.dept-slot{margin-bottom:16px}
+.dept-slot h4{font-size:12px;font-weight:600;color:var(--g600);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.dept-slot h4 .ds-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.dept-slot .long-text{font-size:13px;line-height:2;color:var(--g700);background:var(--g50);border-radius:8px;padding:14px 16px;white-space:pre-wrap}
+.plist{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px}
+.pcard{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--g50);border-radius:8px;font-size:11px}
+.pcard .pc-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700;flex-shrink:0}
+.pcard .pc-info{flex:1;min-width:0}.pcard .pc-info .pc-name{font-weight:600}.pcard .pc-info .pc-role{font-size:10px;color:var(--g400)}
+.pcard .pc-contact{font-size:10px;color:var(--g500)}
+.atts{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.att-item{display:flex;align-items:center;gap:4px;padding:4px 9px;background:#fff;border:1px solid var(--g200);border-radius:6px;font-size:10px;cursor:pointer;transition:.12s}
+.att-item:hover{border-color:var(--b600);background:var(--b50)}
+.att-item .att-icon{font-size:13px}.att-item .att-name{max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.att-item .att-size{font-size:9px;color:var(--g400)}
+.mt-table{width:100%;border-collapse:collapse;margin-top:6px}
+.mt-table th{font-size:10px;padding:7px 10px;background:transparent}
+.mt-table td{font-size:11px;padding:7px 10px;border-bottom:1px solid var(--g100)}
+.mm{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;font-size:11px;border-left:3px solid;background:var(--g50)}
+.mm.ml{border-left-color:var(--gn600)}.mm.mt{border-left-color:var(--o600)}.mm.mn{border-left-color:#ccc}
+.mm .mn{flex:1;font-weight:500}
+.mm .mtg{font-size:9px;padding:1px 6px;border-radius:7px;font-weight:500}
+.mgl{background:var(--gn50);color:var(--gn600)}.mgt{background:var(--o50);color:var(--o600)}.mgn{background:var(--g50);color:var(--g400)}
+.flow{display:flex;gap:0;margin:14px 0}
+.flow .fs{flex:1;text-align:center;position:relative}
+.flow .fs::after{content:'';position:absolute;top:13px;left:50%;width:100%;height:2px;background:var(--g200);z-index:0}
+.flow .fs:last-child::after{display:none}
+.flow .fs .fc{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;position:relative;z-index:1;border:2px solid var(--g200);background:#fff;color:var(--g400)}
+.flow .fs.on .fc{border-color:var(--b600);background:var(--b600);color:#fff}
+.flow .fs.dn .fc{border-color:var(--gn600);background:var(--gn600);color:#fff}
+.flow .fs .fl{font-size:10px;color:var(--g500);margin-top:4px}.flow .fs.on .fl{color:var(--b600);font-weight:600}
+.lk{display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:500;cursor:pointer;border:none;font-family:inherit;transition:.15s}
+.lk.t{background:var(--t50);color:var(--t700)}.lk.t:hover{background:var(--t100)}
+.lk.b{background:var(--b50);color:var(--b700)}.lk.b:hover{background:var(--b100)}
+.itw{background:#fff;border:1px solid var(--g200);border-radius:8px;padding:10px 12px}
+.itw .lbl{font-size:10px;color:var(--g400);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.itw input,.itw textarea{width:100%;border:1px solid var(--g200);border-radius:6px;padding:7px 9px;font-size:12px;font-family:inherit;outline:none;margin-top:2px;transition:.15s}
+.itw input:focus,.itw textarea:focus{border-color:var(--b600);box-shadow:0 0 0 3px rgba(37,99,235,.06)}
+.itw textarea{min-height:100px;resize:vertical;line-height:1.7}
+.itw textarea.large{min-height:180px}
+.att-upload{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:1px dashed var(--g200);border-radius:6px;font-size:11px;color:var(--g400);cursor:pointer;transition:.12s}
+.att-upload:hover{border-color:var(--b600);color:var(--b600);background:var(--b50)}
+
+/* Product cases styles (same as before) */
+.rank-table td{padding:9px 12px;font-size:11px}
+.rank-table .rt-name{font-weight:500}
+.rank-table .rt-bar-wrap{display:flex;align-items:center;gap:8px}
+.rank-table .rt-bar{flex:1;height:6px;background:var(--g100);border-radius:3px;overflow:hidden;max-width:180px}
+.rank-table .rt-bar .f{height:100%;border-radius:3px}
+.rank-badge{display:inline-block;padding:1px 7px;border-radius:7px;font-size:9px;font-weight:600}
+.rank-top{background:var(--gn50);color:var(--gn600)}.rank-bot{background:var(--r50);color:var(--r600)}.rank-mid{background:var(--b50);color:var(--b600)}
+.rank-tip{font-size:11px;color:var(--g500);padding:6px 12px;background:var(--b50);border-radius:8px;margin-top:4px;display:none}.rank-tip.on{display:block}
+.treemap{display:flex;flex-wrap:wrap;gap:3px;min-height:90px;border-radius:8px;overflow:hidden}
+.treemap .tm{display:flex;flex-direction:column;justify-content:center;align-items:center;border-radius:5px;padding:6px 5px;cursor:default;transition:all .15s;color:#fff;min-width:70px}
+.treemap .tm:hover{filter:brightness(1.1);transform:scale(1.02)}
+.treemap .tm .tm-n{font-size:10px;font-weight:500}.treemap .tm .tm-c{font-size:16px;font-weight:700}
+.region-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.region-grid .rg{background:var(--g50);border-radius:8px;padding:10px}
+.region-grid .rg .rgn{font-size:9px;font-weight:600;color:var(--g400);margin-bottom:4px;padding-bottom:3px;border-bottom:1px solid var(--g200)}
+.region-grid .rg .rgl{display:flex;flex-wrap:wrap;gap:2px}
+.region-grid .rg .rgl span{padding:2px 5px;border-radius:4px;font-size:9px;font-weight:500}
+.type-dist{display:flex;flex-direction:column;gap:5px}
+.type-dist .td-row{display:flex;align-items:center;gap:8px}
+.type-dist .td-row .td-lbl{width:44px;font-size:11px;font-weight:500;text-align:right;flex-shrink:0}
+.type-dist .td-row .td-bar{flex:1;height:20px;background:var(--g100);border-radius:4px;overflow:hidden}
+.type-dist .td-row .td-bar .td-f{height:100%;border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;font-size:10px;font-weight:600;color:#fff;transition:width .5s}
+.lb-item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--g100)}.lb-item:last-child{border-bottom:none}
+.lb-item .lb-rank{width:20px;text-align:center;font-size:11px;font-weight:700;color:var(--g400)}
+.lb-item .lb-info{flex:1;min-width:0}.lb-item .lb-info .lb-name{font-size:11px;font-weight:500}.lb-item .lb-info .lb-sub{font-size:9px;color:var(--g400)}
+.lb-item .lb-bar-wrap{display:flex;align-items:center;gap:5px;flex-shrink:0}
+.lb-item .lb-bar{width:70px;height:4px;background:var(--g100);border-radius:2px;overflow:hidden}
+.lb-item .lb-bar .f{height:100%;border-radius:2px}
+.lb-item .lb-pct{font-size:11px;font-weight:600;width:32px;text-align:right}
+@keyframes fadeSlide{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeSlide .2s ease-out}
+</style>
+</head>
+<body>
+
+<!-- TOP DOCK -->
+<nav class="top-dock">
+  <div class="tk-logo"><div class="tk-icon">元</div></div>
+  <button class="tk-item t-teal"><span class="tk-icon">📊</span>项目看板</button>
+  <button class="tk-item t-blue"><span class="tk-icon">📁</span>项目管理</button>
+  <button class="tk-item t-orange"><span class="tk-icon">✅</span>任务中心<span class="tk-badge">5</span></button>
+  <button class="tk-item t-blue"><span class="tk-icon">⚠</span>工单提交</button>
+  <button class="tk-item t-teal act"><span class="tk-icon">💼</span>案例中心</button>
+  <button class="tk-item t-purple"><span class="tk-icon">📢</span>信息广场<span class="tk-badge">3</span></button>
+  <button class="tk-item t-violet"><span class="tk-icon">🔧</span>规范管理</button>
+  <button class="tk-item t-gray"><span class="tk-icon">⚙</span>设置</button>
+  <button class="tk-item t-indigo"><span class="tk-icon">ℹ</span>关于</button>
+  <button class="tk-item t-cyan"><span class="tk-icon">📚</span>学习中心</button>
+  <div class="tk-right"><button>📌</button><div class="tk-user"><div class="tk-av">张</div>管理员</div></div>
+</nav>
+
+<!-- MAIN TABS -->
+<div class="mtabs" id="mtabs">
+  <button class="on" data-v="list">📋 用户画像</button>
+  <button data-v="detail">🔍 画像详情</button>
+  <button data-v="form">📝 新建画像</button>
+  <button data-v="product">📊 产品案例</button>
+</div>
+
+<!-- LEFT NAV — all sections (about-page style) -->
+<div class="left-nav" id="left-nav" style="display:none"></div>
+
+<div class="content">
+
+<!-- ===== VIEW 1: LIST ===== -->
+<div class="view on" id="v-list">
+  <div class="hero" style="background:linear-gradient(135deg,#2563eb,#1d4ed8)">
+    <h2>案例中心</h2><div class="sub">Case Center · 客户画像与产品案例管理</div>
+    <div class="hstats"><div class="hs"><div class="n">8</div><div class="l">画像总数</div></div><div class="hs"><div class="n">47</div><div class="l">已落地模块</div></div><div class="hs"><div class="n">12</div><div class="l">待推进</div></div><div class="hs"><div class="n">67%</div><div class="l">素材覆盖率</div></div></div>
+  </div>
+  <div class="sec"><div class="sec-head"><div class="num" style="background:var(--b600)">1</div><div class="tx"><h2>用户画像列表</h2></div></div>
+    <div class="card">
+      <div class="toolbar">
+        <div class="sw"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input class="sch" placeholder="搜索学校..." oninput="filterL(this.value)"></div>
+        <select onchange="filterLT(this.value)"><option value="">全部类型</option><option>幼儿园</option><option>小学</option><option>初中</option><option>高中</option><option>中职</option><option>高职</option><option>技师</option><option>教育局</option></select><div class="fx"></div>
+        <button class="btn btn-g btn-sm">📥 模板</button><button class="btn btn-g btn-sm">📤 导入</button>
+        <button class="btn btn-p btn-sm" onclick="switchTab('form')">＋ 新建画像</button>
+      </div>
+      <table><thead><tr><th>学校名称</th><th>客户类型</th><th>位置</th><th>科室</th><th>模块落地率</th><th>更新日期</th><th style="width:100px">操作</th></tr></thead><tbody id="list-body"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== VIEW 2: DETAIL ===== -->
+<div class="view" id="v-detail">
+  <div class="hero" style="background:linear-gradient(135deg,#0d9488,#0f766e)" id="d-hero"></div>
+
+  <div class="sec" id="d-basic-sec"><div class="sec-head"><div class="num" style="background:var(--b600)">1</div><div class="tx"><h2>基础信息</h2></div></div>
+    <div class="card card-pad"><div class="ig2" id="d-basic"></div></div>
+  </div>
+
+  <div class="sec" id="d-hw-sec"><div class="sec-head"><div class="num" style="background:var(--v600)">2</div><div class="tx"><h2>硬件与网络</h2></div></div>
+    <div class="card card-pad">
+      <div class="sec-bar">校园规模</div><div class="ig3" id="d-hw"></div>
+      <div class="sec-bar">网络基础设施</div><div class="ig3" id="d-net"></div>
+    </div>
+  </div>
+
+  <div class="sec" id="d-dept-sec"><div class="sec-head"><div class="num" style="background:var(--gn600)">3</div><div class="tx"><h2>科室业务</h2><p id="d-dept-sub"></p></div></div>
+    <div id="d-dept-all"></div>
+
+  <div class="sec" id="d-mod-sec"><div class="sec-head"><div class="num" style="background:var(--o600)">4</div><div class="tx"><h2>模块状态</h2><p id="d-mod-sub"></p></div></div>
+    <div class="card"><table><thead><tr><th>模块</th><th>科室</th><th>状态</th><th>使用率</th><th>活跃用户</th><th>备注</th></tr></thead><tbody id="d-mod-body"></tbody></table></div>
+  </div>
+
+  <div class="sec" id="d-act-sec"><div class="sec-head"><div class="num" style="background:var(--v600)">5</div><div class="tx"><h2>操作</h2></div></div>
+    <div class="card card-pad" style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="lk t">📝 本周周报</button><button class="lk b">📜 版本历史</button>
+      <button class="lk b" onclick="switchTab('form')">✏️ 编辑画像</button>
+      <button class="lk b" onclick="switchTab('product')">📊 产品案例</button>
+      <button class="lk b" onclick="switchTab('list')">← 返回列表</button>
+    </div>
+</div>
+
+<!-- ===== VIEW 3: FORM ===== -->
+<div class="view" id="v-form">
+  <div class="hero" style="background:linear-gradient(135deg,#7c3aed,#6d28d9)">
+    <h2>新建用户画像</h2><div class="sub">Create Customer Profile</div>
+    <div class="flow" id="flow-steps">
+      <div class="fs on dn" data-fs="0"><div class="fc">1</div><div class="fl">基础信息</div></div>
+      <div class="fs" data-fs="1"><div class="fc">2</div><div class="fl">硬件 & 网络</div></div>
+      <div class="fs" data-fs="2"><div class="fc">3</div><div class="fl">科室业务</div></div>
+      <div class="fs" data-fs="3"><div class="fc">4</div><div class="fl">模块状态</div></div>
+    </div>
+  </div>
+
+  <div class="sec" id="f-basic-sec"><div class="sec-head"><div class="num" style="background:var(--b600)">1</div><div class="tx"><h2>基础信息</h2></div></div>
+    <div class="card card-pad">
+      <div class="ig2"><div class="itw"><div class="lbl">学校名称 *</div><input value="深圳光明高级中学" placeholder="搜索选择项目中的学校..."><div style="font-size:10px;color:var(--g400);margin-top:3px">从已建项目选取，自动带入位置信息</div></div>
+      <div class="itw"><div class="lbl">客户类型</div><div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px" id="type-chips"></div></div></div>
+      <div class="ig2" style="margin-top:8px"><div class="itw" style="grid-column:1/-1"><div class="lbl">位置 <span style="font-size:9px;padding:2px 7px;border-radius:7px;background:var(--gn50);color:var(--gn600)">✓ 已同步</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-top:4px"><input placeholder="省" value="广东省"><input placeholder="市" value="深圳市"><input placeholder="区/县" value="光明区"><input placeholder="镇/乡"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px"><input placeholder="经度" value="113.9352"><input placeholder="纬度" value="22.7365"></div></div></div>
+      <div class="ig2" style="margin-top:8px"><div class="itw" style="grid-column:1/-1"><div class="lbl">学校描述</div><textarea>广东省一级学校，位于深圳市光明区。占地面积约8万平方米，现有54个教学班，在校学生约2600人，教职工180人。</textarea></div></div>
+    </div>
+
+  <div class="sec" id="f-hw-sec"><div class="sec-head"><div class="num" style="background:var(--v600)">2</div><div class="tx"><h2>硬件与网络</h2></div></div>
+    <div class="card card-pad">
+      <div class="sec-bar">校园规模</div><div class="ig3"><div class="itw"><div class="lbl">总人数</div><input type="number" value="2800"></div><div class="itw"><div class="lbl">教师</div><input type="number" value="180"></div><div class="itw"><div class="lbl">学生</div><input type="number" value="2620"></div><div class="itw"><div class="lbl">班级</div><input type="number" value="54"></div><div class="itw"><div class="lbl">教室</div><input type="number" value="50"></div><div class="itw"><div class="lbl">功能教室</div><input type="number" value="12"></div><div class="itw"><div class="lbl">总面积</div><input type="number" value="80000"> m²</div><div class="itw"><div class="lbl">宿舍</div><input type="number" value="3"> 栋</div><div class="itw"><div class="lbl">食堂</div><input type="number" value="2"> 个</div></div>
+      <div class="sec-bar">网络基础设施</div><div class="ig3"><div class="itw"><div class="lbl">带宽</div><input value="1000M"></div><div class="itw"><div class="lbl">服务器</div><input value="8 台"></div><div class="itw"><div class="lbl">虚拟化</div><input value="VMware"></div><div class="itw"><div class="lbl">存储</div><input value="华为 40TB"></div><div class="itw"><div class="lbl">数据库</div><input value="MySQL 8.0"></div><div class="itw"><div class="lbl">无线覆盖</div><select style="width:100%;border:1px solid var(--g200);border-radius:6px;padding:6px;font-size:12px;font-family:inherit;outline:none;margin-top:2px"><option>全覆盖</option><option>部分覆盖</option><option>无</option></select></div></div>
+    </div>
+
+  <div class="sec" id="f-dept-sec"><div class="sec-head"><div class="num" style="background:var(--gn600)">3</div><div class="tx"><h2>科室业务</h2><p>左侧导航快速跳转 · 全部展开滚动编辑</p></div></div>
+    <div id="f-dept-all"></div>
+
+  <div class="sec" id="f-mod-sec"><div class="sec-head"><div class="num" style="background:var(--o600)">4</div><div class="tx"><h2>模块状态</h2></div></div>
+    <div class="card"><table><thead><tr><th>模块</th><th>科室</th><th>状态</th><th>使用率</th><th>活跃用户</th><th>备注</th></tr></thead><tbody id="f-mod-body"></tbody></table></div>
+
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:24px;padding-bottom:40px">
+    <button class="btn btn-g" id="btn-prev" onclick="prevF()" style="display:none">← 上一步</button>
+    <button class="btn btn-p" id="btn-next" onclick="nextF()">下一步 →</button>
+    <button class="btn btn-p" id="btn-save" onclick="saveF()" style="display:none;background:var(--gn600)">✓ 保存画像</button>
+  </div>
+</div>
+
+<!-- ===== VIEW 4: PRODUCT CASES ===== -->
+<div class="view" id="v-product">
+  <div class="hero" style="background:linear-gradient(135deg,#0891b2,#0e7490)">
+    <h2>产品案例</h2><div class="sub">Product Case Analytics</div>
+    <div class="hstats"><div class="hs"><div class="n">47</div><div class="l">落地学校</div></div><div class="hs"><div class="n">72%</div><div class="l">平均使用率</div></div><div class="hs"><div class="n">1,245</div><div class="l">活跃用户</div></div><div class="hs"><div class="n">86</div><div class="l">素材总数</div></div></div>
+  </div>
+  <div class="sec" id="pc-rank-sec"><div class="sec-head"><div class="num" style="background:var(--b600)">1</div><div class="tx"><h2>产品目录排名</h2></div></div>
+    <div class="card"><table class="rank-table"><thead><tr><th>产品/模块</th><th>落地学校</th><th>覆盖率</th><th>正式使用</th><th>试用中</th><th>未购</th><th>活跃用户</th><th>排名</th></tr></thead><tbody id="pc-rank-body"></tbody></table></div>
+  </div>
+  <div class="sec" id="pc-dist-sec"><div class="sec-head"><div class="num" style="background:var(--v600)">2</div><div class="tx"><h2>分布分析</h2></div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="card card-pad"><div class="sec-bar">省份画像分布</div><div class="treemap" id="pc-treemap"></div><div style="font-size:9px;color:var(--g400);margin-top:6px;display:flex;gap:10px"><span>■ 面积=数量</span><span>■ 深浅=多/少</span></div></div>
+      <div class="card card-pad"><div class="sec-bar">学校类型分布</div><div class="type-dist" id="pc-typedist"></div></div>
+    </div>
+  <div class="sec" id="pc-rank2-sec"><div class="sec-head"><div class="num" style="background:var(--gn600)">3</div><div class="tx"><h2>使用率排行</h2></div></div>
+    <div style="display:grid;grid-template-columns:2fr 3fr;gap:10px">
+      <div class="card card-pad"><div class="sec-bar">区域分布</div><div class="region-grid" id="pc-regions"></div><div style="font-size:9px;color:var(--g400);margin-top:6px;display:flex;gap:6px"><span>⬛无</span><span>🟦少</span><span>🟪多</span></div></div>
+      <div class="card card-pad"><div class="sec-bar">Top 10</div><div id="pc-leaderboard"></div></div>
+    </div>
+  <div class="sec" id="pc-list-sec"><div class="sec-head"><div class="num" style="background:var(--o600)">4</div><div class="tx"><h2>落地学校列表</h2></div></div>
+    <div class="card"><table><thead><tr><th style="width:36px">对比</th><th>学校</th><th>类型</th><th>科室</th><th>模块</th><th>使用率</th><th>活跃</th></tr></thead><tbody id="pc-schools"></tbody></table></div>
+</div>
+
+</div><!-- /.content -->
+
+<script>
+// === DATA ===
+const AV=["#3b82f6","#10b981","#f59e0b","#8b5cf6","#ef4444","#ec4899","#14b8a6","#f97316"];
+const TM={"幼儿园":"tK","小学":"tP","初中":"tC","高中":"tG","中职":"tZ","高职":"tGZ","技师":"tJS","教育局":"tJY"};
+const S=[{id:1,n:"北京电子信息学校",t:["中职","高中"],l:"北京市朝阳区",dn:12,mn:12,ld:9,tr:2,no:1,dt:"2026-07-28",hw:{total:3200,tea:210,stu:2990,cls:65,rm:55,lab:18,area:52000,dorm:4,cant:2},net:{bw:"1000M",srv:"12台",vm:"VMware",store:"华为 50TB",db:"MySQL 8.0",wifi:"全覆盖"},desc:"国家级重点中等职业学校。"},{id:2,n:"深圳光明高级中学",t:["高中"],l:"广东省深圳市光明区",dn:13,mn:10,ld:8,tr:2,no:0,dt:"2026-07-25",hw:{total:2800,tea:180,stu:2620,cls:54,rm:50,lab:12,area:80000,dorm:3,cant:2},net:{bw:"1000M",srv:"8台",vm:"VMware",store:"华为 40TB",db:"MySQL 8.0",wifi:"全覆盖"},desc:"广东省一级学校。"},{id:3,n:"成都华阳实验小学",t:["小学"],l:"四川省成都市",dn:12,mn:8,ld:5,tr:3,no:0,dt:"2026-07-22",hw:{total:1800,tea:120,stu:1680,cls:36,rm:32,lab:8,area:35000,dorm:0,cant:1},net:{bw:"500M",srv:"3台",vm:"无",store:"群晖 20TB",db:"MySQL 5.7",wifi:"部分覆盖"},desc:"成都市实验小学集团成员校。"},{id:4,n:"杭州西湖职业中专",t:["中职"],l:"浙江省杭州市",dn:15,mn:14,ld:11,tr:2,no:1,dt:"2026-07-20",hw:{total:3500,tea:240,stu:3260,cls:70,rm:62,lab:22,area:68000,dorm:5,cant:3},net:{bw:"2000M",srv:"15台",vm:"Hyper-V",store:"戴尔 80TB",db:"SQL Server",wifi:"全覆盖"},desc:"国家重点中等职业学校。"},{id:5,n:"广州天河区教育局",t:["教育局"],l:"广东省广州市",dn:5,mn:3,ld:2,tr:1,no:0,dt:"2026-07-18",hw:{total:120,tea:0,stu:0,cls:0,rm:0,lab:0,area:3000,dorm:0,cant:0},net:{bw:"500M",srv:"5台",vm:"VMware",store:"华为 30TB",db:"PostgreSQL",wifi:"全覆盖"},desc:"教育行政管理部门。"},{id:6,n:"武汉华中师大一附中",t:["初中","高中"],l:"湖北省武汉市",dn:14,mn:12,ld:10,tr:1,no:1,dt:"2026-07-15",hw:{total:4200,tea:310,stu:3890,cls:84,rm:76,lab:26,area:95000,dorm:6,cant:3},net:{bw:"2000M",srv:"18台",vm:"VMware",store:"华为 100TB",db:"MySQL 8.0",wifi:"全覆盖"},desc:"湖北省重点中学。"},{id:7,n:"上海浦东新区幼儿园",t:["幼儿园"],l:"上海市浦东新区",dn:12,mn:6,ld:4,tr:1,no:1,dt:"2026-07-12",hw:{total:480,tea:60,stu:420,cls:15,rm:14,lab:2,area:8000,dorm:0,cant:1},net:{bw:"200M",srv:"2台",vm:"无",store:"群晖 8TB",db:"MySQL 5.7",wifi:"部分覆盖"},desc:"上海市一级幼儿园。"},{id:8,n:"济南技师学院",t:["技师"],l:"山东省济南市",dn:15,mn:11,ld:7,tr:3,no:1,dt:"2026-07-10",hw:{total:5000,tea:380,stu:4620,cls:100,rm:85,lab:35,area:120000,dorm:8,cant:4},net:{bw:"2000M",srv:"20台",vm:"VMware",store:"戴尔 120TB",db:"Oracle",wifi:"全覆盖"},desc:"国家重点技师学院。"}];
+const CODES=["school_leader","academic_affairs","teaching_research","student_affairs","it_center","hr","finance","logistics","security","admissions","employment","supervision","psychology","dormitory","school_office","grade_group"];
+const NAMES=["校领导","教务处","教研室","学生处/德育处","信息中心","人事处","财务处","后勤/资产处","保卫处","招生办","就业处/实习办","督导室","心理中心","宿管科","校办","年级组/学院"];
+const BARS=["#64748b","#3b82f6","#6366f1","#10b981","#8b5cf6","#f59e0b","#22c55e","#f97316","#ef4444","#14b8a6","#06b6d4","#f43f5e","#ec4899","#8b5cf6","#78716c","#84cc16"];
+const DOCK_ICONS=["🏫","📋","📚","🎓","💻","👥","💰","🏗","🛡","📢","💼","🔍","💚","🏠","📝","🏘"];
+
+function getDept(code){
+  const idx=CODES.indexOf(code);const n=NAMES[idx];const bar=BARS[idx];
+  if(code==="school_leader") return{code,n,bar,personnel:[{n:"张建国",r:"校长",p:"138****6789"},{n:"李明华",r:"副校长（教学）",p:"139****8901"}],dw:"统筹学校整体发展战略规划与信息化建设方向，负责全校行政管理和重大决策。\n\n具体职责包括：\n1. 制定学校中长期发展规划和年度工作计划\n2. 统筹全校教学、德育、后勤、安全等各条线工作\n3. 审批重大采购项目和信息化建设方案\n4. 对接上级主管部门，争取政策与资金支持\n5. 主持召开校务会议和行政办公会议",wf:"校务会议（每周一）→ 部门工作汇报 → 问题协调 → 决策下发 → 跟踪督办\n\n重大事项决策流程：\n部门提案 → 分管校长审核 → 校务会讨论 → 校长审批 → 办公室发文 → 执行跟踪",pn:"1. 数据分散在各个部门的Excel和独立系统中，无法实时掌握学校运行全貌\n2. 开会时各部门数据口径不一致，经常需要反复核对\n3. 缺乏统一的数据驾驶舱，决策依赖经验和直觉\n4. 上级主管部门要求的数据报表统计耗时，占用了大量行政资源\n5. 跨部门协同效率低，信息传递依赖微信和口头沟通",tl:"- OA办公系统（旧版，仅用于公文流转）\n- 企业微信（日常沟通和通知发布）\n- Excel（各部门数据汇总）\n- 邮件系统（对外联络）",ex:"1. 建设统一的数据驾驶舱，一站式查看全校核心指标\n2. 实现各部门数据自动汇聚，减少手工统计工作量\n3. 建立跨部门协同工作平台，打破信息孤岛\n4. 支持移动端审批和查看，提升管理效率\n5. 对接上级教育管理平台，自动生成所需报表",summary:"该校领导层对信息化建设高度重视，已将'智慧校园'列入学校五年发展规划的重点工程。",metrics:[{i:"行政会议次数",v:"42次/学期",s:"人工",p:"学期"}],files:[{n:"学校五年发展规划-2026版.pdf",s:"2.4MB"},{n:"智慧校园建设方案-初稿.docx",s:"1.8MB"},{n:"校务会议纪要-2026年7月.pdf",s:"560KB"}]};
+  if(code==="academic_affairs") return{code,n,bar,personnel:[{n:"王燕",r:"教务主任",p:"136****2345"},{n:"赵磊",r:"教务员",p:"137****3456"}],dw:"负责全校教学运行管理，包括课程编排、考务组织、学籍管理、教学质量监控和教师教学评价。\n\n具体工作：\n1. 编排全校课程表，协调教师、教室、时间资源\n2. 组织期中/期末考试、补考、学业水平考试等各类考试\n3. 管理学生学籍档案、成绩档案\n4. 开展教学检查和教学质量评估\n5. 管理教材征订和教学资源",wf:"学期初：排课 → 教材征订 → 教学计划审核\n学期中：教学检查 → 听课评课 → 期中考试组织\n学期末：期末考试 → 成绩分析 → 学籍归档 → 下学期排课准备",pn:"1. 排课冲突频发——手工排课效率极低，平均需要2-3周才能完成\n2. 成绩分析耗时——每次考试后需要3-5天完成全年级成绩统计分析\n3. 巡课缺乏系统支撑——教学检查依赖人工巡课\n4. 学籍管理电子化程度低——部分档案仍为纸质\n5. 对接区级教育平台要求的数据标准化程度越来越高",tl:"- Excel（排课、成绩统计）\n- 老旧教务系统（仅支持学籍查询）\n- 纸质巡课记录表\n- 微信通知群",ex:"1. 智能排课系统——自动生成最优课表\n2. 成绩管理与分析平台——自动统计、可视化展示\n3. 在线巡课系统——支持移动端记录、拍照、评分\n4. 电子学籍管理系统——全流程数字化\n5. 教学资源管理平台——统一管理课件、试卷、教学资料",summary:"教务处是学校教学运行的核心部门，工作量大、时间节点紧。王燕主任对信息化有强烈需求。",metrics:[{i:"排课周期",v:"2-3周",s:"人工",p:"学期"},{i:"考试次数",v:"6次/学期",s:"系统",p:"学期"}],files:[{n:"2026春季学期课程表.xlsx",s:"380KB"},{n:"期末考试质量分析报告.pdf",s:"1.2MB"}]};
+  if(code==="it_center") return{code,n,bar,personnel:[{n:"陈伟",r:"信息中心主任",p:"135****5678"}],dw:"负责全校信息化建设和运维管理，包括校园网络、服务器、应用系统的规划建设和日常运维。\n\n具体职责：\n1. 制定学校信息化建设规划和实施方案\n2. 管理校园网络、数据中心、信息安全\n3. 推进各部门信息化项目的技术选型和系统集成\n4. 负责学校网站、微信公众号等对外平台运营\n5. 协调第三方供应商进行系统开发和运维",wf:"需求收集 → 技术评估 → 方案设计 → 采购招标 → 项目实施 → 验收测试 → 运维保障",pn:"1. 各部门系统孤立——数据无法互通\n2. 数据标准不统一——同一信息在不同系统中格式不同\n3. 接口对接成本高——每次打通都需与供应商协商\n4. 缺乏统一数据中台——无法实现全校数据资产管理\n5. 信息安全压力大——等保合规要求越来越高",tl:"- 堡垒机（运维审计）\n- Zabbix（网络监控）\n- VMware vSphere（虚拟化平台）\n- 自研数据同步脚本（Python）",ex:"1. 统一数据中台——建立全校统一的数据标准和交换平台\n2. 低代码集成平台——降低系统对接的技术门槛\n3. 统一身份认证（SSO）——一套账号访问所有系统\n4. API网关——统一管理和监控接口调用\n5. 信息安全运营中心（SOC）——满足等保2.0要求",summary:"信息中心是学校信息化建设的核心推动力量。陈伟主任技术能力强，对行业认识深刻。他指出当前最大瓶颈不是技术而是数据治理。",metrics:[{i:"服务器",v:"12台",s:"系统",p:"实时"},{i:"网络带宽",v:"1000M",s:"系统",p:"实时"},{i:"在用系统",v:"8个",s:"人工",p:"学期"}],files:[{n:"信息化建设三年规划-2026-2028.pdf",s:"3.1MB"},{n:"数据中台建设方案.xlsx",s:"1.5MB"},{n:"网络安全等保测评报告-2025.pdf",s:"4.2MB"},{n:"API接口规范-草案.md",s:"45KB"},{n:"系统架构拓扑图.png",s:"2.8MB"}]};
+  return{code,n,bar,personnel:[],dw:"待填写",wf:"待填写",pn:"待填写",tl:"待填写",ex:"待填写",summary:"",metrics:[],files:[]};
+}
+const MODS=[{n:"数据大屏/驾驶舱",d:"校领导",st:"landed",us:85,ur:42,nt:"校领导日常使用"},{n:"流程审批",d:"校领导",st:"landed",us:72,ur:38,nt:"覆盖大部分审批"},{n:"课表中心",d:"教务处",st:"landed",us:90,ur:180,nt:"全校使用"},{n:"成绩管理",d:"教务处",st:"landed",us:88,ur:165,nt:"对接区级平台"},{n:"集体备课",d:"教研室",st:"trial",us:45,ur:28,nt:"试推行中"},{n:"德育管理",d:"学生处/德育处",st:"landed",us:78,ur:56,nt:""},{n:"基础数据中心",d:"信息中心",st:"landed",us:95,ur:120,nt:"核心系统"},{n:"人事管理",d:"人事处",st:"landed",us:65,ur:22,nt:""},{n:"网上收费",d:"财务处",st:"landed",us:82,ur:16,nt:"缴费高峰期稳定"},{n:"资产管理",d:"后勤/资产处",st:"trial",us:35,ur:10,nt:"台账迁移中"},{n:"进出校管理",d:"保卫处",st:"trial",us:40,ur:8,nt:"兼容性调试中"},{n:"招生管理",d:"招生办",st:"landed",us:70,ur:14,nt:""},{n:"实习管理",d:"就业处/实习办",st:"none",us:0,ur:0,nt:"计划下学期采购"},{n:"OA办公",d:"校办",st:"none",us:0,ur:0,nt:"已评估待批复"}];
+
+// === DOCK ===
+document.querySelectorAll('.top-dock .tk-item').forEach(b=>{b.addEventListener('click',function(){document.querySelectorAll('.top-dock .tk-item').forEach(x=>x.classList.remove('act'));this.classList.add('act');});});
+
+// === TABS ===
+let cur='list',dS=S[0],fS=0;
+function switchTab(v){
+  cur=v;document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));document.getElementById('v-'+v).classList.add('on');
+  document.querySelectorAll('#mtabs button').forEach(b=>b.classList.remove('on'));
+  const m={'list':0,'detail':1,'form':2,'product':3};if(m[v]!==undefined)document.querySelectorAll('#mtabs button')[m[v]].classList.add('on');
+  const ln=document.getElementById('left-nav');
+  if(v==='detail'){ln.style.display='flex';openD(dS);}
+  else if(v==='form'){ln.style.display='flex';goF(0);}
+  else if(v==='product'){ln.style.display='flex';renderPC();}
+  else{ln.style.display='none';}
+}
+document.getElementById('mtabs').addEventListener('click',e=>{const b=e.target.closest('button');if(b&&b.dataset.v)switchTab(b.dataset.v);});
+
+// === LEFT NAV — ALL sections + departments ===
+function buildLeftNav(view){
+  const ln=document.getElementById('left-nav');
+  const pfx=view==='detail'?'d':view==='form'?'f':'pc';
+  let items=[];
+
+  if(view==='detail'||view==='form'){
+    items.push({id:pfx+'-basic-sec',icon:'📋',label:'基础信息',tip:'学校名称 · 位置 · 类型',dot:''});
+    items.push({id:pfx+'-hw-sec',icon:'🖥',label:'硬件与网络',tip:'校园规模 · 网络基础设施',dot:''});
+    // Dept header
+    const deptCount=view==='detail'?dS.dn:13;
+    const codes=CODES.slice(0,deptCount);
+    items.push({sep:true,label:'科室'});
+    codes.forEach((c,i)=>{
+      const d=getDept(c);const ms=MODS.filter(m=>m.d===d.n);const ld=ms.filter(m=>m.st==='landed').length;
+      const dotClr=ld>=ms.length&&ms.length>0?'#16a34a':ld>0?'#ea580c':'#94a3b8';
+      items.push({id:pfx+'-dept-'+c,icon:DOCK_ICONS[i%16],label:d.n,tip:d.n+' · '+ld+'/'+ms.length+' 模块',dot:dotClr});
+    });
+    items.push({sep:true,label:''});
+    items.push({id:pfx+'-mod-sec',icon:'📦',label:'模块状态',tip:'已购模块 · 落地率',dot:''});
+    if(view==='detail') items.push({id:pfx+'-act-sec',icon:'⚡',label:'操作',tip:'周报 · 版本 · 编辑',dot:''});
+  } else if(view==='product'){
+    items.push({id:'pc-rank-sec',icon:'📊',label:'产品排名',tip:'覆盖率排行',dot:''});
+    items.push({id:'pc-dist-sec',icon:'🗺',label:'分布分析',tip:'省份 · 学校类型',dot:''});
+    items.push({id:'pc-rank2-sec',icon:'🏆',label:'使用率排行',tip:'Top 10 学校',dot:''});
+    items.push({id:'pc-list-sec',icon:'📋',label:'学校列表',tip:'落地学校清单',dot:''});
+  }
+
+  let h='';
+  items.forEach(it=>{
+    if(it.sep){h+=`<div class="ln-sep"></div>`;if(it.label)h+=`<span class="ln-label">${it.label}</span>`;}
+    else h+=`<button class="ln-btn" onclick="document.getElementById('${it.id}').scrollIntoView({behavior:'smooth',block:'start'})" title="${it.tip||it.label}">${it.dot?`<span class="ln-dot" style="background:${it.dot}"></span>`:''}${it.icon}<span class="ln-tip">${it.tip||it.label}</span></button>`;
+  });
+  ln.innerHTML=h;
+}
+
+// Scroll tracking for left nav
+let ticking=false;
+window.addEventListener('scroll',()=>{if(!ticking){ticking=true;requestAnimationFrame(()=>{ticking=false;highlightLeftNav();});}},{passive:true});
+
+function highlightLeftNav(){
+  const ln=document.getElementById('left-nav');if(ln.style.display==='none')return;
+  const btns=ln.querySelectorAll('.ln-btn');if(!btns.length)return;
+  let active=0;
+  btns.forEach((b,i)=>{const id=b.getAttribute('onclick')?.match(/getElementById\('([^']+)'\)/)?.[1];if(id){const el=document.getElementById(id);if(el&&el.getBoundingClientRect().top<180)active=i;}});
+  btns.forEach((b,i)=>b.classList.toggle('act',i===active));
+}
+
+// === LIST ===
+function buildL(f,tf){
+  let d=S;if(f){const q=f.toLowerCase();d=d.filter(s=>s.n.toLowerCase().includes(q)||s.l.toLowerCase().includes(q));}if(tf)d=d.filter(s=>s.t.includes(tf));
+  document.getElementById('list-body').innerHTML=d.map((s,i)=>{const pct=Math.round(s.ld/s.mn*100);const pc=pct>=80?'fg':pct>=40?'fo':'fy';return`<tr onclick="dS=S[${i}];switchTab('detail')"><td><div class="cn"><div class="av" style="background:${AV[i%8]}">${s.n.charAt(0)}</div><div>${s.n}<div style="font-size:10px;color:var(--g400);font-weight:400">${s.l}</div></div></div></td><td>${s.t.map(t=>`<span class="tag ${TM[t]}">${t}</span>`).join('')}</td><td style="font-size:11px">${s.l}</td><td>${s.dn}个</td><td><div class="prog"><span style="font-weight:600;width:22px">${s.ld}/${s.mn}</span><div class="bar"><div class="f ${pc}" style="width:${pct}%"></div></div><span>${pct}%</span></div></td><td style="font-size:11px">${s.dt}</td><td><div style="display:flex;gap:3px"><button class="btn btn-sm btn-g" onclick="event.stopPropagation();dS=S[${i}];switchTab('detail')">查看</button><button class="btn btn-sm btn-red" onclick="event.stopPropagation();if(confirm('确认删除？'))this.closest('tr').remove()">删除</button></div></td></tr>`;}).join('');}
+function filterL(q){buildL(q);}function filterLT(t){buildL(null,t||null);}
+
+// === DETAIL ===
+function openD(s){
+  dS=s;
+  document.getElementById('d-hero').innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div><h2>${s.n}</h2><div class="sub">${s.t.join(' & ')} School</div></div><div style="display:flex;gap:4px">${s.t.map(t=>`<span class="tag ${TM[t]}" style="font-size:11px;padding:3px 10px">${t}</span>`).join('')}</div></div><p style="margin-top:6px;font-size:13px">${s.desc}</p><div class="hstats"><div class="hs"><div class="n">${s.mn}</div><div class="l">已购模块</div></div><div class="hs"><div class="n">${s.ld}</div><div class="l">✅ 已落地</div></div><div class="hs"><div class="n">${s.tr}</div><div class="l">🔵 未落地</div></div><div class="hs"><div class="n">${s.no}</div><div class="l">⬜ 未购</div></div></div>`;
+  document.getElementById('d-basic').innerHTML=`<div class="it"><div class="lbl">学校名称</div><div class="val">${s.n}</div></div><div class="it"><div class="lbl">客户类型</div><div class="val">${s.t.join('、')}</div></div><div class="it"><div class="lbl">省/直辖市</div><div class="val">北京</div></div><div class="it"><div class="lbl">位置</div><div class="val">${s.l}</div></div><div class="it"><div class="lbl">经度/纬度</div><div class="val">116.4551, 39.9532</div></div><div class="it"><div class="lbl">更新日期</div><div class="val">${s.dt}</div></div>`;
+  document.getElementById('d-hw').innerHTML=`<div class="it"><div class="lbl">总人数</div><div class="val">${s.hw.total.toLocaleString()}</div></div><div class="it"><div class="lbl">教师</div><div class="val">${s.hw.tea}</div></div><div class="it"><div class="lbl">学生</div><div class="val">${s.hw.stu.toLocaleString()}</div></div><div class="it"><div class="lbl">班级</div><div class="val">${s.hw.cls}</div></div><div class="it"><div class="lbl">教室</div><div class="val">${s.hw.rm}</div></div><div class="it"><div class="lbl">功能教室</div><div class="val">${s.hw.lab}</div></div><div class="it"><div class="lbl">总面积</div><div class="val">${s.hw.area.toLocaleString()} m²</div></div><div class="it"><div class="lbl">宿舍</div><div class="val">${s.hw.dorm}栋</div></div><div class="it"><div class="lbl">食堂</div><div class="val">${s.hw.cant}个</div></div>`;
+  document.getElementById('d-net').innerHTML=`<div class="it"><div class="lbl">带宽</div><div class="val">${s.net.bw}</div></div><div class="it"><div class="lbl">服务器</div><div class="val">${s.net.srv}</div></div><div class="it"><div class="lbl">虚拟化</div><div class="val">${s.net.vm}</div></div><div class="it"><div class="lbl">存储</div><div class="val">${s.net.store}</div></div><div class="it"><div class="lbl">数据库</div><div class="val">${s.net.db}</div></div><div class="it"><div class="lbl">无线覆盖</div><div class="val">${s.net.wifi}</div></div>`;
+  document.getElementById('d-dept-sub').textContent=s.dn+' 个科室 · 左侧导航快速跳转 · 全部展开随页面滚动';
+  document.getElementById('d-mod-sub').textContent='落地率 '+Math.round(s.ld/s.mn*100)+'%';
+  // Render all dept blocks
+  const codes=CODES.slice(0,s.dn);
+  document.getElementById('d-dept-all').innerHTML=codes.map(c=>{const d=getDept(c);const ms=MODS.filter(m=>m.d===d.n);return renderDeptBlock(d,ms,'d');}).join('');
+  renderDMod();
+  buildLeftNav('detail');
+  highlightLeftNav();
+}
+
+function renderDeptBlock(d,ms,prefix){
+  let h=`<div class="dept-block" id="${prefix}-dept-${d.code}"><div class="db-header"><span class="db-bar" style="background:${d.bar}"></span><h3>${d.n}</h3><span class="db-meta">${ms.length}个模块</span></div><div class="card card-pad">`;
+  if(d.personnel&&d.personnel.length>0){h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:${d.bar}"></span>科室人员</h4><div class="plist">${d.personnel.map(p=>`<div class="pcard"><div class="pc-av" style="background:${d.bar}">${p.n.charAt(0)}</div><div class="pc-info"><div class="pc-name">${p.n}</div><div class="pc-role">${p.r}</div></div><div class="pc-contact">📱 ${p.p}</div></div>`).join('')}</div></div>`;}
+  h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:var(--b600)"></span>日常核心工作</h4><div class="long-text">${esc(d.dw)}</div></div>`;
+  h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:var(--v600)"></span>业务流程</h4><div class="long-text">${esc(d.wf)}</div></div>`;
+  h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:var(--r600)"></span>当前痛点</h4><div class="long-text">${esc(d.pn)}</div></div>`;
+  h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:var(--a600)"></span>在用工具/系统</h4><div class="long-text">${esc(d.tl)}</div></div>`;
+  h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:var(--gn600)"></span>信息化期望</h4><div class="long-text">${esc(d.ex)}</div></div>`;
+  if(d.summary)h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:var(--t600)"></span>科室总结</h4><div class="long-text">${esc(d.summary)}</div></div>`;
+  if(d.metrics&&d.metrics.length>0){h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:${d.bar}"></span>核心数据</h4><table class="mt-table"><thead><tr><th>指标</th><th>数值</th><th>来源</th><th>周期</th></tr></thead><tbody>${d.metrics.map(m=>`<tr><td>${m.i}</td><td style="font-weight:600">${m.v}</td><td>${m.s}</td><td>${m.p}</td></tr>`).join('')}</tbody></table></div>`;}
+  if(d.files&&d.files.length>0){h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:var(--g400)"></span>附件 · ${d.files.length}个</h4><div class="atts">${d.files.map(f=>{const ext=f.n.split('.').pop().toLowerCase();const icon={'pdf':'📄','docx':'📝','xlsx':'📊','pptx':'📽','md':'📋','png':'🖼','jpg':'🖼'}[ext]||'📎';return`<div class="att-item"><span class="att-icon">${icon}</span><span class="att-name">${f.n}</span><span class="att-size">${f.s}</span></div>`;}).join('')}</div></div>`;}
+  h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:var(--g500)"></span>匹配模块</h4><div style="display:flex;flex-direction:column;gap:4px">${ms.map(m=>{const cl=m.st==='landed'?'ml':m.st==='trial'?'mt':'mn';const bg=m.st==='landed'?'mgl':m.st==='trial'?'mgt':'mgn';const lb=m.st==='landed'?'✅已落地':m.st==='trial'?'🔵未落地':'⬜未购';return`<div class="mm ${cl}"><span class="mn">${m.n}</span>${m.st!=='none'?`<span style="font-size:10px;color:var(--g400)">使用率${m.us}%·${m.ur}人</span>`:''}<span class="mtg ${bg}">${lb}</span></div>`;}).join('')}</div></div></div></div>`;
+  return h;
+}
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
+function renderDMod(){document.getElementById('d-mod-body').innerHTML=MODS.map(m=>{const dot=m.st==='landed'?'var(--gn600)':m.st==='trial'?'var(--o600)':'#ccc';const lb=m.st==='landed'?'✅已落地':m.st==='trial'?'🔵未落地':'⬜未购';const cl=m.st==='landed'?'fg':m.st==='trial'?'fo':'fy';return`<tr><td style="font-weight:500">${m.n}</td><td style="font-size:11px">${m.d}</td><td><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${dot};margin-right:3px"></span>${lb}</td><td>${m.st!=='none'?`<div class="prog"><div class="bar"><div class="f ${cl}" style="width:${m.us}%"></div></div><span>${m.us}%</span></div>`:'-'}</td><td>${m.ur||'-'}</td><td style="font-size:11px;color:var(--g400)">${m.nt||'-'}</td></tr>`;}).join('');}
+
+// === FORM ===
+function goF(n){fS=n;
+  document.querySelectorAll('#flow-steps .fs').forEach((s,i)=>{s.classList.remove('on','dn');if(i<n)s.classList.add('dn');if(i===n){s.classList.add('on','dn');}});
+  document.getElementById('btn-prev').style.display=n===0?'none':'';document.getElementById('btn-next').style.display=n===3?'none':'';document.getElementById('btn-save').style.display=n===3?'':'none';
+  if(n===2)renderFDept();if(n===3)renderFMod();
+  buildLeftNav('form');highlightLeftNav();
+}
+function nextF(){if(fS<3)goF(fS+1);}function prevF(){if(fS>0)goF(fS-1);}
+function renderFDept(){
+  const codes=CODES.slice(0,13);
+  document.getElementById('f-dept-all').innerHTML=codes.map(c=>{const d=getDept(c);const ms=MODS.filter(m=>m.d===d.n);return renderFormDept(d,ms);}).join('');
+  buildLeftNav('form');highlightLeftNav();
+}
+function renderFormDept(d,ms){
+  let h=`<div class="dept-block" id="f-dept-${d.code}"><div class="db-header"><span class="db-bar" style="background:${d.bar}"></span><h3>${d.n}</h3><span class="db-meta">${ms.length}个模块</span></div><div class="card card-pad">`;
+  h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:${d.bar}"></span>科室人员 <button class="btn btn-xs btn-g" style="margin-left:6px">＋ 添加</button></h4>`;
+  if(d.personnel&&d.personnel.length>0){h+=`<div class="ig3">${d.personnel.map(p=>`<div class="itw"><div class="lbl">姓名</div><input value="${p.n}"></div><div class="itw"><div class="lbl">职务</div><input value="${p.r}"></div><div class="itw"><div class="lbl">电话</div><input value="${p.p}"></div>`).join('')}</div>`;}h+=`</div>`;
+  h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:var(--b600)"></span>日常核心工作</h4><div class="itw"><textarea class="large">${d.dw}</textarea></div></div>`;
+  h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:var(--v600)"></span>业务流程</h4><div class="itw"><textarea class="large">${d.wf}</textarea></div></div>`;
+  h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:var(--r600)"></span>当前痛点</h4><div class="itw"><textarea class="large">${d.pn}</textarea></div></div>`;
+  h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:var(--a600)"></span>在用工具/系统</h4><div class="itw"><textarea>${d.tl}</textarea></div></div>`;
+  h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:var(--gn600)"></span>信息化期望</h4><div class="itw"><textarea class="large">${d.ex}</textarea></div></div>`;
+  h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:var(--t600)"></span>科室总结</h4><div class="itw"><textarea>${d.summary||''}</textarea></div></div>`;
+  h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:var(--g400)"></span>附件</h4>`;
+  if(d.files&&d.files.length>0){h+=`<div class="atts">${d.files.map(f=>{const ext=f.n.split('.').pop().toLowerCase();const icon={'pdf':'📄','docx':'📝','xlsx':'📊','pptx':'📽','md':'📋','png':'🖼'}[ext]||'📎';return`<div class="att-item"><span class="att-icon">${icon}</span><span class="att-name">${f.n}</span><span class="att-size">${f.s}</span><span style="cursor:pointer;margin-left:3px" onclick="this.parentElement.remove()">✕</span></div>`;}).join('')}</div>`;}
+  h+=`<label class="att-upload" style="margin-top:6px">📤 上传附件<input type="file" multiple style="display:none"></label><div style="font-size:10px;color:var(--g400);margin-top:3px">支持 PDF/Word/Excel/PPT/Markdown/图片，≤50MB</div></div>`;
+  h+=`<div class="dept-slot"><h4><span class="ds-dot" style="background:var(--g500)"></span>匹配模块</h4><div style="display:flex;flex-direction:column;gap:4px">${ms.map(m=>{const sL=m.st==='landed'?'selected':'';const sT=m.st==='trial'?'selected':'';const sN=m.st==='none'?'selected':'';return`<div style="display:flex;align-items:center;gap:6px;padding:5px 0;font-size:11px;border-bottom:1px solid var(--g100)"><span style="flex:1;font-weight:500">${m.n}</span><select style="font-size:10px;padding:2px 4px;border:1px solid var(--g200);border-radius:4px"><option value="landed" ${sL}>已落地</option><option value="trial" ${sT}>未落地</option><option value="none" ${sN}>未购</option></select><input type="number" value="${m.us}" style="width:42px;font-size:10px;padding:2px;border:1px solid var(--g200);border-radius:4px;text-align:center">%<input type="number" value="${m.ur}" style="width:42px;font-size:10px;padding:2px;border:1px solid var(--g200);border-radius:4px;text-align:center">人<input value="${m.nt}" placeholder="备注" style="width:110px;font-size:10px;padding:2px 4px;border:1px solid var(--g200);border-radius:4px"></div>`;}).join('')}</div></div></div></div>`;
+  return h;
+}
+function renderFMod(){document.getElementById('f-mod-body').innerHTML=MODS.map(m=>{const sL=m.st==='landed'?'selected':'';const sT=m.st==='trial'?'selected':'';const sN=m.st==='none'?'selected':'';return`<tr><td style="font-weight:500">${m.n}</td><td style="font-size:11px">${m.d}</td><td><select style="font-size:10px;padding:2px 4px;border:1px solid var(--g200);border-radius:4px"><option value="landed" ${sL}>已落地</option><option value="trial" ${sT}>未落地</option><option value="none" ${sN}>未购</option></select></td><td>${m.st!=='none'?`<input type="range" value="${m.us}" style="width:56px;vertical-align:middle"><span style="font-size:10px">${m.us}%</span>`:'-'}</td><td>${m.st!=='none'?`<input type="number" value="${m.ur}" style="width:44px;font-size:10px;padding:2px;border:1px solid var(--g200);border-radius:4px;text-align:center">人`:'-'}</td><td><input value="${m.nt}" style="width:110px;font-size:10px;padding:2px 4px;border:1px solid var(--g200);border-radius:4px"></td></tr>`;}).join('');}
+function saveF(){alert('✅ 画像创建成功！');switchTab('list');}
+
+// === PRODUCT CASES ===
+function renderPC(){
+  const modStats=MODS.map(m=>{let l=0,t=0,n=0;S.forEach(s=>{if(m.st==='landed')l++;else if(m.st==='trial')t++;else n++;});const tot=l+t+n;const cov=tot>0?Math.round(l/tot*100):0;return{...m,landed:l,trial:t,none:n,total:tot,cov};}).sort((a,b)=>b.cov-a.cov);
+  document.getElementById('pc-rank-body').innerHTML=modStats.map((m,i)=>{const badge=i<3?'rank-top':i>=modStats.length-3?'rank-bot':'rank-mid';const bl=i<3?'⭐TOP'+(i+1):i>=modStats.length-3?'⚠BOTTOM':'';const cl=m.cov>=60?'fg':m.cov>=30?'fo':'fy';return`<tr onclick="document.getElementById('tip-${m.n.replace(/[^a-zA-Z一-龥]/g,'')}').classList.toggle('on')"><td><span class="rt-name">${m.n}</span></td><td>${m.landed}所</td><td><div class="rt-bar-wrap"><div class="rt-bar"><div class="f ${cl}" style="width:${m.cov}%"></div></div><span style="font-weight:600">${m.cov}%</span></div></td><td style="color:var(--gn600)">${m.landed}</td><td style="color:var(--o600)">${m.trial}</td><td style="color:var(--g400)">${m.none}</td><td>${m.ur}</td><td>${bl?`<span class="rank-badge ${badge}">${bl}</span>`:''}</td></tr><tr class="rank-tip" id="tip-${m.n.replace(/[^a-zA-Z一-龥]/g,'')}"><td colspan="8">${m.cov>60?`⭐ <strong>${m.n}</strong>（核心产品）：覆盖率${m.cov}%，已落地${m.landed}所。`:m.cov>=30?`📈 <strong>${m.n}</strong>（增长潜力）：覆盖率${m.cov}%。`:`⚠ <strong>${m.n}</strong>（需关注）：覆盖率仅${m.cov}%。`}</td></tr>`;}).join('');
+  const provs=[{p:"北京市",c:2},{p:"广东省",c:2},{p:"浙江省",c:1},{p:"四川省",c:1},{p:"湖北省",c:1},{p:"上海市",c:1},{p:"山东省",c:1},{p:"江苏省",c:0},{p:"河南省",c:0},{p:"湖南省",c:0},{p:"福建省",c:0},{p:"安徽省",c:0}];const maxC=Math.max(...provs.map(p=>p.c),1);
+  document.getElementById('pc-treemap').innerHTML=provs.map(p=>{const r=p.c/maxC;const i=Math.max(.15,r*.85);const fg=Math.max(1,Math.round(r*20));const mw=Math.max(70,Math.round(r*280));return`<div class="tm" style="flex:${fg} 1 ${mw}px;background:rgba(37,99,235,${i})">${p.c>0?`<div class="tm-c">${p.c}所</div><div class="tm-n">${p.p}</div>`:`<div class="tm-n" style="opacity:.4">${p.p}</div>`}</div>`;}).join('');
+  const types=["幼儿园","小学","初中","高中","中职","高职","技师","教育局"];const typeCounts=types.map(t=>({n:t,c:S.filter(s=>s.t.includes(t)).length}));const maxT=Math.max(...typeCounts.map(t=>t.c),1);
+  document.getElementById('pc-typedist').innerHTML=typeCounts.map(t=>`<div class="td-row"><span class="td-lbl">${t.n}</span><div class="td-bar"><div class="td-f" style="width:${(t.c/maxT*100)}%;background:var(--b600)">${t.c>0?t.c+'所':''}</div></div></div>`).join('');
+  const regions=[{l:"东北",p:["黑龙江","吉林","辽宁"]},{l:"华北",p:["北京","天津","河北","山西","内蒙古"]},{l:"西北",p:["新疆","青海","甘肃","宁夏","陕西"]},{l:"华东",p:["山东","江苏","上海","浙江","安徽","福建","江西"]},{l:"华中",p:["河南","湖北","湖南"]},{l:"西南",p:["四川","重庆","贵州","云南","西藏"]},{l:"华南",p:["广东","广西","海南"]},{l:"港澳台",p:["香港","澳门","台湾"]}];const pMap={北京市:2,广东省:2,浙江省:1,四川省:1,湖北省:1,上海市:1,山东省:1};
+  document.getElementById('pc-regions').innerHTML=regions.map(r=>`<div class="rg"><div class="rgn">${r.l}</div><div class="rgl">${r.p.map(p=>{const c=pMap[p]||0;const i=c>0?Math.max(.15,c/maxC):0;const bg=c>0?`rgba(37,99,235,${i})`:'rgba(226,232,240,.5)';const tc=i>.5?'#fff':'#334155';return`<span style="background:${bg};color:${tc}">${p}${c>0?' '+c:''}</span>`;}).join('')}</div></div>`).join('');
+  const lb=S.map(s=>{const ms=MODS.filter(m=>m.st==='landed');const avgUs=ms.length>0?Math.round(ms.reduce((a,m)=>a+m.us,0)/ms.length):0;return{...s,avgUs};}).sort((a,b)=>b.avgUs-a.avgUs);
+  document.getElementById('pc-leaderboard').innerHTML=lb.slice(0,10).map((s,i)=>`<div class="lb-item"><span class="lb-rank">${i+1}</span><div class="lb-info"><div class="lb-name">🏫 ${s.n}</div><div class="lb-sub">${s.t.join('、')} · ${s.l}</div></div><div class="lb-bar-wrap"><div class="lb-bar"><div class="f ${s.avgUs>=60?'fg':s.avgUs>=30?'fo':'fy'}" style="width:${s.avgUs}%"></div></div><span class="lb-pct">${s.avgUs}%</span></div></div>`).join('');
+  document.getElementById('pc-schools').innerHTML=S.map(s=>{const avgUs=Math.round(MODS.reduce((a,m)=>a+m.us,0)/MODS.length);const cl=avgUs>=60?'fg':avgUs>=30?'fo':'fy';return`<tr><td style="text-align:center"><input type="checkbox" style="border-radius:3px"></td><td><span style="font-weight:500">${s.n}</span><div style="font-size:10px;color:var(--g400)">${s.l}</div></td><td>${s.t.map(t=>`<span class="tag ${TM[t]}">${t}</span>`).join('')}</td><td>${s.dn}个</td><td>${s.mn}个</td><td><div class="prog"><div class="bar"><div class="f ${cl}" style="width:${avgUs}%"></div></div><span style="font-weight:600">${avgUs}%</span></div></td><td>${MODS.reduce((a,m)=>a+m.ur,0)}</td></tr>`;}).join('');
+  buildLeftNav('product');highlightLeftNav();
+}
+
+// === INIT ===
+buildL();
+document.getElementById('type-chips').innerHTML=["幼儿园","小学","初中","高中","中职","高职","技师","教育局"].map(t=>`<span class="tag ${TM[t]}" style="cursor:pointer;font-size:11px;padding:3px 10px;border-radius:10px" onclick="this.classList.toggle('${TM[t]}');this.classList.toggle('tG')" ${t==='高中'?'':''}>${t}</span>`).join('');
+</script>
+</body>
+</html>

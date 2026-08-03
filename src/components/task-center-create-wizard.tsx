@@ -191,7 +191,7 @@ export default function TaskCenterCreateWizard({ currentUser, onSave, onBack, in
       if (j.data) setRecentDefs(j.data.slice(0, 5));
     }).catch(() => {});
     fetch("/api/users").then(r => r.json()).then(j => { if (j.data) setSystemUsers(j.data); }).catch(() => {});
-    fetch("/api/projects").then(r => r.json()).then(j => { if (j.data) setProjects(j.data); }).catch(() => {});
+    fetch("/api/projects", { headers: { Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}` } }).then(r => r.json()).then(j => { if (j.data) setProjects(j.data); }).catch(() => {});
     // Load reference data sources for dropdown options
     fetch("/api/standards").then(r => r.json()).then(j => {
       if (j.data && Array.isArray(j.data)) {
@@ -216,7 +216,7 @@ export default function TaskCenterCreateWizard({ currentUser, onSave, onBack, in
   // Load board data
   useEffect(() => {
     if (showBoardSelector) {
-      fetch("/api/projects").then(r => r.json()).then(j => { if (j.data) setBoardProjects(j.data); }).catch(() => {});
+      fetch("/api/projects", { headers: { Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}` } }).then(r => r.json()).then(j => { if (j.data) setBoardProjects(j.data); }).catch(() => {});
       fetch("/api/standards").then(r => r.json()).then(j => {
         if (j.data && Array.isArray(j.data)) {
           const map: Record<string, string> = {};
