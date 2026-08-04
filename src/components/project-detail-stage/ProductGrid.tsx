@@ -245,14 +245,14 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
   return (
     <div className="px-16 py-6" style={{ borderBottom: "1px solid var(--s-border)" }}>
       <div className="text-[10px] uppercase tracking-[2px] mb-4 flex items-center gap-2 font-semibold" style={{ color: "#16a34a", fontFamily: "var(--font-mono, monospace)" }}>
-        已采购产品清单 · {totalModules} 项 · 共 {totalQty} 套
+        合同产品清单 · {totalModules} 项 · 共 {totalQty} 套
         <span className="flex-1 h-px" style={{ backgroundColor: "#16a34a", opacity: 0.3 }} />
       </div>
 
       {/* Tab bar */}
       <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
         <button onClick={() => setActiveTab("procurement")} style={{ padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none", borderBottom: activeTab === "procurement" ? "2px solid #16a34a" : "2px solid transparent", background: "transparent", color: activeTab === "procurement" ? "#16a34a" : "var(--s-text-muted)", fontFamily: "var(--s-font-mono)", letterSpacing: "0.5px" }}>
-          📦 采购清单 <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 2 }}>{totalModules}</span>
+          📦 合同清单 <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 2 }}>{totalModules}</span>
         </button>
         <button onClick={() => setActiveTab("info")} style={{ padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none", borderBottom: activeTab === "info" ? "2px solid #16a34a" : "2px solid transparent", background: "transparent", color: activeTab === "info" ? "#16a34a" : "var(--s-text-muted)", fontFamily: "var(--s-font-mono)", letterSpacing: "0.5px" }}>
           📋 项目基本信息
@@ -401,7 +401,7 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
       {/* ═══ 全屏弹窗 ═══ */}
       {fullscreenOpen && (
         <FullscreenModal
-          title={activeTab === "procurement" ? `📦 已采购产品清单 · ${totalModules} 项 · 共 ${totalQty} 套` : activeTab === "integration" ? `🔗 对接信息 · ${integrations.length} 条` : activeTab === "custom" ? `🔧 定制化信息 · ${customs.length} 条` : "📋 项目基本信息"}
+          title={activeTab === "procurement" ? `📦 合同产品清单 · ${totalModules} 项 · 共 ${totalQty} 套` : activeTab === "integration" ? `🔗 对接信息 · ${integrations.length} 条` : activeTab === "custom" ? `🔧 定制化信息 · ${customs.length} 条` : "📋 项目基本信息"}
           onClose={() => setFullscreenOpen(false)}
         >
           {activeTab === "procurement" ? (
@@ -607,9 +607,9 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
               {(!!p.procurement_amount || !!p.software_amount || !!p.hardware_amount) && (
                 <InfoSection title="采购金额">
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", padding: 12 }}>
-                    <FieldBlock label="采购总金额" value={fmtCurrency(p.procurement_amount)} />
-                    <FieldBlock label="软件金额" value={fmtCurrency(p.software_amount)} />
-                    <FieldBlock label="硬件金额" value={fmtCurrency(p.hardware_amount)} />
+                    <FieldBlock label="合同总金额" value={fmtCurrency(p.procurement_amount)} />
+                    <FieldBlock label="合同软件金额" value={fmtCurrency(p.software_amount)} />
+                    <FieldBlock label="合同硬件金额" value={fmtCurrency(p.hardware_amount)} />
                   </div>
                 </InfoSection>
               )}

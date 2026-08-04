@@ -515,9 +515,9 @@ export function ProjectForm({
         { label: "施工单位施工内容(多个用、分隔)" },
         { label: "项目成员姓名(多个用、分隔)" },
         { label: "项目成员角色(多个用、分隔)" },
-        { label: "采购总金额(元)" },
-        { label: "软件金额(元)" },
-        { label: "硬件金额(元)" },
+        { label: "合同总金额(元)" },
+        { label: "合同软件金额(元)" },
+        { label: "合同硬件金额(元)" },
         { label: "对接厂商(多个用、分隔)" },
         { label: "对接产品目录(多个用、分隔)" },
       ];
@@ -715,11 +715,11 @@ export function ProjectForm({
         setProjectMembers(members);
       }
 
-      const procAmt = get("采购总金额(元)");
+      const procAmt = get("合同总金额(元)");
       if (procAmt) setProcurementAmount(procAmt);
-      const swAmt = get("软件金额(元)");
+      const swAmt = get("合同软件金额(元)");
       if (swAmt) setSoftwareAmount(swAmt);
-      const hwAmt = get("硬件金额(元)");
+      const hwAmt = get("合同硬件金额(元)");
       if (hwAmt) setHardwareAmount(hwAmt);
 
       // 读取采购模块 sheet
@@ -2195,7 +2195,7 @@ export function ProjectForm({
               {/* 采购金额 */}
               <div className="grid grid-cols-3 gap-4 mb-4">
                 <div>
-                  <label className="text-sm font-medium text-slate-600 mb-1.5 block">采购总金额（元）</label>
+                  <label className="text-sm font-medium text-slate-600 mb-1.5 block">合同总金额（元）</label>
                   <Input
                     type="number"
                     step="0.01"
@@ -2206,7 +2206,7 @@ export function ProjectForm({
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-slate-600 mb-1.5 block">软件金额（元）</label>
+                  <label className="text-sm font-medium text-slate-600 mb-1.5 block">合同软件金额（元）</label>
                   <Input
                     type="number"
                     step="0.01"
@@ -2217,7 +2217,7 @@ export function ProjectForm({
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-slate-600 mb-1.5 block">硬件金额（元）</label>
+                  <label className="text-sm font-medium text-slate-600 mb-1.5 block">合同硬件金额（元）</label>
                   <Input
                     type="number"
                     step="0.01"
