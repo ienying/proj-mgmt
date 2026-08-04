@@ -786,10 +786,10 @@ export function ProjectForm({
       setRoleMarketProduct((d.role_market_product as string) || "");
       setRoleProjectManager((d.role_project_manager as string) || "");
       setDescription((d.description as string) || "");
-      setEntryDate((d.entry_date as string) || "");
-      setInitialAcceptanceDate((d.initial_acceptance_date as string) || "");
-      setFinalAcceptanceDate((d.final_acceptance_date as string) || "");
-      setRequiredDate((d.required_date as string) || "");
+      setEntryDate(((d.entry_date as string) || "").slice(0, 10));
+      setInitialAcceptanceDate(((d.initial_acceptance_date as string) || "").slice(0, 10));
+      setFinalAcceptanceDate(((d.final_acceptance_date as string) || "").slice(0, 10));
+      setRequiredDate(((d.required_date as string) || "").slice(0, 10));
       setFinalCustomer((d.final_customer as string) || "");
 
       // 客户信息

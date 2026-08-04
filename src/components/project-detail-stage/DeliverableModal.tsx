@@ -65,6 +65,10 @@ export function DeliverableModal({ open, onClose, projectSchema, projectName, on
   const [implRows, setImplRows] = useState<ImplRow[]>([]);
   const [loadingImpl, setLoadingImpl] = useState(false);
 
+  // 对接信息和定制化信息表的记录数
+  const [integrationCount, setIntegrationCount] = useState(0);
+  const [customDevCount, setCustomDevCount] = useState(0);
+
   // Load table definitions and module types on open
   useEffect(() => {
     if (!open) return;
@@ -248,6 +252,26 @@ export function DeliverableModal({ open, onClose, projectSchema, projectName, on
       setLoadingImpl(false);
     })();
   }, [open, implTables, projectSchema, resolveModule, loadingDefs]);
+
+  // Fetch integration_info and custom_dev_info record counts
+  useEffect(() => {
+    if (!open || !projectSchema) return;
+    (async () => {
+      try {
+        const [intRes, cdRes] = await Promise.all([
+          fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=integration_info`),
+          fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=custom_dev_info`),
+        ]);
+        const intJson = await intRes.json();
+        const cdJson = await cdRes.json();
+        setIntegrationCount(Array.isArray(intJson.data) ? intJson.data.length : 0);
+        setCustomDevCount(Array.isArray(cdJson.data) ? cdJson.data.length : 0);
+      } catch {
+        setIntegrationCount(0);
+        setCustomDevCount(0);
+      }
+    })();
+  }, [open, projectSchema]);
 
   // Download handler
   const handleDownload = (fileKey: string) => {
@@ -752,6 +776,68 @@ export function DeliverableModal({ open, onClose, projectSchema, projectName, on
                             </tr>
                             </React.Fragment>
                           ))}
+                          {/* ═══ 对接信息 — 项目 Schema 表 ═══ */}
+                          <tr
+                            onMouseEnter={(e) => {
+                              const td = (e.currentTarget as HTMLElement).querySelectorAll("td");
+                              td.forEach((t) => { (t as HTMLElement).style.background = "var(--s-bg)"; });
+                            }}
+                            onMouseLeave={(e) => {
+                              const td = (e.currentTarget as HTMLElement).querySelectorAll("td");
+                              td.forEach((t) => { (t as HTMLElement).style.background = ""; });
+                            }}
+                          >
+                            <td onClick={() => window.open(`/project-data-view?schema=${encodeURIComponent(projectSchema)}&table=integration_info&name=${encodeURIComponent("对接信息")}`, "_blank")}
+                              style={{ padding: "9px 12px", borderBottom: "1px solid var(--s-border-light)", fontWeight: 600, color: "var(--s-blue)", cursor: "pointer" }}>
+                              对接信息
+                            </td>
+                            <td style={{ padding: "9px 12px", borderBottom: "1px solid var(--s-border-light)", color: "var(--s-text-secondary)" }}>
+                              <span style={{ display: "inline-block", fontSize: 10, fontWeight: 500, padding: "2px 8px", borderRadius: 3, background: "#ede9fe", color: "#7c3aed" }}>对接管理</span>
+                            </td>
+                            <td style={{ padding: "9px 12px", borderBottom: "1px solid var(--s-border-light)", textAlign: "center", fontFamily: "var(--s-font-mono)" }}>
+                              {integrationCount} 条
+                            </td>
+                            <td style={{ padding: "9px 12px", borderBottom: "1px solid var(--s-border-light)", textAlign: "center" }}>
+                              <span style={{ display: "inline-block", fontSize: 9, fontWeight: 600, padding: "2px 10px", borderRadius: 3, textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: "var(--s-font-mono)", background: "#dcfce7", color: "var(--s-green)", border: "1px solid rgba(43,138,62,.2)" }}>可编辑</span>
+                            </td>
+                            <td style={{ padding: "9px 12px", borderBottom: "1px solid var(--s-border-light)", textAlign: "center" }}>
+                              <span onClick={() => window.open(`/project-data-view?schema=${encodeURIComponent(projectSchema)}&table=integration_info&name=${encodeURIComponent("对接信息")}`,"_blank")}
+                                style={{ fontSize: 11, color: "var(--s-orange)", cursor: "pointer" }}>编辑</span>
+                              <span onClick={() => window.open(`/project-data-view?schema=${encodeURIComponent(projectSchema)}&table=integration_info&name=${encodeURIComponent("对接信息")}`,"_blank")}
+                                style={{ fontSize: 11, color: "var(--s-blue)", cursor: "pointer", marginLeft: 8 }}>查看</span>
+                            </td>
+                          </tr>
+                          {/* ═══ 定制化信息 — 项目 Schema 表 ═══ */}
+                          <tr
+                            onMouseEnter={(e) => {
+                              const td = (e.currentTarget as HTMLElement).querySelectorAll("td");
+                              td.forEach((t) => { (t as HTMLElement).style.background = "var(--s-bg)"; });
+                            }}
+                            onMouseLeave={(e) => {
+                              const td = (e.currentTarget as HTMLElement).querySelectorAll("td");
+                              td.forEach((t) => { (t as HTMLElement).style.background = ""; });
+                            }}
+                          >
+                            <td onClick={() => window.open(`/project-data-view?schema=${encodeURIComponent(projectSchema)}&table=custom_dev_info&name=${encodeURIComponent("定制化信息")}`, "_blank")}
+                              style={{ padding: "9px 12px", borderBottom: "1px solid var(--s-border-light)", fontWeight: 600, color: "var(--s-blue)", cursor: "pointer" }}>
+                              定制化信息
+                            </td>
+                            <td style={{ padding: "9px 12px", borderBottom: "1px solid var(--s-border-light)", color: "var(--s-text-secondary)" }}>
+                              <span style={{ display: "inline-block", fontSize: 10, fontWeight: 500, padding: "2px 8px", borderRadius: 3, background: "#fef3c7", color: "#92400e" }}>定制开发</span>
+                            </td>
+                            <td style={{ padding: "9px 12px", borderBottom: "1px solid var(--s-border-light)", textAlign: "center", fontFamily: "var(--s-font-mono)" }}>
+                              {customDevCount} 条
+                            </td>
+                            <td style={{ padding: "9px 12px", borderBottom: "1px solid var(--s-border-light)", textAlign: "center" }}>
+                              <span style={{ display: "inline-block", fontSize: 9, fontWeight: 600, padding: "2px 10px", borderRadius: 3, textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: "var(--s-font-mono)", background: "#dcfce7", color: "var(--s-green)", border: "1px solid rgba(43,138,62,.2)" }}>可编辑</span>
+                            </td>
+                            <td style={{ padding: "9px 12px", borderBottom: "1px solid var(--s-border-light)", textAlign: "center" }}>
+                              <span onClick={() => window.open(`/project-data-view?schema=${encodeURIComponent(projectSchema)}&table=custom_dev_info&name=${encodeURIComponent("定制化信息")}`,"_blank")}
+                                style={{ fontSize: 11, color: "var(--s-orange)", cursor: "pointer" }}>编辑</span>
+                              <span onClick={() => window.open(`/project-data-view?schema=${encodeURIComponent(projectSchema)}&table=custom_dev_info&name=${encodeURIComponent("定制化信息")}`,"_blank")}
+                                style={{ fontSize: 11, color: "var(--s-blue)", cursor: "pointer", marginLeft: 8 }}>查看</span>
+                            </td>
+                          </tr>
                         </tbody>
                       </table>
 

@@ -26,6 +26,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ProjectForm } from "./project-form";
+import { ExportDialog } from "./export-dialog";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell
@@ -382,6 +383,7 @@ export function ProjectManagement({
   const [modSearch, setModSearch] = useState("");
   const [descDialogOpen, setDescDialogOpen] = useState(false);
   const [descDialogContent, setDescDialogContent] = useState("");
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [progressMap, setProgressMap] = useState<Record<string, number>>({});
   // 加载项目成员
   const loadProjectMembers = useCallback(async (projectId: string) => {
@@ -1503,7 +1505,7 @@ export function ProjectManagement({
             </button>
           </div>
 
-          <Button variant="outline" size="sm" className="h-8 gap-1 text-xs rounded-lg" onClick={handleExport}><Download className="w-3.5 h-3.5" />导出</Button>
+          <Button variant="outline" size="sm" className="h-8 gap-1 text-xs rounded-lg" onClick={() => setExportDialogOpen(true)}><Download className="w-3.5 h-3.5" />导出</Button>
           <Button size="sm" className="h-8 gap-1 text-xs rounded-lg bg-blue-500 hover:bg-blue-600"
             onClick={() => { setEditingProject(null); setShowProjectForm(true); }}>
             <Plus className="w-3.5 h-3.5" />新建项目</Button>
@@ -1531,7 +1533,7 @@ export function ProjectManagement({
           <span className="w-px h-4 bg-slate-200 mx-0.5" />
           {/* 状态 */}
           <FilterCombobox value={filterStatus} onChange={setFilterStatus} placeholder="状态" width="w-[120px]"
-            options={[{value:"all",label:"全部状态"},{value:"进行中",label:"进行中"},{value:"已完成",label:"已完成"},{value:"已暂停",label:"已暂停"}]} />
+            options={[{value:"all",label:"全部状态"},...projectStatuses.filter(s=>s.code).map(s=>({value:s.code,label:s.name}))]} />
           {/* 项目经理 */}
           <FilterCombobox value={filterManager} onChange={setFilterManager} placeholder="项目经理" width="w-[130px]"
             options={[{value:"all",label:"全部经理"},...managers.map(m=>({value:m,label:m}))]} />
@@ -1682,6 +1684,13 @@ export function ProjectManagement({
 
       {/* 右侧项目详情面板 */}
       {selectedProject && renderProjectDetail()}
+
+      {/* 导出弹窗 */}
+      <ExportDialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+        projects={filteredProjects.map(p => ({ id: p.id, project_name: p.project_name, project_code: p.project_code, project_schema: p.project_schema }))}
+      />
 
       {/* 项目描述弹窗 */}
       <Dialog open={descDialogOpen} onOpenChange={setDescDialogOpen}>

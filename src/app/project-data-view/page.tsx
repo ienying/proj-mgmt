@@ -52,11 +52,64 @@ function TableViewInner() {
       const defs = (defJson.data || []) as Array<{ table_code: string; columns_config?: Array<{ name: string; label: string; type: string }> }>;
       const def = defs.find(d => d.table_code === tableCode);
       const cols = def?.columns_config || [];
-      // 优先用表定义的列（有label），否则用数据中的列名
+
+      // 硬编码：对接信息和定制化信息的列定义
+      const HARDCODED_COLS: Record<string, Array<{ name: string; label: string; type: string }>> = {
+        integration_info: [
+          { name: "vendor_name", label: "对接厂商", type: "text" },
+          { name: "product_module", label: "产品目录", type: "text" },
+          { name: "integration_type", label: "对接类型", type: "text" },
+          { name: "brief_description", label: "简述", type: "text" },
+          { name: "in_contract", label: "是否在合同内", type: "text" },
+          { name: "contract_note", label: "合同备注", type: "text" },
+          { name: "our_req_contact", label: "我方需求对接人", type: "text" },
+          { name: "our_req_contact_phone", label: "联系方式", type: "text" },
+          { name: "our_product_contact", label: "我方产品负责人", type: "text" },
+          { name: "our_product_contact_phone", label: "联系方式", type: "text" },
+          { name: "our_dev_contact", label: "我方开发负责人", type: "text" },
+          { name: "our_dev_contact_phone", label: "联系方式", type: "text" },
+          { name: "our_responsibility", label: "我方负责内容", type: "text" },
+          { name: "their_req_contact", label: "对方需求对接人", type: "text" },
+          { name: "their_req_contact_phone", label: "联系方式", type: "text" },
+          { name: "their_req_contact_position", label: "职位", type: "text" },
+          { name: "their_req_contact_note", label: "备注", type: "text" },
+          { name: "their_product_contact", label: "对方产品负责人", type: "text" },
+          { name: "their_product_contact_phone", label: "联系方式", type: "text" },
+          { name: "their_product_contact_position", label: "职位", type: "text" },
+          { name: "their_product_contact_note", label: "备注", type: "text" },
+          { name: "their_dev_contact", label: "对方开发负责人", type: "text" },
+          { name: "their_dev_contact_phone", label: "联系方式", type: "text" },
+          { name: "their_dev_contact_position", label: "职位", type: "text" },
+          { name: "their_dev_contact_note", label: "备注", type: "text" },
+          { name: "their_responsibility", label: "对方负责内容", type: "text" },
+          { name: "integration_docs", label: "附件", type: "json" },
+          { name: "remark", label: "备注", type: "text" },
+        ],
+        custom_dev_info: [
+          { name: "product_module", label: "产品目录", type: "text" },
+          { name: "custom_content", label: "定制内容", type: "text" },
+          { name: "in_contract", label: "是否在合同内", type: "text" },
+          { name: "contract_note", label: "合同备注", type: "text" },
+          { name: "customer_req_contact", label: "客户需求提出人", type: "text" },
+          { name: "customer_req_contact_phone", label: "联系方式", type: "text" },
+          { name: "customer_req_contact_position", label: "职位", type: "text" },
+          { name: "customer_req_contact_note", label: "备注", type: "text" },
+          { name: "internal_req_contact", label: "内部需求对接人", type: "text" },
+          { name: "internal_req_contact_phone", label: "联系方式", type: "text" },
+          { name: "internal_product_contact", label: "内部产品负责人", type: "text" },
+          { name: "internal_product_contact_phone", label: "联系方式", type: "text" },
+          { name: "req_docs", label: "需求文档", type: "json" },
+          { name: "remark", label: "备注", type: "text" },
+        ],
+      };
+
+      // 优先用表定义的列（有label），其次硬编码定义，否则用数据中的列名
       if (cols.length > 0) {
         setColumns(cols.map(c => ({ name: c.name, label: c.label || c.name, type: c.type || "text" })));
+      } else if (HARDCODED_COLS[tableCode]) {
+        setColumns(HARDCODED_COLS[tableCode]);
       } else if (data.length > 0) {
-        setColumns(Object.keys(data[0]).filter(k => !k.startsWith("_")).map(k => ({ name: k, label: k, type: "text" })));
+        setColumns(Object.keys(data[0]).filter(k => !k.startsWith("_") && k !== "id" && k !== "created_at").map(k => ({ name: k, label: k, type: "text" })));
       }
     } catch { }
     setLoading(false);
@@ -136,10 +189,19 @@ function TableViewInner() {
                     {columns.map(col => {
                       const isEditing = editingCell?.rowIdx === ri && editingCell?.colName === col.name;
                       const val = row[col.name];
-                      const displayVal = typeof val === "object" && val !== null ? JSON.stringify(val) : String(val ?? "—");
+                      // 对于 JSONB 附件列，显示文档数量
+                      const jsonCols = ["integration_docs", "req_docs"];
+                      let displayVal: string;
+                      if (jsonCols.includes(col.name) && Array.isArray(val)) {
+                        displayVal = `${val.length} 个文档`;
+                      } else {
+                        displayVal = typeof val === "object" && val !== null ? JSON.stringify(val) : String(val ?? "—");
+                      }
+                      // JSONB 列不可双击编辑
+                      const editable = !jsonCols.includes(col.name);
                       return (
                         <td key={col.name} style={{ padding: "8px 12px", borderBottom: "1px solid var(--s-border-light)", color: "var(--s-text-secondary)" }}
-                          onDoubleClick={() => startEdit(ri, col.name, displayVal === "—" ? "" : displayVal)}>
+                          onDoubleClick={() => { if (editable) startEdit(ri, col.name, displayVal === "—" ? "" : displayVal); }}>
                           {isEditing ? (
                             <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                               <input value={editValue} onChange={e => setEditValue(e.target.value)}
