@@ -369,11 +369,15 @@ function RichTextEditorInner(props: RichTextEditorProps) {
   return (
     <EditorErrorBoundary>
       <div className={`border border-gray-300 overflow-hidden focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-200 flex flex-col ${props.className || ""}`} onClick={handleContainerClick}>
-        <style>{`.w-e-text-container h1{font-size:2em!important;font-weight:700!important;margin:0.67em 0!important;line-height:1.3!important}.w-e-text-container h2{font-size:1.5em!important;font-weight:700!important;margin:0.83em 0!important;line-height:1.4!important;border-bottom:1px solid #e5e7eb;padding-bottom:0.3em}.w-e-text-container h3{font-size:1.25em!important;font-weight:600!important;margin:1em 0!important;line-height:1.5!important}.w-e-text-container h4{font-size:1.1em!important;font-weight:600!important;margin:0.8em 0!important}
-.w-e-full-screen-container{position:fixed!important;inset:0!important;z-index:99999!important;background:rgba(0,0,0,.5)!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:24px!important}
-.w-e-full-screen-container .w-e-full-screen-tool-bar{position:sticky!important;top:0!important;z-index:10!important;background:#fff!important;border-radius:12px 12px 0 0!important}
-.w-e-full-screen-container .w-e-text-container{width:100%!important;max-width:960px!important;max-height:calc(100vh-80px)!important;border-radius:12px!important;box-shadow:0 24px 80px rgba(0,0,0,.25)!important;overflow:hidden!important;background:#fff!important;display:flex!important;flex-direction:column!important}
-.w-e-full-screen-container .w-e-text-container [data-slate-editor]{flex:1!important;overflow-y:auto!important;min-height:300px!important;padding:24px 32px!important}`}</style>
+        <style>{`.w-e-text-container{padding:0!important}.w-e-scroll{padding:0!important}
+.w-e-text-container [data-slate-editor]{padding:16px 20px!important}
+.w-e-text-container h1{font-size:2em!important;font-weight:700!important;margin:0.67em 0!important;line-height:1.3!important}.w-e-text-container h2{font-size:1.5em!important;font-weight:700!important;margin:0.83em 0!important;line-height:1.4!important;border-bottom:1px solid #e5e7eb;padding-bottom:0.3em}.w-e-text-container h3{font-size:1.25em!important;font-weight:600!important;margin:1em 0!important;line-height:1.5!important}.w-e-text-container h4{font-size:1.1em!important;font-weight:600!important;margin:0.8em 0!important}
+.w-e-full-screen-container{position:fixed!important;inset:0!important;z-index:99999!important;background:rgba(0,0,0,.5)!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;padding:24px!important;overflow-y:auto!important}
+.w-e-full-screen-container>*{width:100%!important;max-width:960px!important;margin-left:auto!important;margin-right:auto!important}
+.w-e-full-screen-container .w-e-bar{flex-shrink:0!important;background:#fff!important;border-radius:12px 12px 0 0!important}
+.w-e-full-screen-container .w-e-text-container{flex:1!important;max-height:calc(100vh-80px)!important;border-radius:0 0 12px 12px!important;box-shadow:0 24px 80px rgba(0,0,0,.25)!important;overflow:hidden!important;background:#fff!important;display:flex!important;flex-direction:column!important}
+.w-e-full-screen-container .w-e-text-container [data-slate-editor]{flex:1!important;overflow-y:auto!important;min-height:300px!important;padding:24px 32px!important}
+.w-e-toolbar .w-e-bar-item{min-width:28px!important;justify-content:center!important}`}</style>
         <Toolbar editor={editor} defaultConfig={TOOLBAR_CONFIG} style={{ borderBottom: "1px solid #e5e7eb", position: "sticky", top: 0, zIndex: 10, background: "#fff" }} />
         <Editor value={value} onChange={function (ed) { onChange(normalizeHtml(ed.getHtml())); }} onCreated={handleCreated} defaultConfig={editorConfig} style={{ minHeight: 180, overflowY: "auto", flex: 1 }} />
       </div>

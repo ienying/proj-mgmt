@@ -88,6 +88,7 @@ export async function PUT(
         delete safeFields.metrics;
         delete safeFields.dept_scope;
         delete safeFields.campus_id;
+        delete safeFields.group_names;
         const retry = await client.rpc("dp_update", {
           p_table: "design_case_center.customer_departments",
           p_id: deptId,

@@ -128,7 +128,7 @@ function joinSections(parts: string[]): string {
 
 const BUSINESS_FIELDS = [
   { key: "daily_work", label: "日常核心工作", placeholder: "描述该科室日常核心工作内容...", colSpan: true },
-  { key: "workflow", label: "业务流程", placeholder: "描述该科室主要业务流程...", colSpan: false },
+  { key: "workflow", label: "业务流程", placeholder: "描述该科室主要业务流程...", colSpan: true },
   { key: "pain_points", label: "当前痛点", placeholder: "描述该科室当前面临的痛点和挑战...", colSpan: false },
   { key: "tools", label: "在用工具/系统", placeholder: "列出该科室当前使用的工具和系统...", colSpan: false },
   { key: "expectations", label: "信息化期望", placeholder: "描述该科室对信息化的期望和需求...", colSpan: true },
@@ -216,10 +216,10 @@ function BusinessGroups({ code, dept, updateDepartment }: {
       <div className="space-y-3">
         {groups.map((group, gi) => (
           <div key={gi} className="border border-[#d1c7b7] bg-white p-3 relative">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between mb-2 gap-2">
+              <div className="flex-1 min-w-0">
                 <Input
-                  className="h-7 w-40 text-xs font-semibold border-[#d1c7b7]"
+                  className="h-7 w-full text-xs font-semibold border-[#d1c7b7]"
                   placeholder={`业务组 ${gi + 1}`}
                   value={group._name}
                   onChange={(e) => updateGroupName(gi, e.target.value)}
@@ -329,7 +329,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
   // 基础信息
   const [schoolName, setSchoolName] = useState("");
   const [schoolPopoverOpen, setSchoolPopoverOpen] = useState(false);
-  const [customerTypes, setCustomerTypes] = useState<string[]>(["中职"]);
+  const [customerTypes, setCustomerTypes] = useState<string[]>([]);
   const [description, setDescription] = useState("");
   const [schoolNature, setSchoolNature] = useState(""); // 办学性质: 公办/民办
 
@@ -443,6 +443,74 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
       const schoolDepts = { ...prev[schoolIdx] }; delete schoolDepts[code];
       return { ...prev, [schoolIdx]: schoolDepts };
     });
+  };
+
+  // Sub-school department helpers
+  const updateSubDept = (si: number, code: string, field: string, value: unknown) => {
+    setSubDepts(prev => ({
+      ...prev,
+      [si]: { ...prev[si], [code]: { ...prev[si][code], [field]: value } },
+    }));
+  };
+  const addSubPersonnel = (si: number, code: string) => {
+    updateSubDept(si, code, "personnel", [
+      ...(subDepts[si]?.[code]?.personnel || []),
+      { name: "", role: "", phone: "", attitude: "支持" },
+    ]);
+  };
+  const updateSubPersonnel = (si: number, code: string, idx: number, field: string, value: string) => {
+    const updated = [...(subDepts[si]?.[code]?.personnel || [])];
+    updated[idx] = { ...updated[idx], [field]: value };
+    updateSubDept(si, code, "personnel", updated);
+  };
+  const removeSubPersonnel = (si: number, code: string, idx: number) => {
+    const updated = (subDepts[si]?.[code]?.personnel || []).filter((_, i) => i !== idx);
+    updateSubDept(si, code, "personnel", updated);
+  };
+  const updateSubModule = (si: number, code: string, mi: number, field: string, value: unknown) => {
+    setSubModules(prev => {
+      const schoolMods = [...(prev[si]?.[code] || [])];
+      schoolMods[mi] = { ...schoolMods[mi], [field]: value };
+      return { ...prev, [si]: { ...prev[si], [code]: schoolMods } };
+    });
+  };
+  const addSubModule = (si: number, code: string) => {
+    setSubModules(prev => ({
+      ...prev,
+      [si]: {
+        ...prev[si],
+        [code]: [...(prev[si]?.[code] || []), {
+          module_code: "", module_name: "", status: "未购",
+          usage_rate: 0, active_users: 0, effect: "", issues: "", current_practice: "",
+          collaborating_departments: [] as string[], materials: [] as Array<{ key: string; name: string; size: number }>,
+        }],
+      },
+    }));
+  };
+  const removeSubModule = (si: number, code: string, mi: number) => {
+    setSubModules(prev => ({
+      ...prev,
+      [si]: { ...prev[si], [code]: (prev[si]?.[code] || []).filter((_, i) => i !== mi) },
+    }));
+  };
+  const uploadSubMaterial = async (si: number, code: string, mi: number, file: File) => {
+    const mod = subModules[si]?.[code]?.[mi];
+    if (!mod || (mod.materials?.length || 0) >= 3) { toast.error("每个模块最多上传3个文件"); return; }
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("fileType", "office");
+    try {
+      const res = await fetch("/api/files/upload", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("上传失败");
+      const data = await res.json();
+      updateSubModule(si, code, mi, "materials", [...(mod.materials || []), { key: data.key, name: data.name, size: data.size }]);
+      toast.success("文件上传成功");
+    } catch { toast.error("文件上传失败"); }
+  };
+  const removeSubMaterial = (si: number, code: string, mi: number, matIdx: number) => {
+    const mod = subModules[si]?.[code]?.[mi];
+    if (!mod) return;
+    updateSubModule(si, code, mi, "materials", (mod.materials || []).filter((_, i) => i !== matIdx));
   };
 
   // 科室数据
@@ -849,7 +917,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
         const matchedProject = allProjects.find((p) => p.project_name === c.school_name);
 
         const types = Array.isArray(c.customer_types) ? c.customer_types as string[] : [];
-        setCustomerTypes(types.length > 0 ? types : ["中职"]);
+        setCustomerTypes(types.length > 0 ? types : []);
 
         // 位置信息：优先使用项目最新数据
         if (matchedProject) {
@@ -886,7 +954,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
           network: (cam.network as Record<string, string>) || {},
         })) : []);
 
-        const loadedTypes: string[] = Array.isArray(c.customer_types) ? c.customer_types as string[] : (c.school_type ? [c.school_type as string] : ["中职"]);
+        const loadedTypes: string[] = Array.isArray(c.customer_types) ? c.customer_types as string[] : (c.school_type ? [c.school_type as string] : []);
         const deptNames: string[] = [];
         const deptSeen = new Set<string>();
         for (const t of loadedTypes) {
@@ -1480,10 +1548,9 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
         <div id="form-basic" className="bg-[#fdfcf8] border border-[#d1c7b7]">
           <div className="bg-red-700 text-white px-5 py-2 text-xs font-semibold tracking-wider">基础信息</div>
           <div className="p-5 space-y-4">
-            {/* 学校名称 + 校区模式 同一行 */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs">学校名称 *</Label>
+            {/* 学校名称 — 整行 */}
+            <div className="space-y-1.5">
+                <Label className="text-xs">最终用户 *</Label>
                 <Popover open={schoolPopoverOpen} onOpenChange={setSchoolPopoverOpen}>
                   <PopoverTrigger asChild>
                     <Button variant="outline" role="combobox" className="h-9 w-full justify-between text-xs font-normal">
@@ -1491,7 +1558,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                       <Search className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[300px] p-0" align="start">
+                  <PopoverContent className="w-[560px] min-w-[400px] p-0" align="start">
                     <Command>
                       <CommandInput placeholder="搜索学校名称..." className="h-8 text-xs" />
                       <CommandList className="max-h-[200px]">
@@ -1523,23 +1590,34 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                   </PopoverContent>
                 </Popover>
                 {!isEdit && (<p className="text-[11px] text-muted-foreground">来源于已建项目，自动带出位置信息</p>)}
-              </div>
-
-              {/* 校区模式（教育局隐藏） */}
-              {!customerTypes.includes("教育局") ? (
-                <div className="space-y-1.5">
-                  <Label className="text-xs">校区模式</Label>
-                  <Select value={campusMode} onValueChange={setCampusMode}>
-                    <SelectTrigger className="h-9 w-full text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="single">单校区</SelectItem>
-                      <SelectItem value="multi_independent">多校区独立</SelectItem>
-                      <SelectItem value="multi_cross">多校区交叉</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : <div />}
             </div>
+
+            {/* 校区模式 + 办学性质 并排一行 */}
+            {!customerTypes.includes("教育局") && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">校区模式</Label>
+                <Select value={campusMode} onValueChange={setCampusMode}>
+                  <SelectTrigger className="h-9 w-full text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single">单校区</SelectItem>
+                    <SelectItem value="multi_independent">多校区独立</SelectItem>
+                    <SelectItem value="multi_cross">多校区交叉</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">办学性质</Label>
+                <Select value={schoolNature} onValueChange={setSchoolNature}>
+                  <SelectTrigger className="h-9 w-full text-xs"><SelectValue placeholder="请选择" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="公办">公办</SelectItem>
+                    <SelectItem value="民办">民办</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            )}
 
             {/* 客户类型（多选） */}
             <div className="space-y-1.5">
@@ -1570,20 +1648,6 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                 幼儿园/小学/初中/中职/高中 支持多选，其余单选
               </p>
             </div>
-
-            {/* 办学性质（仅学校类型显示） */}
-            {!customerTypes.includes("教育局") && (
-            <div className="space-y-1.5">
-              <Label className="text-xs">办学性质</Label>
-              <Select value={schoolNature} onValueChange={setSchoolNature}>
-                <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue placeholder="请选择" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="公办">公办</SelectItem>
-                  <SelectItem value="民办">民办</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            )}
 
             {/* 位置信息（同步自项目管理页面创建新项目的数据） */}
             <div className="space-y-3">
@@ -1803,13 +1867,10 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
             >
               <div className="bg-[#fdfcf8] border border-[#d1c7b7] relative">
                 <CollapsibleTrigger className="w-full">
-                  <CardHeader className={cn("py-3 cursor-pointer transition-colors rounded-tr-lg", colors.header)}>
+                  <CardHeader className={cn("py-3 pr-9 cursor-pointer transition-colors rounded-tr-lg", colors.header)}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        {code === "school_leader" ? (
-                          <span className="text-base font-semibold">{deptName}</span>
-                        ) : (
-                          <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5">
                             <div className={cn("w-2 h-2 rounded-full", colors.accent)} />
                             <Input
                               className="h-8 w-40 text-base font-semibold border-0 bg-transparent focus-visible:ring-1 px-1"
@@ -1818,7 +1879,6 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                               onClick={(ev) => ev.stopPropagation()}
                             />
                           </div>
-                        )}
                         {campusMode === "multi_cross" && (
                           <Select
                             value={dept.dept_scope || "school_wide"}
@@ -1888,13 +1948,13 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                             onChange={(e) => updatePersonnel(code, i, "name", e.target.value)}
                           />
                           <Input
-                            className="w-36 h-8 text-xs"
+                            className="flex-1 h-8 text-xs"
                             placeholder="职务"
                             value={p.role}
                             onChange={(e) => updatePersonnel(code, i, "role", e.target.value)}
                           />
                           <Input
-                            className="w-28 h-8 text-xs"
+                            className="flex-1 h-8 text-xs"
                             placeholder="电话"
                             value={p.phone}
                             onChange={(e) => updatePersonnel(code, i, "phone", e.target.value)}
@@ -2244,38 +2304,130 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                     </div>
                   </div>
                 ))}
-                {/* Sub-school departments */}
+                {/* Sub-school departments — full-featured like main */}
                 <div className="mt-3 pt-3 border-t border-[#e8e0d0]">
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="text-xs font-medium">科室（可选）</Label>
-                    <Button variant="ghost" size="sm" className="h-6 text-xs text-red-700 hover:bg-red-50" onClick={() => {
-                      // Pick first unadded dept
-                      const existing = Object.keys(subDepts[si] || {});
-                      const available = ALL_DEPARTMENTS.filter(d => !existing.includes(d.code));
-                      if (available.length > 0) addSubDept(si, available[0].name);
-                    }}>＋ 添加科室</Button>
-                  </div>
+                  <AddDepartmentButton
+                    addedNames={new Set(Object.values(subDepts[si] || {}).map(d => d.department_name))}
+                    predefined={ALL_DEPARTMENTS}
+                    onAdd={(name) => addSubDept(si, name)}
+                  />
                   {Object.keys(subDepts[si] || {}).length === 0 && (
-                    <p className="text-xs text-gray-400">暂未添加科室</p>
+                    <p className="text-xs text-gray-400 mt-2">暂未添加科室，点击上方按钮添加</p>
                   )}
-                  {Object.entries(subDepts[si] || {}).map(([code, dept]) => (
-                    <div key={code} className="bg-[#fdfcf8] border border-[#e8e0d0] p-3 mb-2">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-semibold">{deptIcons[code] || "📌"} {dept.department_name}</span>
-                        <Button variant="ghost" size="sm" className="h-5 text-[10px] text-red-400" onClick={() => removeSubDept(si, code)}>✕</Button>
+                  {Object.entries(subDepts[si] || {}).map(([code, dept]) => {
+                    const subMods = subModules[si]?.[code] || [];
+                    const colors = DEPT_COLORS[code] || DEPT_COLORS.school_leader;
+                    return (
+                    <Collapsible key={code} defaultOpen>
+                      <div className="bg-[#fdfcf8] border border-[#d1c7b7] relative mt-3">
+                        <CollapsibleTrigger className="w-full">
+                          <CardHeader className={cn("py-2 pr-9 cursor-pointer", colors.header)}>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <div className={cn("w-2 h-2 rounded-full", colors.accent)} />
+                                <Input className="h-7 w-36 text-sm font-semibold border-0 bg-transparent focus-visible:ring-1 px-1"
+                                  value={dept.department_name}
+                                  onChange={(e) => updateSubDept(si, code, "department_name", e.target.value)}
+                                  onClick={(ev) => ev.stopPropagation()} />
+                                <Badge variant="secondary" className="text-[10px]">{subMods.length} 模块</Badge>
+                              </div>
+                              <ChevronDown className="w-3.5 h-3.5 Collapsible__open-icon" />
+                            </div>
+                          </CardHeader>
+                        </CollapsibleTrigger>
+                        <button className="absolute top-2 right-8 z-10 h-6 w-6 rounded hover:bg-red-50 text-red-400"
+                          onClick={(ev) => { ev.stopPropagation(); ev.preventDefault(); removeSubDept(si, code); }}>
+                          <Trash2 className="w-3 h-3" /></button>
+                        <CollapsibleContent>
+                          <CardContent className="space-y-4 pt-0">
+                            {/* Personnel */}
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <Label className="text-xs font-medium">科室人员</Label>
+                                <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => addSubPersonnel(si, code)}>＋ 添加人员</Button>
+                              </div>
+                              {(dept.personnel || []).map((p, pi) => (
+                                <div key={pi} className="flex items-center gap-2 mb-2 p-2 border rounded-md bg-muted/20">
+                                  <Input className="flex-1 h-8 text-xs" placeholder="姓名" value={p.name}
+                                    onChange={(e) => updateSubPersonnel(si, code, pi, "name", e.target.value)} />
+                                  <Input className="flex-1 h-8 text-xs" placeholder="职务" value={p.role}
+                                    onChange={(e) => updateSubPersonnel(si, code, pi, "role", e.target.value)} />
+                                  <Input className="flex-1 h-8 text-xs" placeholder="电话" value={p.phone}
+                                    onChange={(e) => updateSubPersonnel(si, code, pi, "phone", e.target.value)} />
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeSubPersonnel(si, code, pi)}>
+                                    <Trash2 className="w-3.5 h-3.5 text-red-500" /></Button>
+                                </div>
+                              ))}
+                            </div>
+                            {/* Business groups — reuse BusinessGroups with sub dept */}
+                            <BusinessGroups code={code} dept={dept} updateDepartment={(c, f, v) => updateSubDept(si, c, f, v)} />
+                            {/* Module matching */}
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <Label className="text-xs font-medium">模块匹配</Label>
+                                <Button variant="ghost" size="sm" className="h-6 text-xs text-red-700 hover:bg-red-50" onClick={() => addSubModule(si, code)}>＋ 添加模块</Button>
+                              </div>
+                              <div className="space-y-2">
+                                {subMods.map((mod, mi) => (
+                                  <div key={mi} className="bg-[#fdfcf8] border border-[#d1c7b7] p-3 relative">
+                                    <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-7 w-7 z-10"
+                                      onClick={() => removeSubModule(si, code, mi)}><Trash2 className="w-3.5 h-3.5 text-red-500" /></Button>
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div className="space-y-1"><Label className="text-[11px]">模块名称</Label>
+                                        <ModuleSearchSelect value={mod.module_name}
+                                          onChange={(modCode, modName) => { updateSubModule(si, code, mi, "module_code", modCode); updateSubModule(si, code, mi, "module_name", modName); }}
+                                          options={moduleTypeList} /></div>
+                                      <div className="space-y-1"><Label className="text-[11px]">状态</Label>
+                                        <Select value={mod.status} onValueChange={(v) => updateSubModule(si, code, mi, "status", v)}>
+                                          <SelectTrigger className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+                                          <SelectContent>{MODULE_STATUS_OPTIONS.map(s => (<SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>))}</SelectContent></Select></div>
+                                    </div>
+                                    {mod.status === "已落地" && (
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1"><Label className="text-[11px]">使用率(%)</Label>
+                                          <Input className="h-8 text-xs" type="number" value={mod.usage_rate}
+                                            onChange={(e) => updateSubModule(si, code, mi, "usage_rate", Number(e.target.value))} /></div>
+                                        <div className="space-y-1"><Label className="text-[11px]">活跃用户</Label>
+                                          <Input className="h-8 text-xs" type="number" value={mod.active_users}
+                                            onChange={(e) => updateSubModule(si, code, mi, "active_users", Number(e.target.value))} /></div>
+                                      </div>)}
+                                    {mod.status === "未购" && (
+                                      <div className="space-y-1"><Label className="text-[11px]">当前替代做法</Label>
+                                        <RichTextEditor className="min-h-[80px] rounded-none" value={mod.current_practice}
+                                          onChange={(v: string) => updateSubModule(si, code, mi, "current_practice", v)}
+                                          placeholder="例如：目前使用Excel手工管理..." /></div>)}
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div className="space-y-1"><Label className="text-[11px]">{mod.status === "已落地" ? "落地效果" : mod.status === "未落地" ? "未落地原因" : "备注"}</Label>
+                                        <RichTextEditor className="min-h-[80px] rounded-none"
+                                          value={mod.status === "已落地" ? mod.effect : mod.issues}
+                                          onChange={(v: string) => { if (mod.status === "已落地") updateSubModule(si, code, mi, "effect", v); else updateSubModule(si, code, mi, "issues", v); }} /></div>
+                                      <div className="space-y-1"><Label className="text-[11px]">问题</Label>
+                                        <RichTextEditor className="min-h-[80px] rounded-none" value={mod.issues}
+                                          onChange={(v: string) => updateSubModule(si, code, mi, "issues", v)}
+                                          placeholder="例如：系统响应速度慢..." /></div>
+                                    </div>
+                                    <div className="mt-2">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[11px] text-muted-foreground">素材：</span>
+                                        {(mod.materials || []).map((m, matIdx) => (
+                                          <Badge key={matIdx} variant="secondary" className="text-[10px] gap-1">
+                                            <a href={`/api/files/${m.key}`} download={m.name} className="hover:underline cursor-pointer">{m.name.length > 15 ? m.name.slice(0, 15) + "..." : m.name}</a>
+                                            <X className="w-3 h-3 cursor-pointer" onClick={() => removeSubMaterial(si, code, mi, matIdx)} /></Badge>))}
+                                        <label className="cursor-pointer"><input type="file" className="hidden" accept=".mp4,.mov,.avi,.ppt,.pptx,.md,.txt"
+                                          onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadSubMaterial(si, code, mi, file); e.target.value = ""; }} />
+                                          <Badge variant="outline" className="text-[10px] gap-1 cursor-pointer hover:bg-muted"><Upload className="w-3 h-3" />{(mod.materials || []).length}/3</Badge></label>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </CollapsibleContent>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <Label className="text-[10px]">日常核心工作</Label>
-                          <RichTextEditor className="min-h-[80px] rounded-none" value={dept.daily_work || ""} onChange={(v: string) => setSubDepts(prev => ({ ...prev, [si]: { ...prev[si], [code]: { ...dept, daily_work: v } } }))} />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-[10px]">当前痛点</Label>
-                          <RichTextEditor className="min-h-[80px] rounded-none" value={dept.pain_points || ""} onChange={(v: string) => setSubDepts(prev => ({ ...prev, [si]: { ...prev[si], [code]: { ...dept, pain_points: v } } }))} />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    </Collapsible>
+                    );
+                  })}
                 </div>
               </div>
             ))}
