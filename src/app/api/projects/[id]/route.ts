@@ -524,7 +524,7 @@ export async function PUT(request: NextRequest) {
     if (members && Array.isArray(members)) {
       // 删除旧成员
       await client.rpc("execute_sql", {
-        p_sql: `DELETE FROM design_public.project_members WHERE project_id = '${id}'`,
+        p_sql: `DELETE FROM public.project_members WHERE project_id = '${id}'`,
       });
       // 插入新成员
       const memberRecords = members
@@ -776,7 +776,7 @@ export async function DELETE(request: NextRequest) {
 
     // 删除项目成员
     const { error: membersError } = await client.rpc("execute_sql", {
-      p_sql: `DELETE FROM design_public.project_members WHERE project_id = '${id}'`,
+      p_sql: `DELETE FROM public.project_members WHERE project_id = '${id}'`,
     });
     
     if (membersError) {
