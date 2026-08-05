@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     const result = await getCached(cacheKey, 30_000, async () => {
       const client = await createServerClient();
 
-      // 列表查询只取必要字段，排除大 JSONB（customer_info/channel_info/school_photos 等）
+      // 列表查询字段
       const LIST_COLUMNS = [
         "id","project_name","project_code","project_type","project_stage",
         "project_schema","status","department","entry_date",
@@ -43,7 +43,8 @@ export async function GET(request: NextRequest) {
         "implementation_unit","description",
         "customer_location","longitude","latitude",
         "procurement_amount","software_amount","hardware_amount",
-        "procurement_modules",
+        "procurement_modules","module_quantities",
+        "integration_list","custom_dev_info","channel_info","customer_info",
       ].join(", ");
 
       // 先查总数

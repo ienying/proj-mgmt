@@ -346,6 +346,20 @@ export function StageLayout({
     minHeight: "100vh",
   };
 
+  // JSONB 字段可能是 JSON 字符串，需要解析
+  const intCount = useMemo(() => {
+    const v = (project as Record<string, unknown>).integration_list;
+    if (Array.isArray(v)) return v.length;
+    if (typeof v === "string") { try { const p = JSON.parse(v); return Array.isArray(p) ? p.length : 0; } catch { return 0; } }
+    return 0;
+  }, [project]);
+  const cdCount = useMemo(() => {
+    const v = (project as Record<string, unknown>).custom_dev_info;
+    if (Array.isArray(v)) return v.length;
+    if (typeof v === "string") { try { const p = JSON.parse(v); return Array.isArray(p) ? p.length : 0; } catch { return 0; } }
+    return 0;
+  }, [project]);
+
   return (
     <div
       className={`stage-layout${isDark ? " dark" : ""}`}
@@ -465,6 +479,9 @@ export function StageLayout({
         onClose={() => setDeliverableOpen(false)}
         projectSchema={project.project_schema}
         projectName={project.project_name}
+        projectId={project.id}
+        integrationCount={intCount > 0 ? intCount : undefined}
+        customDevCount={cdCount > 0 ? cdCount : undefined}
         onNavigateTable={(tableCode) => {
           const def = tableDefs.find(d => d.table_code === tableCode);
           const label = def?.table_name || tableCode;
@@ -676,7 +693,7 @@ export function StageLayout({
                   ? [...projectStages].sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99))[activePhase]?.code
                   : undefined
               }
-              tableDefs={tableDefs}
+              tableDefs={existingTableDefs}
               projectSchema={project.project_schema}
               projectStages={projectStages}
               currentStageCode={project.project_stage}
@@ -706,7 +723,7 @@ export function StageLayout({
             <OverviewGrid stages={projectStages} tableDefs={existingTableDefs} tableRecords={allTableRecords} />
 
             {/* 图表区域 */}
-            <ChartsSection stages={projectStages} tableDefs={tableDefs} tableRecords={allTableRecords} />
+            <ChartsSection stages={projectStages} tableDefs={existingTableDefs} tableRecords={allTableRecords} />
 
             {/* ═══ 操作记录 (NEW) — 页面最底部 ═══ */}
             <div className="px-16 py-6">

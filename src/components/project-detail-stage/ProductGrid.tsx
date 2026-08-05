@@ -24,11 +24,15 @@ function n(v: unknown): number {
 function lookupName(code: string, dict?: { code: string; name: string }[]): string {
   return (dict || []).find((d) => d.code === code)?.name || code;
 }
-function parseModule(m: string | Record<string, unknown>, dict?: { code: string; name: string }[]): { name: string; qty: number } {
-  if (typeof m === "string") return { name: lookupName(m, dict), qty: 1 };
+function parseModule(m: string | Record<string, unknown>, dict?: { code: string; name: string }[], qtyMap?: Record<string, string>): { name: string; qty: number } {
+  if (typeof m === "string") {
+    const qty = qtyMap?.[m] ? n(qtyMap[m]) : 1;
+    return { name: lookupName(m, dict), qty };
+  }
   const rawCode = s(m.module_code || m.code || "");
   const rawName = s(m.module_name || m.name || "");
-  return { name: rawName || lookupName(rawCode, dict), qty: n(m.quantity || 1) };
+  const qty = qtyMap?.[rawCode] ? n(qtyMap[rawCode]) : n(m.quantity || 1);
+  return { name: rawName || lookupName(rawCode, dict), qty };
 }
 function fmtCurrency(v: unknown): string {
   const num = n(v);
@@ -59,11 +63,15 @@ function InfoSection({ title, count, defaultOpen, children }: {
   );
 }
 
-function FieldBlock({ label, value, span2, highlight }: { label: string; value: string; span2?: boolean; highlight?: boolean }) {
+function FieldBlock({ label, value, span2, highlight, html }: { label: string; value: string; span2?: boolean; highlight?: boolean; html?: boolean }) {
   return (
     <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--s-border-light)", display: "flex", flexDirection: "column", gap: 3, borderRight: span2 ? undefined : "1px solid var(--s-border-light)", gridColumn: span2 ? "span 2" : undefined, background: highlight ? "rgba(232,89,12,.03)" : undefined }}>
       <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "1px", color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--s-text)", wordBreak: "break-all" }}>{value}</div>
+      {html ? (
+        <div className="prose prose-sm max-w-none text-[13px]" style={{ color: "var(--s-text-secondary)", lineHeight: 1.7 }} dangerouslySetInnerHTML={{ __html: value }} />
+      ) : (
+        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--s-text)", wordBreak: "break-all" }}>{value}</div>
+      )}
     </div>
   );
 }
@@ -120,6 +128,15 @@ function DocList({ docs }: { docs: Array<Record<string, unknown>> }) {
   );
 }
 
+// JSONB 字段可能是 JSON 字符串，需要解析
+function parseJsonField(val: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(val)) return val as Array<Record<string, unknown>>;
+  if (typeof val === "string" && val.trim()) {
+    try { const p = JSON.parse(val); return Array.isArray(p) ? p : []; } catch { return []; }
+  }
+  return [];
+}
+
 export function ProductGrid({ modules, moduleDict, project, onFullscreen, projectTypes, projectStages, customerTypeDict }: ProductGridProps) {
   const [activeTab, setActiveTab] = useState<"procurement" | "info" | "integration" | "custom">("procurement");
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
@@ -147,21 +164,24 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
     }
   }, [fullscreenOpen]);
 
+  const p = project || {};
+
   const { items, totalQty, totalModules } = useMemo(() => {
-    const parsed = (modules || []).map((m) => parseModule(m, moduleDict)).filter((m) => m.name);
+    let rawQty = p.module_quantities;
+    if (typeof rawQty === "string") { try { rawQty = JSON.parse(rawQty); } catch { rawQty = {}; } }
+    const qtyMap = (rawQty as Record<string, string>) || {};
+    const parsed = (modules || []).map((m) => parseModule(m, moduleDict, qtyMap)).filter((m) => m.name);
     const merged = new Map<string, number>();
     for (const m of parsed) merged.set(m.name, (merged.get(m.name) || 0) + m.qty);
     const it = Array.from(merged.entries()).map(([name, qty]) => ({ name, qty }));
     return { items: it, totalQty: it.reduce((s, i) => s + i.qty, 0), totalModules: it.length };
-  }, [modules, moduleDict]);
-
-  const p = project || {};
+  }, [modules, moduleDict, p.module_quantities]);
   const ci = (p.customer_info as Record<string, unknown>) || {};
   const cl = (p.customer_location as Record<string, unknown>) || {};
   const channels = (p.channel_info as Array<Record<string, unknown>>) || [];
   const units = (p.construction_units_info as Array<Record<string, unknown>>) || [];
-  const integrations = (p.integration_list as Array<Record<string, unknown>>) || [];
-  const customs = (p.custom_dev_info as Array<Record<string, unknown>>) || [];
+  const integrations = parseJsonField(p.integration_list);
+  const customs = parseJsonField(p.custom_dev_info);
 
   // Dict lookups (after p is declared)
   const typeName = (projectTypes || []).find(t => t.code === p.project_type)?.name || s(p.project_type) || "—";
@@ -314,6 +334,12 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
         ) : activeTab === "integration" ? (
           /* 对接信息 */
           <div style={{ border: "1px solid var(--s-border)", background: "var(--s-surface)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: 8 }}>
+              <button onClick={() => window.open(`/project-data-view?schema=${encodeURIComponent(s(p.project_schema))}&table=integration_info&name=对接信息`, "_blank")}
+                style={{ fontSize: 11, color: "#16a34a", cursor: "pointer", border: "1px solid #16a34a", padding: "4px 12px", background: "transparent", fontFamily: "var(--s-font-mono)" }}>
+                ✏️ 编辑对接信息
+              </button>
+            </div>
             {integrations.length === 0 ? (
               <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--s-text-muted)", fontSize: 13 }}>暂无对接信息</div>
             ) : (
@@ -334,15 +360,15 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
                     <FieldBlock label="产品目录" value={s(it.product_module)} />
                     <FieldBlock label="对接类型" value={s(it.integration_type)} />
                     <FieldBlock label="是否在合同内" value={s(it.in_contract) + (s(it.contract_note) ? ` (${s(it.contract_note)})` : "")} />
-                    <FieldBlock label="简述" value={s(it.brief_description)} span2 />
+                    <FieldBlock label="简述" value={s(it.brief_description)} span2 html />
                     <FieldBlock label="我方需求对接人" value={s(it.our_req_contact) + (s(it.our_req_contact_phone) ? ` / ${s(it.our_req_contact_phone)}` : "")} />
                     <FieldBlock label="我方产品负责人" value={s(it.our_product_contact) + (s(it.our_product_contact_phone) ? ` / ${s(it.our_product_contact_phone)}` : "")} />
                     <FieldBlock label="我方开发负责人" value={s(it.our_dev_contact) + (s(it.our_dev_contact_phone) ? ` / ${s(it.our_dev_contact_phone)}` : "")} />
-                    <FieldBlock label="我方负责内容" value={s(it.our_responsibility)} />
+                    <FieldBlock label="我方负责内容" value={s(it.our_responsibility)} html />
                     <FieldBlock label="对方需求对接人" value={s(it.their_req_contact) + (s(it.their_req_contact_phone) ? ` / ${s(it.their_req_contact_phone)}` : "")} />
                     <FieldBlock label="对方产品负责人" value={s(it.their_product_contact) + (s(it.their_product_contact_phone) ? ` / ${s(it.their_product_contact_phone)}` : "")} />
                     <FieldBlock label="对方开发负责人" value={s(it.their_dev_contact) + (s(it.their_dev_contact_phone) ? ` / ${s(it.their_dev_contact_phone)}` : "")} />
-                    <FieldBlock label="对方负责内容" value={s(it.their_responsibility)} />
+                    <FieldBlock label="对方负责内容" value={s(it.their_responsibility)} html />
                     {s(it.remark) && <FieldBlock label="备注" value={s(it.remark)} span2 />}
                     {(it.integration_docs as Array<Record<string, unknown>>)?.length > 0 && (
                       <div style={{ gridColumn: "span 2", padding: "12px 20px", borderBottom: "1px solid var(--s-border-light)", display: "flex", flexDirection: "column", gap: 3 }}>
@@ -359,6 +385,12 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
         ) : (
           /* 定制化信息 */
           <div style={{ border: "1px solid var(--s-border)", background: "var(--s-surface)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: 8 }}>
+              <button onClick={() => window.open(`/project-data-view?schema=${encodeURIComponent(s(p.project_schema))}&table=custom_dev_info&name=定制化信息`, "_blank")}
+                style={{ fontSize: 11, color: "#16a34a", cursor: "pointer", border: "1px solid #16a34a", padding: "4px 12px", background: "transparent", fontFamily: "var(--s-font-mono)" }}>
+                ✏️ 编辑定制化信息
+              </button>
+            </div>
             {customs.length === 0 ? (
               <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--s-text-muted)", fontSize: 13 }}>暂无定制化信息</div>
             ) : (
@@ -377,7 +409,7 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 20px" }}>
                     <FieldBlock label="产品目录" value={s(cd.product_module)} />
                     <FieldBlock label="是否在合同内" value={s(cd.in_contract) + (s(cd.contract_note) ? ` (${s(cd.contract_note)})` : "")} />
-                    <FieldBlock label="定制内容" value={s(cd.custom_content)} span2 />
+                    <FieldBlock label="定制内容" value={s(cd.custom_content)} span2 html />
                     <FieldBlock label="客户需求提出人" value={s(cd.customer_req_contact) + (s(cd.customer_req_contact_phone) ? ` / ${s(cd.customer_req_contact_phone)}` : "")} />
                     <FieldBlock label="客户方职位" value={s(cd.customer_req_contact_position) + (s(cd.customer_req_contact_note) ? ` (${s(cd.customer_req_contact_note)})` : "")} />
                     <FieldBlock label="内部需求对接人" value={s(cd.internal_req_contact) + (s(cd.internal_req_contact_phone) ? ` / ${s(cd.internal_req_contact_phone)}` : "")} />
@@ -635,15 +667,15 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
                     <FieldBlock label="产品目录" value={s(it.product_module)} />
                     <FieldBlock label="对接类型" value={s(it.integration_type)} />
                     <FieldBlock label="是否在合同内" value={s(it.in_contract) + (s(it.contract_note) ? ` (${s(it.contract_note)})` : "")} />
-                    <FieldBlock label="简述" value={s(it.brief_description)} span2 />
+                    <FieldBlock label="简述" value={s(it.brief_description)} span2 html />
                     <FieldBlock label="我方需求对接人" value={s(it.our_req_contact) + (s(it.our_req_contact_phone) ? ` / ${s(it.our_req_contact_phone)}` : "")} />
                     <FieldBlock label="我方产品负责人" value={s(it.our_product_contact) + (s(it.our_product_contact_phone) ? ` / ${s(it.our_product_contact_phone)}` : "")} />
                     <FieldBlock label="我方开发负责人" value={s(it.our_dev_contact) + (s(it.our_dev_contact_phone) ? ` / ${s(it.our_dev_contact_phone)}` : "")} />
-                    <FieldBlock label="我方负责内容" value={s(it.our_responsibility)} />
+                    <FieldBlock label="我方负责内容" value={s(it.our_responsibility)} html />
                     <FieldBlock label="对方需求对接人" value={s(it.their_req_contact) + (s(it.their_req_contact_phone) ? ` / ${s(it.their_req_contact_phone)}` : "")} />
                     <FieldBlock label="对方产品负责人" value={s(it.their_product_contact) + (s(it.their_product_contact_phone) ? ` / ${s(it.their_product_contact_phone)}` : "")} />
                     <FieldBlock label="对方开发负责人" value={s(it.their_dev_contact) + (s(it.their_dev_contact_phone) ? ` / ${s(it.their_dev_contact_phone)}` : "")} />
-                    <FieldBlock label="对方负责内容" value={s(it.their_responsibility)} />
+                    <FieldBlock label="对方负责内容" value={s(it.their_responsibility)} html />
                     {s(it.remark) && <FieldBlock label="备注" value={s(it.remark)} span2 />}
                     {(it.integration_docs as Array<Record<string, unknown>>)?.length > 0 && (
                       <div style={{ gridColumn: "span 2", marginTop: 4 }}>
@@ -675,7 +707,7 @@ export function ProductGrid({ modules, moduleDict, project, onFullscreen, projec
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px" }}>
                     <FieldBlock label="产品目录" value={s(cd.product_module)} />
                     <FieldBlock label="是否在合同内" value={s(cd.in_contract) + (s(cd.contract_note) ? ` (${s(cd.contract_note)})` : "")} />
-                    <FieldBlock label="定制内容" value={s(cd.custom_content)} span2 />
+                    <FieldBlock label="定制内容" value={s(cd.custom_content)} span2 html />
                     <FieldBlock label="客户需求提出人" value={s(cd.customer_req_contact) + (s(cd.customer_req_contact_phone) ? ` / ${s(cd.customer_req_contact_phone)}` : "")} />
                     <FieldBlock label="客户方职位" value={s(cd.customer_req_contact_position) + (s(cd.customer_req_contact_note) ? ` (${s(cd.customer_req_contact_note)})` : "")} />
                     <FieldBlock label="内部需求对接人" value={s(cd.internal_req_contact) + (s(cd.internal_req_contact_phone) ? ` / ${s(cd.internal_req_contact_phone)}` : "")} />

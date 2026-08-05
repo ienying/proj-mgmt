@@ -379,6 +379,8 @@ export function ProjectForm({
 }: ProjectFormProps) {
   const { token, user: currentUser } = useAuth();
   const isEditMode = !!initialData?.id;
+  const idCounter = useRef(0);
+  const nextId = () => String(++idCounter.current);
   // 注入聚焦样式
   useEffect(() => {
     const style = document.createElement('style');
@@ -731,7 +733,7 @@ export function ProjectForm({
         for (const row of modRows) {
           const name = (row["模块名称"] || "").toString().trim();
           if (!name) continue;
-          const matched = productModules.find((m) => m.module_name === name);
+          const matched = activeProductModules.find((m) => m.module_name === name);
           if (matched) {
             matchedCodes.push(matched.module_code);
           } else {
@@ -936,7 +938,7 @@ export function ProjectForm({
       const members = d.members as Array<Record<string, unknown>> | null;
       if (members && members.length > 0) {
         setProjectMembers(members.map((m) => ({
-          id: (m.id as string) || String(Date.now()),
+          id: (m.id as string) || nextId(),
           user_id: (m.user_id as string) || "",
           name: (m.name as string) || "",
           role_type: (m.role_type as string) || "",
@@ -967,9 +969,23 @@ export function ProjectForm({
     }
   }, [open, initialData]);
 
-  // 加载客户类型和部署模式
+  // 产品模块列表（form 打开时刷新）
+  const [refreshedProductModules, setRefreshedProductModules] = useState(productModules);
+  const activeProductModules = refreshedProductModules.length > 0 ? refreshedProductModules : productModules;
+
+  // 加载客户类型、部署模式、产品模块
   useEffect(() => {
     if (open) {
+      fetch("/api/dicts?type=product_module_types")
+        .then(r => r.json())
+        .then(data => {
+          if (data.data) setRefreshedProductModules(data.data.map((m: Record<string, unknown>) => ({
+            module_code: m.code || m.module_code,
+            module_name: m.module_name || m.name,
+            product_name: m.product_name || m.module_name || m.name,
+            vendor: m.vendor || "", model_spec: m.model_spec || "", scope: m.scope || "",
+          })));
+        }).catch(() => {});
       fetch("/api/dicts?type=customer_types")
         .then((res) => res.json())
         .then((data) => {
@@ -1097,7 +1113,7 @@ export function ProjectForm({
   const addContactPerson = () => {
     setContactPersons([
       ...contactPersons,
-      { id: Date.now().toString(), name: "", phone: "", email: "", position: "" },
+      { id: nextId(), name: "", phone: "", email: "", position: "" },
     ]);
   };
 
@@ -1118,7 +1134,7 @@ export function ProjectForm({
     setChannelCompanies([
       ...channelCompanies,
       {
-        id: Date.now().toString(),
+        id: nextId(),
         company_name: "",
         contact_person: "",
         contact_phone: "",
@@ -1142,7 +1158,7 @@ export function ProjectForm({
     setConstructionUnits([
       ...constructionUnits,
       {
-        id: Date.now().toString(),
+        id: nextId(),
         company_name: "",
         contact_person: "",
         contact_phone: "",
@@ -1165,7 +1181,7 @@ export function ProjectForm({
   const addProjectMember = () => {
     setProjectMembers((prev) => [
       ...prev,
-      { id: Date.now().toString(), user_id: "", name: "", role_type: "", phone: "" },
+      { id: nextId(), user_id: "", name: "", role_type: "", phone: "" },
     ]);
   };
 
@@ -1206,7 +1222,7 @@ export function ProjectForm({
     setIntegrationList([
       ...integrationList,
       {
-        id: Date.now().toString(),
+        id: nextId(),
         vendor_name: "",
         product_module: "",
         integration_type: "",
@@ -1256,7 +1272,7 @@ export function ProjectForm({
       reader.onload = (ev) => {
         const result = ev.target?.result;
         if (typeof result === "string") {
-          const doc: IntegrationDoc = { id: Date.now().toString(), name: file.name, type: "file", data: result };
+          const doc: IntegrationDoc = { id: nextId(), name: file.name, type: "file", data: result };
           setIntegrationList((prev) =>
             prev.map((item) =>
               item.id === itemId ? { ...item, integration_docs: [...item.integration_docs, doc] } : item
@@ -1266,7 +1282,7 @@ export function ProjectForm({
       };
       reader.readAsDataURL(file);
     } else if (linkUrl) {
-      const doc: IntegrationDoc = { id: Date.now().toString(), name: linkUrl, type: "link", url: linkUrl };
+      const doc: IntegrationDoc = { id: nextId(), name: linkUrl, type: "link", url: linkUrl };
       setIntegrationList((prev) =>
         prev.map((item) =>
           item.id === itemId ? { ...item, integration_docs: [...item.integration_docs, doc] } : item
@@ -1290,7 +1306,7 @@ export function ProjectForm({
     setCustomDevItems([
       ...customDevItems,
       {
-        id: Date.now().toString(),
+        id: nextId(),
         product_module: "",
         custom_content: "",
         in_contract: "是",
@@ -1325,7 +1341,7 @@ export function ProjectForm({
       reader.onload = (ev) => {
         const result = ev.target?.result;
         if (typeof result === "string") {
-          const doc: IntegrationDoc = { id: Date.now().toString(), name: file.name, type: "file", data: result };
+          const doc: IntegrationDoc = { id: nextId(), name: file.name, type: "file", data: result };
           setCustomDevItems((prev) =>
             prev.map((item) =>
               item.id === itemId ? { ...item, req_docs: [...item.req_docs, doc] } : item
@@ -1335,7 +1351,7 @@ export function ProjectForm({
       };
       reader.readAsDataURL(file);
     } else if (linkUrl) {
-      const doc: IntegrationDoc = { id: Date.now().toString(), name: linkUrl, type: "link", url: linkUrl };
+      const doc: IntegrationDoc = { id: nextId(), name: linkUrl, type: "link", url: linkUrl };
       setCustomDevItems((prev) =>
         prev.map((item) =>
           item.id === itemId ? { ...item, req_docs: [...item.req_docs, doc] } : item
@@ -2284,7 +2300,7 @@ export function ProjectForm({
                             for (const row of rows) {
                               const name = (row["模块名称"] || "").toString().trim();
                               if (!name) continue;
-                              const matched = productModules.find(
+                              const matched = activeProductModules.find(
                                 (m) => m.module_name === name
                               );
                               if (matched) {
@@ -2336,8 +2352,8 @@ export function ProjectForm({
                     className="h-8 text-sm border border-input rounded-md bg-transparent px-2 text-muted-foreground"
                   >
                     <option value="">产品名称筛选</option>
-                    {[...new Set(productModules.map(m => m.product_name).filter(Boolean))].sort().map(v => (
-                      <option key={v} value={v}>{v}</option>
+                    {[...new Set(activeProductModules.map(m => m.product_name).filter(Boolean))].sort().map((v, i) => (
+                      <option key={`pn${i}`} value={v}>{v}</option>
                     ))}
                   </select>
                   <select
@@ -2346,8 +2362,8 @@ export function ProjectForm({
                     className="h-8 text-sm border border-input rounded-md bg-transparent px-2 text-muted-foreground"
                   >
                     <option value="">范围筛选</option>
-                    {[...new Set(productModules.map(m => m.scope).filter(Boolean))].sort().map(v => (
-                      <option key={v} value={v}>{v}</option>
+                    {[...new Set(activeProductModules.map(m => m.scope).filter(Boolean))].sort().map((v, i) => (
+                      <option key={`sc${i}`} value={v}>{v}</option>
                     ))}
                   </select>
                   <select
@@ -2356,13 +2372,13 @@ export function ProjectForm({
                     className="h-8 text-sm border border-input rounded-md bg-transparent px-2 text-muted-foreground"
                   >
                     <option value="">厂家筛选</option>
-                    {[...new Set(productModules.map(m => m.vendor).filter(Boolean))].sort().map(v => (
-                      <option key={v} value={v}>{v}</option>
+                    {[...new Set(activeProductModules.map(m => m.vendor).filter(Boolean))].sort().map((v, i) => (
+                      <option key={`vn${i}`} value={v}>{v}</option>
                     ))}
                   </select>
                 </div>
                 {(() => {
-                  const filtered = productModules.filter((m) => {
+                  const filtered = activeProductModules.filter((m) => {
                     if (procurementSearch && !m.module_name.toLowerCase().includes(procurementSearch.toLowerCase()) && !m.product_name.toLowerCase().includes(procurementSearch.toLowerCase())) return false;
                     if (procurementProductFilter && !(m.product_name || "").toLowerCase().includes(procurementProductFilter.toLowerCase())) return false;
                     if (procurementScopeFilter && !(m.scope || "").toLowerCase().includes(procurementScopeFilter.toLowerCase())) return false;
@@ -2441,7 +2457,7 @@ export function ProjectForm({
                     setHasIntegration(v === 'yes');
                     if (v === 'yes' && integrationList.length === 0) {
                       setIntegrationList([{
-                        id: Date.now().toString(),
+                        id: nextId(),
                         vendor_name: "",
                         product_module: "",
                         integration_type: "",
@@ -2528,7 +2544,7 @@ export function ProjectForm({
                                 <CommandList className="max-h-[200px]">
                                   <CommandEmpty className="py-2 text-center text-sm">未找到</CommandEmpty>
                                   <CommandGroup>
-                                    {productModules.map((mod) => (
+                                    {activeProductModules.map((mod) => (
                                       <CommandItem
                                         key={mod.module_code}
                                         value={mod.module_code}
@@ -2767,7 +2783,7 @@ export function ProjectForm({
                     setHasCustomDev(v === 'yes');
                     if (v === 'yes' && customDevItems.length === 0) {
                       setCustomDevItems([{
-                        id: Date.now().toString(),
+                        id: nextId(),
                         product_module: "",
                         custom_content: "",
                         in_contract: "是",
@@ -2827,7 +2843,7 @@ export function ProjectForm({
                                     <CommandList className="max-h-[200px]">
                                       <CommandEmpty className="py-2 text-center text-sm">未找到</CommandEmpty>
                                       <CommandGroup>
-                                        {productModules.map((mod) => (
+                                        {activeProductModules.map((mod) => (
                                           <CommandItem key={mod.module_code} value={mod.module_code} onSelect={() => updateCustomDev(cd.id, "product_module", mod.module_name)} className="text-sm">
                                             {mod.module_name}
                                           </CommandItem>
@@ -3130,7 +3146,7 @@ export function ProjectForm({
                   {selectedModules.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
                       {selectedModules.map((code, i) => {
-                        const mod = productModules.find((m) => m.module_code === code);
+                        const mod = activeProductModules.find((m) => m.module_code === code);
                         const qty = moduleQuantities[code];
                         return (
                           <Badge key={i} variant="secondary" className="text-xs">

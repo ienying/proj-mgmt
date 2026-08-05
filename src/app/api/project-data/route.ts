@@ -73,7 +73,26 @@ export async function GET(request: NextRequest) {
     const { data: tableCheck } = await client.rpc("execute_sql", {
       p_sql: `SELECT table_name FROM information_schema.tables WHERE table_schema = '${safeSchema.replace(/'/g, "''")}' AND table_name = '${tableCode.replace(/'/g, "''")}'`,
     });
+    const isIntOrCd = tableCode === "integration_info" || tableCode === "custom_dev_info";
     const tableExists = Array.isArray(tableCheck) && tableCheck.length > 0;
+
+    // 对接/定制表：始终从 projects 表 JSONB 读取（最可靠的数据源）
+    if (isIntOrCd) {
+      const jsonField = tableCode === "integration_info" ? "integration_list" : "custom_dev_info";
+      const { data: projRows } = await client.rpc("execute_sql", {
+        p_sql: `SELECT ${jsonField} FROM public.projects WHERE project_schema = '${safeSchema.replace(/'/g, "''")}'`,
+      });
+      const proj = (projRows as Array<Record<string, unknown>>)?.[0];
+      const raw = proj?.[jsonField];
+      let result: Array<Record<string, unknown>> = [];
+      if (Array.isArray(raw)) {
+        result = raw as Array<Record<string, unknown>>;
+      } else if (typeof raw === "string" && raw.trim()) {
+        try { const p = JSON.parse(raw); if (Array.isArray(p)) result = p; } catch { /* ignore */ }
+      }
+      return NextResponse.json({ data: result });
+    }
+
     if (!tableExists) {
       return NextResponse.json({ data: null, exists: false });
     }

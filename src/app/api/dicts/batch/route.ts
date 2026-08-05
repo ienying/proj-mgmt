@@ -1,3 +1,4 @@
+import { invalidateCacheByPrefix } from "@/lib/cache";
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
 
@@ -74,6 +75,7 @@ export async function GET(request: Request) {
 
     await Promise.allSettled(queries);
 
+    invalidateCacheByPrefix("dicts:");
     return NextResponse.json({ data: results });
   } catch (error: unknown) {
     const message =

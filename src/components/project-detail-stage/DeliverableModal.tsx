@@ -8,6 +8,9 @@ interface DeliverableModalProps {
   onClose: () => void;
   projectSchema: string;
   projectName: string;
+  projectId?: string;
+  integrationCount?: number;
+  customDevCount?: number;
   onNavigateTable?: (tableCode: string) => void;
 }
 
@@ -49,7 +52,7 @@ function getExtension(filename: string): string {
   return filename.slice(dot + 1).toUpperCase();
 }
 
-export function DeliverableModal({ open, onClose, projectSchema, projectName, onNavigateTable }: DeliverableModalProps) {
+export function DeliverableModal({ open, onClose, projectSchema, projectName, projectId, integrationCount: propIntCount, customDevCount: propCdCount, onNavigateTable }: DeliverableModalProps) {
   const [activeTab, setActiveTab] = useState<"docs" | "impl">("docs");
 
   // Shared data
@@ -65,9 +68,15 @@ export function DeliverableModal({ open, onClose, projectSchema, projectName, on
   const [implRows, setImplRows] = useState<ImplRow[]>([]);
   const [loadingImpl, setLoadingImpl] = useState(false);
 
-  // 对接信息和定制化信息表的记录数
-  const [integrationCount, setIntegrationCount] = useState(0);
-  const [customDevCount, setCustomDevCount] = useState(0);
+  // 对接信息和定制化信息表的记录数（优先用 props，API 查询做更新）
+  const [integrationCount, setIntegrationCount] = useState(propIntCount ?? 0);
+  const [customDevCount, setCustomDevCount] = useState(propCdCount ?? 0);
+
+  // props 变化时同步
+  useEffect(() => {
+    if (propIntCount !== undefined) setIntegrationCount(propIntCount);
+    if (propCdCount !== undefined) setCustomDevCount(propCdCount);
+  }, [propIntCount, propCdCount]);
 
   // Load table definitions and module types on open
   useEffect(() => {
@@ -253,25 +262,26 @@ export function DeliverableModal({ open, onClose, projectSchema, projectName, on
     })();
   }, [open, implTables, projectSchema, resolveModule, loadingDefs]);
 
-  // Fetch integration_info and custom_dev_info record counts
+  // Fetch integration/custom counts - directly from project API
   useEffect(() => {
-    if (!open || !projectSchema) return;
+    if (!open || !projectId) return;
     (async () => {
       try {
-        const [intRes, cdRes] = await Promise.all([
-          fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=integration_info`),
-          fetch(`/api/project-data?projectSchema=${encodeURIComponent(projectSchema)}&tableCode=custom_dev_info`),
-        ]);
-        const intJson = await intRes.json();
-        const cdJson = await cdRes.json();
-        setIntegrationCount(Array.isArray(intJson.data) ? intJson.data.length : 0);
-        setCustomDevCount(Array.isArray(cdJson.data) ? cdJson.data.length : 0);
+        const res = await fetch(`/api/projects/${projectId}`);
+        const json = await res.json();
+        const p = json.data || {};
+        const parseCount = (v: unknown): number => {
+          if (Array.isArray(v)) return v.length;
+          if (typeof v === "string") { try { const p = JSON.parse(v); return Array.isArray(p) ? p.length : 0; } catch { return 0; } }
+          return 0;
+        };
+        setIntegrationCount(parseCount(p.integration_list));
+        setCustomDevCount(parseCount(p.custom_dev_info));
       } catch {
-        setIntegrationCount(0);
-        setCustomDevCount(0);
+        // 保持 props 传入的值
       }
     })();
-  }, [open, projectSchema]);
+  }, [open, projectId]);
 
   // Download handler
   const handleDownload = (fileKey: string) => {
@@ -626,7 +636,7 @@ export function DeliverableModal({ open, onClose, projectSchema, projectName, on
                     <div style={{ fontSize: 13, textAlign: "center", padding: "40px 0", color: "var(--s-text-muted)" }}>
                       加载中...
                     </div>
-                  ) : implRows.length === 0 ? (
+                  ) : (implRows.length === 0 && integrationCount === 0 && customDevCount === 0) ? (
                     <div style={{ fontSize: 13, textAlign: "center", padding: "40px 0", color: "var(--s-text-muted)" }}>
                       暂无数据
                     </div>

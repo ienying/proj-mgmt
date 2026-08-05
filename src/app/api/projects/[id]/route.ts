@@ -421,14 +421,16 @@ export async function GET(
     }
 
     if (id) {
-      const { data, error } = await client.rpc("dp_get_by_id", {
-        p_table: "projects",
-        p_id: id,
+      const safeId = id.replace(/'/g, "''");
+      const { data: rows, error } = await client.rpc("execute_sql", {
+        p_sql: `SELECT * FROM public.projects WHERE id = '${safeId}'`,
       });
 
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
+
+      const data = (rows as Array<Record<string, unknown>>)?.[0] || null;
 
       // 同时获取项目成员数据
       if (data) {

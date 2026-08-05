@@ -155,22 +155,25 @@ export function HeroSection({ project, projectTypes, projectStages, customerType
   // 总进度
   const overallProgress = totalTasks > 0 ? Math.round((totalCompleted / totalTasks) * 100) : 0;
 
-  // 已完成阶段 = 每个阶段所有表进度100%
+  // 已完成阶段 = 阶段内有进度配置的表全部达到目标（与底部进度一致）
   const sortedStages = [...projectStages].sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99));
   let completedPhases = 0;
+  let activePhaseCount = 0;
   for (const stage of sortedStages) {
     const phaseTables = tableDefs.filter((d) => d.apply_project_stages?.includes(stage.code));
-    if (phaseTables.length === 0) continue;
-    let allDone = true;
-    for (const def of phaseTables) {
+    // 只看有进度列配置且在 Schema 中存在的表
+    const progressTables = phaseTables.filter(def =>
+      def.table_code in tableRecords && def.stage_progress_column && def.stage_progress_target
+    );
+    if (progressTables.length === 0) continue;
+    activePhaseCount++;
+    const allDone = progressTables.every(def => {
       const recs = tableRecords[def.table_code] || [];
-      if (recs.length === 0) { allDone = false; break; }
-      if (def.stage_progress_column && def.stage_progress_target) {
-        const col = def.stage_progress_column;
-        const target = String(def.stage_progress_target).trim();
-        if (recs.some((r) => String(r[col] || "").trim() !== target)) { allDone = false; break; }
-      }
-    }
+      if (recs.length === 0) return false;
+      const col = def.stage_progress_column;
+      const target = String(def.stage_progress_target).trim();
+      return recs.every((r: Record<string, unknown>) => String(r[col] || "").trim() === target);
+    });
     if (allDone) completedPhases++;
   }
 
@@ -282,7 +285,7 @@ export function HeroSection({ project, projectTypes, projectStages, customerType
         >
           {[
             { value: `${overallProgress}%`, label: "总进度", accent: true },
-            { value: `${completedPhases}/${sortedStages.length}`, label: "已完成阶段", green: true },
+            { value: `${completedPhases}/${activePhaseCount || sortedStages.length}`, label: "已完成阶段", green: true },
             { value: `${totalTasks}`, label: "任务总数" },
             { value: remainingDays, label: remainingLabel },
           ].map((stat, i) => (

@@ -1,3 +1,4 @@
+import { invalidateCacheByPrefix } from "@/lib/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
 
@@ -92,6 +93,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    invalidateCacheByPrefix("dicts:");
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     const message =

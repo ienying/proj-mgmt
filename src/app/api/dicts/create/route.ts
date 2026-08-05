@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/storage/database/pg-client";
+import { invalidateCacheByPrefix } from "@/lib/cache";
 
 export async function POST(request: NextRequest) {
   try {
@@ -139,6 +140,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    invalidateCacheByPrefix("dicts:");
     return NextResponse.json({ data }, { status: 201 });
   } catch (error: unknown) {
     const message =

@@ -44,7 +44,20 @@ function TableViewInner() {
         fetch(`/api/project-data?projectSchema=${encodeURIComponent(schema)}&tableCode=${encodeURIComponent(tableCode)}`),
         fetch("/api/standards"),
       ]);
-      const dataJson = await dataRes.json();
+      let dataJson = await dataRes.json();
+
+      // 对接/定制表不存在时自动创建并重试
+      if (dataJson.exists === false && (tableCode === "integration_info" || tableCode === "custom_dev_info")) {
+        try {
+          await fetch("/api/projects/ensure-schema-tables", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ projectSchema: schema }),
+          });
+        } catch { /* ignore */ }
+        const retryRes = await fetch(`/api/project-data?projectSchema=${encodeURIComponent(schema)}&tableCode=${encodeURIComponent(tableCode)}`);
+        dataJson = await retryRes.json();
+      }
+
       const defJson = await defRes.json();
       const data = (dataJson.data || []) as Array<Record<string, unknown>>;
       setRecords(data);
@@ -157,13 +170,156 @@ function TableViewInner() {
           <button onClick={() => window.close()} style={{ width: 32, height: 32, border: "1px solid var(--s-border)", background: "var(--s-surface)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--s-text-muted)", fontSize: 14 }}>
             <ArrowLeft size={16} />
           </button>
-          <div>
+          <div style={{ flex: 1 }}>
             <h1 style={{ fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: "1px", color: "var(--s-text)", margin: 0, fontFamily: "var(--s-font-mono)" }}>{tableName}</h1>
             <p style={{ fontSize: 10, color: "var(--s-text-muted)", margin: "2px 0 0", fontFamily: "var(--s-font-mono)", letterSpacing: "0.3px" }}>{records.length} 条记录</p>
           </div>
+          {(tableCode === "integration_info" || tableCode === "custom_dev_info") && records.length > 0 && (
+            <button onClick={() => {
+              const labelMap: Record<string, string> = {};
+              columns.forEach(c => { labelMap[c.name] = c.label; });
+              const docCols = columns.filter(c => !["integration_docs", "req_docs"].includes(c.name));
+              let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><style>
+                body{font-family:'PingFang SC','Microsoft YaHei',sans-serif;padding:40px;color:#333}
+                h1{font-size:18px;border-bottom:2px solid #e8590c;padding-bottom:8px;margin-bottom:16px}
+                .card{border:1px solid #ddd;margin-bottom:24px;page-break-inside:avoid}
+                .card-title{background:#f5f5f5;padding:10px 16px;font-weight:bold;font-size:14px;border-bottom:1px solid #ddd}
+                .card-body{display:grid;grid-template-columns:1fr 1fr;gap:0}
+                .field{padding:8px 16px;border-bottom:1px solid #eee;border-right:1px solid #eee}
+                .field-label{font-size:10px;color:#999;text-transform:uppercase;letter-spacing:0.5px}
+                .field-value{font-size:13px;margin-top:2px}
+                .field-full{grid-column:span 2}
+              </style></head><body>
+              <h1>${tableName}</h1>
+              ${records.map((row, ri) => `
+                <div class="card">
+                  <div class="card-title">#${ri + 1} ${String(row.vendor_name || row.product_module || "")}</div>
+                  <div class="card-body">
+                    ${docCols.map(col => {
+                      const isHtml = ["brief_description","our_responsibility","their_responsibility","custom_content"].includes(col.name);
+                      const val = row[col.name];
+                      const displayVal = typeof val === "object" && val !== null ? JSON.stringify(val) : String(val ?? "—");
+                      return `<div class="field${isHtml ? " field-full" : ""}"><div class="field-label">${col.label}</div><div class="field-value">${isHtml ? displayVal : displayVal.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div></div>`;
+                    }).join("")}
+                  </div>
+                </div>
+              `).join("")}
+              </body></html>`;
+              const blob = new Blob([html], { type: "application/msword" });
+              const a = document.createElement("a");
+              a.href = URL.createObjectURL(blob);
+              a.download = `${tableName}_${new Date().toISOString().slice(0,10)}.doc`;
+              a.click();
+              URL.revokeObjectURL(a.href);
+            }}
+              style={{ fontSize: 11, color: "#2563eb", cursor: "pointer", border: "1px solid #2563eb", padding: "5px 14px", background: "transparent", fontFamily: "var(--s-font-mono)", whiteSpace: "nowrap" }}>
+              📥 下载 Word
+            </button>
+          )}
         </div>
 
-        {/* Table — 匹配表格风格 */}
+        {/* 对接/定制表 — 卡片表单视图 */}
+        {(tableCode === "integration_info" || tableCode === "custom_dev_info") ? (
+          <div style={{ padding: "40px 24px", maxWidth: 860, margin: "0 auto" }}>
+            {loading ? (
+              <div style={{ textAlign: "center", padding: 60, color: "var(--s-text-muted)", fontSize: 12 }}>加载中...</div>
+            ) : records.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 60, color: "var(--s-text-muted)", fontSize: 13 }}>暂无数据</div>
+            ) : (
+              records.map((row, ri) => (
+                <div key={ri} style={{ marginBottom: 28, background: "var(--s-surface)", border: "1px solid var(--s-border)", boxShadow: "0 2px 8px rgba(0,0,0,.04)" }}>
+                  <div style={{ padding: "11px 24px", background: "var(--s-surface2)", borderBottom: "1px solid var(--s-border)", fontSize: 13, fontWeight: 600, color: "var(--s-text)", display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ background: "var(--s-orange)", color: "#fff", width: 24, height: 24, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{ri + 1}</span>
+                    {tableCode === "integration_info"
+                      ? (String(row.vendor_name || row.product_module || "") || `对接信息 #${ri + 1}`)
+                      : (String(row.product_module || "") || `定制化信息 #${ri + 1}`)}
+                    {row.in_contract === "是" && <span style={{ fontSize: 10, background: "rgba(34,197,94,.12)", color: "#16a34a", padding: "2px 8px", borderRadius: 3, fontWeight: 500 }}>合同内</span>}
+                    {row.in_contract === "否" && <span style={{ fontSize: 10, background: "rgba(239,68,68,.12)", color: "#dc2626", padding: "2px 8px", borderRadius: 3, fontWeight: 500 }}>合同外</span>}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0 }}>
+                    {columns.map(col => {
+                      const val = row[col.name];
+                      const isHtml = ["brief_description", "our_responsibility", "their_responsibility", "custom_content"].includes(col.name);
+                      const isDoc = ["integration_docs", "req_docs"].includes(col.name);
+                      const isEditing = editingCell?.rowIdx === ri && editingCell?.colName === col.name;
+                      let displayVal: string;
+                      if (isDoc && Array.isArray(val)) {
+                        displayVal = `${val.length} 个文档`;
+                      } else {
+                        displayVal = typeof val === "object" && val !== null ? JSON.stringify(val) : String(val ?? "—");
+                      }
+                      const editable = !isDoc;
+                      return (
+                        <div key={col.name}
+                          className="field-row"
+                          style={{
+                          padding: "10px 24px", borderBottom: "1px solid var(--s-border-light)",
+                          borderRight: "1px solid var(--s-border-light)",
+                          display: "flex", flexDirection: "column", gap: 4,
+                          gridColumn: (isHtml || isDoc) ? "span 2" : undefined,
+                          transition: "background 0.15s",
+                        }}
+                          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--s-bg)"}
+                          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ""}
+                        >
+                          <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "1px", color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+                            {col.label}
+                          </div>
+                          {isDoc ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              {Array.isArray(val) && val.length > 0 ? val.map((doc: Record<string, unknown>, di: number) => {
+                                const name = String(doc.name || `文档 ${di + 1}`);
+                                const type = String(doc.type || "file");
+                                const url = String(doc.url || "");
+                                const data = String(doc.data || "");
+                                if (type === "link" && url) {
+                                  return (
+                                    <a key={di} href={url} target="_blank" rel="noreferrer"
+                                      style={{ fontSize: 12, color: "#2563eb", textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: 4, wordBreak: "break-all" }}>
+                                      🔗 {name}
+                                    </a>
+                                  );
+                                }
+                                if (type === "file" && data) {
+                                  return (
+                                    <a key={di} href={data} download={name}
+                                      style={{ fontSize: 12, color: "#16a34a", textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: 4, wordBreak: "break-all" }}>
+                                      📄 {name}
+                                    </a>
+                                  );
+                                }
+                                return <span key={di} style={{ fontSize: 12, color: "var(--s-text-muted)" }}>📄 {name}</span>;
+                              }) : <span style={{ fontSize: 12, color: "var(--s-text-muted)" }}>—</span>}
+                            </div>
+                          ) : isEditing ? (
+                            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                              <input value={editValue} onChange={e => setEditValue(e.target.value)}
+                                onKeyDown={e => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditingCell(null); }}
+                                autoFocus style={{ flex: 1, padding: "5px 8px", border: "1px solid var(--s-border)", background: "var(--s-surface)", fontSize: 12, color: "var(--s-text)", fontFamily: "inherit", outline: "none" }} />
+                              <button onClick={saveEdit} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--s-green)", padding: 2 }}><Check size={14} /></button>
+                              <button onClick={() => setEditingCell(null)} style={{ border: "none", background: "none", cursor: "pointer", color: "#e03131", padding: 2 }}><X size={14} /></button>
+                            </div>
+                          ) : isHtml ? (
+                            <div className="prose prose-sm max-w-none text-[13px]" style={{ color: "var(--s-text-secondary)", lineHeight: 1.7, cursor: "pointer" }}
+                              dangerouslySetInnerHTML={{ __html: displayVal }}
+                              onDoubleClick={() => startEdit(ri, col.name, displayVal === "—" ? "" : displayVal)} />
+                          ) : (
+                            <div style={{ fontSize: 13, fontWeight: 500, color: displayVal === "—" ? "var(--s-text-muted)" : "var(--s-text)", wordBreak: "break-all", cursor: "pointer" }}
+                              title={displayVal}
+                              onDoubleClick={() => startEdit(ri, col.name, displayVal === "—" ? "" : displayVal)}>
+                              {displayVal}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+        /* Table — 匹配表格风格 */
         <div style={{ padding: "20px 24px", maxWidth: "100%", overflowX: "auto" }}>
           {loading ? (
             <div style={{ textAlign: "center", padding: 60, color: "var(--s-text-muted)", fontSize: 12 }}>加载中...</div>
@@ -223,6 +379,7 @@ function TableViewInner() {
             </table>
           )}
         </div>
+        )}
       </div>
     </>
   );
