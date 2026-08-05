@@ -383,12 +383,14 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
   const [subDepts, setSubDepts] = useState<Record<number, Record<string, DepartmentData>>>({});
   const [subModules, setSubModules] = useState<Record<number, Record<string, ModuleFormData[]>>>({});
   const [subExpanded, setSubExpanded] = useState<Record<string, boolean>>({});
+  const [activeSubSchool, setActiveSubSchool] = useState(0); // Tab index for sub-schools
 
   const addSubSchool = () => {
     const idx = subSchools.length;
     setSubSchools(prev => [...prev, { name: "", types: "", location: { district: "", address: "" }, description: "", hardware_info: {}, network_info: {}, campus_mode: "single", campuses: [] }]);
     setSubDepts(prev => ({ ...prev, [idx]: {} }));
     setSubModules(prev => ({ ...prev, [idx]: {} }));
+    setActiveSubSchool(idx); // Auto-switch to new tab
   };
   const removeSubSchool = (idx: number) => {
     setSubSchools(prev => prev.filter((_, i) => i !== idx));
@@ -2148,24 +2150,44 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
         onAdd={(name) => addDepartment(name)}
       />
 
-      {/* 下属学校（教育局模式） */}
+      {/* 下属学校（教育局模式）— Tab 切换，每次只显示一个学校 */}
       {isEducationBureau && (
         <div className="bg-[#fdfcf8] border border-[#d1c7b7] mt-6" id="form-sub-schools">
           <div className="bg-red-700 text-white px-5 py-2 text-xs font-semibold tracking-wider flex items-center justify-between">
             <span>下属学校</span>
             <Button variant="ghost" size="sm" className="h-6 text-xs text-white hover:bg-red-600" onClick={addSubSchool}>＋ 添加下属学校</Button>
           </div>
-          <div className="p-5 space-y-4">
-            {subSchools.length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-4">暂无下属学校，点击上方按钮添加</p>
-            )}
-            {subSchools.map((school, si) => (
-              <div key={si} id={`form-sub-${si}`} className="bg-white border border-[#d1c7b7] p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-semibold text-red-700">🏫 下属学校 {si + 1}</span>
-                  <Button variant="ghost" size="sm" className="h-6 text-xs text-red-500" onClick={() => removeSubSchool(si)}>🗑 删除</Button>
-                </div>
-                <div className="grid grid-cols-2 gap-3 mb-3">
+          {subSchools.length === 0 ? (
+            <div className="p-8 text-center text-xs text-gray-400">暂无下属学校，点击上方"＋ 添加下属学校"按钮添加</div>
+          ) : (
+            <>
+              {/* Tab bar */}
+              <div className="flex border-b border-[#d1c7b7] bg-white overflow-x-auto">
+                {subSchools.map((school, si) => (
+                  <button key={si} id={`form-sub-${si}`}
+                    onClick={() => setActiveSubSchool(si)}
+                    className={cn(
+                      "shrink-0 px-4 py-2.5 text-xs font-medium border-r border-[#e8e0d0] transition-colors flex items-center gap-1.5",
+                      activeSubSchool === si
+                        ? "bg-red-50 text-red-700 border-b-2 border-b-red-700 -mb-px"
+                        : "text-gray-500 hover:bg-gray-50"
+                    )}>
+                    🏫 {school.name || `学校 ${si + 1}`}
+                    {subSchools.length > 1 && (
+                      <span className="text-red-400 hover:text-red-600 ml-0.5" onClick={(ev) => { ev.stopPropagation(); removeSubSchool(si); if (activeSubSchool >= si && activeSubSchool > 0) setActiveSubSchool(activeSubSchool - 1); }}>
+                        <X className="w-3 h-3" /></span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              {/* Active tab content */}
+              {subSchools[activeSubSchool] && (() => {
+                const school = subSchools[activeSubSchool];
+                const si = activeSubSchool;
+                return (
+              <div className="p-5 space-y-4">
+                {/* Row 1: 学校名称 + 学校类型 */}
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label className="text-xs">学校名称</Label>
                     <div className="flex gap-1">
@@ -2208,6 +2230,9 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                       })}
                     </div>
                   </div>
+                </div>
+                {/* Row 2: 区/县 + 地址 */}
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label className="text-xs">区/县</Label>
                     <Input className="h-8 text-xs" value={school.location?.district || ""} onChange={(e) => updateSubSchoolLocation(si, "district", e.target.value)} placeholder="如：天河区" />
@@ -2217,15 +2242,17 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                     <Input className="h-8 text-xs" value={school.location?.address || ""} onChange={(e) => updateSubSchoolLocation(si, "address", e.target.value)} placeholder="详细地址" />
                   </div>
                 </div>
+                {/* 学校描述 */}
                 <div className="space-y-1.5">
                   <Label className="text-xs">学校描述</Label>
                   <RichTextEditor className="min-h-[120px] rounded-none" value={school.description} onChange={(v: string) => updateSubSchool(si, "description", v)} placeholder="学校简要描述..." />
                 </div>
-                {/* Hardware & Network for sub-school — hidden when multi-campus */}
+                {/* HW/NW — single campus mode */}
                 {(school.campus_mode || "single") === "single" && (
-                <div className="mt-3 pt-3 border-t border-[#e8e0d0]">
+                <div>
+                  <div className="border-t border-[#e8e0d0] pt-3 mb-3" />
                   <Label className="text-xs font-medium mb-2 block">基本信息</Label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     {["总人数","教师人数","学生人数","班级数量","教室数量","功能教室数量","总面积"].map((key) => (
                       <div key={key} className="space-y-0.5">
                         <Label className="text-[10px]">{key}</Label>
@@ -2247,53 +2274,48 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                   </div>
                 </div>
                 )}
-                {/* Campus mode for sub-school */}
-                <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-[#e8e0d0]">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">校区模式</Label>
-                    <Select value={school.campus_mode || "single"} onValueChange={(v) => updateSubSchool(si, "campus_mode", v)}>
-                      <SelectTrigger className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="single">单校区</SelectItem>
-                        <SelectItem value="multi_independent">多校区独立</SelectItem>
-                        <SelectItem value="multi_cross">多校区交叉</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {(school.campus_mode === "multi_independent" || school.campus_mode === "multi_cross") && (
+                {/* Campus mode */}
+                <div className="border-t border-[#e8e0d0] pt-3">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label className="text-xs">校区列表</Label>
-                      <Button variant="ghost" size="sm" className="h-6 text-xs text-red-700 hover:bg-red-50" onClick={() => addSubSchoolCampus(si)}>＋ 添加校区</Button>
+                      <Label className="text-xs">校区模式</Label>
+                      <Select value={school.campus_mode || "single"} onValueChange={(v) => updateSubSchool(si, "campus_mode", v)}>
+                        <SelectTrigger className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="single">单校区</SelectItem>
+                          <SelectItem value="multi_independent">多校区独立</SelectItem>
+                          <SelectItem value="multi_cross">多校区交叉</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                  )}
+                    {(school.campus_mode === "multi_independent" || school.campus_mode === "multi_cross") && (
+                      <div className="flex items-end pb-0.5">
+                        <Button variant="ghost" size="sm" className="h-6 text-xs text-red-700 hover:bg-red-50" onClick={() => addSubSchoolCampus(si)}>＋ 添加校区</Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                {/* Campus list with full hw/nw */}
+                {/* Campus list */}
                 {(school.campus_mode === "multi_independent" || school.campus_mode === "multi_cross") && school.campuses.map((campus, ci) => (
-                  <div key={ci} className="bg-gray-50 border border-[#e8e0d0] p-3 mt-2">
+                  <div key={ci} className="bg-gray-50 border border-[#e8e0d0] p-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-semibold">🏫 校区 {ci + 1}</span>
                       <Button variant="ghost" size="sm" className="h-5 text-[10px] text-red-400" onClick={() => removeSubSchoolCampus(si, ci)}>✕</Button>
                     </div>
-                    {/* Row 1: name */}
-                    <div className="space-y-0.5 mb-2">
-                      <Label className="text-[10px]">校区名称</Label>
-                      <Input className="h-7 text-[10px]" value={campus.name} placeholder="校区名称（必填）" onChange={(e) => updateSubSchoolCampus(si, ci, "name", e.target.value)} />
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <div className="space-y-0.5"><Label className="text-[10px]">校区名称</Label>
+                        <Input className="h-7 text-[10px]" value={campus.name} placeholder="校区名称" onChange={(e) => updateSubSchoolCampus(si, ci, "name", e.target.value)} /></div>
+                      <div className="space-y-0.5"><Label className="text-[10px]">地址</Label>
+                        <Input className="h-7 text-[10px]" value={campus.address} placeholder="校区地址" onChange={(e) => updateSubSchoolCampus(si, ci, "address", e.target.value)} /></div>
                     </div>
-                    {/* Row 2: address */}
-                    <div className="space-y-0.5 mb-2">
-                      <Label className="text-[10px]">地址</Label>
-                      <Input className="h-7 text-[10px]" value={campus.address} placeholder="校区地址（选填）" onChange={(e) => updateSubSchoolCampus(si, ci, "address", e.target.value)} />
-                    </div>
-                    {/* Campus hardware */}
-                    <div className="text-[10px] font-medium text-gray-500 mt-2 mb-1">硬件信息</div>
+                    <div className="text-[10px] font-medium text-gray-500 mb-1">硬件信息</div>
                     <div className="grid grid-cols-4 gap-1.5">
                       {["总人数","教师人数","学生人数","班级数量","教室数量","功能教室数量","总面积","宿舍楼栋数"].map((key) => (
                         <div key={key} className="space-y-0.5"><Label className="text-[9px]">{key}</Label>
-                          <Input type="number" inputMode="numeric" min="0" step="1" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} className="h-7 text-[10px]" value={(campus.hardware || {})[key] || ""}
+                          <Input type="number" inputMode="numeric" min="0" step="1" className="h-7 text-[10px]" value={(campus.hardware || {})[key] || ""}
                             onChange={(e) => { const hw = { ...(campus.hardware || {}), [key]: e.target.value }; setSubSchools(prev => prev.map((s, i) => i === si ? { ...s, campuses: s.campuses.map((c, j) => j === ci ? { ...c, hardware: hw } : c) } : s)); }} />
                         </div>))}
                     </div>
-                    {/* Campus network */}
                     <div className="text-[10px] font-medium text-gray-500 mt-2 mb-1">网络信息</div>
                     <div className="grid grid-cols-4 gap-1.5">
                       {["带宽","服务器数量","虚拟化平台","存储","无线覆盖"].map((key) => (
@@ -2304,8 +2326,8 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                     </div>
                   </div>
                 ))}
-                {/* Sub-school departments — full-featured like main */}
-                <div className="mt-3 pt-3 border-t border-[#e8e0d0]">
+                {/* Sub-school departments */}
+                <div className="border-t border-[#e8e0d0] pt-3">
                   <AddDepartmentButton
                     addedNames={new Set(Object.values(subDepts[si] || {}).map(d => d.department_name))}
                     predefined={ALL_DEPARTMENTS}
@@ -2318,111 +2340,106 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                     const subMods = subModules[si]?.[code] || [];
                     const colors = DEPT_COLORS[code] || DEPT_COLORS.school_leader;
                     return (
-                    <Collapsible key={code} defaultOpen>
-                      <div className="bg-[#fdfcf8] border border-[#d1c7b7] relative mt-3">
-                        <CollapsibleTrigger className="w-full">
-                          <CardHeader className={cn("py-2 pr-9 cursor-pointer", colors.header)}>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <div className={cn("w-2 h-2 rounded-full", colors.accent)} />
-                                <Input className="h-7 w-36 text-sm font-semibold border-0 bg-transparent focus-visible:ring-1 px-1"
-                                  value={dept.department_name}
-                                  onChange={(e) => updateSubDept(si, code, "department_name", e.target.value)}
-                                  onClick={(ev) => ev.stopPropagation()} />
-                                <Badge variant="secondary" className="text-[10px]">{subMods.length} 模块</Badge>
-                              </div>
-                              <ChevronDown className="w-3.5 h-3.5 Collapsible__open-icon" />
+                    <Collapsible key={code} defaultOpen className="mt-3">
+                      <div className="border-l-2 border-l-gray-300 pl-3">
+                        <CollapsibleTrigger className="w-full text-left">
+                          <div className="flex items-center justify-between mb-2 cursor-pointer">
+                            <div className="flex items-center gap-1.5">
+                              <div className={cn("w-2 h-2 rounded-full", colors.accent)} />
+                              <Input className="h-7 w-36 text-sm font-semibold border-0 bg-transparent focus-visible:ring-1 px-1"
+                                value={dept.department_name}
+                                onChange={(e) => updateSubDept(si, code, "department_name", e.target.value)}
+                                onClick={(ev) => ev.stopPropagation()} />
+                              <Badge variant="secondary" className="text-[10px]">{subMods.length} 模块</Badge>
                             </div>
-                          </CardHeader>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="sm" className="h-6 text-[10px] text-red-400 hover:text-red-600"
+                                onClick={(ev) => { ev.stopPropagation(); ev.preventDefault(); removeSubDept(si, code); }}>
+                                <Trash2 className="w-3 h-3 mr-0.5" />移除</Button>
+                              <ChevronDown className="w-3.5 h-3.5 text-gray-400 Collapsible__open-icon" />
+                            </div>
+                          </div>
                         </CollapsibleTrigger>
-                        <button className="absolute top-2 right-8 z-10 h-6 w-6 rounded hover:bg-red-50 text-red-400"
-                          onClick={(ev) => { ev.stopPropagation(); ev.preventDefault(); removeSubDept(si, code); }}>
-                          <Trash2 className="w-3 h-3" /></button>
                         <CollapsibleContent>
-                          <CardContent className="space-y-4 pt-0">
-                            {/* Personnel */}
-                            <div>
-                              <div className="flex items-center justify-between mb-2">
-                                <Label className="text-xs font-medium">科室人员</Label>
-                                <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => addSubPersonnel(si, code)}>＋ 添加人员</Button>
+                          <div className="pb-3 mb-3 border-b border-dashed border-[#e8e0d0]">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[11px] font-medium text-gray-500">科室人员</span>
+                              <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={() => addSubPersonnel(si, code)}>＋ 添加</Button>
+                            </div>
+                            {(dept.personnel || []).map((p, pi) => (
+                              <div key={pi} className="flex items-center gap-1.5 mb-1.5">
+                                <Input className="flex-1 h-7 text-[11px]" placeholder="姓名" value={p.name}
+                                  onChange={(e) => updateSubPersonnel(si, code, pi, "name", e.target.value)} />
+                                <Input className="flex-1 h-7 text-[11px]" placeholder="职务" value={p.role}
+                                  onChange={(e) => updateSubPersonnel(si, code, pi, "role", e.target.value)} />
+                                <Input className="flex-1 h-7 text-[11px]" placeholder="电话" value={p.phone}
+                                  onChange={(e) => updateSubPersonnel(si, code, pi, "phone", e.target.value)} />
+                                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => removeSubPersonnel(si, code, pi)}>
+                                  <X className="w-3 h-3 text-red-400" /></Button>
                               </div>
-                              {(dept.personnel || []).map((p, pi) => (
-                                <div key={pi} className="flex items-center gap-2 mb-2 p-2 border rounded-md bg-muted/20">
-                                  <Input className="flex-1 h-8 text-xs" placeholder="姓名" value={p.name}
-                                    onChange={(e) => updateSubPersonnel(si, code, pi, "name", e.target.value)} />
-                                  <Input className="flex-1 h-8 text-xs" placeholder="职务" value={p.role}
-                                    onChange={(e) => updateSubPersonnel(si, code, pi, "role", e.target.value)} />
-                                  <Input className="flex-1 h-8 text-xs" placeholder="电话" value={p.phone}
-                                    onChange={(e) => updateSubPersonnel(si, code, pi, "phone", e.target.value)} />
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeSubPersonnel(si, code, pi)}>
-                                    <Trash2 className="w-3.5 h-3.5 text-red-500" /></Button>
+                            ))}
+                          </div>
+                          <div className="pb-3 mb-3 border-b border-dashed border-[#e8e0d0]">
+                            <BusinessGroups code={code} dept={dept} updateDepartment={(c, f, v) => updateSubDept(si, c, f, v)} />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[11px] font-medium text-gray-500">模块匹配</span>
+                              <Button variant="ghost" size="sm" className="h-5 text-[10px] text-red-700 hover:bg-red-50" onClick={() => addSubModule(si, code)}>＋ 添加</Button>
+                            </div>
+                            <div className="space-y-2">
+                              {subMods.map((mod, mi) => (
+                                <div key={mi} className="bg-gray-50/50 border border-dashed border-[#e8e0d0] p-2.5 relative">
+                                  <Button variant="ghost" size="icon" className="absolute top-1.5 right-1.5 h-6 w-6 z-10"
+                                    onClick={() => removeSubModule(si, code, mi)}><X className="w-3 h-3 text-red-400" /></Button>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div className="space-y-1"><Label className="text-[10px]">模块名称</Label>
+                                      <ModuleSearchSelect value={mod.module_name}
+                                        onChange={(modCode, modName) => { updateSubModule(si, code, mi, "module_code", modCode); updateSubModule(si, code, mi, "module_name", modName); }}
+                                        options={moduleTypeList} /></div>
+                                    <div className="space-y-1"><Label className="text-[10px]">状态</Label>
+                                      <Select value={mod.status} onValueChange={(v) => updateSubModule(si, code, mi, "status", v)}>
+                                        <SelectTrigger className="h-7 w-full text-[11px]"><SelectValue /></SelectTrigger>
+                                        <SelectContent>{MODULE_STATUS_OPTIONS.map(s => (<SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>))}</SelectContent></Select></div>
+                                  </div>
+                                  {mod.status === "已落地" && (
+                                    <div className="grid grid-cols-2 gap-2 mt-2">
+                                      <div className="space-y-1"><Label className="text-[10px]">使用率(%)</Label>
+                                        <Input className="h-7 text-[11px]" type="number" value={mod.usage_rate}
+                                          onChange={(e) => updateSubModule(si, code, mi, "usage_rate", Number(e.target.value))} /></div>
+                                      <div className="space-y-1"><Label className="text-[10px]">活跃用户</Label>
+                                        <Input className="h-7 text-[11px]" type="number" value={mod.active_users}
+                                          onChange={(e) => updateSubModule(si, code, mi, "active_users", Number(e.target.value))} /></div>
+                                    </div>)}
+                                  {mod.status === "未购" && (
+                                    <div className="space-y-1 mt-2"><Label className="text-[10px]">当前替代做法</Label>
+                                      <RichTextEditor className="min-h-[60px] rounded-none" value={mod.current_practice}
+                                        onChange={(v: string) => updateSubModule(si, code, mi, "current_practice", v)}
+                                        placeholder="目前使用Excel手工管理..." /></div>)}
+                                  <div className="grid grid-cols-2 gap-2 mt-2">
+                                    <div className="space-y-1"><Label className="text-[10px]">{mod.status === "已落地" ? "落地效果" : mod.status === "未落地" ? "未落地原因" : "备注"}</Label>
+                                      <RichTextEditor className="min-h-[60px] rounded-none"
+                                        value={mod.status === "已落地" ? mod.effect : mod.issues}
+                                        onChange={(v: string) => { if (mod.status === "已落地") updateSubModule(si, code, mi, "effect", v); else updateSubModule(si, code, mi, "issues", v); }} /></div>
+                                    <div className="space-y-1"><Label className="text-[10px]">问题</Label>
+                                      <RichTextEditor className="min-h-[60px] rounded-none" value={mod.issues}
+                                        onChange={(v: string) => updateSubModule(si, code, mi, "issues", v)}
+                                        placeholder="系统响应速度慢..." /></div>
+                                  </div>
+                                  <div className="mt-2 flex items-center gap-1.5">
+                                    <span className="text-[10px] text-gray-400">素材：</span>
+                                    {(mod.materials || []).map((m, matIdx) => (
+                                      <Badge key={matIdx} variant="secondary" className="text-[9px] gap-0.5 py-0 px-1">
+                                        <a href={`/api/files/${m.key}`} download={m.name} className="hover:underline cursor-pointer">{m.name.length > 12 ? m.name.slice(0, 12) + "…" : m.name}</a>
+                                        <X className="w-2.5 h-2.5 cursor-pointer" onClick={() => removeSubMaterial(si, code, mi, matIdx)} /></Badge>))}
+                                    <label className="cursor-pointer"><input type="file" className="hidden" accept=".mp4,.mov,.avi,.ppt,.pptx,.md,.txt"
+                                      onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadSubMaterial(si, code, mi, file); e.target.value = ""; }} />
+                                      <Badge variant="outline" className="text-[9px] gap-0.5 cursor-pointer hover:bg-muted py-0 px-1"><Upload className="w-2.5 h-2.5" />{(mod.materials || []).length}/3</Badge></label>
+                                  </div>
                                 </div>
                               ))}
                             </div>
-                            {/* Business groups — reuse BusinessGroups with sub dept */}
-                            <BusinessGroups code={code} dept={dept} updateDepartment={(c, f, v) => updateSubDept(si, c, f, v)} />
-                            {/* Module matching */}
-                            <div>
-                              <div className="flex items-center justify-between mb-2">
-                                <Label className="text-xs font-medium">模块匹配</Label>
-                                <Button variant="ghost" size="sm" className="h-6 text-xs text-red-700 hover:bg-red-50" onClick={() => addSubModule(si, code)}>＋ 添加模块</Button>
-                              </div>
-                              <div className="space-y-2">
-                                {subMods.map((mod, mi) => (
-                                  <div key={mi} className="bg-[#fdfcf8] border border-[#d1c7b7] p-3 relative">
-                                    <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-7 w-7 z-10"
-                                      onClick={() => removeSubModule(si, code, mi)}><Trash2 className="w-3.5 h-3.5 text-red-500" /></Button>
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div className="space-y-1"><Label className="text-[11px]">模块名称</Label>
-                                        <ModuleSearchSelect value={mod.module_name}
-                                          onChange={(modCode, modName) => { updateSubModule(si, code, mi, "module_code", modCode); updateSubModule(si, code, mi, "module_name", modName); }}
-                                          options={moduleTypeList} /></div>
-                                      <div className="space-y-1"><Label className="text-[11px]">状态</Label>
-                                        <Select value={mod.status} onValueChange={(v) => updateSubModule(si, code, mi, "status", v)}>
-                                          <SelectTrigger className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
-                                          <SelectContent>{MODULE_STATUS_OPTIONS.map(s => (<SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>))}</SelectContent></Select></div>
-                                    </div>
-                                    {mod.status === "已落地" && (
-                                      <div className="grid grid-cols-2 gap-3">
-                                        <div className="space-y-1"><Label className="text-[11px]">使用率(%)</Label>
-                                          <Input className="h-8 text-xs" type="number" value={mod.usage_rate}
-                                            onChange={(e) => updateSubModule(si, code, mi, "usage_rate", Number(e.target.value))} /></div>
-                                        <div className="space-y-1"><Label className="text-[11px]">活跃用户</Label>
-                                          <Input className="h-8 text-xs" type="number" value={mod.active_users}
-                                            onChange={(e) => updateSubModule(si, code, mi, "active_users", Number(e.target.value))} /></div>
-                                      </div>)}
-                                    {mod.status === "未购" && (
-                                      <div className="space-y-1"><Label className="text-[11px]">当前替代做法</Label>
-                                        <RichTextEditor className="min-h-[80px] rounded-none" value={mod.current_practice}
-                                          onChange={(v: string) => updateSubModule(si, code, mi, "current_practice", v)}
-                                          placeholder="例如：目前使用Excel手工管理..." /></div>)}
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div className="space-y-1"><Label className="text-[11px]">{mod.status === "已落地" ? "落地效果" : mod.status === "未落地" ? "未落地原因" : "备注"}</Label>
-                                        <RichTextEditor className="min-h-[80px] rounded-none"
-                                          value={mod.status === "已落地" ? mod.effect : mod.issues}
-                                          onChange={(v: string) => { if (mod.status === "已落地") updateSubModule(si, code, mi, "effect", v); else updateSubModule(si, code, mi, "issues", v); }} /></div>
-                                      <div className="space-y-1"><Label className="text-[11px]">问题</Label>
-                                        <RichTextEditor className="min-h-[80px] rounded-none" value={mod.issues}
-                                          onChange={(v: string) => updateSubModule(si, code, mi, "issues", v)}
-                                          placeholder="例如：系统响应速度慢..." /></div>
-                                    </div>
-                                    <div className="mt-2">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-[11px] text-muted-foreground">素材：</span>
-                                        {(mod.materials || []).map((m, matIdx) => (
-                                          <Badge key={matIdx} variant="secondary" className="text-[10px] gap-1">
-                                            <a href={`/api/files/${m.key}`} download={m.name} className="hover:underline cursor-pointer">{m.name.length > 15 ? m.name.slice(0, 15) + "..." : m.name}</a>
-                                            <X className="w-3 h-3 cursor-pointer" onClick={() => removeSubMaterial(si, code, mi, matIdx)} /></Badge>))}
-                                        <label className="cursor-pointer"><input type="file" className="hidden" accept=".mp4,.mov,.avi,.ppt,.pptx,.md,.txt"
-                                          onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadSubMaterial(si, code, mi, file); e.target.value = ""; }} />
-                                          <Badge variant="outline" className="text-[10px] gap-1 cursor-pointer hover:bg-muted"><Upload className="w-3 h-3" />{(mod.materials || []).length}/3</Badge></label>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </CardContent>
+                          </div>
                         </CollapsibleContent>
                       </div>
                     </Collapsible>
@@ -2430,8 +2447,10 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                   })}
                 </div>
               </div>
-            ))}
-          </div>
+                );
+              })()}
+            </>
+          )}
         </div>
       )}
 
