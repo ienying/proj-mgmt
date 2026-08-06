@@ -26,6 +26,16 @@ export async function GET(request: NextRequest) {
       const schema = project.project_schema;
       if (!schema) continue;
 
+      const projectInfo = {
+        project_id: project.id,
+        project_name: project.project_name,
+        project_code: project.project_code,
+        schema: schema,
+        project_type: project.project_type || "",
+        project_status: project.project_status || "",
+        deployment_mode: project.deployment_mode || "",
+      };
+
       if (showAll) {
         // 显示所有项目模式：不过滤，全部列出，同时标注是否已有该表
         const { data: tableCheck, error: checkError } = await supabase.rpc("execute_sql", {
@@ -35,13 +45,7 @@ export async function GET(request: NextRequest) {
           ) as exists`,
         });
         const hasTable = !checkError && (tableCheck?.[0]?.exists === true);
-        results.push({
-          project_id: project.id,
-          project_name: project.project_name,
-          project_code: project.project_code,
-          schema: schema,
-          has_table: hasTable,
-        });
+        results.push({ ...projectInfo, has_table: hasTable });
         continue;
       }
 
@@ -57,13 +61,7 @@ export async function GET(request: NextRequest) {
 
       const hasTable = tableExists?.[0]?.exists === true;
       if (hasTable) {
-        results.push({
-          project_id: project.id,
-          project_name: project.project_name,
-          project_code: project.project_code,
-          schema: schema,
-          has_table: true,
-        });
+        results.push({ ...projectInfo, has_table: true });
       }
     }
 

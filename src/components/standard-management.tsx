@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Fragment, useEffect, useRef } from "react";
+import { useState, Fragment, useEffect, useRef, useMemo } from "react";
 import { RefreshCw, AlertCircle, Info } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -181,6 +181,8 @@ interface StandardManagementProps {
   definitions: TableDefinition[];
   projectTypes: { code: string; name: string }[];
   projectStages: { code: string; name: string }[];
+  projectStatuses?: { code: string; name: string }[];
+  deploymentModes?: { code: string; name: string }[];
   onCreate: (data: unknown) => void;
   onUpdate: (id: string, data: unknown) => void;
   onDelete: (id: string) => void;
@@ -709,6 +711,8 @@ export function StandardManagement({
   definitions,
   projectTypes,
   projectStages,
+  projectStatuses = [],
+  deploymentModes = [],
   onCreate,
   onUpdate,
   onDelete,
@@ -800,12 +804,30 @@ export function StandardManagement({
   // 同步对话框状态
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [syncTableDef, setSyncTableDef] = useState<TableDefinition | null>(null);
-  const [syncProjects, setSyncProjects] = useState<Array<{project_id: string; project_name: string; project_code: string; schema: string}>>([]);
+  const [syncProjects, setSyncProjects] = useState<Array<{project_id: string; project_name: string; project_code: string; schema: string; project_type: string; project_status: string; deployment_mode: string; has_table?: boolean}>>([]);
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
   const [syncMode, setSyncMode] = useState<'structure' | 'data' | 'both'>('both');
   const [syncDataMode, setSyncDataMode] = useState<'overwrite' | 'append'>('overwrite');
   const [syncing, setSyncing] = useState(false);
   const [showAllProjects, setShowAllProjects] = useState(false);
+  const [syncFilterType, setSyncFilterType] = useState<string>('all');
+  const [syncFilterStatus, setSyncFilterStatus] = useState<string>('all');
+  const [syncFilterDeploy, setSyncFilterDeploy] = useState<string>('all');
+  const [syncFilterName, setSyncFilterName] = useState<string>('');
+  const [loadedStatuses, setLoadedStatuses] = useState<{ code: string; name: string }[]>(projectStatuses);
+  const [loadedDeployModes, setLoadedDeployModes] = useState<{ code: string; name: string }[]>(deploymentModes);
+  const activeStatuses = loadedStatuses.length > 0 ? loadedStatuses : projectStatuses;
+  const activeDeployModes = loadedDeployModes.length > 0 ? loadedDeployModes : deploymentModes;
+
+  const filteredSyncProjects = useMemo(() => {
+    return syncProjects.filter((p) => {
+      if (syncFilterType !== 'all' && p.project_type !== syncFilterType) return false;
+      if (syncFilterStatus !== 'all' && p.project_status !== syncFilterStatus) return false;
+      if (syncFilterDeploy !== 'all' && p.deployment_mode !== syncFilterDeploy) return false;
+      if (syncFilterName && !p.project_name.toLowerCase().includes(syncFilterName.toLowerCase()) && !p.project_code.toLowerCase().includes(syncFilterName.toLowerCase())) return false;
+      return true;
+    });
+  }, [syncProjects, syncFilterType, syncFilterStatus, syncFilterDeploy, syncFilterName]);
 
   // 引用关系对话框状态
   const [refDialogOpen, setRefDialogOpen] = useState(false);
@@ -926,6 +948,22 @@ export function StandardManagement({
     setSyncDataMode('overwrite');
     setSyncing(false);
     setShowAllProjects(false); // 每次打开重置为默认模式
+    setSyncFilterType('all');
+    setSyncFilterStatus('all');
+    setSyncFilterDeploy('all');
+    // 加载字典（如果还没加载）
+    if (loadedStatuses.length === 0) {
+      fetch("/api/dicts?type=project_statuses")
+        .then(r => r.json())
+        .then(d => { if (d.data) setLoadedStatuses(d.data.map((i: { code: string; name: string }) => ({ code: i.code, name: i.name }))); })
+        .catch(() => {});
+    }
+    if (loadedDeployModes.length === 0) {
+      fetch("/api/dicts?type=deployment_modes")
+        .then(r => r.json())
+        .then(d => { if (d.data) setLoadedDeployModes(d.data.map((i: { code: string; name: string }) => ({ code: i.code, name: i.name }))); })
+        .catch(() => {});
+    }
     // 加载包含此表的项目
     try {
       const res = await fetch(`/api/standards/sync?tableCode=${encodeURIComponent(def.table_code)}`);
@@ -975,15 +1013,25 @@ export function StandardManagement({
   };
 
   const toggleSelectAll = () => {
-    if (selectedProjectIds.length === syncProjects.length) {
-      setSelectedProjectIds([]);
+    const filteredIds = filteredSyncProjects.map(p => p.project_id);
+    const allFilteredSelected = filteredIds.every(id => selectedProjectIds.includes(id));
+    if (allFilteredSelected) {
+      setSelectedProjectIds(prev => prev.filter(id => !filteredIds.includes(id)));
     } else {
-      setSelectedProjectIds(syncProjects.map(p => p.project_id));
+      setSelectedProjectIds(prev => [...new Set([...prev, ...filteredIds])]);
     }
   };
 
+  // 同步结果弹窗
+  const [syncResultOpen, setSyncResultOpen] = useState(false);
+  const [syncResultData, setSyncResultData] = useState<{ successCount: number; errorCount: number; errors: string; allResults: Array<{ project: string; schema: boolean; data: boolean; errors: string[] }> } | null>(null);
+
   const handleSync = async () => {
-    if (!syncTableDef || selectedProjectIds.length === 0) return;
+    // 只同步当前筛选结果中被选中的项目
+    const filteredSelectedIds = selectedProjectIds.filter(id =>
+      filteredSyncProjects.some(p => p.project_id === id)
+    );
+    if (!syncTableDef || filteredSelectedIds.length === 0) return;
     setSyncing(true);
     try {
       const res = await fetch('/api/standards/sync', {
@@ -991,7 +1039,7 @@ export function StandardManagement({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tableCode: syncTableDef.table_code,
-          projectIds: selectedProjectIds,
+          projectIds: filteredSelectedIds,
           syncSchema: syncMode === 'structure' || syncMode === 'both',
           syncData: syncMode === 'data' || syncMode === 'both',
           syncDataMode,
@@ -999,21 +1047,18 @@ export function StandardManagement({
       });
       const result = await res.json();
       if (res.ok) {
-        const results = result.data || [];
-        const summary = results.map((r: { project: string; schema: boolean; data: boolean; errors: string[] }) => {
-          const parts: string[] = [];
-          if (r.schema) parts.push('结构同步成功');
-          if (r.data) parts.push('数据同步成功');
-          if (r.errors.length > 0) parts.push(`错误: ${r.errors.join(', ')}`);
-          return `${r.project}: ${parts.join(', ') || '无变更'}`;
-        }).join('\n');
-        alert(`同步完成：\n${summary}`);
+        const results = (result.data || []) as Array<{ project: string; schema: boolean; data: boolean; errors: string[] }>;
+        const successCount = results.filter((r) => r.errors.length === 0).length;
+        const errorCount = results.filter((r) => r.errors.length > 0).length;
+        const errorSummary = results.filter((r) => r.errors.length > 0).map((r) => `${r.project}: ${r.errors.join(', ')}`).join('; ');
+        setSyncResultData({ successCount, errorCount, errors: errorSummary, allResults: results });
+        setSyncResultOpen(true);
         setSyncDialogOpen(false);
       } else {
-        alert('同步失败: ' + (result.error || '未知错误'));
+        toast.error('同步失败: ' + (result.error || '未知错误'));
       }
     } catch (err) {
-      alert('同步失败: ' + String(err));
+      toast.error('同步失败: ' + String(err));
     } finally {
       setSyncing(false);
     }
@@ -4090,7 +4135,7 @@ export function StandardManagement({
 
       {/* 同步到项目对话框 */}
       <Dialog open={syncDialogOpen} onOpenChange={setSyncDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="!max-w-[900px] !w-[95vw]">
           <DialogHeader>
             <DialogTitle>
               同步到项目 - {syncTableDef?.table_name || ""}
@@ -4162,11 +4207,62 @@ export function StandardManagement({
               </div>
             )}
 
+            {/* 项目筛选 */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">筛选条件</Label>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Input
+                  placeholder="搜索项目名称/编号..."
+                  value={syncFilterName}
+                  onChange={(e) => setSyncFilterName(e.target.value)}
+                  className="h-8 w-[180px] text-xs"
+                />
+                <Select value={syncFilterType} onValueChange={setSyncFilterType}>
+                  <SelectTrigger className="h-8 w-[130px] text-xs">
+                    <SelectValue placeholder="项目类型" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部类型</SelectItem>
+                    {projectTypes.map((t) => (
+                      <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={syncFilterStatus} onValueChange={setSyncFilterStatus}>
+                  <SelectTrigger className="h-8 w-[130px] text-xs">
+                    <SelectValue placeholder="项目状态" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部状态</SelectItem>
+                    {(activeStatuses || []).map((s: { code: string; name: string }) => (
+                      <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={syncFilterDeploy} onValueChange={setSyncFilterDeploy}>
+                  <SelectTrigger className="h-8 w-[130px] text-xs">
+                    <SelectValue placeholder="部署模式" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部模式</SelectItem>
+                    {(activeDeployModes || []).map((d: { code: string; name: string }) => (
+                      <SelectItem key={d.code} value={d.code}>{d.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(syncFilterType !== 'all' || syncFilterStatus !== 'all' || syncFilterDeploy !== 'all' || syncFilterName !== '') && (
+                  <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setSyncFilterType('all'); setSyncFilterStatus('all'); setSyncFilterDeploy('all'); setSyncFilterName(''); }}>
+                    清除筛选
+                  </Button>
+                )}
+              </div>
+            </div>
+
             {/* 项目选择 */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium">
-                  选择项目（共 {syncProjects.length} 个）
+                  选择项目（共 {syncProjects.length} 个{filteredSyncProjects.length !== syncProjects.length ? `，筛选后 ${filteredSyncProjects.length} 个` : ''}）
                 </Label>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
@@ -4182,36 +4278,42 @@ export function StandardManagement({
                       显示所有项目
                     </label>
                   </div>
-                  <Button variant="outline" size="sm" onClick={toggleRecordSelectAll}>
-                    {selectedProjectIds.length === syncProjects.length && syncProjects.length > 0 ? "取消全选" : "全选"}
+                  <Button variant="outline" size="sm" onClick={toggleSelectAll}>
+                    {filteredSyncProjects.length > 0 && filteredSyncProjects.every(p => selectedProjectIds.includes(p.project_id)) ? "取消全选" : "全选"}
                   </Button>
                 </div>
               </div>
               <div className="max-h-48 overflow-y-auto space-y-1 border rounded-md p-2">
-                {syncProjects.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    {showAllProjects ? "没有可用的项目" : "没有包含该表的项目 Schema，可开启「显示所有项目」后选择"}
-                  </p>
-                ) : (
-                  syncProjects.map((p) => (
-                    <label
-                      key={p.project_id}
-                      className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedProjectIds.includes(p.project_id)}
-                        onChange={() => toggleProjectSelect(p.project_id)}
-                        className="rounded"
-                      />
-                      <span className="text-sm">{p.project_name}</span>
-                      {(p as { has_table?: boolean }).has_table === false && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">新表</span>
-                      )}
-                      <span className="text-xs text-muted-foreground ml-auto font-mono">{p.schema}</span>
-                    </label>
-                  ))
-                )}
+                {(() => {
+                  const filtered = filteredSyncProjects;
+                  return filtered.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      {syncProjects.length === 0 ? (showAllProjects ? "没有可用的项目" : "没有包含该表的项目 Schema，可开启「显示所有项目」后选择") : "没有符合筛选条件的项目"}
+                    </p>
+                  ) : (
+                    filtered.map((p) => (
+                      <label
+                        key={p.project_id}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedProjectIds.includes(p.project_id)}
+                          onChange={() => toggleProjectSelect(p.project_id)}
+                          className="rounded"
+                        />
+                        <span className="text-sm">{p.project_name}</span>
+                        {p.project_type && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600">{projectTypes.find(t => t.code === p.project_type)?.name || p.project_type}</span>}
+                        {p.project_status && <span className="text-[10px] px-1 py-0.5 rounded bg-green-50 text-green-600">{(activeStatuses || []).find((s) => s.code === p.project_status)?.name || p.project_status}</span>}
+                        {p.deployment_mode && <span className="text-[10px] px-1 py-0.5 rounded bg-purple-50 text-purple-600">{(activeDeployModes || []).find((d) => d.code === p.deployment_mode)?.name || p.deployment_mode}</span>}
+                        {p.has_table === false && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">新表</span>
+                        )}
+                        <span className="text-xs text-muted-foreground ml-auto font-mono">{p.schema}</span>
+                      </label>
+                    ))
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -4221,10 +4323,57 @@ export function StandardManagement({
             </Button>
             <Button
               onClick={handleSync}
-              disabled={selectedProjectIds.length === 0 || syncing}
+              disabled={selectedProjectIds.filter(id => filteredSyncProjects.some(p => p.project_id === id)).length === 0 || syncing}
             >
-              {syncing ? "同步中..." : `同步到 ${selectedProjectIds.length} 个项目`}
+              {syncing ? "同步中..." : `同步到 ${selectedProjectIds.filter(id => filteredSyncProjects.some(p => p.project_id === id)).length} 个项目`}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 同步结果弹窗 */}
+      <Dialog open={syncResultOpen} onOpenChange={setSyncResultOpen}>
+        <DialogContent className="!max-w-[900px] !w-[95vw]">
+          <DialogHeader>
+            <DialogTitle>
+              {syncResultData?.errorCount === 0 ? "同步完成 ✓" : "同步完成（有错误）"}
+            </DialogTitle>
+            <DialogDescription>
+              表「{syncTableDef?.table_name || ""}」同步到 {syncResultData?.allResults.length || 0} 个项目的结果
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="flex items-center gap-4 text-sm">
+              <span className="text-green-600 font-medium">✓ {syncResultData?.successCount || 0} 个成功</span>
+              {syncResultData?.errorCount ? (
+                <span className="text-red-500 font-medium">✗ {syncResultData.errorCount} 个失败</span>
+              ) : null}
+            </div>
+            <div className="max-h-48 overflow-y-auto border rounded-md">
+              <table className="w-full text-sm">
+                <thead className="bg-muted sticky top-0">
+                  <tr>
+                    <th className="text-left px-3 py-2 text-xs font-medium">项目</th>
+                    <th className="text-center px-3 py-2 text-xs font-medium w-16">结构</th>
+                    <th className="text-center px-3 py-2 text-xs font-medium w-16">数据</th>
+                    <th className="text-left px-3 py-2 text-xs font-medium">备注</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(syncResultData?.allResults || []).map((r, i) => (
+                    <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-muted/30'}>
+                      <td className="px-3 py-1.5 text-xs">{r.project}</td>
+                      <td className="px-3 py-1.5 text-center">{r.schema ? '✓' : '-'}</td>
+                      <td className="px-3 py-1.5 text-center">{r.data ? '✓' : '-'}</td>
+                      <td className="px-3 py-1.5 text-xs text-muted-foreground">{r.errors.length > 0 ? r.errors.join(', ') : '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setSyncResultOpen(false)}>确认</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Sparkles, Send, Loader2, ChevronRight } from "lucide-react";
+import { Sparkles, Send, Loader2, ChevronRight, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AIPromptDialog } from "@/components/ai-prompt-dialog";
@@ -60,21 +60,81 @@ function renderMarkdown(text: string): string {
     .replace(/---/g, "<hr class='my-3 border-[var(--s-border)]'>");
 }
 
+// localStorage 存储分析结果的 key
+function getStorageKey(projectSchema: string) {
+  return `ai_analysis_${projectSchema}`;
+}
+
+// 复制文本到剪贴板（兼容 HTTP，容器需在焦点陷阱内）
+function copyToClipboard(text: string, container: HTMLElement): boolean {
+  try {
+    const ta = document.createElement("textarea");
+    ta.setAttribute("readonly", "");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.style.top = "-9999px";
+    ta.style.fontSize = "16px";
+    container.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand("copy");
+    container.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 export function AIDialog({ open, onClose, projectSchema, projectName, progressUpdates, procurementModules, projectInfo }: AIDialogProps) {
+  const storageKey = getStorageKey(projectSchema);
+
+  // 从 localStorage 恢复上次分析结果
+  const getCachedResult = (): { analysis: string; tableCount: number; totalRows: number } | null => {
+    try {
+      const cached = localStorage.getItem(storageKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.analysis) return parsed;
+      }
+    } catch { /* ignore */ }
+    return null;
+  };
+
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ analysis: string; tableCount: number; totalRows: number } | null>(null);
+  const [result, setResult] = useState<{ analysis: string; tableCount: number; totalRows: number } | null>(getCachedResult);
   const [error, setError] = useState("");
   const [followUpQ, setFollowUpQ] = useState("");
   const [followUpLoading, setFollowUpLoading] = useState(false);
   const [conversation, setConversation] = useState<Array<{ role: string; content: string }>>([]);
   const [chatMessages, setChatMessages] = useState<Array<{ role: string; content: string; loading?: boolean }>>([]);
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setResult(null); setError(""); setConversation([]); setChatMessages([]); }, [open]);
+  // 当 projectSchema 变化时（切换项目），重新加载缓存
+  useEffect(() => {
+    setResult(getCachedResult());
+    setError("");
+    setConversation([]);
+    setChatMessages([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectSchema]);
+
+  // 分析结果变化时同步到 localStorage
+  useEffect(() => {
+    if (result) {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(result));
+      } catch { /* ignore */ }
+    }
+  }, [result, storageKey]);
 
   const runAnalysis = useCallback(async (systemMsg?: string, userPrompt?: string) => {
     setLoading(true); setResult(null); setError(""); setConversation([]); setChatMessages([]);
+    // 清除旧缓存
+    try { localStorage.removeItem(storageKey); } catch { /* ignore */ }
     try {
       const res = await fetch("/api/ai/analyze-project", {
         method: "POST",
@@ -87,12 +147,14 @@ export function AIDialog({ open, onClose, projectSchema, projectName, progressUp
         return;
       }
       if (json.data) {
-        setResult({ analysis: json.data.analysis || "", tableCount: json.data.tableCount || 0, totalRows: json.data.totalRows || 0 });
+        const newResult = { analysis: json.data.analysis || "", tableCount: json.data.tableCount || 0, totalRows: json.data.totalRows || 0 };
+        setResult(newResult);
+        try { localStorage.setItem(storageKey, JSON.stringify(newResult)); } catch { /* ignore */ }
         if (json.data.conversationHistory) setConversation(json.data.conversationHistory);
       }
     } catch (e) { setError(String(e)); }
     finally { setLoading(false); }
-  }, [projectSchema, projectName]);
+  }, [projectSchema, projectName, progressUpdates, procurementModules, projectInfo, storageKey]);
 
   const handleFollowUp = useCallback(async () => {
     if (!followUpQ.trim() || !conversation.length) return;
@@ -115,7 +177,16 @@ export function AIDialog({ open, onClose, projectSchema, projectName, progressUp
       setChatMessages(prev => prev.map((m, i) => i === prev.length - 1 ? { role: "ai", content: "请求失败，请重试" } : m));
     }
     setFollowUpLoading(false);
-  }, [followUpQ, conversation, projectSchema, projectName]);
+  }, [followUpQ, conversation, projectSchema, projectName, progressUpdates, procurementModules, projectInfo]);
+
+  const handleCopy = useCallback(() => {
+    if (!result || !bodyRef.current) return;
+    const success = copyToClipboard(result.analysis, bodyRef.current);
+    if (success) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }, [result]);
 
   return (
     <>
@@ -158,6 +229,15 @@ export function AIDialog({ open, onClose, projectSchema, projectName, progressUp
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   已分析 <strong>{result.tableCount}</strong> 张表，共 <strong>{result.totalRows}</strong> 条数据
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs ml-auto"
+                    onClick={handleCopy}
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span className="ml-1">{copied ? "已复制" : "复制"}</span>
+                  </Button>
                 </div>
                 <div className="prose prose-sm max-w-none text-sm text-gray-700 whitespace-pre-wrap leading-relaxed"
                   dangerouslySetInnerHTML={{ __html: renderMarkdown(result.analysis) }} />
