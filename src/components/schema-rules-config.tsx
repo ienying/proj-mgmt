@@ -40,6 +40,7 @@ interface SchemaRule {
   project_status: string | null;
   project_type_list?: string[] | null;
   project_status_list?: string[] | null;
+  deployment_mode_list?: string[] | null;
   module_codes: string[];
   table_definitions: string[];
   is_enabled: boolean;
@@ -87,6 +88,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
   const [tableDefinitions, setTableDefinitions] = useState<TableDefinition[]>([]);
   const [productModules, setProductModules] = useState<ProductModule[]>([]);
   const [projectStatuses, setLocalProjectStatuses] = useState<ProjectStatus[]>([]);
+  const [deploymentModes, setDeploymentModes] = useState<{code:string;name:string}[]>([]);
   const [moduleSearch, setModuleSearch] = useState("");
   const [tableSearch, setTableSearch] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -100,6 +102,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
     project_status: null,
     project_type_list: null,
     project_status_list: null,
+    deployment_mode_list: [] as string[],
     module_codes: [],
     table_definitions: [],
     is_enabled: true,
@@ -164,6 +167,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
     loadTableDefinitions();
     loadProductModules();
     loadProjectStatuses();
+    fetch("/api/dicts?type=deployment_modes").then(r=>r.json()).then(d=>{ if(d.data) setDeploymentModes(d.data); }).catch(()=>{});
   }, []);
 
   const openCreateDrawer = () => {
@@ -176,6 +180,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
       project_status: null,
       project_type_list: null,
       project_status_list: null,
+      deployment_mode_list: [],
       module_codes: [],
       table_definitions: [],
       is_enabled: true,
@@ -734,6 +739,47 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+                  <div className="space-y-1.5 mt-3">
+                    <Label className="text-[11px]">部署模式（可选，多选）</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="flex w-full items-center justify-between min-h-[2rem] rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm hover:bg-accent hover:text-accent-foreground">
+                          {(formData.deployment_mode_list || []).length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {(formData.deployment_mode_list || []).map((code) => (
+                                <Badge key={code} variant="secondary" className="text-[10px] h-4 px-1">
+                                  {deploymentModes.find(d => d.code === code)?.name || code}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">不限部署模式</span>
+                          )}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[220px] p-1" align="start">
+                        <div className="max-h-[180px] overflow-y-auto space-y-0.5">
+                          {deploymentModes.map((dm) => {
+                            const checked = (formData.deployment_mode_list || []).includes(dm.code);
+                            return (
+                              <label key={dm.code} className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs hover:bg-gray-100 ${checked ? 'bg-blue-50' : ''}`}>
+                                <Checkbox checked={checked} onCheckedChange={() => {
+                                  const list = formData.deployment_mode_list || [];
+                                  setFormData(prev => ({ ...prev, deployment_mode_list: list.includes(dm.code) ? list.filter(c => c !== dm.code) : [...list, dm.code] }));
+                                }} />
+                                {dm.name}
+                              </label>
+                            );
+                          })}
+                        </div>
+                        {(formData.deployment_mode_list || []).length > 0 && (
+                          <div className="border-t pt-1 mt-1">
+                            <button className="text-xs text-red-500 hover:underline w-full text-center" onClick={() => setFormData(prev => ({ ...prev, deployment_mode_list: [] }))}>清除全部</button>
+                          </div>
+                        )}
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
                     类型必选，状态可选。匹配后将在项目所有阶段中创建这些规范表，表在哪个阶段显示由规范管理中的「适用范围」决定。多条规则同时命中时全部合并（Set 去重）。

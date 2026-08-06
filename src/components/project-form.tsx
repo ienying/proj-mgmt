@@ -1418,6 +1418,10 @@ export function ProjectForm({
       toast.error("请选择项目进场时间");
       return;
     }
+    if (!deploymentMode) {
+      toast.error("请选择部署模式");
+      return;
+    }
     if (selectedModules.length === 0) {
       toast.error("请至少选择一个采购模块");
       return;
@@ -1803,7 +1807,7 @@ export function ProjectForm({
                   </Popover>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>部署模式</Label>
+                  <Label>部署模式 <span className="text-red-500">*</span></Label>
                   <Select value={deploymentMode} onValueChange={setDeploymentMode}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="请选择部署模式" />
@@ -2547,7 +2551,7 @@ export function ProjectForm({
                                     {activeProductModules.map((mod) => (
                                       <CommandItem
                                         key={mod.module_code}
-                                        value={mod.module_code}
+                                        value={`${mod.module_code} ${mod.module_name}`}
                                         onSelect={() => updateIntegration(item.id, "product_module", mod.module_name)}
                                         className="text-sm"
                                       >
@@ -2844,7 +2848,7 @@ export function ProjectForm({
                                       <CommandEmpty className="py-2 text-center text-sm">未找到</CommandEmpty>
                                       <CommandGroup>
                                         {activeProductModules.map((mod) => (
-                                          <CommandItem key={mod.module_code} value={mod.module_code} onSelect={() => updateCustomDev(cd.id, "product_module", mod.module_name)} className="text-sm">
+                                          <CommandItem key={mod.module_code} value={`${mod.module_code} ${mod.module_name}`} onSelect={() => updateCustomDev(cd.id, "product_module", mod.module_name)} className="text-sm">
                                             {mod.module_name}
                                           </CommandItem>
                                         ))}

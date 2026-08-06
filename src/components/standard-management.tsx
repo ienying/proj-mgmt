@@ -71,6 +71,7 @@ import {
   Link as LinkIcon,
   ArrowLeftRight,
   Lock,
+  LockOpen,
 } from "lucide-react";
 import { FileUploadField, renderFileCellDisplay } from "@/components/file-upload-field";
 import type { ReferenceConfig } from "@/storage/database/shared/schema";
@@ -3770,11 +3771,11 @@ export function StandardManagement({
                           if (idx >= 0) {
                             newCols[idx] = { ...newCols[idx], readonly: !col.readonly };
                             setCurrentTableDef(prev => prev ? { ...prev, columns_config: newCols } : prev);
-                            await fetch(`/api/standards/${currentTableDef.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: currentTableDef.id, columns_config: newCols }) });
+                            await onUpdate(currentTableDef.id, { columns_config: newCols });
                           }
                         }}>
                           <span>{col.name}</span>
-                          {col.readonly ? <Lock className="w-3 h-3 text-red-500" /> : <Lock className="w-3 h-3 text-gray-700 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                          {col.readonly ? <span className="text-[10px] text-red-500 font-medium">已锁定</span> : <span className="text-[10px] text-gray-400">未锁定</span>}
                         </div>
                       </TableHead>
                     ))}

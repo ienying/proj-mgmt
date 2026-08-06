@@ -311,7 +311,9 @@ export function StageLayout({
     ["--s-chart-amber" as string]: "#f59e0b",
     ["--s-chart-rose" as string]: "#e11d48",
     ["--s-chart-gray" as string]: "#94a3b8",
-    ["--s-font-mono" as string]: "\"SF Mono\",\"Fira Code\",\"Cascadia Code\",monospace",
+    ["--s-font-mono" as string]: "\"SF Mono\",\"Inter\",\"Fira Code\",\"Cascadia Code\",monospace",
+    ["--s-font-sans" as string]: "\"PingFang SC\",\"Noto Sans SC\",\"Microsoft YaHei\",sans-serif",
+    fontFamily: "var(--s-font-sans)",
     backgroundColor: "#f8f9fa",
     color: "#212529",
     minHeight: "100vh",
@@ -340,7 +342,9 @@ export function StageLayout({
     ["--s-chart-amber" as string]: "#fbbf24",
     ["--s-chart-rose" as string]: "#fb7185",
     ["--s-chart-gray" as string]: "#6b7280",
-    ["--s-font-mono" as string]: "\"SF Mono\",\"Fira Code\",\"Cascadia Code\",monospace",
+    ["--s-font-mono" as string]: "\"SF Mono\",\"Inter\",\"Fira Code\",\"Cascadia Code\",monospace",
+    ["--s-font-sans" as string]: "\"PingFang SC\",\"Noto Sans SC\",\"Microsoft YaHei\",sans-serif",
+    fontFamily: "var(--s-font-sans)",
     backgroundColor: "#1b1b1f",
     color: "#f0f0f3",
     minHeight: "100vh",
@@ -365,6 +369,10 @@ export function StageLayout({
       className={`stage-layout${isDark ? " dark" : ""}`}
       style={isDark ? darkVars : lightVars}
     >
+      {/* Web 字体：Windows 上加载 Inter + Noto Sans SC，Mac 保留系统字体 */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+      `}} />
       {/* ═══ 固定定位元素 ═══ */}
 
       {/* 左侧悬停导航条 */}

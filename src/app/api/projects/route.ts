@@ -152,6 +152,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 部署模式匹配辅助函数
+    const deploymentMatches = (rule: Record<string, unknown>) => {
+      const list = rule.deployment_mode_list as string[] | null;
+      if (!list || list.length === 0) return true; // 未配置则不限制
+      return list.includes(deployment_mode as string);
+    };
+
     // 0.5 检查是否有匹配的 Schema 规则
     const { data: rules } = await client.rpc("dp_select", { p_table: "project_schema_rules" });
     const enabledRules = ((rules as Record<string, unknown>[]) || []).filter(r => r.is_enabled === true);
@@ -159,12 +166,15 @@ export async function POST(request: NextRequest) {
       // 类型阶段规则
       if (rule.rule_type !== "module" && rule.project_type === project_type) {
         const ruleStatus = (rule as Record<string, unknown>).project_status as string | null;
-        if (!ruleStatus || ruleStatus === (project_status || null)) return true;
+        if (ruleStatus && ruleStatus !== (project_status || null)) return false;
+        if (!deploymentMatches(rule)) return false;
+        return true;
       }
       // 产品规则：采购模块有交集 + 类型匹配
       if (rule.rule_type === "module" && rule.project_type === project_type) {
         const ruleStatus = (rule as Record<string, unknown>).project_status as string | null;
         if (ruleStatus && ruleStatus !== (project_status || null)) return false;
+        if (!deploymentMatches(rule)) return false;
         const moduleCodes = (rule.module_codes as string[]) || [];
         const procModules = (procurement_modules as string[]) || [];
         if (moduleCodes.some(code => procModules.includes(code))) return true;
@@ -272,7 +282,8 @@ export async function POST(request: NextRequest) {
       project_type,
       projectSchema,
       procurement_modules as string[] || [],
-      project_status || null
+      project_status || null,
+      deployment_mode || null
     );
 
     // 6. 创建项目专属表
@@ -421,9 +432,15 @@ async function copyTableDefinitionsToSchema(
   projectType: string,
   projectSchema: string,
   procurementModules: string[] = [],
-  projectStatus: string | null = null
+  projectStatus: string | null = null,
+  deploymentMode?: string | null
 ): Promise<{ matched: boolean; tableCount: number }> {
   try {
+    const deploymentMatches = (rule: Record<string, unknown>) => {
+      const list = rule.deployment_mode_list as string[] | null;
+      if (!list || list.length === 0) return true;
+      return list.includes(deploymentMode || "");
+    };
     // 查询所有启用的规则
     const { data: rules, error } = await client.rpc("dp_select", {
       p_table: "project_schema_rules",
@@ -454,7 +471,8 @@ async function copyTableDefinitionsToSchema(
       // type 必匹配；status 为空时匹配所有，否则精确匹配
       if (ruleType === projectType) {
         const statusMatch = !ruleStatus || ruleStatus === projectStatus;
-        if (statusMatch && rule.table_definitions) {
+        const deployMatch = deploymentMatches(rule);
+        if (statusMatch && deployMatch && rule.table_definitions) {
           (rule.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
         }
       }
@@ -479,6 +497,9 @@ async function copyTableDefinitionsToSchema(
           if (statusList && statusList.length > 0 && projectStatus && !statusList.includes(projectStatus)) continue;
           // 兼容旧字段 project_status
           if ((!statusList || statusList.length === 0) && rule.project_status && rule.project_status !== projectStatus) continue;
+
+          // 部署模式匹配
+          if (!deploymentMatches(rule)) continue;
 
           if (rule.table_definitions) {
             (rule.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));

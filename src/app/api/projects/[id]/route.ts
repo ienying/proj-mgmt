@@ -168,8 +168,15 @@ async function syncProjectSchema(
   projectSchema: string,
   projectType: string,
   procurementModules: string[],
-  projectStatus?: string | null
+  projectStatus?: string | null,
+  deploymentMode?: string | null
 ): Promise<{ matched: boolean; tableCount: number }> {
+  const deploymentMatches = (rule: Record<string, unknown>) => {
+    const list = rule.deployment_mode_list as string[] | null;
+    if (!list || list.length === 0) return true;
+    return list.includes(deploymentMode || "");
+  };
+
   // 收集所有匹配的表定义
   const allTableDefinitions = new Set<string>();
 
@@ -193,7 +200,7 @@ async function syncProjectSchema(
 
     if (ruleType === projectType) {
       const statusMatch = !ruleStatus || ruleStatus === projectStatus;
-      if (statusMatch && rule.table_definitions) {
+      if (statusMatch && deploymentMatches(rule) && rule.table_definitions) {
         (rule.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
       }
     }
@@ -211,6 +218,8 @@ async function syncProjectSchema(
         if (rule.project_type !== projectType) continue;
         const ruleStatus = (rule as Record<string, unknown>).project_status as string | null;
         if (ruleStatus && ruleStatus !== projectStatus) continue;
+
+        if (!deploymentMatches(rule)) continue;
 
         if (rule.table_definitions) {
           (rule.table_definitions as string[]).forEach((t) => allTableDefinitions.add(t));
@@ -583,7 +592,7 @@ export async function PUT(request: NextRequest) {
     if (shouldSync) {
       if (projectSchema && (projectType || projectStage)) {
         try {
-          const syncResult = await syncProjectSchema(client, projectSchema, projectType, procurementModules, projectStatus);
+          const syncResult = await syncProjectSchema(client, projectSchema, projectType, procurementModules, projectStatus, updateData.deployment_mode as string | null);
           if (!syncResult.matched) {
             return NextResponse.json({
               data,
