@@ -14,6 +14,10 @@ export async function PUT(request: NextRequest) {
     // 根据 rule_type 清理不相关的字段
     if (updateData.rule_type === 'module') {
       updateData.project_type = null;
+      updateData.project_type_list = null;
+      updateData.project_status = null;
+      updateData.project_status_list = null;
+      updateData.deployment_mode_list = null;
     } else {
       updateData.module_codes = [];
     }

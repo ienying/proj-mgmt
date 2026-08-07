@@ -38,6 +38,9 @@ export async function POST(request: NextRequest) {
       project_type,
       project_stage,
       project_status,
+      project_type_list,
+      project_status_list,
+      deployment_mode_list,
       module_codes,
       table_definitions,
       is_enabled = true,
@@ -51,6 +54,9 @@ export async function POST(request: NextRequest) {
       project_type: rule_type === 'type_stage' ? (project_type || null) : null,
       project_stage: project_stage || null, // both rule types support stage filter
       project_status: project_status || null, // both rule types support status filter
+      project_type_list: project_type_list || null,
+      project_status_list: project_status_list || null,
+      deployment_mode_list: deployment_mode_list || null,
       module_codes: rule_type === 'module' ? (module_codes || []) : [],
       table_definitions: table_definitions || [],
       is_enabled,

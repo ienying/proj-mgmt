@@ -3,6 +3,7 @@
 interface TableDef {
   table_code: string;
   apply_project_stages: string[];
+  stage_display_mode?: string;
   stage_progress_column?: string;
   stage_progress_target?: string;
 }
@@ -19,12 +20,12 @@ interface ChartsSectionProps {
 }
 
 export function ChartsSection({ stages = [], tableDefs = [], tableRecords = {} }: ChartsSectionProps) {
-  // 计算每个阶段的总记录数
+  // 计算每个阶段的总记录数（同一张表可分属多个阶段，各阶段计数会重叠）
   const stageStats = stages.map((stage) => {
     let total = 0;
     let completed = 0;
     for (const def of tableDefs) {
-      if (!def.apply_project_stages?.includes(stage.code)) continue;
+      if (!def.apply_project_stages?.includes(stage.code) || def.stage_display_mode === 'menu') continue;
       const records = tableRecords[def.table_code] || [];
       total += records.length;
       if (def.stage_progress_column && def.stage_progress_target) {
@@ -36,14 +37,25 @@ export function ChartsSection({ stages = [], tableDefs = [], tableRecords = {} }
     return { label: stage.name, total, completed, pending: total - completed };
   });
 
-  // 环形图数据
-  const totalRecords = stageStats.reduce((s, st) => s + st.total, 0);
-  const totalCompleted = stageStats.reduce((s, st) => s + st.completed, 0);
-  const totalActive = stageStats.reduce((s, st) => s + (st.total - st.completed - st.pending), 0);
-  const totalPending = stageStats.reduce((s, st) => s + st.pending, 0);
+  // 环形图数据 — 按去重后的实际记录数计算（避免多阶段表重复计数）
+  // 只统计已分配到阶段且非"仅菜单"模式的表
+  const stageTableCodes = new Set(tableDefs.filter(d => d.apply_project_stages?.length > 0 && d.stage_display_mode !== 'menu').map(d => d.table_code));
+  const totalRecords = Object.entries(tableRecords)
+    .filter(([code]) => stageTableCodes.has(code))
+    .reduce((s, [, recs]) => s + recs.length, 0);
+  let totalCompleted = 0;
+  for (const def of tableDefs) {
+    if (!def.apply_project_stages?.length || def.stage_display_mode === 'menu') continue;
+    const records = tableRecords[def.table_code] || [];
+    if (def.stage_progress_column && def.stage_progress_target) {
+      const col = def.stage_progress_column;
+      const target = def.stage_progress_target.trim();
+      totalCompleted += records.filter((r) => String(r[col] || "").trim() === target).length;
+    }
+  }
+  const totalPending = totalRecords - totalCompleted;
   const donutData = [
     { label: "已完成", count: totalCompleted, color: "var(--s-green)", percentage: totalRecords > 0 ? Math.round((totalCompleted / totalRecords) * 100) : 0 },
-    { label: "进行中", count: totalActive, color: "var(--s-orange)", percentage: totalRecords > 0 ? Math.round((totalActive / totalRecords) * 100) : 0 },
     { label: "待开始", count: totalPending, color: "var(--s-text-muted)", percentage: totalRecords > 0 ? Math.round((totalPending / totalRecords) * 100) : 0 },
   ];
 
