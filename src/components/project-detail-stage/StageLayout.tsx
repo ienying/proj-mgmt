@@ -605,7 +605,7 @@ export function StageLayout({
 
             {/* ═══ 进展同步 (NEW) ═══ */}
             <div className="px-16 py-6" style={{ borderBottom: "1px solid var(--s-border)" }}>
-              <div className="text-[9px] uppercase tracking-[2px] mb-4 flex items-center gap-2" style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+              <div className="uppercase tracking-[2px] mb-4 flex items-center gap-2" style={{ fontSize: "18px", color: isDark ? "#ffffff" : "#000000", fontFamily: "var(--font-mono, monospace)" }}>
                 📝 进展同步
                 <span className="flex-1 h-px" style={{ backgroundColor: "var(--s-border)" }} />
               </div>
@@ -677,7 +677,7 @@ export function StageLayout({
             </div>
 
             {/* 阶段步骤条（内含 Phases 项目阶段 标签） */}
-            <PhaseStepper activePhase={activePhase} onPhaseChange={setActivePhase} stages={projectStages} phaseDates={phaseDates} />
+            <PhaseStepper activePhase={activePhase} onPhaseChange={setActivePhase} stages={projectStages} phaseDates={phaseDates} isDark={isDark} />
 
             {/* Phase Details 阶段详情 — 分隔标题 */}
             <div
@@ -685,8 +685,8 @@ export function StageLayout({
               style={{ borderBottom: "1px solid var(--s-border)" }}
             >
               <span
-                className="text-[11px] uppercase tracking-[2px]"
-                style={{ color: "var(--s-text-secondary)", fontFamily: "var(--font-mono, monospace)" }}
+                className="uppercase tracking-[2px]"
+                style={{ fontSize: "14px", color: isDark ? "#ffffff" : "#000000", fontFamily: "var(--font-mono, monospace)" }}
               >
                 Phase Details 阶段详情
               </span>
@@ -711,6 +711,7 @@ export function StageLayout({
               }}
               userName={userName}
               onDataChange={fetchOperations}
+              isDark={isDark}
             />
 
             {/* 项目总览 分隔标题 */}
@@ -719,8 +720,8 @@ export function StageLayout({
               style={{ borderBottom: "1px solid var(--s-border)" }}
             >
               <span
-                className="text-[11px] uppercase tracking-[2px]"
-                style={{ color: "var(--s-text-secondary)", fontFamily: "var(--font-mono, monospace)" }}
+                className="uppercase tracking-[2px]"
+                style={{ fontSize: "14px", color: isDark ? "#ffffff" : "#000000", fontFamily: "var(--font-mono, monospace)" }}
               >
                 项目总览
               </span>
@@ -728,10 +729,10 @@ export function StageLayout({
             </div>
 
             {/* 总览网格 */}
-            <OverviewGrid stages={projectStages} tableDefs={existingTableDefs} tableRecords={allTableRecords} />
+            <OverviewGrid stages={projectStages} tableDefs={existingTableDefs} tableRecords={allTableRecords} isDark={isDark} />
 
             {/* 图表区域 */}
-            <ChartsSection stages={projectStages} tableDefs={existingTableDefs} tableRecords={allTableRecords} />
+            <ChartsSection stages={projectStages} tableDefs={existingTableDefs} tableRecords={allTableRecords} isDark={isDark} />
 
             {/* ═══ 操作记录 (NEW) — 页面最底部 ═══ */}
             <div className="px-16 py-6">

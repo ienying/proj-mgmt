@@ -17,9 +17,10 @@ interface ChartsSectionProps {
   stages?: StageInfo[];
   tableDefs?: TableDef[];
   tableRecords?: Record<string, Array<Record<string, unknown>>>;
+  isDark?: boolean;
 }
 
-export function ChartsSection({ stages = [], tableDefs = [], tableRecords = {} }: ChartsSectionProps) {
+export function ChartsSection({ stages = [], tableDefs = [], tableRecords = {}, isDark = false }: ChartsSectionProps) {
   // 计算每个阶段的总记录数（同一张表可分属多个阶段，各阶段计数会重叠）
   const stageStats = stages.map((stage) => {
     let total = 0;
@@ -71,8 +72,8 @@ export function ChartsSection({ stages = [], tableDefs = [], tableRecords = {} }
       <div className="grid grid-cols-2 gap-px" style={{ backgroundColor: "var(--s-border)" }}>
         {/* 环形图 */}
         <div className="bg-[var(--s-bg)] p-8 flex flex-col items-center">
-          <div className="text-[10px] uppercase tracking-[2px] mb-6 self-start"
-            style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+          <div className="uppercase tracking-[2px] mb-6 self-start"
+            style={{ fontSize: "14px", color: isDark ? "#ffffff" : "#000000", fontFamily: "var(--font-mono, monospace)" }}>
             任务状态分布
           </div>
           {totalRecords > 0 ? (
@@ -114,8 +115,8 @@ export function ChartsSection({ stages = [], tableDefs = [], tableRecords = {} }
 
         {/* 条形图 */}
         <div className="bg-[var(--s-bg)] p-8">
-          <div className="text-[10px] uppercase tracking-[2px] mb-8"
-            style={{ color: "var(--s-text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+          <div className="uppercase tracking-[2px] mb-8"
+            style={{ fontSize: "14px", color: isDark ? "#ffffff" : "#000000", fontFamily: "var(--font-mono, monospace)" }}>
             各阶段任务量
           </div>
           {stageStats.some((s) => s.total > 0) ? (

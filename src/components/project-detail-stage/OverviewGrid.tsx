@@ -18,9 +18,10 @@ interface OverviewGridProps {
   stages?: StageInfo[];
   tableDefs?: TableDef[];
   tableRecords?: Record<string, Array<Record<string, unknown>>>;
+  isDark?: boolean;
 }
 
-export function OverviewGrid({ stages = [], tableDefs = [], tableRecords = {} }: OverviewGridProps) {
+export function OverviewGrid({ stages = [], tableDefs = [], tableRecords = {}, isDark = false }: OverviewGridProps) {
   if (stages.length === 0) return null;
 
   return (
@@ -51,7 +52,8 @@ export function OverviewGrid({ stages = [], tableDefs = [], tableRecords = {} }:
 
           return (
             <div key={stage.code} className="bg-[var(--s-bg)] p-5 flex flex-col gap-3">
-              <div className="text-[11px] font-semibold text-center text-[var(--s-text-secondary)] leading-tight">
+              <div className="font-semibold text-center leading-tight"
+                style={{ fontSize: "18px", color: isDark ? "#ffffff" : "#000000" }}>
                 {stage.name}
               </div>
               <div className="flex flex-col items-center gap-1">

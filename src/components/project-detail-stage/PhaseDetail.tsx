@@ -79,9 +79,10 @@ interface PhaseDetailProps {
   onDataChange?: () => void;
   userName?: string;
   canEdit?: boolean;
+  isDark?: boolean;
 }
 
-export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema, projectStages = [], currentStageCode, onRecordsUpdate, onDataChange, userName, canEdit = false }: PhaseDetailProps) {
+export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema, projectStages = [], currentStageCode, onRecordsUpdate, onDataChange, userName, canEdit = false, isDark = false }: PhaseDetailProps) {
   const { token } = useAuth();
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [tableRecords, setTableRecords] = useState<Record<string, Array<Record<string, unknown>>>>({});
@@ -741,7 +742,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
           </div>
           <h3 className="text-[32px] font-bold tracking-[-0.5px] leading-[1.2] text-[var(--s-text)]">{phaseName}</h3>
           {phaseDescription && (
-            <p className="text-[15px] text-[var(--s-text-secondary)] leading-[1.75] max-w-[580px]">{phaseDescription}</p>
+            <p className="text-[15px] leading-[1.75] max-w-[580px]" style={{ color: isDark ? "#ffffff" : "#000000" }}>{phaseDescription}</p>
           )}
           {/* 动态日期（从表数据计算） */}
           {(() => {
@@ -826,7 +827,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
                     expandedTable === def.table_code ? "border-l-[var(--s-blue)] bg-[rgba(28,126,214,.04)] text-[var(--s-blue)]" : "border-l-transparent"
                   } hover:bg-[rgba(28,126,214,.06)] hover:border-l-[var(--s-blue)]`}
                 >
-                  <div className="flex items-center gap-2.5 text-[13px] text-[var(--s-text-secondary)]">
+                  <div className="flex items-center gap-2.5 text-[13px]" style={{ color: isDark ? "#ffffff" : "#000000" }}>
                     <span className="w-1.5 h-1.5 flex-shrink-0 bg-[var(--s-green)]" />
                     {def.table_name}
                     {def.allow_add === false && (

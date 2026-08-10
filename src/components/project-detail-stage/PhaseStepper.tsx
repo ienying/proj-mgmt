@@ -7,9 +7,10 @@ interface PhaseStepperProps {
   stages?: { code: string; name: string; sort_order?: number }[];
   /** 每个阶段的日期范围 { planStart, planEnd } */
   phaseDates?: Record<number, { planStart?: string; planEnd?: string; actualStart?: string; actualEnd?: string }>;
+  isDark?: boolean;
 }
 
-export function PhaseStepper({ activePhase, onPhaseChange, stages = [], phaseDates }: PhaseStepperProps) {
+export function PhaseStepper({ activePhase, onPhaseChange, stages = [], phaseDates, isDark = false }: PhaseStepperProps) {
   const sortedStages = stages.length > 0
     ? [...stages].sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99))
     : [];
@@ -40,8 +41,8 @@ export function PhaseStepper({ activePhase, onPhaseChange, stages = [], phaseDat
   return (
     <div className="px-12 py-7 relative" style={{ borderBottom: "1px solid var(--s-border)" }}>
       <div className="flex items-center gap-4 mb-2 px-4">
-        <span className="text-[11px] uppercase tracking-[2px]"
-          style={{ color: "var(--s-text-secondary)", fontFamily: "var(--font-mono, monospace)" }}>
+        <span className="uppercase tracking-[2px]"
+          style={{ fontSize: "14px", color: isDark ? "#ffffff" : "#000000", fontFamily: "var(--font-mono, monospace)" }}>
           Phases 项目阶段
         </span>
         <div className="flex-1 h-px" style={{ backgroundColor: "var(--s-border)" }} />
@@ -70,9 +71,8 @@ export function PhaseStepper({ activePhase, onPhaseChange, stages = [], phaseDat
               </div>
 
               {/* 标签 */}
-              <div className={`text-xs font-semibold text-center leading-[1.3] transition-colors ${
-                isDone ? "text-[var(--s-text-secondary)]" : isActive ? "text-[var(--s-orange)]" : "text-[var(--s-text-muted)]"
-              }`}>
+              <div className="font-semibold text-center leading-[1.3] transition-colors"
+                style={{ fontSize: "18px", color: isDark ? "#ffffff" : "#000000" }}>
                 {phase.label}
               </div>
 
