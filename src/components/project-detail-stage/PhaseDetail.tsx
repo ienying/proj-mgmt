@@ -813,7 +813,7 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
         {/* 右列：表任务列表（紧凑模式） */}
         <div className="px-16 py-12 flex flex-col gap-5">
           <div className="mb-1"
-            style={{ color: "var(--s-orange)", fontFamily: "var(--font-mono, monospace)", fontSize: "11px", fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase" }}>
+            style={{ color: "var(--s-orange)", fontFamily: "var(--font-mono, monospace)", fontSize: "22px", fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase" }}>
             {phaseTables.length > 0 ? "任务清单 TASKS" : "阶段任务"}
           </div>
 
