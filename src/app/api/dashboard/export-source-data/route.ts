@@ -15,6 +15,7 @@ interface KpiCondition {
 interface KpiSource {
   table_code: string;
   conditions: KpiCondition[];
+  relation?: "AND" | "OR";  // how conditions within this source combine
 }
 
 function buildWhereClause(source: KpiSource): string {
@@ -34,7 +35,9 @@ function buildWhereClause(source: KpiSource): string {
       case "not_in": conditions.push(`${col} NOT IN (${vals.join(", ")})`); break;
     }
   }
-  return conditions.length > 0 ? " WHERE " + conditions.join(" AND ") : "";
+  if (conditions.length === 0) return "";
+  const joinOp = source.relation === "OR" ? " OR " : " AND ";
+  return " WHERE " + conditions.join(joinOp);
 }
 
 export async function POST(request: NextRequest) {
@@ -136,8 +139,9 @@ export async function POST(request: NextRequest) {
               };
             });
           }
-        } catch {
-          // table may not exist in this schema
+        } catch (err) {
+          // table may not exist in this schema, or SQL error
+          console.warn(`[export-source-data] query failed for project=${String(project.project_name)} schema=${schema} table=${source.table_code}:`, String(err));
         }
       }
 
@@ -151,7 +155,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (!hasData) {
-      return NextResponse.json({ error: "没有匹配的数据" }, { status: 404 });
+      const tableList = sources.map((s) => s.table_code).join(", ");
+      return NextResponse.json(
+        { error: `没有匹配的数据（在 ${projects.length} 个项目中未找到表 [${tableList}] 的匹配记录）` },
+        { status: 404 }
+      );
     }
 
     const buffer = await workbook.xlsx.writeBuffer();

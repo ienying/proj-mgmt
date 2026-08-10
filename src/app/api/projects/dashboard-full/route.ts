@@ -54,6 +54,33 @@ function buildSourceSQL(schema: string, source: KpiSource): string {
   return sql;
 }
 
+// Build a SELECT * query for detail data (vs SELECT COUNT(*) for KPIs)
+function buildDetailSQL(schema: string, source: KpiSource, limit = 20): string {
+  let sql = `SELECT * FROM ${schema}."${source.table_code.replace(/"/g, '""')}"`;
+  const conditions: string[] = [];
+  for (const c of source.conditions || []) {
+    if (!c.column || !c.operator) continue;
+    const col = `"${c.column.replace(/"/g, '""')}"`;
+    const vals = (c.values || []).map((v) => `'${String(v).replace(/'/g, "''")}'`);
+    if (vals.length === 0) continue;
+    switch (c.operator) {
+      case "eq": conditions.push(`${col} = ${vals[0]}`); break;
+      case "gt": conditions.push(`${col} > ${vals[0]}`); break;
+      case "lt": conditions.push(`${col} < ${vals[0]}`); break;
+      case "gte": conditions.push(`${col} >= ${vals[0]}`); break;
+      case "lte": conditions.push(`${col} <= ${vals[0]}`); break;
+      case "in": conditions.push(`${col} IN (${vals.join(", ")})`); break;
+      case "not_in": conditions.push(`${col} NOT IN (${vals.join(", ")})`); break;
+    }
+  }
+  if (conditions.length > 0) {
+    const joinOp = source.relation === "OR" ? " OR " : " AND ";
+    sql += " WHERE " + conditions.join(joinOp);
+  }
+  sql += ` LIMIT ${limit}`;
+  return sql;
+}
+
 function evaluateExpression(expr: string, values: number[]): number {
   let replaced = expr;
   for (let i = 0; i < values.length; i++) {
@@ -731,6 +758,87 @@ export async function GET(request: NextRequest) {
     const displayStakeholders = stakeholdersVal.configured ? stakeholdersVal.value : (totalStakeholders || totalMembers || projects.length * 5);
     const displayProcurement = procurementVal.configured ? procurementVal.value : (totalProcurement || projects.length * 3);
 
+    // ---- Build requirement detail list from configured data source ----
+    const reqDetailConfig = kpiConfigMap.get("requirement_detail");
+    const detailColumns: Array<{ name: string; label: string }> = [];
+    const detailList: Array<Record<string, unknown>> = [];
+
+    if (reqDetailConfig && reqDetailConfig.sources.length > 0) {
+      // Load column definitions from data_table_definitions for the primary table
+      const primaryTable = reqDetailConfig.sources[0].table_code;
+      try {
+        const { data: colDefData } = await client.rpc("execute_sql", {
+          p_sql: `SELECT columns_config FROM data_table_definitions WHERE table_code = '${primaryTable.replace(/'/g, "''")}'`,
+        });
+        const colRows = colDefData as Array<{ columns_config: unknown }> | null;
+        if (colRows && colRows.length > 0) {
+          const cols = colRows[0].columns_config as Array<{ name: string; label?: string }> | null;
+          if (cols) {
+            for (const c of cols) {
+              detailColumns.push({ name: c.name, label: c.label || c.name });
+            }
+          }
+        }
+      } catch { /* ignore */ }
+
+      // Query real data from project schemas
+      for (const project of projects) {
+        const schema = safeSchema(String(project.project_schema));
+        if (!project.project_schema) continue;
+        const projectName = String(project.project_name || "");
+        const ci = project.customer_info as Record<string, unknown> | undefined;
+        const customerName = String(ci?.company_name || "");
+
+        for (const source of reqDetailConfig.sources) {
+          try {
+            const sql = buildDetailSQL(schema, source);
+            const { data } = await client.rpc("execute_sql", { p_sql: sql });
+            const rows = data as Array<Record<string, unknown>> | null;
+            if (rows) {
+              for (const row of rows) {
+                detailList.push({
+                  customer_name: customerName,
+                  project_name: projectName,
+                  ...row,
+                });
+              }
+            }
+          } catch {
+            // table may not exist in this schema
+          }
+        }
+
+        if (detailList.length >= 200) break; // limit total rows
+      }
+    }
+
+    // Fallback: if no config or no data, use hardcoded columns and placeholder data
+    const finalDetailColumns: Array<{ name: string; label: string }> = detailColumns.length > 0
+      ? detailColumns
+      : [
+          { name: "id", label: "ID" },
+          { name: "title", label: "标题" },
+          { name: "type", label: "类型" },
+          { name: "priority", label: "优先级" },
+          { name: "status", label: "状态" },
+          { name: "source", label: "来源" },
+          { name: "date", label: "日期" },
+        ];
+
+    const finalDetailList: Array<Record<string, unknown>> = detailList.length > 0
+      ? detailList
+      : Array.from({ length: Math.min(reqTotal, 10) }, (_, i) => ({
+          customer_name: "",
+          project_name: "",
+          id: `REQ-${String(i + 1).padStart(3, "0")}`,
+          title: ["数据看板优化需求", "用户权限管理升级", "移动端适配改造", "报表导出功能", "消息推送集成", "第三方登录对接", "性能监控告警", "日志审计系统"][i] || `需求项 ${i + 1}`,
+          type: ["功能需求", "性能优化", "UI/UX", "数据对接", "安全加固"][i % 5],
+          priority: i < 2 ? "高" : i < 5 ? "中" : "低",
+          status: ["已完成", "开发中", "待确认", "已完成", "开发中", "待确认", "已完成", "已拒绝"][i % 8],
+          source: ["客户反馈", "内部评审", "用户调研", "项目管理"][i % 4],
+          date: new Date(now.getTime() - (9 - i) * 86400000 * 3).toISOString().slice(0, 10),
+        }));
+
     return NextResponse.json({
       data: {
         kpi: {
@@ -801,15 +909,8 @@ export async function GET(request: NextRequest) {
             { category: "安全加固", count: Math.max(1, Math.round(reqTotal * 0.1)) },
             { category: "运维支撑", count: Math.max(1, Math.round(reqTotal * 0.05)) },
           ],
-          detail_list: Array.from({ length: Math.min(reqTotal, 10) }, (_, i) => ({
-            id: `REQ-${String(i + 1).padStart(3, "0")}`,
-            title: ["数据看板优化需求", "用户权限管理升级", "移动端适配改造", "报表导出功能", "消息推送集成", "第三方登录对接", "性能监控告警", "日志审计系统"][i] || `需求项 ${i + 1}`,
-            type: ["功能需求", "性能优化", "UI/UX", "数据对接", "安全加固"][i % 5],
-            priority: i < 2 ? "高" : i < 5 ? "中" : "低",
-            status: ["已完成", "开发中", "待确认", "已完成", "开发中", "待确认", "已完成", "已拒绝"][i % 8],
-            source: ["客户反馈", "内部评审", "用户调研", "项目管理"][i % 4],
-            date: new Date(now.getTime() - (9 - i) * 86400000 * 3).toISOString().slice(0, 10),
-          })),
+          detail_list: finalDetailList,
+          detail_columns: finalDetailColumns,
         },
         departments,
         warnings: dedupedWarnings,

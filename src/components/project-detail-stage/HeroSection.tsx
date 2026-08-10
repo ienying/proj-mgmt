@@ -194,13 +194,12 @@ export function HeroSection({ project, projectTypes, projectStages, customerType
   }
   const today = new Date(); today.setHours(0, 0, 0, 0);
   let remainingDays = "—";
-  let remainingLabel = "剩余天数";
+  let remainingLabel = "表内计划剩余";
   if (planStart && planEnd) {
     const endDate = new Date(planEnd.split(/[T ]/)[0]);
     const diff = Math.ceil((endDate.getTime() - today.getTime()) / 86400000);
     if (diff < 0) {
       remainingDays = `${Math.abs(diff)}天`;
-      remainingLabel = "已超时";
     } else {
       remainingDays = `${diff}天`;
     }

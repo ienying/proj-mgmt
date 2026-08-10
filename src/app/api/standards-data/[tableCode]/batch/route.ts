@@ -19,7 +19,7 @@ export async function PUT(
     }
 
     const supabase = await createServerClient();
-    const tableName = `std_definition_${tableCode}`;
+    const tableName = `design_public.std_definition_${tableCode}`;
 
     // 清理数据：空字符串转 null
     const cleanData: Record<string, unknown> = { ...data };
@@ -71,7 +71,7 @@ export async function DELETE(
     }
 
     const supabase = await createServerClient();
-    const tableName = `std_definition_${tableCode}`;
+    const tableName = `design_public.std_definition_${tableCode}`;
 
     // 逐条删除（使用 dp_delete_varchar 支持 varchar 类型的 id）
     let deleted = 0;

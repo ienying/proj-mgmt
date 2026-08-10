@@ -101,13 +101,9 @@ interface ReqStats {
 }
 
 interface ReqDetail {
-  id: string;
-  title: string;
-  type: string;
-  priority: string;
-  status: string;
-  source: string;
-  date: string;
+  customer_name: string;
+  project_name: string;
+  [key: string]: unknown;
 }
 
 interface DashboardWarning {
@@ -153,6 +149,7 @@ interface DashboardFullData {
     status_distribution: Array<{ status: string; count: number }>;
     category_distribution: Array<{ category: string; count: number }>;
     detail_list: ReqDetail[];
+    detail_columns: Array<{ name: string; label: string }>;
   };
   departments: string[];
   warnings: DashboardWarning[];
@@ -599,17 +596,38 @@ export function ProjectDashboard({
       groups = [{ id: 0, conditions: [{ column: state.colA, operator: "eq" as const, values: [state.valA] }], relation: "AND" as const }];
     }
 
-    const sources = groups
-      .filter((g: ConditionGroup) => g.conditions.length > 0 && g.conditions.some((c: Condition) => c.column && (c.values.length > 0 || c.operator === "in" || c.operator === "not_in")))
-      .map((g: ConditionGroup) => ({
+    // Build sources from condition groups. If no groups with valid conditions,
+    // create a single source with no conditions (returns all rows from the table).
+    let sources: Array<{
+      table_code: string;
+      module_type: string;
+      table_name: string;
+      conditions: Array<{ column: string; operator: string; values: string[] }>;
+      relation: "AND" | "OR";
+    }>;
+
+    if (groups.length > 0) {
+      sources = groups
+        .filter((g: ConditionGroup) => g.conditions.length > 0 && g.conditions.some((c: Condition) => c.column && (c.values.length > 0 || c.operator === "in" || c.operator === "not_in")))
+        .map((g: ConditionGroup) => ({
+          table_code: state.table,
+          module_type: state.module,
+          table_name: def?.table_name || state.table,
+          conditions: g.conditions
+            .filter((c: Condition) => c.column)
+            .map((c: Condition) => ({ column: c.column, operator: c.operator, values: c.values })),
+          relation: g.relation,
+        }));
+    } else {
+      // No groups — create a source with empty conditions to fetch all rows
+      sources = [{
         table_code: state.table,
         module_type: state.module,
         table_name: def?.table_name || state.table,
-        conditions: g.conditions
-          .filter((c: Condition) => c.column)
-          .map((c: Condition) => ({ column: c.column, operator: c.operator, values: c.values })),
-        relation: g.relation,
-      }));
+        conditions: [],
+        relation: "AND" as const,
+      }];
+    }
 
     if (sources.length === 0) return;
 
@@ -971,16 +989,18 @@ export function ProjectDashboard({
   /* Req detail search */
   const [reqSearch, setReqSearch] = useState("");
   const reqDetails = data?.requirements.detail_list || [];
+  const reqColumns = data?.requirements.detail_columns || [];
   const filteredReqs = useMemo(() => {
     if (!reqSearch.trim()) return reqDetails;
     const q = reqSearch.toLowerCase();
     return reqDetails.filter(
       (r) =>
-        r.title.toLowerCase().includes(q) ||
-        r.id.toLowerCase().includes(q) ||
-        r.type.toLowerCase().includes(q)
+        String(r.customer_name || "").toLowerCase().includes(q) ||
+        reqColumns.some((col) =>
+          String(r[col.name] || "").toLowerCase().includes(q)
+        )
     );
-  }, [reqDetails, reqSearch]);
+  }, [reqDetails, reqSearch, reqColumns]);
 
   /* ---- KPI config helpers (shared) ---- */
   const kpiModuleOptions = useMemo(() => {
@@ -1869,54 +1889,42 @@ export function ProjectDashboard({
           <table className="db-table">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>标题</th>
-                <th>类型</th>
-                <th>优先级</th>
-                <th>状态</th>
-                <th>来源</th>
-                <th>日期</th>
+                <th>最终客户名称</th>
+                {reqColumns.map((col) => (
+                  <th key={col.name}>{col.label}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {filteredReqs.map((r) => (
-                <tr key={r.id}>
-                  <td className="mono">{r.id}</td>
-                  <td>{r.title}</td>
-                  <td>{r.type}</td>
-                  <td>
-                    <span
-                      className={cn(
-                        "db-tag",
-                        r.priority === "高" ? "high" : r.priority === "中" ? "medium" : "low"
-                      )}
-                    >
-                      {r.priority}
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      className={cn(
-                        "db-status",
-                        r.status === "已完成"
-                          ? "done"
-                          : r.status === "开发中"
-                            ? "dev"
-                            : r.status === "待确认"
-                              ? "pending"
-                              : "rejected"
-                      )}
-                    >
-                      {r.status}
-                    </span>
-                  </td>
-                  <td>{r.source}</td>
-                  <td>{r.date}</td>
+              {filteredReqs.map((r, ri) => (
+                <tr key={ri}>
+                  <td>{String(r.customer_name || "")}</td>
+                  {reqColumns.map((col) => {
+                    const val = r[col.name];
+                    const str = val != null ? String(val) : "";
+                    // priority-style badge
+                    if (col.name === "优先级" || col.label === "优先级") {
+                      return (
+                        <td key={col.name}>
+                          <span className={cn("db-tag", str === "高" ? "high" : str === "中" ? "medium" : "low")}>{str}</span>
+                        </td>
+                      );
+                    }
+                    // status-style badge
+                    if (col.name === "状态" || col.label === "状态") {
+                      return (
+                        <td key={col.name}>
+                          <span className={cn("db-status", str === "已完成" ? "done" : str === "开发中" ? "dev" : str === "待确认" ? "pending" : "rejected")}>{str}</span>
+                        </td>
+                      );
+                    }
+                    return <td key={col.name}>{str}</td>;
+                  })}
                 </tr>
               ))}
               {filteredReqs.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", color: "var(--text3)", padding: 24 }}>
+                  <td colSpan={1 + reqColumns.length} style={{ textAlign: "center", color: "var(--text3)", padding: 24 }}>
                     无匹配需求记录
                   </td>
                 </tr>
