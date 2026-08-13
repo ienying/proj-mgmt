@@ -13,12 +13,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Download, Trash2, Share2, Eye, MessageCircle, Tag, Package,
   Paperclip, Send, X, User, ChevronUp, ChevronsUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { copyToClipboard } from "@/lib/utils";
+import { exportExcel } from "@/lib/export-excel";
 
 interface VideoItem {
   id: string;
@@ -107,6 +109,17 @@ export default function VideoDetailDrawer({
   const [editModuleOpen, setEditModuleOpen] = useState(false);
   const [readHistory, setReadHistory] = useState<Array<{ user_name?: string; read_at: string }>>([]);
   const [readHistoryOpen, setReadHistoryOpen] = useState(false);
+
+  const handleExportReadHistory = () => {
+    if (readHistory.length === 0) return;
+    const rows = readHistory
+      .sort((a, b) => new Date(b.read_at).getTime() - new Date(a.read_at).getTime())
+      .map((r) => [r.user_name || "匿名", new Date(r.read_at).toLocaleString("zh-CN")]);
+    exportExcel(
+      { "浏览记录": { headers: ["用户", "浏览时间"], rows } },
+      `${video?.title || "视频"}_浏览记录`,
+    );
+  };
   const [editTags, setEditTags] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [modules, setModules] = useState<string[]>([]);
@@ -300,6 +313,7 @@ export default function VideoDetailDrawer({
   if (!video) return null;
 
   return (
+    <>
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-xl p-0">
         <SheetHeader className="p-4 pb-2 border-b shrink-0">
@@ -451,26 +465,12 @@ export default function VideoDetailDrawer({
                       <span className="flex items-center gap-1">
                         <Eye className="w-4 h-4" /> {fullVideo.view_count || 0} 次观看
                       </span>
-                      {readHistory.length > 0 && (
-                        <Popover open={readHistoryOpen} onOpenChange={setReadHistoryOpen}>
-                          <PopoverTrigger asChild>
-                            <button className="flex items-center gap-1 text-xs text-indigo-500 hover:text-indigo-700 cursor-pointer">
-                              <User className="w-3.5 h-3.5" /> 浏览记录
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-56 p-2" align="start">
-                            <div className="text-xs font-medium text-gray-500 mb-2">最近浏览</div>
-                            <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                              {readHistory.map((r, i) => (
-                                <div key={i} className="flex items-center justify-between text-xs">
-                                  <span className="text-gray-700">{r.user_name || "匿名"}</span>
-                                  <span className="text-gray-400">{new Date(r.read_at).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      )}
+                      <button
+                        className="flex items-center gap-1 text-xs text-indigo-500 hover:text-indigo-700 cursor-pointer"
+                        onClick={() => setReadHistoryOpen(true)}
+                      >
+                        <User className="w-3.5 h-3.5" /> 浏览记录
+                      </button>
                       <span className="flex items-center gap-1">
                         <Download className="w-4 h-4" /> {fullVideo.download_count || 0} 次下载
                       </span>
@@ -714,5 +714,54 @@ export default function VideoDetailDrawer({
         )}
       </SheetContent>
     </Sheet>
+
+    {/* Read History Dialog */}
+    <Dialog open={readHistoryOpen} onOpenChange={setReadHistoryOpen}>
+      <DialogContent className="sm:max-w-md max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Eye className="w-5 h-5 text-indigo-500" />
+            浏览记录
+          </DialogTitle>
+          {readHistory.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+              onClick={handleExportReadHistory}
+            >
+              <Download className="w-4 h-4 mr-1" />导出
+            </Button>
+          )}
+        </DialogHeader>
+        <ScrollArea className="flex-1 min-h-0">
+          {readHistory.length > 0 ? (
+            <div className="space-y-2 pr-3">
+              {readHistory
+                .sort((a, b) => new Date(b.read_at).getTime() - new Date(a.read_at).getTime())
+                .map((r, i) => (
+                  <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xs font-medium">
+                        {(r.user_name || "匿")[0]}
+                      </div>
+                      <span className="text-sm text-gray-700">{r.user_name || "匿名用户"}</span>
+                    </div>
+                    <span className="text-xs text-gray-400">
+                      {new Date(r.read_at).toLocaleString("zh-CN", {
+                        month: "2-digit", day: "2-digit",
+                        hour: "2-digit", minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-400 text-sm">暂无浏览记录</div>
+          )}
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

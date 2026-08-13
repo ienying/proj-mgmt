@@ -17,6 +17,7 @@ import { Markdown } from "@/components/markdown";
 import { toast } from "sonner";
 import { parseTags } from "./tag-utils";
 import { copyToClipboard } from "@/lib/utils";
+import { exportExcel } from "@/lib/export-excel";
 
 interface Attachment {
   id: string;
@@ -146,6 +147,17 @@ export default function PostDrawer({
   const [tocOpen, setTocOpen] = useState(false);
   const [readHistoryOpen, setReadHistoryOpen] = useState(false);
   const [downloadHistory, setDownloadHistory] = useState<{ attachmentName: string; records: Array<{ user_name?: string; downloaded_at: string }> } | null>(null);
+
+  const handleExportReadHistory = () => {
+    if (!detail?.reads || detail.reads.length === 0) return;
+    const rows = detail.reads
+      .sort((a, b) => new Date(b.read_at).getTime() - new Date(a.read_at).getTime())
+      .map((r) => [r.user_name || "匿名用户", new Date(r.read_at).toLocaleString("zh-CN")]);
+    exportExcel(
+      { "浏览记录": { headers: ["用户", "浏览时间"], rows } },
+      `${post?.title || "帖子"}_浏览记录`,
+    );
+  };
 
   const loadDetail = useCallback(async () => {
     if (!post) return;
@@ -650,7 +662,7 @@ export default function PostDrawer({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="ml-auto rounded-full hover:bg-indigo-50 hover:text-indigo-600"
+                      className="ml-auto rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
                       onClick={() => onEdit(post)}
                     >
                       编辑
@@ -731,14 +743,24 @@ export default function PostDrawer({
       </div>
       {/* Read History Dialog */}
       <Dialog open={readHistoryOpen} onOpenChange={setReadHistoryOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Eye className="w-5 h-5 text-indigo-500" />
               浏览记录
             </DialogTitle>
+            {detail?.reads && detail.reads.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                onClick={handleExportReadHistory}
+              >
+                <Download className="w-4 h-4 mr-1" />导出
+              </Button>
+            )}
           </DialogHeader>
-          <ScrollArea className="max-h-[60vh]">
+          <ScrollArea className="flex-1 min-h-0">
             {detail?.reads && detail.reads.length > 0 ? (
               <div className="space-y-2 pr-3">
                 {detail.reads
@@ -769,14 +791,14 @@ export default function PostDrawer({
 
       {/* Download History Dialog */}
       <Dialog open={!!downloadHistory} onOpenChange={() => setDownloadHistory(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Download className="w-5 h-5 text-indigo-500" />
               下载记录 — {downloadHistory?.attachmentName}
             </DialogTitle>
           </DialogHeader>
-          <ScrollArea className="max-h-[60vh]">
+          <ScrollArea className="flex-1 min-h-0">
             {downloadHistory && downloadHistory.records.length > 0 ? (
               <div className="space-y-2 pr-3">
                 {downloadHistory.records

@@ -13,6 +13,21 @@ export async function PUT(
 
     const { status, handler_id, handler_name, handler_phone, operator_id, operator_name, action_type, comment, to_user_id, to_user_name, processing_notes, custom_fields } = body;
 
+    // 认领/分配时检查工单是否已被其他人认领
+    if ((action_type === "claim" || action_type === "assign") && handler_id) {
+      const { data: currentIssue } = await client.rpc("dp_get_by_id", {
+        p_table: "issue_mgmt_issues",
+        p_id: id,
+      });
+      const existing = currentIssue as Record<string, unknown> | null;
+      if (existing?.handler_id && String(existing.handler_id) !== String(handler_id)) {
+        return NextResponse.json(
+          { error: `该工单已被「${existing.handler_name || existing.handler_id}」认领，无法重复认领` },
+          { status: 409 }
+        );
+      }
+    }
+
     const updateData: Record<string, unknown> = {};
     if (status) updateData.status = status;
     if (handler_id !== undefined) {

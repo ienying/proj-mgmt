@@ -1,22 +1,33 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Search, Plus, School, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CUSTOMER_TYPE_OPTIONS } from "@/lib/case-center-constants";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+type TopTab = "customer" | "product";
 
 interface CustomerRow {
   id: string; school_name: string; customer_types: string[]; location: Record<string, string>;
   department_count: string; module_count: string; landed_count: string; updated_at: string; created_at: string;
 }
 
-interface CustomerListProps { onViewCustomer: (id: string) => void; onCreateCustomer: () => void; }
+interface CustomerListProps {
+  onViewCustomer: (id: string) => void;
+  onCreateCustomer: () => void;
+  activeTab?: TopTab;
+  onTabChange?: (tab: TopTab) => void;
+}
 
-export function CustomerList({ onViewCustomer, onCreateCustomer }: CustomerListProps) {
+function getAvatarColor(index: number): string {
+  const colors = ["bg-black", "bg-[#ff6b35]", "bg-[#004ecc]"];
+  return colors[index % colors.length];
+}
+
+export function CustomerList({ onViewCustomer, onCreateCustomer, activeTab = "customer", onTabChange }: CustomerListProps) {
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -36,112 +47,173 @@ export function CustomerList({ onViewCustomer, onCreateCustomer }: CustomerListP
 
   useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`确认删除"${name}"的画像数据？此操作不可撤销。`)) return;
-    const res = await fetch(`/api/case-center/customers/${id}`, { method: "DELETE" });
-    if (res.ok) { toast.success("删除成功"); fetchCustomers(); } else { toast.error("删除失败"); }
+  const formatDate = (d: string) => d ? new Date(d).toLocaleDateString("zh-CN") : "-";
+  const getLandingRate = (landed: string, modules: string) => {
+    const m = Number(modules || 0);
+    if (m === 0) return "—";
+    return Math.round((Number(landed || 0) / m) * 100) + "%";
   };
 
-  const formatDate = (d: string) => d ? new Date(d).toLocaleDateString("zh-CN") : "-";
-  const totalModules = customers.reduce((sum, c) => sum + Number(c.module_count || 0), 0);
-  const totalLanded = customers.reduce((sum, c) => sum + Number(c.landed_count || 0), 0);
-  const totalDepts = customers.reduce((sum, c) => sum + Number(c.department_count || 0), 0);
-
   return (
-    <div className="max-w-[820px] mx-auto px-6 pb-16">
-      {/* Stats row */}
-      {customers.length > 0 && (
-        <div className="grid grid-cols-4 gap-3 mt-4 mb-5">
+    <div>
+      {/* Hero */}
+      <div className="py-8 text-center">
+        <h1 className="text-[40px] font-extrabold tracking-[-1px] text-black">案例中心</h1>
+        <p className="text-[15px] text-[#555] mt-2 font-medium">Customer Profile &amp; Product Archive</p>
+        <p className="text-[13px] text-[#777] max-w-[520px] mx-auto mt-3.5 leading-relaxed">
+          面向教育行业售前与实施团队，统一管理客户学校画像、软硬件环境、科室业务需求与模块落地状态。
+        </p>
+      </div>
+
+      {/* Tabs */}
+      {onTabChange && (
+        <div className="flex justify-center gap-1 mb-11">
           {[
-            { n: customers.length, l: "画像总数" }, { n: totalDepts, l: "科室总数" },
-            { n: totalModules, l: "已购模块" }, { n: totalLanded, l: "已落地模块" },
-          ].map((s, i) => (
-            <div key={i} className="bg-[#fdfcf8] border border-[#d1c7b7] p-3 text-center">
-              <div className="text-2xl font-bold text-red-900">{s.n}</div>
-              <div className="text-[10px] text-gray-400 tracking-wide mt-0.5">{s.l}</div>
-            </div>
+            { key: "customer" as TopTab, label: "用户画像" },
+            { key: "product" as TopTab, label: "产品案例" },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => onTabChange(tab.key)}
+              className={cn(
+                "px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-200",
+                activeTab === tab.key
+                  ? "bg-black text-white"
+                  : "text-[#555] hover:text-black hover:bg-black/5"
+              )}
+            >
+              {tab.label}
+            </button>
           ))}
         </div>
       )}
 
       {/* Toolbar */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1 max-w-[240px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input placeholder="搜索学校..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9 text-sm border-[#d1c7b7]" />
+      <div className="flex gap-3 items-center mb-6">
+        <div className="relative flex-1 max-w-[360px]">
+          <svg
+            className="absolute left-4 top-1/2 -translate-y-1/2 opacity-40"
+            width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          >
+            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+          </svg>
+          <Input
+            placeholder="搜索学校名称、地区…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-[42px] h-11 text-sm border-[1.5px] border-[#e0e0e0] rounded-xl bg-white focus:border-black focus:ring-0"
+          />
         </div>
         <Select value={customerType} onValueChange={setCustomerType}>
-          <SelectTrigger className="w-[110px] h-9 text-sm border-[#d1c7b7]">
-            <SelectValue placeholder="类型" />
+          <SelectTrigger className="w-[120px] h-11 text-sm border-[1.5px] border-[#e0e0e0] rounded-xl bg-white focus:border-black">
+            <SelectValue placeholder="全部类型" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">全部类型</SelectItem>
-            {CUSTOMER_TYPE_OPTIONS.map((t) => (<SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>))}
+            {CUSTOMER_TYPE_OPTIONS.map((t) => (
+              <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <div className="flex-1" />
-        <Button variant="outline" size="sm" className="h-9 text-xs border-[#d1c7b7] text-gray-500">📥 模板</Button>
-        <Button variant="outline" size="sm" className="h-9 text-xs border-[#d1c7b7] text-gray-500">📤 导入</Button>
-        <Button onClick={onCreateCustomer} size="sm" className="h-9 bg-red-700 hover:bg-red-800">
-          <Plus className="w-4 h-4 mr-1" />新建画像
+        <Button variant="outline" className="h-11 px-[22px] rounded-xl text-sm font-semibold border-[1.5px] border-[#e0e0e0] text-black bg-white hover:bg-gray-100">
+          📥 模板
+        </Button>
+        <Button variant="outline" className="h-11 px-[22px] rounded-xl text-sm font-semibold border-[1.5px] border-[#e0e0e0] text-black bg-white hover:bg-gray-100">
+          📤 导入
+        </Button>
+        <Button onClick={onCreateCustomer} className="h-11 px-[22px] rounded-xl text-sm font-semibold bg-black text-white hover:bg-[#222]">
+          ＋ 新建画像
         </Button>
       </div>
 
-      {/* Table */}
+      {/* Card Grid */}
       {loading ? (
-        <div className="flex items-center justify-center h-48 text-gray-400 bg-[#fdfcf8] border border-[#d1c7b7]">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-700 mr-2" />加载中...
+        <div className="flex items-center justify-center h-48 text-gray-400">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-black mr-2" />加载中...
         </div>
       ) : customers.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 text-gray-400 bg-[#fdfcf8] border border-[#d1c7b7]">
-          <School className="w-12 h-12 mb-3 opacity-20" />
+        <div className="flex flex-col items-center justify-center h-48 text-gray-400">
           <p className="text-sm">暂无客户画像数据</p>
-          <Button variant="outline" size="sm" className="mt-3 border-[#d1c7b7]" onClick={onCreateCustomer}><Plus className="w-4 h-4 mr-1" />新建画像</Button>
+          <Button variant="outline" className="mt-3" onClick={onCreateCustomer}>＋ 新建画像</Button>
         </div>
       ) : (
-        <div className="border border-[#d1c7b7] bg-[#fdfcf8] overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[#d1c7b7] bg-amber-50/50">
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">学校</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">类型</th>
-                <th className="text-center px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">科室</th>
-                <th className="text-center px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">模块</th>
-                <th className="text-center px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">已落地</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">更新</th>
-                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#e8e0d0]">
-              {customers.map((c) => (
-                <tr key={c.id} className="hover:bg-amber-50/30 cursor-pointer transition-colors" onClick={() => onViewCustomer(c.id)}>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 bg-red-700 flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0">{c.school_name?.charAt(0) || "?"}</div>
-                      <div>
-                        <div className="font-semibold text-gray-900 text-[13px]">{c.school_name}</div>
-                        {c.location && (c.location.province || c.location.city) && (
-                          <div className="text-[10px] text-gray-400">{[c.location.province, c.location.city, c.location.district].filter(Boolean).join(" ")}</div>
-                        )}
+        <>
+          <div className="grid grid-cols-3 gap-4">
+            {customers.map((c, i) => (
+              <div
+                key={c.id}
+                onClick={() => onViewCustomer(c.id)}
+                className="bg-white rounded-2xl p-6 shadow-[0_1px_3px_rgba(0,0,0,.04)] cursor-pointer transition-all duration-[250ms] border-[1.5px] border-transparent relative overflow-hidden hover:-translate-y-1 hover:shadow-[0_8px_30px_rgba(0,0,0,.1)] hover:border-black group"
+              >
+                {/* Top row: name + avatar */}
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <div className="text-[17px] font-bold text-black tracking-[-0.2px] leading-tight">
+                      {c.school_name}
+                    </div>
+                    {c.location && (c.location.province || c.location.city) && (
+                      <div className="text-xs text-[#666] mt-1">
+                        {[c.location.province, c.location.city, c.location.district].filter(Boolean).join(" · ")}
                       </div>
+                    )}
+                  </div>
+                  <div
+                    className={cn(
+                      "w-12 h-12 rounded-[14px] flex items-center justify-center text-xl font-extrabold text-white flex-shrink-0",
+                      getAvatarColor(i)
+                    )}
+                  >
+                    {c.school_name?.charAt(0) || "?"}
+                  </div>
+                </div>
+
+                {/* Tags */}
+                <div className="flex flex-wrap gap-1.5 mb-[18px]">
+                  {(c.customer_types || []).map((t) => (
+                    <span key={t} className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-[#f5f5f5] text-black">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Stats row */}
+                <div className="grid grid-cols-3 gap-2 pt-4 border-t border-gray-100">
+                  <div className="text-center">
+                    <div className="text-xl font-extrabold text-black tracking-[-0.5px]">{c.department_count || 0}</div>
+                    <div className="text-[10px] font-semibold text-[#888] uppercase">科室</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-extrabold text-black tracking-[-0.5px]">{c.module_count || 0}</div>
+                    <div className="text-[10px] font-semibold text-[#888] uppercase">模块</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-extrabold text-black tracking-[-0.5px]">
+                      {getLandingRate(c.landed_count, c.module_count)}
                     </div>
-                  </td>
-                  <td className="px-4 py-3"><div className="flex flex-wrap gap-1">{(c.customer_types || []).map((t) => (<Badge key={t} variant="secondary" className="text-[10px]">{t}</Badge>))}</div></td>
-                  <td className="px-4 py-3 text-center font-medium">{c.department_count}</td>
-                  <td className="px-4 py-3 text-center font-medium">{c.module_count}</td>
-                  <td className="px-4 py-3 text-center"><span className={Number(c.landed_count) > 0 ? "text-green-600 font-semibold" : "text-gray-300"}>{c.landed_count}</span></td>
-                  <td className="px-4 py-3 text-gray-400 text-[11px]">{formatDate(c.updated_at)}</td>
-                  <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="sm" className="h-7 text-[11px] text-gray-500 hover:text-red-700" onClick={() => onViewCustomer(c.id)}><ChevronRight className="w-3 h-3 mr-0.5" />查看</Button>
-                      <Button variant="ghost" size="sm" className="h-7 text-[11px] text-gray-400 hover:text-red-500" onClick={() => handleDelete(c.id, c.school_name)}>删除</Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    <div className="text-[10px] font-semibold text-[#888] uppercase">落地率</div>
+                  </div>
+                </div>
+
+                {/* Arrow on hover */}
+                <span className="absolute top-6 right-6 text-lg opacity-0 -translate-x-2 transition-all duration-[250ms] group-hover:opacity-100 group-hover:translate-x-0">
+                  →
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Pagination */}
+          <div className="flex items-center justify-center gap-2 mt-9 pb-16">
+            <button className="w-[38px] h-[38px] rounded-[10px] text-[13px] font-semibold text-[#555] hover:bg-gray-200 transition-colors">←</button>
+            <button className="w-[38px] h-[38px] rounded-[10px] text-[13px] font-semibold bg-black text-white">1</button>
+            <button className="w-[38px] h-[38px] rounded-[10px] text-[13px] font-semibold text-[#555] hover:bg-gray-200 transition-colors">2</button>
+            <button className="w-[38px] h-[38px] rounded-[10px] text-[13px] font-semibold text-[#555] hover:bg-gray-200 transition-colors">3</button>
+            <button className="w-[38px] h-[38px] rounded-[10px] text-[13px] font-semibold text-[#555] hover:bg-gray-200 transition-colors">…</button>
+            <button className="w-[38px] h-[38px] rounded-[10px] text-[13px] font-semibold text-[#555] hover:bg-gray-200 transition-colors">13</button>
+            <button className="w-[38px] h-[38px] rounded-[10px] text-[13px] font-semibold text-[#555] hover:bg-gray-200 transition-colors">→</button>
+          </div>
+        </>
       )}
     </div>
   );

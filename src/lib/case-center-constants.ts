@@ -64,8 +64,8 @@ export const ALL_DEPARTMENTS = [
 
 // 模块状态选项
 export const MODULE_STATUS_OPTIONS = [
-  { code: "已落地", name: "已落地" },
-  { code: "未落地", name: "未落地" },
+  { code: "已采购-已使用", name: "已采购-已使用" },
+  { code: "已采购-未使用", name: "已采购-未使用" },
   { code: "未购", name: "未采购" },
 ] as const;
 

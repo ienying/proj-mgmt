@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const effectiveType = customerType || schoolType;
 
     // 构建 WHERE 条件
-    const conditions: string[] = ["cm.status = '已落地'"];
+    const conditions: string[] = ["cm.status = '已采购-已使用'"];
     if (departmentCode) {
       conditions.push(`cd.department_code = '${departmentCode.replace(/'/g, "''")}'`);
     }
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
         (SELECT COUNT(*) FROM design_case_center.customer_modules m2
          JOIN design_case_center.customer_departments d2 ON m2.customer_department_id = d2.id
          JOIN design_case_center.customers c2 ON m2.customer_id = c2.id
-         WHERE m2.status = '已落地'
+         WHERE m2.status = '已采购-已使用'
          ${departmentCode ? `AND d2.department_code = '${departmentCode.replace(/'/g, "''")}'` : ""}
          ${effectiveType ? `AND c2.customer_types @> to_jsonb(ARRAY['${effectiveType.replace(/'/g, "''")}'])` : ""}
         ) as total_materials
@@ -66,11 +66,11 @@ export async function GET(request: NextRequest) {
         cm.module_code,
         cm.module_name,
         COUNT(DISTINCT cm.customer_id) as landed_schools,
-        COUNT(DISTINCT cm.customer_id) FILTER (WHERE cm.status = '已落地') as active_schools,
-        COUNT(DISTINCT cm.customer_id) FILTER (WHERE cm.status = '未落地') as trial_schools,
+        COUNT(DISTINCT cm.customer_id) FILTER (WHERE cm.status = '已采购-已使用') as active_schools,
+        COUNT(DISTINCT cm.customer_id) FILTER (WHERE cm.status = '已采购-未使用') as trial_schools,
         COUNT(DISTINCT cm.customer_id) FILTER (WHERE cm.status = '未购') as not_purchased_schools,
         ROUND(
-          COUNT(DISTINCT cm.customer_id) FILTER (WHERE cm.status = '已落地')::numeric
+          COUNT(DISTINCT cm.customer_id) FILTER (WHERE cm.status = '已采购-已使用')::numeric
           / NULLIF(COUNT(DISTINCT cm.customer_id), 0) * 100, 1
         ) as coverage_rate,
         COUNT(DISTINCT cm.customer_id) as total_school_count
@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
       SELECT DISTINCT cd.department_code, cd.department_name
       FROM design_case_center.customer_modules cm
       JOIN design_case_center.customer_departments cd ON cm.customer_department_id = cd.id
-      WHERE cm.status = '已落地'
+      WHERE cm.status = '已采购-已使用'
       ORDER BY cd.department_name
     `;
     const { data: deptOptions } = await client.rpc("execute_sql", { p_sql: filterOptionsSql });
@@ -151,7 +151,7 @@ export async function GET(request: NextRequest) {
     const moduleOptionsSql = `
       SELECT DISTINCT cm.module_code, cm.module_name
       FROM design_case_center.customer_modules cm
-      WHERE cm.status = '已落地'
+      WHERE cm.status = '已采购-已使用'
       ${departmentCode ? `AND cm.customer_department_id IN (SELECT id FROM design_case_center.customer_departments WHERE department_code = '${departmentCode.replace(/'/g, "''")}')` : ""}
       ORDER BY cm.module_name
     `;

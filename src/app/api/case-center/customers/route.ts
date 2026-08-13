@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
         c.*,
         (SELECT COUNT(*) FROM design_case_center.customer_departments WHERE customer_id = c.id) as department_count,
         (SELECT COUNT(*) FROM design_case_center.customer_modules WHERE customer_id = c.id) as module_count,
-        (SELECT COUNT(*) FROM design_case_center.customer_modules WHERE customer_id = c.id AND status = '已落地') as landed_count
+        (SELECT COUNT(*) FROM design_case_center.customer_modules WHERE customer_id = c.id AND status = '已采购-已使用') as landed_count
       FROM design_case_center.customers c
       ${whereClause}
       ORDER BY c.updated_at DESC NULLS LAST, c.created_at DESC

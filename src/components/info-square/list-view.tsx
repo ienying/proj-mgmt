@@ -337,13 +337,13 @@ export default function ListView({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 w-7 p-0"
+                    className="h-7 w-7 p-0 bg-indigo-50 hover:bg-indigo-100 rounded-full"
                     onClick={(e) => {
                       e.stopPropagation();
                       if (onEdit) onEdit(post);
                     }}
                   >
-                    <Edit className="w-3.5 h-3.5 text-gray-400 hover:text-indigo-500" />
+                    <Edit className="w-3.5 h-3.5 text-indigo-500" />
                   </Button>
                 </div>
               </div>

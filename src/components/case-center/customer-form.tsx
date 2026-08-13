@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ArrowLeft, Save, ChevronDown, ChevronUp, Plus, Trash2, Upload, X, Search, Check, Download, FileSpreadsheet, Sparkles } from "lucide-react";
+import { Save, ChevronDown, ChevronUp, Plus, Trash2, Upload, X, Search, Check, Download, FileSpreadsheet, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,7 +14,7 @@ import { AIInputDialog } from "./ai-input-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { LeftFloatNav, type NavSection, type NavItem } from "./left-float-nav";
+import { CaseDock, type DockDept } from "./case-dock";
 import RichTextEditor from "@/components/rich-text-editor";
 import {
   CUSTOMER_TYPE_OPTIONS,
@@ -55,6 +55,7 @@ interface ModuleFormData {
   effect: string;
   issues: string;
   current_practice: string;
+  usage_description: string;
   collaborating_departments: string[];
   materials: Array<{ key: string; name: string; size: number }>;
 }
@@ -83,7 +84,7 @@ function AddDepartmentButton({ addedNames, predefined, onAdd }: {
     <div className="mt-4">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="h-8 text-xs border-[#d1c7b7] text-red-700 hover:bg-red-50">
+          <Button variant="outline" size="sm" className="h-8 text-xs border-[#e0e0e0] text-black hover:bg-gray-100">
             <Plus className="w-3 h-3 mr-1" />添加科室
           </Button>
         </PopoverTrigger>
@@ -99,11 +100,11 @@ function AddDepartmentButton({ addedNames, predefined, onAdd }: {
                   </CommandItem>
                 ))}
               </CommandGroup>
-              <div className="border-t border-[#e8e0d0] p-2 flex items-center gap-2">
+              <div className="border-t border-[#e8e8e8] p-2 flex items-center gap-2">
                 <Input className="h-7 text-xs flex-1" value={customName} placeholder="输入自定义科室名称"
                   onChange={(e) => setCustomName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") handleAddCustom(); }} />
-                <Button size="sm" className="h-7 text-[10px] bg-red-700 hover:bg-red-800 shrink-0" onClick={handleAddCustom}>添加</Button>
+                <Button size="sm" className="h-7 text-[10px] bg-black hover:bg-[#222] shrink-0" onClick={handleAddCustom}>添加</Button>
               </div>
             </CommandList>
           </Command>
@@ -205,21 +206,30 @@ function BusinessGroups({ code, dept, updateDepartment }: {
     }
   };
 
+  // 业务组背景色板（每2组一循环，相邻组视觉区分明显）
+  const GROUP_BG = [
+    { bg: "bg-white", border: "border-[#e0e0e0]", dot: "bg-blue-500" },
+    { bg: "bg-amber-50/60", border: "border-amber-200", dot: "bg-amber-500" },
+    { bg: "bg-emerald-50/60", border: "border-emerald-200", dot: "bg-emerald-500" },
+    { bg: "bg-violet-50/60", border: "border-violet-200", dot: "bg-violet-500" },
+    { bg: "bg-rose-50/60", border: "border-rose-200", dot: "bg-rose-500" },
+    { bg: "bg-cyan-50/60", border: "border-cyan-200", dot: "bg-cyan-500" },
+  ];
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <Label className="text-xs font-medium">业务描述</Label>
-        <Button variant="ghost" size="sm" className="h-6 text-xs text-red-700 hover:bg-red-50" onClick={addGroup}>
-          <Plus className="w-3 h-3 mr-0.5" />添加业务组
-        </Button>
-      </div>
+      <Label className="text-xs font-medium mb-2">业务描述</Label>
       <div className="space-y-3">
-        {groups.map((group, gi) => (
-          <div key={gi} className="border border-[#d1c7b7] bg-white p-3 relative">
-            <div className="flex items-center justify-between mb-2 gap-2">
+        {groups.map((group, gi) => {
+          const clr = GROUP_BG[gi % GROUP_BG.length];
+          return (
+          <div key={gi} className={cn("border p-3 relative rounded-md", clr.bg, clr.border)}>
+            {/* Group indicator dot */}
+            <div className={cn("absolute top-3.5 left-3 w-2.5 h-2.5 rounded-full", clr.dot)} title={`业务组 ${gi + 1}`} />
+            <div className="flex items-center justify-between mb-2 gap-2 pl-5">
               <div className="flex-1 min-w-0">
                 <Input
-                  className="h-7 w-full text-xs font-semibold border-[#d1c7b7]"
+                  className="h-7 w-full text-xs font-semibold border-[#e0e0e0]"
                   placeholder={`业务组 ${gi + 1}`}
                   value={group._name}
                   onChange={(e) => updateGroupName(gi, e.target.value)}
@@ -229,7 +239,7 @@ function BusinessGroups({ code, dept, updateDepartment }: {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 text-[10px] text-red-400 hover:text-red-600 hover:bg-red-50"
+                  className="h-6 text-[10px] text-gray-400 hover:text-black hover:bg-gray-100"
                   onClick={() => removeGroup(gi)}
                 >
                   <Trash2 className="w-3 h-3 mr-0.5" />移除此组
@@ -250,7 +260,13 @@ function BusinessGroups({ code, dept, updateDepartment }: {
               ))}
             </div>
           </div>
-        ))}
+          );
+        })}
+      </div>
+      <div className="mt-3">
+        <Button variant="ghost" size="sm" className="h-6 text-xs text-black bg-blue-50 hover:bg-blue-100 border border-blue-200" onClick={addGroup}>
+          <Plus className="w-3 h-3 mr-0.5" />添加业务组
+        </Button>
       </div>
     </div>
   );
@@ -431,7 +447,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
           const schoolMods = { ...(prev2[schoolIdx] || {}) };
           schoolMods[code] = firstMod.map(m => ({
             module_code: m, module_name: m, status: "未购" as const,
-            usage_rate: 0, active_users: 0, effect: "", issues: "", current_practice: "",
+            usage_rate: 0, active_users: 0, effect: "", issues: "", current_practice: "", usage_description: "",
             collaborating_departments: [] as string[], materials: [] as Array<{ key: string; name: string; size: number }>,
           }));
           return { ...prev2, [schoolIdx]: schoolMods };
@@ -483,7 +499,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
         ...prev[si],
         [code]: [...(prev[si]?.[code] || []), {
           module_code: "", module_name: "", status: "未购",
-          usage_rate: 0, active_users: 0, effect: "", issues: "", current_practice: "",
+          usage_rate: 0, active_users: 0, effect: "", issues: "", current_practice: "", usage_description: "",
           collaborating_departments: [] as string[], materials: [] as Array<{ key: string; name: string; size: number }>,
         }],
       },
@@ -524,6 +540,12 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [formDockExpanded, setFormDockExpanded] = useState(false);
+  const [formDockActiveId, setFormDockActiveId] = useState<string | undefined>("form-basic");
+  const handleFormScroll = useCallback((id: string) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   // 下载模板
   const handleDownloadTemplate = useCallback(() => {
@@ -625,7 +647,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
           const deptName = String(r[0]).trim();
           const code = deptNameToCode[deptName] || ALL_DEPARTMENTS.find((d) => d.name === deptName)?.code || deptName;
           if (!newModules[code]) newModules[code] = [];
-          const statuses = ["已落地", "未落地", "未购"];
+          const statuses = ["已采购-已使用", "已采购-未使用", "未购"];
           const rawStatus = String(r[2] || "").trim();
           const status = statuses.includes(rawStatus) ? rawStatus : "未购";
           newModules[code].push({
@@ -634,9 +656,10 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
             status,
             usage_rate: Number(r[3]) || 0,
             active_users: Number(r[4]) || 0,
-            effect: status === "已落地" ? String(r[5] || "") : "",
+            effect: status === "已采购-已使用" ? String(r[5] || "") : "",
             issues: String(r[6] || ""),
             current_practice: status === "未购" ? String(r[7] || "") : "",
+            usage_description: status === "已采购-已使用" ? String(r[8] || "") : "",
             collaborating_departments: [] as string[],
             materials: [] as Array<{ key: string; name: string; size: number }>,
           });
@@ -703,6 +726,33 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
     setApplicableDepts(merged);
   }, [customerTypes]);
 
+  // IntersectionObserver: track active section for dock highlighting
+  useEffect(() => {
+    const ids = ["form-basic", "form-hw", ...applicableDepts.map((name) => {
+      const def = ALL_DEPARTMENTS.find((d) => d.name === name);
+      return `form-dept-${def?.code || name}`;
+    }), ...(isEducationBureau ? ["form-sub-schools"] : [])];
+    const observer = new IntersectionObserver(
+      (entries) => {
+        let closest: { id: string; top: number } | null = null;
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            if (!closest || entry.boundingClientRect.top < closest.top) {
+              closest = { id: entry.target.id, top: entry.boundingClientRect.top };
+            }
+          }
+        }
+        if (closest) setFormDockActiveId(closest.id);
+      },
+      { rootMargin: "-80px 0px -60% 0px", threshold: 0 }
+    );
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, [applicableDepts, isEducationBureau]);
+
   const addDepartment = (deptName: string) => {
     setApplicableDepts(prev => { if (prev.includes(deptName)) return prev; return [...prev, deptName]; });
     // Initialize department data if not exists
@@ -719,7 +769,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
       }}));
       setModules(prev => ({ ...prev, [code]: firstMod.map(m => ({
         module_code: m, module_name: m, status: "未购" as const,
-        usage_rate: 0, active_users: 0, effect: "", issues: "", current_practice: "",
+        usage_rate: 0, active_users: 0, effect: "", issues: "", current_practice: "", usage_description: "",
         collaborating_departments: [] as string[], materials: [] as Array<{ key: string; name: string; size: number }>,
       })) }));
       setExpandedDepts(prev => ({ ...prev, [code]: true }));
@@ -838,6 +888,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
           effect: "",
           issues: "",
           current_practice: "",
+          usage_description: "",
           collaborating_departments: [] as string[],
           materials: [] as Array<{ key: string; name: string; size: number }>,
         }));
@@ -850,6 +901,28 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
     setModules(newModules);
     setExpandedDepts(newExpanded);
   }, []);
+
+  // 新建模式：自动从项目表中匹配位置信息（schoolName 改变时自动同步）
+  useEffect(() => {
+    if (customerId) return; // 只在新建模式下生效
+    if (!schoolName.trim() || projectList.length === 0) return;
+    const matched = projectList.find(
+      (p) => p.final_customer === schoolName || p.project_name === schoolName
+    );
+    if (matched) {
+      setProvince(matched.customer_location.province || "");
+      setCity(matched.customer_location.city || "");
+      setDistrict(matched.customer_location.district || "");
+      setTown(matched.customer_location.town || "");
+      setVillage(matched.customer_location.village || "");
+      setLongitude(matched.longitude || "");
+      setLatitude(matched.latitude || "");
+      if (!locationSynced) {
+        setLocationSynced(true);
+        setSyncedProjectName(matched.project_name);
+      }
+    }
+  }, [schoolName, projectList, customerId, locationSynced]);
 
   // 加载已有数据（编辑模式）
   useEffect(() => {
@@ -1015,6 +1088,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
               effect: (m.effect as string) || "",
               issues: (m.issues as string) || "",
               current_practice: (m.current_practice as string) || "",
+              usage_description: (m.usage_description as string) || "",
               collaborating_departments: Array.isArray(m.collaborating_departments) ? m.collaborating_departments as string[] : [],
               materials: Array.isArray(m.materials) ? m.materials as Array<{ key: string; name: string; size: number }> : [],
             }));
@@ -1045,6 +1119,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
               effect: "",
               issues: "",
               current_practice: "",
+              usage_description: "",
               collaborating_departments: [] as string[],
               materials: [] as Array<{ key: string; name: string; size: number }>,
             }));
@@ -1142,6 +1217,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
           effect: "",
           issues: "",
           current_practice: "",
+          usage_description: "",
           collaborating_departments: [],
           materials: [],
         },
@@ -1421,6 +1497,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
               effect: mod.effect,
               issues: mod.issues,
               current_practice: mod.current_practice,
+              usage_description: mod.usage_description,
               collaborating_departments: mod.collaborating_departments,
               materials: mod.materials,
             });
@@ -1470,85 +1547,92 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
     admissions: "🎓", employment: "💼", supervision: "📊", psychology: "💚",
     dormitory: "🏠", school_office: "📝", grade_group: "🏢",
   };
-  const deptNavItems = applicableDepts.map((name) => {
-    const def = ALL_DEPARTMENTS.find((d) => d.name === name);
-    const c = def?.code || name;
-    const dept = departments[c];
-    const deptMods = modules[c] || [];
-    const landedCount = deptMods.filter((m) => m.status === "已落地").length;
-    // Use actual department name from state (may have been edited)
-    const displayName = dept?.department_name || name;
-    return { id: `form-dept-${c}`, icon: deptIcons[c] || "📌", label: `${displayName} · ${landedCount}/${deptMods.length}` };
-  });
 
-  // Build sub-school nav items for教育局 mode
-  const subSchoolNavItems: NavItem[] = subSchools.map((s, i) => ({
-    id: `form-sub-${i}`, icon: "🏫", label: s.name || `学校${i + 1}`,
-  }));
-
-  const navSections: NavSection[] = [
-    { id: "form-basic", icon: "📋", label: "基础信息" },
-    { id: "form-hw", icon: "🖥", label: "硬件与网络" },
-    { separator: true, label: isEducationBureau ? "教育局科室" : "科室", items: deptNavItems },
+  // Build dock departments for CaseDock nav
+  const formDockDepts: DockDept[] = [
+    ...applicableDepts.map((name) => {
+      const def = ALL_DEPARTMENTS.find((d) => d.name === name);
+      const c = def?.code || name;
+      const dept = departments[c];
+      const deptMods = modules[c] || [];
+      const landedCount = deptMods.filter((m) => m.status === "已采购-已使用").length;
+      const displayName = dept?.department_name || name;
+      return { code: `form-dept-${c}`, name: displayName, icon: deptIcons[c] || "🏛️", landedCount, totalCount: deptMods.length };
+    }),
+    ...(isEducationBureau && subSchools.length > 0
+      ? subSchools.map((s, i) => ({ code: `form-sub-${i}`, name: s.name || `学校${i + 1}`, icon: "🏫", landedCount: 0, totalCount: 0 }))
+      : []),
   ];
-  if (isEducationBureau && subSchools.length > 0) {
-    navSections.push({ separator: true, label: "下属学校", items: subSchoolNavItems });
-  }
 
   return (
-    <div>
-      <LeftFloatNav sections={navSections} onBack={onCancel} />
-      <div className="max-w-[820px] mx-auto px-6 pb-16">
-        {/* Newspaper masthead */}
-        <div className="text-center pt-8 pb-5 border-b-[3px] border-double border-red-700 mb-6">
-          <h1 className="text-4xl font-black text-red-700 tracking-[6px]" style={{fontFamily:"STSong, Songti SC, Noto Serif SC, serif"}}>
+    <div className="bg-[#f5f5f7] min-h-screen">
+      <CaseDock
+        onBack={onCancel}
+        departments={formDockDepts}
+        onScrollTo={handleFormScroll}
+        activeId={formDockActiveId}
+        onExpandedChange={setFormDockExpanded}
+        profileId="form-basic"
+        hwId="form-hw"
+      />
+
+      {/* Main content area — offset by dock */}
+      <div
+        className={cn(
+          "transition-[margin-left] duration-[250ms] ease-[cubic-bezier(.4,0,.2,1)]",
+          formDockExpanded ? "ml-[244px]" : "ml-[88px]"
+        )}
+      >
+        <div className="max-w-[1380px] mx-auto px-10 pt-4 pb-16">
+        {/* Header */}
+        <div className="text-center pt-8 pb-5 mb-6">
+          <h1 className="text-[32px] font-extrabold tracking-[-1px] text-black">
             {isEdit ? "编辑画像" : "新建用户画像"}
           </h1>
-          <p className="text-[11px] text-amber-700/60 tracking-[3px] mt-1">
+          <p className="text-[11px] text-[#999] tracking-[3px] mt-1">
             {isEdit ? "EDIT CUSTOMER PROFILE" : "CREATE CUSTOMER PROFILE"}
           </p>
           <p className="text-xs text-gray-400 mt-2">按步骤填写学校信息，构建完整的客户画像档案</p>
         </div>
 
         {/* 顶部操作栏 */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between py-2 mb-5">
+          <button
+            onClick={onCancel}
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[#555] px-4 py-2 rounded-[10px] hover:bg-gray-200 hover:text-black transition-all"
+          >
+            ← 返回画像列表
+          </button>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={onCancel} className="text-xs text-gray-500">
-              <ArrowLeft className="w-4 h-4 mr-1" />
-            返回
-          </Button>
-          <h2 className="font-semibold text-lg">{isEdit ? "编辑画像" : "新建画像"}</h2>
+            <Button variant="outline" size="sm" onClick={handleDownloadTemplate} className="h-10 px-5 rounded-[10px] text-[13px] font-semibold border-[1.5px] border-[#e0e0e0] text-black bg-white hover:bg-gray-100">
+              <Download className="w-3.5 h-3.5 mr-1.5" />下载模板
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="h-10 px-5 rounded-[10px] text-[13px] font-semibold border-[1.5px] border-[#e0e0e0] text-black bg-white hover:bg-gray-100">
+              <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />导入Excel
+            </Button>
+            <input ref={fileInputRef} type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImportExcel(file);
+                  }}
+                />
+            <Button variant="outline" size="sm" className="h-10 px-5 rounded-[10px] text-[13px] font-semibold border-[1.5px] border-[#e0e0e0] text-black bg-white hover:bg-gray-100" onClick={onCancel}>
+              取消
+            </Button>
+            <Button size="sm" onClick={handleSubmit} disabled={loading} className="h-10 px-5 rounded-[10px] text-[13px] font-semibold bg-black text-white hover:bg-[#222]">
+              <Save className="w-3.5 h-3.5 mr-1.5" />
+              {loading ? "保存中..." : "保存"}
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
-            <Download className="w-4 h-4 mr-1" />下载模板
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-            <FileSpreadsheet className="w-4 h-4 mr-1" />导入Excel
-          </Button>
-          <input ref={fileInputRef} type="file"
-                accept=".xlsx,.xls"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleImportExcel(file);
-                }}
-              />
-          <Button variant="outline" size="sm" className="border-[#d1c7b7] text-gray-500" onClick={onCancel}>
-            取消
-          </Button>
-          <Button size="sm" onClick={handleSubmit} disabled={loading}>
-            <Save className="w-4 h-4 mr-1" />
-            {loading ? "保存中..." : "保存"}
-          </Button>
-        </div>
-      </div>
 
       {/* 表单内容 */}
       <div className="space-y-6">
         {/* 基础信息 */}
-        <div id="form-basic" className="bg-[#fdfcf8] border border-[#d1c7b7]">
-          <div className="bg-red-700 text-white px-5 py-2 text-xs font-semibold tracking-wider">基础信息</div>
+        <div id="form-basic" className="bg-white rounded-2xl overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,.04)] scroll-mt-[100px]">
+          <div className="bg-black text-white px-5 py-2.5 text-xs font-bold tracking-wider">基础信息</div>
           <div className="p-5 space-y-4">
             {/* 学校名称 — 整行 */}
             <div className="space-y-1.5">
@@ -1710,7 +1794,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                             return <Badge key={t.code} variant={selected ? "default" : "outline"} className="cursor-pointer text-[10px] py-0.5 px-1.5" onClick={() => { const updated = [...campuses]; let newTypes: string[]; if (selected) newTypes = types.filter((x) => x !== t.code); else newTypes = [...types, t.code]; updated[ci] = { ...updated[ci], type: newTypes.join(",") }; setCampuses(updated); }}>{t.name}</Badge>;
                           })}
                         </div>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setCampuses((prev) => prev.filter((_, i) => i !== ci))}><Trash2 className="w-3.5 h-3.5 text-red-500" /></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setCampuses((prev) => prev.filter((_, i) => i !== ci))}><Trash2 className="w-3.5 h-3.5 text-gray-400" /></Button>
                       </div>
                       <Input className="h-8 text-xs" value={campus.address} placeholder="校区地址（选填）" onChange={(e) => { const updated = [...campuses]; updated[ci] = { ...updated[ci], address: e.target.value }; setCampuses(updated); }} />
                       {/* Campus hardware */}
@@ -1751,8 +1835,8 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
 
         {/* 硬件与网络信息 — hidden when multi-campus */}
         {campusMode === "single" && (
-        <div id="form-hw" className="bg-[#fdfcf8] border border-[#d1c7b7]">
-          <div className="bg-red-700 text-white px-5 py-2 text-xs font-semibold tracking-wider">硬件与网络信息</div>
+        <div id="form-hw" className="bg-white rounded-2xl overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,.04)] scroll-mt-[100px]">
+          <div className="bg-black text-white px-5 py-2.5 text-xs font-bold tracking-wider">硬件与网络信息</div>
           <div className="p-5 space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="space-y-1.5">
@@ -1867,7 +1951,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
               open={isExpanded}
               onOpenChange={(open) => setExpandedDepts((prev) => ({ ...prev, [code]: open }))}
             >
-              <div className="bg-[#fdfcf8] border border-[#d1c7b7] relative">
+              <div id={`form-dept-${code}`} className="bg-white rounded-2xl overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,.04)] relative scroll-mt-[100px]">
                 <CollapsibleTrigger className="w-full">
                   <CardHeader className={cn("py-3 pr-9 cursor-pointer transition-colors rounded-tr-lg", colors.header)}>
                     <div className="flex items-center justify-between">
@@ -1875,10 +1959,11 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                         <div className="flex items-center gap-1.5">
                             <div className={cn("w-2 h-2 rounded-full", colors.accent)} />
                             <Input
-                              className="h-8 w-40 text-base font-semibold border-0 bg-transparent focus-visible:ring-1 px-1"
+                              className="h-8 min-w-[120px] max-w-[260px] text-base font-semibold border border-transparent bg-white/60 hover:border-gray-300 focus-visible:ring-1 focus-visible:border-black rounded-md px-2"
                               value={dept.department_name}
                               onChange={(e) => updateDepartment(code, "department_name", e.target.value)}
                               onClick={(ev) => ev.stopPropagation()}
+                              placeholder="科室名称"
                             />
                           </div>
                         {campusMode === "multi_cross" && (
@@ -1925,7 +2010,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                 </CollapsibleTrigger>
                 {/* Delete button outside trigger to avoid button-in-button */}
                 <button
-                  className="absolute top-3 right-3 z-10 inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-red-50 text-red-400 hover:text-red-600"
+                  className="absolute top-3 right-3 z-10 inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-gray-100 text-gray-400 hover:text-black"
                   onClick={(ev) => { ev.stopPropagation(); ev.preventDefault(); removeDepartment(deptName); }}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -1962,7 +2047,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                             onChange={(e) => updatePersonnel(code, i, "phone", e.target.value)}
                           />
                           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removePersonnel(code, i)}>
-                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                            <Trash2 className="w-3.5 h-3.5 text-gray-400" />
                           </Button>
                         </div>
                       ))}
@@ -1975,21 +2060,21 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <Label className="text-xs font-medium">模块匹配</Label>
-                        <Button variant="ghost" size="sm" className="h-6 text-xs text-red-700 hover:bg-red-50" onClick={() => addModule(code)}>
+                        <Button variant="ghost" size="sm" className="h-6 text-xs text-black hover:bg-gray-100" onClick={() => addModule(code)}>
                           <Plus className="w-3 h-3 mr-0.5" />
                           添加模块
                         </Button>
                       </div>
                       <div className="space-y-2">
                         {deptModules.map((mod, mi) => (
-                          <div key={mi} className="bg-[#fdfcf8] border border-[#d1c7b7] p-3 relative">
+                          <div key={mi} className="bg-white rounded-2xl overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,.04)] p-3 relative">
                             <Button
                               variant="ghost"
                               size="icon"
                               className="absolute top-2 right-2 h-7 w-7 z-10"
                               onClick={() => removeModule(code, mi)}
                             >
-                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                              <Trash2 className="w-3.5 h-3.5 text-gray-400" />
                             </Button>
                             {/* Row 1: 模块名称 + 状态 */}
                             <div className="grid grid-cols-2 gap-3">
@@ -2022,22 +2107,12 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                               </div>
                             </div>
 
-                            {/* Row 2 (已落地): 使用率 + 活跃用户 */}
-                            {mod.status === "已落地" && (
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1">
-                                  <Label className="text-[11px]">使用率(%)</Label>
-                                  <Input className="h-8 text-xs" type="number" inputMode="numeric" min="0" max="100" step="1" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }}
-                                    value={mod.usage_rate}
-                                    onChange={(e) => updateModule(code, mi, "usage_rate", Number(e.target.value))}
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <Label className="text-[11px]">活跃用户</Label>
-                                  <Input className="h-8 text-xs" type="number" inputMode="numeric" min="0" step="1" onKeyDown={(e) => { if (e.key === '.' || e.key === 'e' || e.key === 'E' || e.key === '-' || e.key === '+') e.preventDefault() }} value={mod.active_users}
-                                    onChange={(e) => updateModule(code, mi, "active_users", Number(e.target.value))}
-                                  />
-                                </div>
+                            {/* 已采购-已使用: 使用介绍 */}
+                            {mod.status === "已采购-已使用" && (
+                              <div className="space-y-1">
+                                <Label className="text-[11px]">使用介绍</Label>
+                                <RichTextEditor className="min-h-[80px] rounded-none" value={mod.usage_description || ""} onChange={(v: string) => updateModule(code, mi, "usage_description", v)}
+                                  placeholder="例如：教务处每周使用该模块进行排课和调课，教师通过移动端查看课表..." />
                               </div>
                             )}
 
@@ -2054,12 +2129,12 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                             <div className="grid grid-cols-2 gap-3">
                               <div className="space-y-1">
                                 <Label className="text-[11px]">
-                                  {mod.status === "已落地" ? "落地效果" : mod.status === "未落地" ? "未落地原因" : "备注"}
+                                  {mod.status === "已采购-已使用" ? "使用效果" : mod.status === "已采购-未使用" ? "未使用原因" : "备注"}
                                 </Label>
                                 <RichTextEditor className="min-h-[80px] rounded-none"
-                                  value={mod.status === "已落地" ? mod.effect : mod.status === "未落地" ? mod.issues : (mod.effect || "")}
-                                  onChange={(v: string) => { if (mod.status === "已落地") updateModule(code, mi, "effect", v); else if (mod.status === "未落地") updateModule(code, mi, "issues", v); else updateModule(code, mi, "effect", v); }}
-                                  placeholder={mod.status === "已落地" ? "例如：教师反馈积极，使用频率高..." : mod.status === "未落地" ? "例如：预算未批复、教师培训不足..." : "例如：暂无相关需求或计划..."} />
+                                  value={mod.status === "已采购-已使用" ? mod.effect : mod.status === "已采购-未使用" ? mod.issues : (mod.effect || "")}
+                                  onChange={(v: string) => { if (mod.status === "已采购-已使用") updateModule(code, mi, "effect", v); else if (mod.status === "已采购-未使用") updateModule(code, mi, "issues", v); else updateModule(code, mi, "effect", v); }}
+                                  placeholder={mod.status === "已采购-已使用" ? "例如：教师反馈积极，使用频率高..." : mod.status === "已采购-未使用" ? "例如：预算未批复、教师培训不足..." : "例如：暂无相关需求或计划..."} />
                               </div>
                               <div className="space-y-1">
                                 <Label className="text-[11px]">问题</Label>
@@ -2152,29 +2227,29 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
 
       {/* 下属学校（教育局模式）— Tab 切换，每次只显示一个学校 */}
       {isEducationBureau && (
-        <div className="bg-[#fdfcf8] border border-[#d1c7b7] mt-6" id="form-sub-schools">
-          <div className="bg-red-700 text-white px-5 py-2 text-xs font-semibold tracking-wider flex items-center justify-between">
+        <div id="form-sub-schools" className="bg-white rounded-2xl overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,.04)] mt-6 scroll-mt-[100px]">
+          <div className="bg-black text-white px-5 py-2.5 text-xs font-bold tracking-wider flex items-center justify-between">
             <span>下属学校</span>
-            <Button variant="ghost" size="sm" className="h-6 text-xs text-white hover:bg-red-600" onClick={addSubSchool}>＋ 添加下属学校</Button>
+            <Button variant="ghost" size="sm" className="h-6 text-xs text-white hover:bg-[#333]" onClick={addSubSchool}>＋ 添加下属学校</Button>
           </div>
           {subSchools.length === 0 ? (
             <div className="p-8 text-center text-xs text-gray-400">暂无下属学校，点击上方"＋ 添加下属学校"按钮添加</div>
           ) : (
             <>
               {/* Tab bar */}
-              <div className="flex border-b border-[#d1c7b7] bg-white overflow-x-auto">
+              <div className="flex border-b border-[#e0e0e0] bg-white overflow-x-auto">
                 {subSchools.map((school, si) => (
                   <button key={si} id={`form-sub-${si}`}
                     onClick={() => setActiveSubSchool(si)}
                     className={cn(
-                      "shrink-0 px-4 py-2.5 text-xs font-medium border-r border-[#e8e0d0] transition-colors flex items-center gap-1.5",
+                      "shrink-0 px-4 py-2.5 text-xs font-medium border-r border-[#e8e8e8] transition-colors flex items-center gap-1.5",
                       activeSubSchool === si
-                        ? "bg-red-50 text-red-700 border-b-2 border-b-red-700 -mb-px"
+                        ? "bg-gray-100 text-black border-b-2 border-b-black -mb-px"
                         : "text-gray-500 hover:bg-gray-50"
                     )}>
                     🏫 {school.name || `学校 ${si + 1}`}
                     {subSchools.length > 1 && (
-                      <span className="text-red-400 hover:text-red-600 ml-0.5" onClick={(ev) => { ev.stopPropagation(); removeSubSchool(si); if (activeSubSchool >= si && activeSubSchool > 0) setActiveSubSchool(activeSubSchool - 1); }}>
+                      <span className="text-gray-400 hover:text-black ml-0.5" onClick={(ev) => { ev.stopPropagation(); removeSubSchool(si); if (activeSubSchool >= si && activeSubSchool > 0) setActiveSubSchool(activeSubSchool - 1); }}>
                         <X className="w-3 h-3" /></span>
                     )}
                   </button>
@@ -2250,7 +2325,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                 {/* HW/NW — single campus mode */}
                 {(school.campus_mode || "single") === "single" && (
                 <div>
-                  <div className="border-t border-[#e8e0d0] pt-3 mb-3" />
+                  <div className="border-t border-[#e8e8e8] pt-3 mb-3" />
                   <Label className="text-xs font-medium mb-2 block">基本信息</Label>
                   <div className="grid grid-cols-4 gap-2">
                     {["总人数","教师人数","学生人数","班级数量","教室数量","功能教室数量","总面积"].map((key) => (
@@ -2275,7 +2350,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                 </div>
                 )}
                 {/* Campus mode */}
-                <div className="border-t border-[#e8e0d0] pt-3">
+                <div className="border-t border-[#e8e8e8] pt-3">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <Label className="text-xs">校区模式</Label>
@@ -2290,17 +2365,17 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                     </div>
                     {(school.campus_mode === "multi_independent" || school.campus_mode === "multi_cross") && (
                       <div className="flex items-end pb-0.5">
-                        <Button variant="ghost" size="sm" className="h-6 text-xs text-red-700 hover:bg-red-50" onClick={() => addSubSchoolCampus(si)}>＋ 添加校区</Button>
+                        <Button variant="ghost" size="sm" className="h-6 text-xs text-black hover:bg-gray-100" onClick={() => addSubSchoolCampus(si)}>＋ 添加校区</Button>
                       </div>
                     )}
                   </div>
                 </div>
                 {/* Campus list */}
                 {(school.campus_mode === "multi_independent" || school.campus_mode === "multi_cross") && school.campuses.map((campus, ci) => (
-                  <div key={ci} className="bg-gray-50 border border-[#e8e0d0] p-3">
+                  <div key={ci} className="bg-gray-50 border border-[#e8e8e8] p-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-semibold">🏫 校区 {ci + 1}</span>
-                      <Button variant="ghost" size="sm" className="h-5 text-[10px] text-red-400" onClick={() => removeSubSchoolCampus(si, ci)}>✕</Button>
+                      <Button variant="ghost" size="sm" className="h-5 text-[10px] text-gray-400" onClick={() => removeSubSchoolCampus(si, ci)}>✕</Button>
                     </div>
                     <div className="grid grid-cols-2 gap-2 mb-2">
                       <div className="space-y-0.5"><Label className="text-[10px]">校区名称</Label>
@@ -2327,7 +2402,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                   </div>
                 ))}
                 {/* Sub-school departments */}
-                <div className="border-t border-[#e8e0d0] pt-3">
+                <div className="border-t border-[#e8e8e8] pt-3">
                   <AddDepartmentButton
                     addedNames={new Set(Object.values(subDepts[si] || {}).map(d => d.department_name))}
                     predefined={ALL_DEPARTMENTS}
@@ -2346,14 +2421,15 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                           <div className="flex items-center justify-between mb-2 cursor-pointer">
                             <div className="flex items-center gap-1.5">
                               <div className={cn("w-2 h-2 rounded-full", colors.accent)} />
-                              <Input className="h-7 w-36 text-sm font-semibold border-0 bg-transparent focus-visible:ring-1 px-1"
+                              <Input className="h-7 min-w-[100px] max-w-[200px] text-sm font-semibold border border-transparent bg-white/60 hover:border-gray-300 focus-visible:ring-1 focus-visible:border-black rounded-md px-2"
                                 value={dept.department_name}
                                 onChange={(e) => updateSubDept(si, code, "department_name", e.target.value)}
-                                onClick={(ev) => ev.stopPropagation()} />
+                                onClick={(ev) => ev.stopPropagation()}
+                                placeholder="科室名称" />
                               <Badge variant="secondary" className="text-[10px]">{subMods.length} 模块</Badge>
                             </div>
                             <div className="flex items-center gap-1">
-                              <Button variant="ghost" size="sm" className="h-6 text-[10px] text-red-400 hover:text-red-600"
+                              <Button variant="ghost" size="sm" className="h-6 text-[10px] text-gray-400 hover:text-black"
                                 onClick={(ev) => { ev.stopPropagation(); ev.preventDefault(); removeSubDept(si, code); }}>
                                 <Trash2 className="w-3 h-3 mr-0.5" />移除</Button>
                               <ChevronDown className="w-3.5 h-3.5 text-gray-400 Collapsible__open-icon" />
@@ -2361,7 +2437,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                           </div>
                         </CollapsibleTrigger>
                         <CollapsibleContent>
-                          <div className="pb-3 mb-3 border-b border-dashed border-[#e8e0d0]">
+                          <div className="pb-3 mb-3 border-b border-dashed border-[#e8e8e8]">
                             <div className="flex items-center justify-between mb-1.5">
                               <span className="text-[11px] font-medium text-gray-500">科室人员</span>
                               <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={() => addSubPersonnel(si, code)}>＋ 添加</Button>
@@ -2375,23 +2451,23 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                                 <Input className="flex-1 h-7 text-[11px]" placeholder="电话" value={p.phone}
                                   onChange={(e) => updateSubPersonnel(si, code, pi, "phone", e.target.value)} />
                                 <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => removeSubPersonnel(si, code, pi)}>
-                                  <X className="w-3 h-3 text-red-400" /></Button>
+                                  <X className="w-3 h-3 text-gray-400" /></Button>
                               </div>
                             ))}
                           </div>
-                          <div className="pb-3 mb-3 border-b border-dashed border-[#e8e0d0]">
+                          <div className="pb-3 mb-3 border-b border-dashed border-[#e8e8e8]">
                             <BusinessGroups code={code} dept={dept} updateDepartment={(c, f, v) => updateSubDept(si, c, f, v)} />
                           </div>
                           <div>
                             <div className="flex items-center justify-between mb-1.5">
                               <span className="text-[11px] font-medium text-gray-500">模块匹配</span>
-                              <Button variant="ghost" size="sm" className="h-5 text-[10px] text-red-700 hover:bg-red-50" onClick={() => addSubModule(si, code)}>＋ 添加</Button>
+                              <Button variant="ghost" size="sm" className="h-5 text-[10px] text-black hover:bg-gray-100" onClick={() => addSubModule(si, code)}>＋ 添加</Button>
                             </div>
                             <div className="space-y-2">
                               {subMods.map((mod, mi) => (
-                                <div key={mi} className="bg-gray-50/50 border border-dashed border-[#e8e0d0] p-2.5 relative">
+                                <div key={mi} className="bg-gray-50/50 border border-dashed border-[#e8e8e8] p-2.5 relative">
                                   <Button variant="ghost" size="icon" className="absolute top-1.5 right-1.5 h-6 w-6 z-10"
-                                    onClick={() => removeSubModule(si, code, mi)}><X className="w-3 h-3 text-red-400" /></Button>
+                                    onClick={() => removeSubModule(si, code, mi)}><X className="w-3 h-3 text-gray-400" /></Button>
                                   <div className="grid grid-cols-2 gap-2">
                                     <div className="space-y-1"><Label className="text-[10px]">模块名称</Label>
                                       <ModuleSearchSelect value={mod.module_name}
@@ -2402,25 +2478,21 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
                                         <SelectTrigger className="h-7 w-full text-[11px]"><SelectValue /></SelectTrigger>
                                         <SelectContent>{MODULE_STATUS_OPTIONS.map(s => (<SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>))}</SelectContent></Select></div>
                                   </div>
-                                  {mod.status === "已落地" && (
-                                    <div className="grid grid-cols-2 gap-2 mt-2">
-                                      <div className="space-y-1"><Label className="text-[10px]">使用率(%)</Label>
-                                        <Input className="h-7 text-[11px]" type="number" value={mod.usage_rate}
-                                          onChange={(e) => updateSubModule(si, code, mi, "usage_rate", Number(e.target.value))} /></div>
-                                      <div className="space-y-1"><Label className="text-[10px]">活跃用户</Label>
-                                        <Input className="h-7 text-[11px]" type="number" value={mod.active_users}
-                                          onChange={(e) => updateSubModule(si, code, mi, "active_users", Number(e.target.value))} /></div>
-                                    </div>)}
+                                  {mod.status === "已采购-已使用" && (
+                                    <div className="space-y-1 mt-2"><Label className="text-[10px]">使用介绍</Label>
+                                      <RichTextEditor className="min-h-[60px] rounded-none" value={mod.usage_description || ""}
+                                        onChange={(v: string) => updateSubModule(si, code, mi, "usage_description", v)}
+                                        placeholder="例如：教务处每周使用该模块进行排课和调课..." /></div>)}
                                   {mod.status === "未购" && (
                                     <div className="space-y-1 mt-2"><Label className="text-[10px]">当前替代做法</Label>
                                       <RichTextEditor className="min-h-[60px] rounded-none" value={mod.current_practice}
                                         onChange={(v: string) => updateSubModule(si, code, mi, "current_practice", v)}
                                         placeholder="目前使用Excel手工管理..." /></div>)}
                                   <div className="grid grid-cols-2 gap-2 mt-2">
-                                    <div className="space-y-1"><Label className="text-[10px]">{mod.status === "已落地" ? "落地效果" : mod.status === "未落地" ? "未落地原因" : "备注"}</Label>
+                                    <div className="space-y-1"><Label className="text-[10px]">{mod.status === "已采购-已使用" ? "使用效果" : mod.status === "已采购-未使用" ? "未使用原因" : "备注"}</Label>
                                       <RichTextEditor className="min-h-[60px] rounded-none"
-                                        value={mod.status === "已落地" ? mod.effect : mod.issues}
-                                        onChange={(v: string) => { if (mod.status === "已落地") updateSubModule(si, code, mi, "effect", v); else updateSubModule(si, code, mi, "issues", v); }} /></div>
+                                        value={mod.status === "已采购-已使用" ? mod.effect : mod.issues}
+                                        onChange={(v: string) => { if (mod.status === "已采购-已使用") updateSubModule(si, code, mi, "effect", v); else updateSubModule(si, code, mi, "issues", v); }} /></div>
                                     <div className="space-y-1"><Label className="text-[10px]">问题</Label>
                                       <RichTextEditor className="min-h-[60px] rounded-none" value={mod.issues}
                                         onChange={(v: string) => updateSubModule(si, code, mi, "issues", v)}
@@ -2477,6 +2549,7 @@ export function CustomerForm({ customerId, onSaved, onCancel, currentUser }: Cus
           { key: "remark", label: "备注" },
         ]}
       />
+      </div>{/* close dock margin wrapper */}
       </div>{/* close max-w */}
     </div>
   );

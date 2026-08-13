@@ -1072,3 +1072,12 @@ body {
   --s-hero-completed: #4ade80;
   --s-stepper-dot-text: #111;
 }
+
+/* Hide scrollbar utility */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

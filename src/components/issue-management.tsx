@@ -753,8 +753,14 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
     }
   };
 
-  // 认领工单（抢单）
+  // 认领工单（抢单）- 同一个工单只能被一个人认领
   const handleClaim = async (issue: Issue) => {
+    // 前端防御性检查：工单已被认领时不允许再次认领
+    if (issue.handler_id) {
+      toast.error(`该工单已被「${issue.handler_name || issue.handler_id}」认领，无法重复认领`);
+      loadIssues(); // 刷新列表以更新状态
+      return;
+    }
     if (!confirm(`确定认领工单「${issue.title}」吗？认领后该工单将进入您的待办列表。`)) return;
     try {
       const body: Record<string, string> = {
@@ -777,15 +783,25 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         await Promise.all([loadIssues(), loadRecords()]);
       } else {
         const err = await res.json();
-        alert("认领失败: " + (err.error || "未知错误"));
+        toast.error(err.error || "认领失败");
+        // 如果是冲突（已被他人认领），刷新列表
+        if (res.status === 409) {
+          await Promise.all([loadIssues(), loadRecords()]);
+        }
       }
     } catch (e) {
-      alert("认领失败: " + String(e));
+      toast.error("认领失败: " + String(e));
     }
   };
 
   // 直接指定处理人（行内快速分配）
   const handleDirectAssign = async (issue: Issue, userId: string, userName: string, userPhone: string) => {
+    // 前端防御性检查：工单已被他人认领时不允许重新指定
+    if (issue.handler_id && String(issue.handler_id) !== String(userId)) {
+      toast.error(`该工单已被「${issue.handler_name || issue.handler_id}」认领，请先取消后再重新指定`);
+      loadIssues();
+      return;
+    }
     try {
       const body: Record<string, string> = {
         status: "accepted",
@@ -809,10 +825,13 @@ export default function IssueManagement({ currentUser }: IssueManagementProps) {
         await Promise.all([loadIssues(), loadRecords()]);
       } else {
         const err = await res.json();
-        alert("指定失败: " + (err.error || "未知错误"));
+        toast.error(err.error || "指定失败");
+        if (res.status === 409) {
+          await Promise.all([loadIssues(), loadRecords()]);
+        }
       }
     } catch (e) {
-      alert("指定失败: " + String(e));
+      toast.error("指定失败: " + String(e));
     }
   };
 

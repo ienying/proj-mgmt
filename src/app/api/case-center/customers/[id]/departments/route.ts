@@ -88,7 +88,6 @@ export async function PUT(
         delete safeFields.metrics;
         delete safeFields.dept_scope;
         delete safeFields.campus_id;
-        delete safeFields.group_names;
         const retry = await client.rpc("dp_update", {
           p_table: "design_case_center.customer_departments",
           p_id: deptId,
@@ -104,6 +103,64 @@ export async function PUT(
     }
 
     return NextResponse.json({ data: results });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+// POST /api/case-center/customers/[id]/departments — 创建自定义科室
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const client = await createServerClient();
+    const { id } = await params;
+    const body = await request.json();
+
+    const insertData: Record<string, unknown> = {
+      customer_id: id,
+      department_code: body.department_code || "",
+      department_name: body.department_name || "",
+      personnel: body.personnel || [],
+      daily_work: body.daily_work || "",
+      workflow: body.workflow || "",
+      pain_points: body.pain_points || "",
+      tools: body.tools || "",
+      expectations: body.expectations || "",
+      group_names: body.group_names || "",
+      department_summary: body.department_summary || "",
+      dept_scope: body.dept_scope || "school_wide",
+      campus_id: body.campus_id || "",
+      sort_order: 99,
+    };
+
+    const { data, error } = await client.rpc("dp_insert", {
+      p_table: "design_case_center.customer_departments",
+      p_data: insertData,
+    });
+
+    if (error) {
+      // 如果 group_names 列不存在，回退重试
+      if (error.message?.includes("does not exist")) {
+        const safe = { ...insertData };
+        delete safe.group_names;
+        delete safe.dept_scope;
+        delete safe.campus_id;
+        const retry = await client.rpc("dp_insert", {
+          p_table: "design_case_center.customer_departments",
+          p_data: safe,
+        });
+        if (retry.error) {
+          return NextResponse.json({ error: retry.error.message }, { status: 500 });
+        }
+        return NextResponse.json({ data: retry.data }, { status: 201 });
+      }
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ data }, { status: 201 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

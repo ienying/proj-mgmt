@@ -50,7 +50,7 @@ export async function POST() {
         customer_id UUID NOT NULL REFERENCES design_case_center.customers(id) ON DELETE CASCADE,
         module_code TEXT NOT NULL,
         module_name TEXT NOT NULL,
-        status TEXT DEFAULT '未购' CHECK (status IN ('已落地', '未落地', '未购')),
+        status TEXT DEFAULT '未购' CHECK (status IN ('已采购-已使用', '已采购-未使用', '未购')),
         usage_rate NUMERIC DEFAULT 0,
         active_users INT DEFAULT 0,
         effect TEXT DEFAULT '',
@@ -152,6 +152,41 @@ export async function POST() {
         ) THEN
           ALTER TABLE design_case_center.customer_departments ADD COLUMN campus_id TEXT DEFAULT '';
         END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'design_case_center' AND table_name = 'customer_departments' AND column_name = 'group_names'
+        ) THEN
+          ALTER TABLE design_case_center.customer_departments ADD COLUMN group_names TEXT DEFAULT '';
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'design_case_center' AND table_name = 'customer_modules' AND column_name = 'usage_description'
+        ) THEN
+          ALTER TABLE design_case_center.customer_modules ADD COLUMN usage_description TEXT DEFAULT '';
+        END IF;
+
+        -- 迁移状态值：已落地→已采购-已使用，未落地→已采购-未使用
+        UPDATE design_case_center.customer_modules SET status = '已采购-已使用' WHERE status = '已落地';
+        UPDATE design_case_center.customer_modules SET status = '已采购-未使用' WHERE status = '未落地';
+
+        -- 更新 CHECK 约束（如果存在旧约束则替换）
+        DO $inner$
+        DECLARE
+          old_constraint_name TEXT;
+        BEGIN
+          SELECT con.conname INTO old_constraint_name
+          FROM pg_constraint con
+          JOIN pg_class rel ON rel.oid = con.conrelid
+          JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+          WHERE nsp.nspname = 'design_case_center'
+            AND rel.relname = 'customer_modules'
+            AND con.contype = 'c'
+            AND pg_get_constraintdef(con.oid) LIKE '%status%';
+          IF old_constraint_name IS NOT NULL THEN
+            EXECUTE format('ALTER TABLE design_case_center.customer_modules DROP CONSTRAINT %I', old_constraint_name);
+          END IF;
+        END $inner$;
+        ALTER TABLE design_case_center.customer_modules ADD CONSTRAINT customer_modules_status_check CHECK (status IN ('已采购-已使用', '已采购-未使用', '未购'));
       END $$;
       CREATE INDEX IF NOT EXISTS idx_customer_modules_customer ON design_case_center.customer_modules(customer_id);
       CREATE INDEX IF NOT EXISTS idx_customer_modules_status ON design_case_center.customer_modules(status);

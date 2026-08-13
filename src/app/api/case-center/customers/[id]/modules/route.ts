@@ -46,7 +46,7 @@ export async function POST(
     const { id: customerId } = await params;
     const body = await request.json();
 
-    const { customer_department_id, module_code, module_name, status, usage_rate, active_users, effect, issues, current_practice, collaborating_departments, materials } = body;
+    const { customer_department_id, module_code, module_name, status, usage_rate, active_users, effect, issues, current_practice, usage_description, collaborating_departments, materials } = body;
 
     if (!customer_department_id || !module_code || !module_name) {
       return NextResponse.json({ error: "科室ID、模块编码和模块名称为必填项" }, { status: 400 });
@@ -63,6 +63,7 @@ export async function POST(
       effect: effect || "",
       issues: issues || "",
       current_practice: current_practice || "",
+      usage_description: usage_description || "",
       collaborating_departments: collaborating_departments || [],
       materials: materials || [],
     };
@@ -119,6 +120,7 @@ export async function PUT(
         effect: mod.effect || "",
         issues: mod.issues || "",
         current_practice: mod.current_practice || "",
+        usage_description: mod.usage_description || "",
         collaborating_departments: mod.collaborating_departments || [],
         materials: mod.materials || [],
         updated_at: new Date().toISOString(),

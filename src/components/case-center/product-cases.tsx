@@ -1,14 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Download, School, TrendingUp, Users, FileText, BarChart3 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { LeftFloatNav, type NavSection } from "./left-float-nav";
+import { School, TrendingUp, BarChart3 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CUSTOMER_TYPE_OPTIONS, ALL_DEPARTMENTS, PROVINCES } from "@/lib/case-center-constants";
-import { cn } from "@/lib/utils";
+import { CUSTOMER_TYPE_OPTIONS, ALL_DEPARTMENTS } from "@/lib/case-center-constants";
 import { toast } from "sonner";
 import { CompareView } from "./compare-view";
 
@@ -63,7 +59,7 @@ interface ProvinceDistRow {
   school_count: string;
 }
 
-export function ProductCases() {
+export function ProductCases({ onBack }: { onBack?: () => void }) {
   const [department, setDepartment] = useState("all");
   const [module, setModule] = useState("all");
   const [schoolType, setSchoolType] = useState("all");
@@ -81,8 +77,6 @@ export function ProductCases() {
   const [moduleRankSort, setModuleRankSort] = useState<"landed" | "coverage">("landed");
   const [expandedRankTip, setExpandedRankTip] = useState<string | null>(null);
   const [provinceDistribution, setProvinceDistribution] = useState<ProvinceDistRow[]>([]);
-  const [hoveredProvince, setHoveredProvince] = useState<string | null>(null);
-
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -123,9 +117,6 @@ export function ProductCases() {
     (sum, r) => sum + (Array.isArray(r.materials) ? r.materials.length : 0), 0
   );
 
-  // 学校类型分布用于简单柱状图
-  const maxTypeCount = Math.max(...typeDistribution.map((t) => Number(t.school_count)), 1);
-
   const toggleSelectSchool = (schoolId: string) => {
     setSelectedForCompare((prev) => {
       if (prev.includes(schoolId)) return prev.filter((id) => id !== schoolId);
@@ -148,47 +139,50 @@ export function ProductCases() {
     );
   }
 
-  const pcNavSections: NavSection[] = [
-    { id: "pc-ranking", icon: "📊", label: "产品排名" },
-    { id: "pc-dist", icon: "🗺", label: "分布分析" },
-    { id: "pc-leaderboard-sec", icon: "🏆", label: "使用率排行" },
-    { id: "pc-schools-sec", icon: "📋", label: "学校列表" },
-  ];
-
   return (
-    <div>
-      <LeftFloatNav sections={pcNavSections} />
-      <div className="max-w-[820px] mx-auto px-6 pb-16 pt-4">
-        {/* Newspaper masthead */}
-        <div className="text-center pt-8 pb-5 border-b-[3px] border-double border-red-700 mb-6">
-          <h1 className="text-4xl font-black text-red-700 tracking-[6px]" style={{fontFamily:"STSong, Songti SC, Noto Serif SC, serif"}}>
-            产品案例
-          </h1>
-          <p className="text-[11px] text-amber-700/60 tracking-[3px] mt-1">
-            PRODUCT CASE ANALYTICS
-          </p>
-          <p className="text-xs text-gray-400 mt-2">按产品目录维度分析模块覆盖率、使用率与落地情况</p>
+    <div className="db" style={{ padding: "0 14px 24px", background: "var(--bg)", minHeight: "100%" }}>
+      {/* ========== Header ========== */}
+      <div className="db-header">
+        <div className="flex items-center gap-4">
+          {onBack && (
+            <button className="btn-sm" onClick={onBack} style={{ marginRight: 4, fontSize: 11 }}>
+              ← 返回画像列表
+            </button>
+          )}
+          <div className="db-pulse" />
+          <span style={{ fontSize: 14, fontWeight: 700 }}>产品案例</span>
+          <span style={{ fontSize: 11, color: "var(--text3)" }}>PRODUCT CASE ANALYTICS</span>
         </div>
+        <div className="flex items-center gap-3">
+          <span className="db-clock">按产品目录维度分析模块覆盖率、使用率与落地情况</span>
+        </div>
+      </div>
 
-        {/* Stats row */}
-        <div className="grid grid-cols-4 gap-3 mb-5">
-          {[
-            { n: totalSchools, l: "落地学校" },
-            { n: avgUsage + "%", l: "平均使用率" },
-            { n: totalActiveUsers, l: "活跃用户" },
-            { n: totalMaterials, l: "素材总数" },
-          ].map((s, i) => (
-            <div key={i} className="bg-[#fdfcf8] border border-[#d1c7b7] p-3 text-center">
-              <div className="text-2xl font-bold text-red-900">{s.n}</div>
-              <div className="text-[10px] text-gray-400 tracking-wide mt-0.5">{s.l}</div>
-            </div>
-          ))}
+      {/* ========== KPI Row ========== */}
+      <div className="kpi6" style={{ marginTop: 10, marginBottom: "var(--gap)" }}>
+        <div className="tk tk-k1">
+          <div className="tk-val">{totalSchools}</div>
+          <div className="tk-label">落地学校</div>
         </div>
+        <div className="tk tk-k2">
+          <div className="tk-val">{avgUsage}%</div>
+          <div className="tk-label">平均使用率</div>
+        </div>
+        <div className="tk tk-k3">
+          <div className="tk-val">{totalActiveUsers}</div>
+          <div className="tk-label">活跃用户</div>
+        </div>
+        <div className="tk tk-k4">
+          <div className="tk-val">{totalMaterials}</div>
+          <div className="tk-label">素材总数</div>
+        </div>
+      </div>
 
       {/* 筛选栏 */}
-      <div className="flex items-center gap-3 flex-wrap mb-4">
+      <div className="db-panel" style={{ marginBottom: "var(--gap)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <span className="db-section-title" style={{ marginBottom: 0, marginRight: 4 }}>筛选</span>
         <Select value={department} onValueChange={(v) => { setDepartment(v); setModule("all"); }}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[160px] h-8 text-xs rounded-[6px]">
             <SelectValue placeholder="选择科室" />
           </SelectTrigger>
           <SelectContent>
@@ -199,7 +193,7 @@ export function ProductCases() {
           </SelectContent>
         </Select>
         <Select value={module} onValueChange={setModule}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[160px] h-8 text-xs rounded-[6px]">
             <SelectValue placeholder="选择模块" />
           </SelectTrigger>
           <SelectContent>
@@ -210,7 +204,7 @@ export function ProductCases() {
           </SelectContent>
         </Select>
         <Select value={schoolType} onValueChange={setSchoolType}>
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="w-[140px] h-8 text-xs rounded-[6px]">
             <SelectValue placeholder="学校类型" />
           </SelectTrigger>
           <SelectContent>
@@ -220,379 +214,279 @@ export function ProductCases() {
             ))}
           </SelectContent>
         </Select>
-        <Button variant="outline" size="sm" className="ml-auto" onClick={fetchData}>
-          刷新
-        </Button>
+        <button className="btn-sm" onClick={fetchData} style={{ marginLeft: "auto" }}>🔄 刷新</button>
       </div>
 
-      {/* 模块统计 */}
-      {stats.length > 0 && (
-        <div>
-          <h3 className="text-sm font-medium mb-2 flex items-center gap-1.5">
-            <BarChart3 className="w-4 h-4 text-muted-foreground" />
-            模块统计概览
-          </h3>
-          <div className="border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="text-left px-4 py-2 font-medium">模块</th>
-                  <th className="text-center px-4 py-2 font-medium">落地学校</th>
-                  <th className="text-center px-4 py-2 font-medium">平均使用率</th>
-                  <th className="text-center px-4 py-2 font-medium">活跃用户</th>
-                  <th className="text-center px-4 py-2 font-medium">素材数</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.map((s) => (
-                  <tr key={s.module_code} className="border-t hover:bg-muted/30">
-                    <td className="px-4 py-2 font-medium">{s.module_name}</td>
-                    <td className="px-4 py-2 text-center">{s.school_count}</td>
-                    <td className="px-4 py-2 text-center">
-                      <div className="flex items-center gap-2 justify-center">
-                        <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
-                          <div className="h-full bg-green-500 rounded-full" style={{ width: `${s.avg_usage_rate}%` }} />
-                        </div>
-                        <span>{s.avg_usage_rate}%</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-2 text-center">{s.total_active_users}</td>
-                    <td className="px-4 py-2 text-center">{s.total_materials}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {/* ========== Main 2-column layout ========== */}
+      <div className="main2" style={{ marginBottom: 10 }}>
+        {/* ---- LEFT PANEL ---- */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
 
-      {/* 产品目录使用排名 */}
-      {moduleRanking.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-medium flex items-center gap-1.5">
-              <TrendingUp className="w-4 h-4 text-muted-foreground" />
-              产品目录使用排名
-            </h3>
-            <div className="flex items-center gap-1 text-xs">
-              <Button
-                variant={moduleRankSort === "landed" ? "secondary" : "ghost"}
-                size="sm"
-                className="h-6 text-xs"
-                onClick={() => setModuleRankSort("landed")}
-              >
-                按落地学校
-              </Button>
-              <Button
-                variant={moduleRankSort === "coverage" ? "secondary" : "ghost"}
-                size="sm"
-                className="h-6 text-xs"
-                onClick={() => setModuleRankSort("coverage")}
-              >
-                按覆盖率
-              </Button>
-            </div>
-          </div>
-          <div className="border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="text-left px-3 py-2 font-medium text-xs">产品/模块</th>
-                  <th className="text-center px-3 py-2 font-medium text-xs">落地学校</th>
-                  <th className="text-center px-3 py-2 font-medium text-xs">🟢正式使用</th>
-                  <th className="text-center px-3 py-2 font-medium text-xs">🔵试用中</th>
-                  <th className="text-center px-3 py-2 font-medium text-xs">🟠未购</th>
-                  <th className="text-center px-3 py-2 font-medium text-xs">覆盖率</th>
-                  <th className="text-center px-3 py-2 font-medium text-xs">排名</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(() => {
-                  const sorted = [...moduleRanking].sort((a, b) => {
-                    if (moduleRankSort === "coverage") {
-                      return Number(b.coverage_rate) - Number(a.coverage_rate);
-                    }
-                    return Number(b.landed_schools) - Number(a.landed_schools);
-                  });
-                  const topThreshold = sorted.length > 0 ? Number(sorted[2]?.landed_schools || 0) : 0;
-                  const bottomThreshold = sorted.length > 3 ? Number(sorted[sorted.length - 3]?.landed_schools || 0) : 0;
-
-                  return sorted.map((m, i) => {
-                    const isTop3 = i < 3 && Number(m.landed_schools) > 0;
-                    const isBottom3 = i >= sorted.length - 3 && sorted.length > 3;
-                    const coverage = Number(m.coverage_rate) || 0;
-
-                    let rankTip = "";
-                    if (coverage > 60) {
-                      rankTip = `⭐ 核心产品：渗透率最高的破冰模块，${m.module_name}已覆盖${m.landed_schools}所学校。推广建议：对所有未购学校优先推荐。`;
-                    } else if (coverage >= 30) {
-                      rankTip = `📈 增长潜力：${m.module_name}覆盖率${coverage}%，有进一步提升空间。当前落地${m.landed_schools}所学校，建议加大推广力度。`;
-                    } else {
-                      rankTip = `⚠ 需关注：${m.module_name}覆盖率仅${coverage}%，落地${m.landed_schools}所学校。建议分析原因（客单价/场景匹配/实施周期），制定针对性推进方案。`;
-                    }
-
-                    return (
-                      <tr
-                        key={m.module_code}
-                        className={cn(
-                          "border-t hover:bg-muted/30 cursor-pointer",
-                          isTop3 && "bg-green-50/50 dark:bg-green-950/20",
-                          isBottom3 && !isTop3 && "bg-red-50/50 dark:bg-red-950/20"
-                        )}
-                        onClick={() => setExpandedRankTip(expandedRankTip === m.module_code ? null : m.module_code)}
-                      >
-                        <td className="px-3 py-2 font-medium text-xs">{m.module_name}</td>
-                        <td className="px-3 py-2 text-center text-xs">{m.landed_schools}</td>
-                        <td className="px-3 py-2 text-center text-xs text-green-600 font-medium">{m.active_schools}</td>
-                        <td className="px-3 py-2 text-center text-xs text-blue-600 font-medium">{m.trial_schools}</td>
-                        <td className="px-3 py-2 text-center text-xs text-orange-600 font-medium">{m.not_purchased_schools}</td>
-                        <td className="px-3 py-2 text-center text-xs">
-                          <div className="flex items-center gap-1.5 justify-center">
-                            <div className="w-12 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                              <div
-                                className={cn(
-                                  "h-full rounded-full",
-                                  coverage > 60 ? "bg-green-500" : coverage >= 30 ? "bg-blue-500" : "bg-orange-500"
-                                )}
-                                style={{ width: `${Math.min(coverage, 100)}%` }}
-                              />
-                            </div>
-                            <span>{coverage}%</span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          {isTop3 ? (
-                            <Badge className="text-[10px] bg-green-100 text-green-700 border-green-300">
-                              ⭐ TOP{i + 1}
-                            </Badge>
-                          ) : isBottom3 ? (
-                            <Badge className="text-[10px] bg-red-100 text-red-700 border-red-300">
-                              ⚠ BOTTOM
-                            </Badge>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">{i + 1}</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  });
-                })()}
-              </tbody>
-            </table>
-          </div>
-          {/* 排名提示词展开 */}
-          {expandedRankTip && (
-            <div className="mt-1 p-3 border rounded-lg bg-blue-50/50 dark:bg-blue-950/20 text-xs text-muted-foreground">
-              {(() => {
-                const m = moduleRanking.find((r) => r.module_code === expandedRankTip);
-                if (!m) return null;
-                const coverage = Number(m.coverage_rate) || 0;
-                if (coverage > 60) {
-                  return <>⭐ <strong>{m.module_name}</strong>（核心产品）：渗透率最高的破冰模块，已覆盖<strong>{m.landed_schools}</strong>所学校，覆盖率<strong>{coverage}%</strong>。推广建议：对所有未购学校优先推荐，以痛点切入。</>;
-                } else if (coverage >= 30) {
-                  return <>📈 <strong>{m.module_name}</strong>（增长潜力）：覆盖率<strong>{coverage}%</strong>，落地<strong>{m.landed_schools}</strong>所学校。当前推广瓶颈有待突破，建议加大推广力度。</>;
-                }
-                return <>⚠ <strong>{m.module_name}</strong>（需关注）：覆盖率仅<strong>{coverage}%</strong>，落地<strong>{m.landed_schools}</strong>所学校。建议分析原因（客单价高/场景窄/实施周期长）并制定推进方案。</>;
-              })()}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 省份画像分布矩形树图 */}
-      {provinceDistribution.length > 0 && (() => {
-        const total = provinceDistribution.reduce((sum, p) => sum + Number(p.school_count), 0);
-        const maxCount = Math.max(...provinceDistribution.map((p) => Number(p.school_count)));
-        return (
-          <div className="bg-[#fdfcf8] border border-[#d1c7b7]">
-            <div className="p-4">
-              <h3 className="text-sm font-medium mb-3 flex items-center gap-1.5">
-                <BarChart3 className="w-4 h-4 text-muted-foreground" />
-                省份画像分布
-                <span className="text-xs text-muted-foreground font-normal ml-2">
-                  共 {provinceDistribution.length} 个省份，{total} 所学校
+          {/* 产品目录排名 + 使用率柱状图 */}
+          {moduleRanking.length > 0 && (
+            <div className="db-panel">
+              <div className="db-section-title" style={{ justifyContent: "space-between" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <TrendingUp style={{ width: 15, height: 15 }} />
+                  产品目录排行
                 </span>
-              </h3>
-              <div className="flex flex-wrap gap-1" style={{ minHeight: "120px" }}>
-                {provinceDistribution.map((p) => {
-                  const count = Number(p.school_count);
-                  const ratio = total > 0 ? count / total : 0;
-                  const percentage = Math.round(ratio * 100);
-                  const colorIntensity = Math.max(0.15, ratio * 0.85);
-                  const flexGrow = Math.max(1, Math.round(ratio * 20));
-                  const minWidth = Math.max(80, Math.round(ratio * 300));
-                  return (
-                    <div
-                      key={p.province}
-                      className="relative rounded-md p-2 transition-all hover:ring-2 hover:ring-primary/50 cursor-default"
-                      style={{
-                        flex: `${flexGrow} 1 ${minWidth}px`,
-                        backgroundColor: `rgba(79, 70, 229, ${colorIntensity})`,
-                        color: colorIntensity > 0.4 ? "#fff" : "#1e293b",
-                      }}
-                      onMouseEnter={() => setHoveredProvince(p.province)}
-                      onMouseLeave={() => setHoveredProvince(null)}
-                    >
-                      <div className="text-xs font-medium truncate">{p.province}</div>
-                      <div className="text-lg font-bold">{count}所</div>
-                      <div className="text-[10px] opacity-75">({percentage}%)</div>
-                      {hoveredProvince === p.province && (
-                        <div className="absolute bottom-full left-0 mb-1 z-10 bg-popover border rounded-md shadow-md p-2 text-xs w-48">
-                          <div className="font-medium">{p.province}</div>
-                          <div className="text-muted-foreground mt-0.5">
-                            {count} 所学校 · 占比 {percentage}%
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button
+                    className="btn-sm"
+                    style={moduleRankSort === "landed" ? { borderColor: "var(--p1)", color: "var(--p)", background: "#e8f0fe" } : {}}
+                    onClick={() => setModuleRankSort("landed")}
+                  >按落地</button>
+                  <button
+                    className="btn-sm"
+                    style={moduleRankSort === "coverage" ? { borderColor: "var(--p1)", color: "var(--p)", background: "#e8f0fe" } : {}}
+                    onClick={() => setModuleRankSort("coverage")}
+                  >按覆盖率</button>
+                </div>
               </div>
-              <div className="flex items-center gap-4 mt-2 text-[10px] text-muted-foreground">
-                <span>■ 块面积 = 画像数量</span>
-                <span>颜色深浅 = 数量多/少</span>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* 学校分布地图（省份热力图） */}
-      {provinceDistribution.length > 0 && (() => {
-        const provinceMap = new Map<string, number>();
-        provinceDistribution.forEach((p) => provinceMap.set(p.province, Number(p.school_count)));
-        const maxSchools = Math.max(...provinceDistribution.map((p) => Number(p.school_count)), 1);
-
-        // 省份按区域分组（大致地理位置）
-        const regions: Array<{ label: string; provinces: string[] }> = [
-          { label: "东北", provinces: ["黑龙江省", "吉林省", "辽宁省"] },
-          { label: "华北", provinces: ["北京市", "天津市", "河北省", "山西省", "内蒙古自治区"] },
-          { label: "西北", provinces: ["新疆维吾尔自治区", "青海省", "甘肃省", "宁夏回族自治区", "陕西省"] },
-          { label: "华东", provinces: ["山东省", "江苏省", "上海市", "浙江省", "安徽省", "福建省", "江西省"] },
-          { label: "华中", provinces: ["河南省", "湖北省", "湖南省"] },
-          { label: "西南", provinces: ["四川省", "重庆市", "贵州省", "云南省", "西藏自治区"] },
-          { label: "华南", provinces: ["广东省", "广西壮族自治区", "海南省"] },
-          { label: "港澳台", provinces: ["香港特别行政区", "澳门特别行政区", "台湾省"] },
-        ];
-
-        return (
-          <div className="bg-[#fdfcf8] border border-[#d1c7b7]">
-            <div className="p-4">
-              <h3 className="text-sm font-medium mb-3 flex items-center gap-1.5">
-                <School className="w-4 h-4 text-muted-foreground" />
-                学校分布地图
-              </h3>
-              <div className="flex gap-4 flex-wrap">
-                {regions.map((region) => (
-                  <div key={region.label} className="flex-1 min-w-[120px]">
-                    <div className="text-[10px] font-medium text-muted-foreground mb-1.5 border-b pb-1">
-                      {region.label}
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {region.provinces.map((prov) => {
-                        const count = provinceMap.get(prov) || 0;
-                        const intensity = count > 0 ? Math.max(0.15, count / maxSchools) : 0;
-                        const bg = count > 0
-                          ? `rgba(79, 70, 229, ${intensity})`
-                          : "rgba(226, 232, 240, 0.5)";
-                        const textColor = intensity > 0.5 ? "#fff" : "#334155";
-                        const short = prov.replace(/省|市|自治区|壮族|回族|维吾尔|特别行政区/g, "").slice(0, 4);
+              {/* 使用率柱状图 */}
+              {stats.length > 0 && (() => {
+                const barMax = Math.max(...stats.map(s => Number(s.avg_usage_rate) || 0), 1);
+                const barColors = ["#6366f1", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6"];
+                return (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 10, color: "var(--text3)", marginBottom: 6 }}>使用率统计 (%)</div>
+                    <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 120, paddingBottom: 18, position: "relative" }}>
+                      {stats.map((s, i) => {
+                        const v = Number(s.avg_usage_rate) || 0;
+                        const h = Math.max(4, (v / barMax) * 96);
                         return (
-                          <div
-                            key={prov}
-                            className="relative rounded px-1.5 py-1 text-[10px] cursor-default transition-all hover:ring-1 hover:ring-primary/50"
-                            style={{ backgroundColor: bg, color: textColor }}
-                            title={`${prov}: ${count}所学校`}
-                          >
-                            <span>{short}</span>
-                            {count > 0 && (
-                              <span className="ml-0.5 font-bold">{count}</span>
-                            )}
+                          <div key={s.module_code} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%", position: "relative" }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, marginBottom: 2, color: "var(--text)" }}>{v}%</span>
+                            <div style={{
+                              width: "100%", maxWidth: 48, height: h,
+                              borderRadius: "4px 4px 0 0",
+                              background: barColors[i % barColors.length],
+                              transition: "height .3s",
+                              minWidth: 20
+                            }} />
+                            <span style={{ fontSize: 9, color: "var(--text2)", position: "absolute", bottom: -18, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%", textAlign: "center" }}>
+                              {s.module_name.length > 3 ? s.module_name.slice(0, 3) + "…" : s.module_name}
+                            </span>
                           </div>
                         );
                       })}
                     </div>
                   </div>
-                ))}
-              </div>
-              <div className="flex items-center gap-4 mt-3 text-[10px] text-muted-foreground">
-                <span>■ 颜色深浅 = 学校数量</span>
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-3 rounded bg-slate-200" /> 无数据
-                  <span className="inline-block w-3 h-3 rounded bg-indigo-200" /> 少
-                  <span className="inline-block w-3 h-3 rounded bg-indigo-800" /> 多
-                </span>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* 学校类型分布 + 使用率排行 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* 学校类型分布 */}
-        <div className="bg-[#fdfcf8] border border-[#d1c7b7]">
-          <div className="p-4">
-            <h3 className="text-sm font-medium mb-3">学校类型分布</h3>
-            {typeDistribution.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">暂无数据</p>
-            ) : (
-              <div className="space-y-2">
-                {typeDistribution.map((t) => (
-                  <div key={t.school_type} className="flex items-center gap-2">
-                    <span className="text-xs w-12">{t.school_type}</span>
-                    <div className="flex-1 h-5 bg-gray-100 rounded overflow-hidden">
+                );
+              })()}
+              {/* 排名列表 */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {(() => {
+                  const sorted = [...moduleRanking].sort((a, b) => {
+                    if (moduleRankSort === "coverage") return Number(b.coverage_rate) - Number(a.coverage_rate);
+                    return Number(b.landed_schools) - Number(a.landed_schools);
+                  });
+                  return sorted.map((m, i) => {
+                    const coverage = Number(m.coverage_rate) || 0;
+                    const isTop3 = i < 3 && Number(m.landed_schools) > 0;
+                    return (
                       <div
-                        className="h-full bg-blue-500 rounded flex items-center justify-end px-2 text-xs text-white font-medium"
-                        style={{ width: `${(Number(t.school_count) / maxTypeCount) * 100}%` }}
+                        key={m.module_code}
+                        onClick={() => setExpandedRankTip(expandedRankTip === m.module_code ? null : m.module_code)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 10, padding: "8px 10px",
+                          borderRadius: 8, cursor: "pointer", background: isTop3 ? "var(--card2)" : "transparent",
+                          transition: "background .15s"
+                        }}
                       >
-                        {t.school_count}
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", width: 18 }}>
+                          {isTop3 ? "⭐" : i + 1}
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600 }}>{m.module_name}</div>
+                          <div style={{ fontSize: 10, color: "var(--text2)" }}>
+                            {m.landed_schools}/{m.total_school_count} 校 · {coverage}% 覆盖
+                          </div>
+                        </div>
+                        <div style={{ width: 60 }}>
+                          <div style={{ height: 4, borderRadius: 2, background: "var(--border)", overflow: "hidden" }}>
+                            <div style={{
+                              height: "100%", borderRadius: 2,
+                              background: coverage > 60 ? "var(--g)" : coverage >= 30 ? "var(--y)" : "var(--r)",
+                              width: `${Math.min(coverage, 100)}%`
+                            }} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+              {expandedRankTip && (
+                <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8, background: "#e8f0fe", fontSize: 11, color: "var(--text2)", lineHeight: 1.6 }}>
+                  {(() => {
+                    const m = moduleRanking.find((r) => r.module_code === expandedRankTip);
+                    if (!m) return null;
+                    const coverage = Number(m.coverage_rate) || 0;
+                    if (coverage > 60) return <>⭐ <strong>{m.module_name}</strong>（核心产品）：已覆盖<strong>{m.landed_schools}</strong>所学校，覆盖率<strong>{coverage}%</strong>。建议对所有未购学校优先推荐。</>;
+                    if (coverage >= 30) return <>📈 <strong>{m.module_name}</strong>（增长潜力）：覆盖率<strong>{coverage}%</strong>，落地<strong>{m.landed_schools}</strong>所学校，建议加大推广。</>;
+                    return <>⚠ <strong>{m.module_name}</strong>（需关注）：覆盖率仅<strong>{coverage}%</strong>，落地<strong>{m.landed_schools}</strong>所学校，建议分析原因并制定推进方案。</>;
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 模块覆盖率卡片 */}
+          {stats.length > 0 && (
+            <div className="db-panel">
+              <div className="db-section-title">
+                <BarChart3 style={{ width: 15, height: 15 }} />
+                模块覆盖率概览
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {stats.map((s) => {
+                  const rate = Number(s.avg_usage_rate) || 0;
+                  return (
+                    <div key={s.module_code} style={{
+                      background: "var(--card2)", borderRadius: 8, padding: "10px 14px",
+                      display: "flex", alignItems: "center", gap: 12
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{s.module_name}</div>
+                        <div style={{ display: "flex", gap: 16, fontSize: 11, color: "var(--text2)" }}>
+                          <span>🏫 {s.school_count} 校</span>
+                          <span>👤 {s.total_active_users} 用户</span>
+                          <span>📎 {s.total_materials} 素材</span>
+                        </div>
+                      </div>
+                      <div style={{ width: 80, textAlign: "right" }}>
+                        <div style={{ fontSize: 20, fontWeight: 900, color: rate >= 60 ? "var(--g)" : rate >= 30 ? "var(--y)" : "var(--r)" }}>
+                          {s.avg_usage_rate}%
+                        </div>
+                        <div style={{ fontSize: 9, color: "var(--text3)" }}>使用率</div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
-        {/* 使用率排行 */}
-        <div className="bg-[#fdfcf8] border border-[#d1c7b7]">
-          <div className="p-4">
-            <h3 className="text-sm font-medium mb-3">使用率排行</h3>
-            <div className="space-y-2 max-h-[300px] overflow-y-auto">
-              {ranking.slice(0, 10).map((r, i) => (
-                <div key={r.school_id} className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground w-5">{i + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium truncate">{r.school_name}</div>
-                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                      <span>{(r.customer_types || []).join(", ")}</span>
-                      {r.module_name && <span>· {r.module_name}</span>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${r.usage_rate}%` }} />
-                    </div>
-                    <span className="text-xs font-medium w-9 text-right">{r.usage_rate}%</span>
-                  </div>
-                </div>
-              ))}
+        {/* ---- RIGHT PANEL ---- */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
+
+          {/* 学校类型饼状图 */}
+          <div className="db-panel">
+            <div className="db-section-title">
+              <School style={{ width: 15, height: 15 }} />
+              学校类型分布
             </div>
+            {typeDistribution.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 24, fontSize: 12, color: "var(--text3)" }}>暂无数据</div>
+            ) : (
+              (() => {
+                const pieColors = ["#6366f1", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6"];
+                const total = typeDistribution.reduce((sum, t) => sum + Number(t.school_count), 0);
+                const cx = 90, cy = 90, r = 75, innerR = 38;
+                let cumAngle = 0;
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                    <svg width="180" height="180" viewBox="0 0 180 180" style={{ flexShrink: 0 }}>
+                      {typeDistribution.map((t, i) => {
+                        const count = Number(t.school_count);
+                        const pct = total > 0 ? count / total : 0;
+                        const angle = pct * 360;
+                        const startAngle = cumAngle;
+                        cumAngle += angle;
+                        if (angle < 0.5) return null;
+                        const toRad = (deg: number) => (deg - 90) * Math.PI / 180;
+                        const a0 = toRad(startAngle);
+                        const a1 = toRad(startAngle + angle);
+                        const x1o = cx + r * Math.cos(a0), y1o = cy + r * Math.sin(a0);
+                        const x2o = cx + r * Math.cos(a1), y2o = cy + r * Math.sin(a1);
+                        const x1i = cx + innerR * Math.cos(a0), y1i = cy + innerR * Math.sin(a0);
+                        const x2i = cx + innerR * Math.cos(a1), y2i = cy + innerR * Math.sin(a1);
+                        const large = angle > 180 ? 1 : 0;
+                        const d = `M${x1o},${y1o} A${r},${r} 0 ${large} 1 ${x2o},${y2o} L${x2i},${y2i} A${innerR},${innerR} 0 ${large} 0 ${x1i},${y1i} Z`;
+                        return <path key={t.school_type} d={d} fill={pieColors[i % pieColors.length]} stroke="#fff" strokeWidth="1.5" />;
+                      })}
+                      <circle cx={cx} cy={cy} r={innerR} fill="#fff" />
+                      <text x={cx} y={cy - 4} textAnchor="middle" fontSize="16" fontWeight="900" fill="var(--text)">{total}</text>
+                      <text x={cx} y={cy + 12} textAnchor="middle" fontSize="9" fill="var(--text3)">学校总数</text>
+                    </svg>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 5, flex: 1 }}>
+                      {typeDistribution.map((t, i) => {
+                        const count = Number(t.school_count);
+                        const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                        return (
+                          <div key={t.school_type} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
+                            <span style={{ width: 9, height: 9, borderRadius: 2, background: pieColors[i % pieColors.length], flexShrink: 0 }} />
+                            <span style={{ flex: 1 }}>{t.school_type}</span>
+                            <span style={{ fontWeight: 700, fontSize: 10 }}>{count}</span>
+                            <span style={{ color: "var(--text3)", fontSize: 10, width: 30, textAlign: "right" }}>{pct}%</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()
+            )}
+          </div>
+
+          {/* 产品使用排行 */}
+          <div className="db-panel">
+            <div className="db-section-title" style={{ justifyContent: "space-between" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                🏆 产品使用排行
+              </span>
+              <span style={{ fontSize: 10, color: "var(--text3)", fontWeight: 400 }}>按使用率</span>
+            </div>
+            {stats.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 20, fontSize: 12, color: "var(--text3)" }}>暂无数据</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {[...stats].sort((a, b) => (Number(b.avg_usage_rate) || 0) - (Number(a.avg_usage_rate) || 0)).map((s, i) => {
+                  const rate = Number(s.avg_usage_rate) || 0;
+                  const colors = ["#6366f1", "#3b82f6", "#10b981"];
+                  return (
+                    <div key={s.module_code} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{
+                        width: 20, height: 20, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 10, fontWeight: 800, color: "#fff",
+                        background: i < 3 ? colors[i] : "var(--text3)"
+                      }}>
+                        {i + 1}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600 }}>{s.module_name}</div>
+                        <div style={{ fontSize: 10, color: "var(--text2)" }}>{s.school_count} 所学校使用</div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                        <div style={{ width: 50, height: 5, borderRadius: 3, background: "var(--border)", overflow: "hidden" }}>
+                          <div style={{
+                            height: "100%", borderRadius: 3,
+                            background: rate >= 60 ? "linear-gradient(90deg, #10b981, #34d399)" : rate >= 30 ? "linear-gradient(90deg, #f59e0b, #fbbf24)" : "linear-gradient(90deg, #ef4444, #f87171)",
+                            width: `${Math.min(rate, 100)}%`
+                          }} />
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 700, width: 36, textAlign: "right" }}>{rate}%</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* 学校列表 */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium">落地学校列表</h3>
+      <div className="db-panel" style={{ marginTop: "var(--gap)" }}>
+        <div className="db-section-title" style={{ justifyContent: "space-between" }}>
+          <span>落地学校列表</span>
           <div className="flex items-center gap-2">
             {selectedForCompare.length >= 2 && (
-              <Button size="sm" variant="outline" onClick={() => setShowCompare(true)}>
+              <button className="btn-sm" onClick={() => setShowCompare(true)}>
                 对比选中 ({selectedForCompare.length})
-              </Button>
+              </button>
             )}
           </div>
         </div>
@@ -668,7 +562,6 @@ export function ProductCases() {
           onClose={() => setShowCompare(false)}
         />
       )}
-    </div>
     </div>
   );
 }

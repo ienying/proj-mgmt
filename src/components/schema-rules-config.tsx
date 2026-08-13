@@ -26,6 +26,7 @@ import {
   Settings,
   Trash2,
   Edit,
+  Copy,
   Database,
   Layers,
 } from "lucide-react";
@@ -93,6 +94,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
   const [tableSearch, setTableSearch] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isCopying, setIsCopying] = useState(false);
 
   const [formData, setFormData] = useState<Partial<SchemaRule>>({
     rule_name: "",
@@ -171,6 +173,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
   }, []);
 
   const openCreateDrawer = () => {
+    setIsCopying(false);
     setEditingId(null);
     setFormData({
       rule_name: "",
@@ -193,10 +196,27 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
   };
 
   const openEditDrawer = (rule: SchemaRule) => {
+    setIsCopying(false);
     setEditingId(rule.id);
     setFormData({
       ...rule,
       module_codes: rule.module_codes || [],
+    });
+    setModuleSearch("");
+    setTableSearch("");
+    setDrawerOpen(true);
+  };
+
+  const openCopyDrawer = (rule: SchemaRule) => {
+    setIsCopying(true);
+    setEditingId(null);
+    setFormData({
+      ...rule,
+      id: undefined,
+      rule_name: `${rule.rule_name} (副本)`,
+      module_codes: rule.module_codes || [],
+      is_enabled: true,
+      sort_order: rules.length,
     });
     setModuleSearch("");
     setTableSearch("");
@@ -375,7 +395,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
               <span className="flex-1 min-w-0">匹配条件</span>
               <span className="w-[180px] shrink-0">规范表</span>
               <span className="w-[60px] shrink-0 text-center">启用</span>
-              <span className="w-[72px] shrink-0 text-right">操作</span>
+              <span className="w-[105px] shrink-0 text-right">操作</span>
             </div>
             {/* 行 */}
             {rules
@@ -425,7 +445,16 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
                       className="scale-75"
                     />
                   </span>
-                  <span className="w-[72px] shrink-0 flex justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
+                  <span className="w-[105px] shrink-0 flex justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openCopyDrawer(rule)}
+                      className="h-7 w-7"
+                      title="复制规则"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -468,7 +497,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
         <div className="flex items-center justify-between px-5 py-3.5 border-b shrink-0">
           <div className="flex items-center gap-3">
             <h3 className="text-sm font-semibold">
-              {editingId ? "编辑规则" : "新建规则"}
+              {editingId ? "编辑规则" : isCopying ? "复制规则" : "新建规则"}
             </h3>
             <Popover>
               <PopoverTrigger asChild>
@@ -910,7 +939,7 @@ export function SchemaRulesConfig({ projectTypes, projectStages }: SchemaRulesCo
             取消
           </Button>
           <Button onClick={handleSubmit} size="sm" className="h-8 text-xs">
-            {editingId ? "保存" : "创建"}
+            {editingId ? "保存" : "确认创建"}
           </Button>
         </div>
       </div>
