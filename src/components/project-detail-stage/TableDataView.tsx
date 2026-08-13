@@ -294,7 +294,8 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
     const fmtDate = (v: string) => { const d = v.split(/[T ]/)[0]; return d || v; };
     if (col.type === "calc" && col.calc_left_col && col.calc_right_col) {
       const l = Number(row[col.calc_left_col] ?? 0); const r = Number(row[col.calc_right_col] ?? 0);
-      const result = col.calc_operator === "-" ? (l - r) : col.calc_operator === "*" ? (l * r) : col.calc_operator === "/" ? (r ? l / r : 0) : (l + r);
+      const op = col.calc_operator || "*"; // 运算符缺失时默认乘法
+      const result = op === "-" ? (l - r) : op === "*" ? (l * r) : op === "/" ? (r ? l / r : 0) : (l + r);
       return <span className="font-mono text-xs" style={{ color: "var(--s-text)" }}>{String(result)}</span>;
     }
     const rawVal = (row[col.name] != null && row[col.name] !== "") ? String(row[col.name]) : "—";

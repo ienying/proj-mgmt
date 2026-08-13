@@ -431,7 +431,8 @@ export function PhaseDetail({ phaseKey, stageCode, tableDefs = [], projectSchema
   const computeCalcRow = (col: any, row: Record<string, unknown>) => {
     if (!col.calc_left_col || !col.calc_right_col) return null;
     const l = Number(row[col.calc_left_col] ?? 0); const r = Number(row[col.calc_right_col] ?? 0);
-    return col.calc_operator === "-" ? (l - r) : col.calc_operator === "*" ? (l * r) : col.calc_operator === "/" ? (r ? l / r : 0) : (l + r);
+    const op = col.calc_operator || "*"; // 运算符缺失时默认乘法
+    return op === "-" ? (l - r) : op === "*" ? (l * r) : op === "/" ? (r ? l / r : 0) : (l + r);
   };
 
   const renderCell = (tableCode: string, rowIdx: number, col: any, row: Record<string, unknown>) => {

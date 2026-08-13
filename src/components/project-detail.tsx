@@ -1197,17 +1197,19 @@ export function ProjectDetail({
   // 渲染单元格显示值（非编辑态）
   const computeCalc = (col: ColumnConfig, row?: Record<string, unknown>, allRows?: Record<string, unknown>[]) => {
     if (col.type !== "calc" || !col.calc_left_col || !col.calc_right_col) return null;
+    // 运算符缺失时默认乘法（与配置界面默认显示 × 保持一致）
+    const op = col.calc_operator || "*";
+    const apply = (l: number, rv: number) =>
+      op === "-" ? (l - rv) : op === "*" ? (l * rv) : op === "/" ? (rv ? l / rv : 0) : (l + rv);
     if (col.calc_sum && allRows) {
       let sum = 0;
       for (const r of allRows) {
-        const l = Number(r[col.calc_left_col] ?? 0); const rv = Number(r[col.calc_right_col] ?? 0);
-        sum += col.calc_operator === "-" ? (l - rv) : col.calc_operator === "*" ? (l * rv) : col.calc_operator === "/" ? (rv ? l / rv : 0) : (l + rv);
+        sum += apply(Number(r[col.calc_left_col] ?? 0), Number(r[col.calc_right_col] ?? 0));
       }
       return sum;
     }
     if (!row) return null;
-    const l = Number(row[col.calc_left_col] ?? 0); const r = Number(row[col.calc_right_col] ?? 0);
-    return col.calc_operator === "-" ? (l - r) : col.calc_operator === "*" ? (l * r) : col.calc_operator === "/" ? (r ? l / r : 0) : (l + r);
+    return apply(Number(row[col.calc_left_col] ?? 0), Number(row[col.calc_right_col] ?? 0));
   };
 
   const renderCellValue = (col: ColumnConfig, value: unknown, row?: Record<string, unknown>) => {

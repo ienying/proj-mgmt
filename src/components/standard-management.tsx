@@ -2294,7 +2294,12 @@ export function StandardManagement({
                                   <TableCell>
                                     <Select
                                       value={col.type}
-                                      onValueChange={(value) => updateColumn(index, "type", value)}
+                                      onValueChange={(value) => {
+                                        updateColumn(index, "type", value);
+                                        if (value === "calc" && !col.calc_operator) {
+                                          updateColumn(index, "calc_operator", "*");
+                                        }
+                                      }}
                                     >
                                       <SelectTrigger className="h-8 text-sm w-full min-w-[120px]">
                                         <SelectValue />
@@ -3353,7 +3358,12 @@ export function StandardManagement({
                                         <Label className="text-xs text-muted-foreground">类型</Label>
                                         <Select
                                           value={col.type}
-                                          onValueChange={(value) => drawerUpdateColumn(ci, "type", value)}
+                                          onValueChange={(value) => {
+                                            drawerUpdateColumn(ci, "type", value);
+                                            if (value === "calc" && !col.calc_operator) {
+                                              drawerUpdateColumn(ci, "calc_operator", "*");
+                                            }
+                                          }}
                                         >
                                           <SelectTrigger className="h-8 text-sm w-full">
                                             <SelectValue />
