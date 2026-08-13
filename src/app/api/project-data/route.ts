@@ -146,11 +146,28 @@ export async function POST(request: NextRequest) {
       allow_delete: data.allow_delete !== undefined ? data.allow_delete : true 
     };
 
+    // 查询列类型，用于精确的空字符串处理：文本列保留空字符串（避免 NOT NULL 报错），非文本列转 NULL
+    const plainSchema = projectSchema.includes('-') ? projectSchema : projectSchema.toLowerCase();
+    let columnTypes: Record<string, string> = {};
+    try {
+      const { data: colInfo } = await client.rpc("query_to_jsonb", {
+        p_sql: `SELECT jsonb_object_agg(column_name, data_type) FROM information_schema.columns WHERE table_schema = '${plainSchema.replace(/'/g, "''")}' AND table_name = '${tableCode.replace(/'/g, "''")}'`,
+      });
+      if (colInfo && typeof colInfo === "object" && !Array.isArray(colInfo)) {
+        columnTypes = colInfo as Record<string, string>;
+      }
+    } catch { /* 列类型查询失败不影响主流程 */ }
+
     // 构建插入 SQL（使用唯一美元标签避免任何冲突）
     const dq = `q_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
     const columns = Object.keys(dataWithMeta).map(k => `"${k}"`);
-    const values = Object.values(dataWithMeta).map((v) => {
-      if (v === null || v === undefined || v === "") return "NULL";
+    const values = Object.entries(dataWithMeta).map(([k, v]) => {
+      if (v === null || v === undefined) return "NULL";
+      if (v === "") {
+        const colType = columnTypes[k];
+        if (colType && !["text", "character varying", "varchar"].includes(colType)) return "NULL";
+        return "''";
+      }
       if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
       if (typeof v === "number") return String(v);
       if (Array.isArray(v) || (typeof v === "object" && v !== null)) {
