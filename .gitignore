@@ -108,3 +108,9 @@ data/
 .backups/
 public/uploads/
 backups/
+
+# Design preview HTML files
+case-center-fresh-v2.html
+customer-dashboard-layout.html
+icon-preview.html
+stage-layout-preview.html
