@@ -396,6 +396,12 @@ type DedicatedState = {
   thresholdEnabled: boolean;
   thresholdOperator: "gt" | "lt" | "gte" | "lte" | "eq";
   thresholdValue: string;
+  // 趋势图专属字段（requirement_trend）
+  allColumns: Array<{ name: string; label: string; type: string; options?: string[] }>;
+  trendTimeField: string;
+  trendStatusField: string;
+  trendCompletedValue: string;
+  trendMonths: string;
 };
 
 const EMPTY_DEDICATED: DedicatedState = {
@@ -405,6 +411,7 @@ const EMPTY_DEDICATED: DedicatedState = {
   valAOptions: [], valBOptions: [], saving: false,
   groups: [], expression: "s0", nextGroupId: 0,
   thresholdEnabled: false, thresholdOperator: "gt", thresholdValue: "",
+  allColumns: [], trendTimeField: "", trendStatusField: "", trendCompletedValue: "", trendMonths: "6",
 };
 
 /* ============================================================
@@ -473,6 +480,7 @@ export function ProjectDashboard({
   const [warningCfg, setWarningCfg] = useState<DedicatedState>(EMPTY_DEDICATED);
   const [healthRank, setHealthRank] = useState<DedicatedState>(EMPTY_DEDICATED);
   const [weakArea, setWeakArea] = useState<DedicatedState>(EMPTY_DEDICATED);
+  const [trendCfg, setTrendCfg] = useState<DedicatedState>(EMPTY_DEDICATED);
 
   /* ---- Shared KPI config helpers ---- */
 
@@ -536,6 +544,10 @@ export function ProjectDashboard({
           thresholdEnabled: threshold?.enabled || false,
           thresholdOperator: (threshold?.operator as DedicatedState["thresholdOperator"]) || "gt",
           thresholdValue: threshold?.value != null ? String(threshold.value) : "",
+          trendTimeField: typeof cfg.time_field === "string" ? cfg.time_field : "",
+          trendStatusField: typeof cfg.status_field === "string" ? cfg.status_field : "",
+          trendCompletedValue: typeof cfg.completed_value === "string" ? cfg.completed_value : "",
+          trendMonths: cfg.months != null ? String(cfg.months) : "6",
         }));
         }
       })
@@ -634,6 +646,12 @@ export function ProjectDashboard({
     const configValue: any = { sources, expression: state.expression || sources.map((_: any, i: number) => `s${i}`).join(" + ") };
     if (state.thresholdEnabled && state.thresholdValue) {
       configValue.threshold = { enabled: true, operator: state.thresholdOperator, value: Number(state.thresholdValue) || 0 };
+    }
+    if (state.kpiKey === "requirement_trend") {
+      configValue.time_field = state.trendTimeField;
+      configValue.status_field = state.trendStatusField;
+      configValue.completed_value = state.trendCompletedValue;
+      configValue.months = Number(state.trendMonths) || 6;
     }
 
     setter((p: any) => ({ ...p, saving: true }));
@@ -1022,6 +1040,7 @@ export function ProjectDashboard({
   useEffect(() => { if (weakArea.open) loadColumnsForDedicated(weakArea, setWeakArea); }, [weakArea.open, weakArea.table]);
   useEffect(() => { if (highRisk.open) loadColumnsForDedicated(highRisk, setHighRisk); }, [highRisk.open, highRisk.table]);
   useEffect(() => { if (taskTotal.open) loadColumnsForDedicated(taskTotal, setTaskTotal); }, [taskTotal.open, taskTotal.table]);
+  useEffect(() => { if (trendCfg.open) loadFullColumnsForDedicated(trendCfg, setTrendCfg); }, [trendCfg.open, trendCfg.table]);
 
   /* ---- loading / error states ---- */
   if (loading && !data) {
@@ -1077,7 +1096,7 @@ export function ProjectDashboard({
               <Label className="text-xs">选择模块</Label>
               <select className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
                 value={state.module}
-                onChange={(e) => setter((p: any) => ({ ...p, module: e.target.value, table: "", columns: [], groups: [], expression: "s0", nextGroupId: 0 }))}>
+                onChange={(e) => setter((p: any) => ({ ...p, module: e.target.value, table: "", columns: [], allColumns: [], trendTimeField: "", trendStatusField: "", trendCompletedValue: "", groups: [], expression: "s0", nextGroupId: 0 }))}>
                 <option value="">-- 选择模块 --</option>
                 {kpiModuleOptions.map((m: any) => (<option key={m.code} value={m.code}>{m.label}</option>))}
               </select>
@@ -1089,10 +1108,63 @@ export function ProjectDashboard({
                 <Label className="text-xs">选择数据表</Label>
                 <select className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
                   value={state.table}
-                  onChange={(e) => setter((p: any) => ({ ...p, table: e.target.value, columns: [], groups: [], expression: "s0", nextGroupId: 0 }))}>
+                  onChange={(e) => setter((p: any) => ({ ...p, table: e.target.value, columns: [], allColumns: [], trendTimeField: "", trendStatusField: "", trendCompletedValue: "", groups: [], expression: "s0", nextGroupId: 0 }))}>
                   <option value="">-- 选择数据表 --</option>
                   {tableOptionsFor(state).map((t: any) => (<option key={t.table_code} value={t.table_code}>{t.table_name}</option>))}
                 </select>
+              </div>
+            )}
+
+            {/* Trend-specific config (requirement_trend) */}
+            {state.kpiKey === "requirement_trend" && state.table && (
+              <div className="space-y-2 border rounded-lg p-3" style={{ borderColor: "var(--border)" }}>
+                <div className="text-xs font-bold text-muted-foreground">📈 趋势图专属设置</div>
+                {/* Time field */}
+                <div>
+                  <Label className="text-xs">时间字段（按月累计的日期列）</Label>
+                  <select className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                    value={state.trendTimeField}
+                    onChange={(e) => setter((p: any) => ({ ...p, trendTimeField: e.target.value }))}>
+                    <option value="">-- 选择日期列 --</option>
+                    {state.allColumns.filter((c: any) => c.type === "date" || c.type === "datetime").map((c: any) => (
+                      <option key={c.name} value={c.name}>{c.label || c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Status field */}
+                <div>
+                  <Label className="text-xs">完成状态列</Label>
+                  <select className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                    value={state.trendStatusField}
+                    onChange={(e) => setter((p: any) => ({ ...p, trendStatusField: e.target.value, trendCompletedValue: "" }))}>
+                    <option value="">-- 选择状态列 --</option>
+                    {state.allColumns.filter((c: any) => c.type === "select" && c.options?.length > 0).map((c: any) => (
+                      <option key={c.name} value={c.name}>{c.label || c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Completed value */}
+                {state.trendStatusField && (
+                  <div>
+                    <Label className="text-xs">判定为「已完成」的值</Label>
+                    <select className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                      value={state.trendCompletedValue}
+                      onChange={(e) => setter((p: any) => ({ ...p, trendCompletedValue: e.target.value }))}>
+                      <option value="">-- 选择值 --</option>
+                      {(state.allColumns.find((c: any) => c.name === state.trendStatusField)?.options || []).map((opt: string) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {/* Months range */}
+                <div>
+                  <Label className="text-xs">时间范围（近 N 个月）</Label>
+                  <input type="number" min={1} max={60} className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                    value={state.trendMonths}
+                    onChange={(e) => setter((p: any) => ({ ...p, trendMonths: e.target.value }))}
+                    placeholder="6" />
+                </div>
               </div>
             )}
 
@@ -1287,6 +1359,25 @@ export function ProjectDashboard({
     fetch(`/api/dashboard/table-columns?table_code=${encodeURIComponent(state.table)}`)
       .then((r) => r.json())
       .then((json) => setter((p: any) => ({ ...p, columns: json.data || [] })))
+      .catch(() => {});
+  };
+
+  // Load full column definitions (with type) for the trend dialog
+  const loadFullColumnsForDedicated = (state: DedicatedState, setter: any) => {
+    if (!state.table || state.allColumns.length > 0) return;
+    fetch(`/api/dashboard/table-columns-full?table_code=${encodeURIComponent(state.table)}`)
+      .then((r) => r.json())
+      .then((json) => {
+        const cols = json.data || [];
+        const firstDate = cols.find((c: any) => c.type === "date" || c.type === "datetime");
+        const firstSelect = cols.find((c: any) => c.type === "select" && c.options?.length > 0);
+        setter((p: any) => ({
+          ...p,
+          allColumns: cols,
+          trendTimeField: p.trendTimeField || firstDate?.name || "",
+          trendStatusField: p.trendStatusField || firstSelect?.name || "",
+        }));
+      })
       .catch(() => {});
   };
 
@@ -1751,7 +1842,16 @@ export function ProjectDashboard({
       <div className="r3">
         {/* Line chart */}
         <div className="r3-panel">
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>📈 需求累计完成趋势</div>
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span>📈 需求累计完成趋势</span>
+            <button
+              className="db-gear"
+              title="设置趋势数据源"
+              onClick={() => openDedicated(setTrendCfg, "requirement_trend", "需求累计趋势")}
+            >
+              ⚙
+            </button>
+          </div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
@@ -1865,14 +1965,24 @@ export function ProjectDashboard({
       <div className="db-panel">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
           <span style={{ fontSize: 12, fontWeight: 700 }}>需求明细列表</span>
-          <button
-            className="db-gear"
-            onClick={() =>
-              openDedicated(setReqStats, "requirement_detail", "需求明细")
-            }
-          >
-            ⚙
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              className="db-gear"
+              title="导出 Excel"
+              onClick={() => handleExportKpi("requirement_detail", "需求明细")}
+            >
+              📥
+            </button>
+            <button
+              className="db-gear"
+              title="配置数据源"
+              onClick={() =>
+                openDedicated(setReqStats, "requirement_detail", "需求明细")
+              }
+            >
+              ⚙
+            </button>
+          </div>
         </div>
 
         <div className="db-search-wrap">
@@ -2124,6 +2234,7 @@ export function ProjectDashboard({
       {renderDedicatedDialog(warningCfg, setWarningCfg)}
       {renderDedicatedDialog(healthRank, setHealthRank)}
       {renderDedicatedDialog(weakArea, setWeakArea)}
+      {renderDedicatedDialog(trendCfg, setTrendCfg)}
     </div>
   );
 }

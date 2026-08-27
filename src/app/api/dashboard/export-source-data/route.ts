@@ -79,11 +79,35 @@ export async function POST(request: NextRequest) {
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "项目管理系统";
 
+    // Load product module name map (code -> module_name) for resolving "procurement_module" columns
+    const moduleNameMap = new Map<string, string>();
+    try {
+      const { data: pmRows } = await client.rpc("dp_select", { p_table: "product_module_types" });
+      for (const r of (pmRows as Array<Record<string, unknown>>) || []) {
+        const code = String(r.code || "");
+        if (code) moduleNameMap.set(code, String(r.module_name || code));
+      }
+    } catch { /* ignore */ }
+
     let hasData = false;
 
     for (let si = 0; si < sources.length; si++) {
       const source = sources[si];
       const whereClause = buildWhereClause(source);
+      // Identify "procurement_module" columns for this source table so codes can be resolved to names
+      const moduleCols = new Set<string>();
+      try {
+        const { data: colDefData } = await client.rpc("execute_sql", {
+          p_sql: `SELECT columns_config FROM data_table_definitions WHERE table_code = '${source.table_code.replace(/'/g, "''")}'`,
+        });
+        const colRows = colDefData as Array<{ columns_config: unknown }> | null;
+        if (colRows && colRows.length > 0) {
+          const cols = colRows[0].columns_config as Array<{ name: string; type?: string }> | null;
+          for (const c of cols || []) {
+            if (c.type === "procurement_module") moduleCols.add(c.name);
+          }
+        }
+      } catch { /* ignore */ }
       // Sheet name: label (or label-N for multi-source)
       const sheetName = sources.length > 1
         ? `${sheetLabel}-${si + 1}`.slice(0, 31)
@@ -97,6 +121,8 @@ export async function POST(request: NextRequest) {
       for (const project of projects) {
         const schema = safeSchema(String(project.project_schema));
         const projectName = String(project.project_name || "");
+        const ci = project.customer_info as Record<string, unknown> | undefined;
+        const customerName = String(project.final_customer || ci?.company_name || "");
 
         try {
           const sql = `SELECT * FROM ${schema}."${source.table_code.replace(/"/g, '""')}"${whereClause}`;
@@ -107,7 +133,7 @@ export async function POST(request: NextRequest) {
           // Write header once per sheet
           if (!headerWritten) {
             const cols = Object.keys(rows[0]).filter((k) => k !== "id");
-            headerRow.values = ["项目名称", ...cols];
+            headerRow.values = ["最终客户名称", "项目名称", ...cols];
             // Style header
             headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
             headerRow.fill = {
@@ -129,7 +155,28 @@ export async function POST(request: NextRequest) {
 
           for (const row of rows) {
             const cols = Object.keys(row).filter((k) => k !== "id");
-            const dataRow = sheet.addRow([projectName, ...cols.map((k) => row[k])]);
+            const dataRow = sheet.addRow([
+              customerName,
+              projectName,
+              ...cols.map((k) => {
+                let v = row[k];
+                if (moduleCols.has(k)) {
+                  if (typeof v === "string") {
+                    const t = v.trim();
+                    if (t.startsWith("[") && t.endsWith("]")) {
+                      try {
+                        const arr = JSON.parse(t);
+                        if (Array.isArray(arr)) return arr.map((x) => moduleNameMap.get(String(x)) || String(x)).join("、");
+                      } catch { /* fall through */ }
+                    }
+                    v = moduleNameMap.get(t) || t;
+                  } else if (Array.isArray(v)) {
+                    v = (v as unknown[]).map((x) => moduleNameMap.get(String(x)) || String(x)).join("、");
+                  }
+                }
+                return v;
+              }),
+            ]);
             dataRow.eachCell((cell) => {
               cell.border = {
                 top: { style: "thin" },
@@ -148,7 +195,8 @@ export async function POST(request: NextRequest) {
       // Auto-fit column widths
       if (sheet.columns) {
         sheet.columns.forEach((col, i) => {
-          if (i === 0) col.width = 20; // project name
+          if (i === 0) col.width = 20; // 最终客户名称
+          else if (i === 1) col.width = 20; // 项目名称
           else col.width = 16;
         });
       }

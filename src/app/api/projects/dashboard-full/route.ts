@@ -23,6 +23,11 @@ interface KpiSource {
 interface KpiConfigValue {
   sources: KpiSource[];
   expression: string;
+  // 趋势图专属字段（requirement_trend）
+  time_field?: string;
+  status_field?: string;
+  completed_value?: string;
+  months?: number;
 }
 
 function hashSource(s: KpiSource): string {
@@ -78,6 +83,47 @@ function buildDetailSQL(schema: string, source: KpiSource, limit = 20): string {
     sql += " WHERE " + conditions.join(joinOp);
   }
   sql += ` LIMIT ${limit}`;
+  return sql;
+}
+
+// Build a monthly aggregation query for the cumulative trend line chart:
+// groups by the time field's YYYY-MM and counts total + completed (status = completedValue).
+function buildTrendSQL(
+  schema: string,
+  source: KpiSource,
+  timeField: string,
+  statusField: string,
+  completedValue: string
+): string {
+  const tf = timeField.replace(/"/g, '""');
+  const sf = statusField.replace(/"/g, '""');
+  const cv = completedValue.replace(/'/g, "''");
+  let sql = `SELECT to_char("${tf}", 'YYYY-MM') AS ym, COUNT(*) AS total, ` +
+    `COUNT(*) FILTER (WHERE "${sf}" = '${cv}') AS completed ` +
+    `FROM ${schema}."${source.table_code.replace(/"/g, '""')}"`;
+
+  const conds: string[] = [];
+  for (const c of source.conditions || []) {
+    if (!c.column || !c.operator) continue;
+    const col = `"${c.column.replace(/"/g, '""')}"`;
+    const vals = (c.values || []).map((v) => `'${String(v).replace(/'/g, "''")}'`);
+    if (vals.length === 0) continue;
+    switch (c.operator) {
+      case "eq": conds.push(`${col} = ${vals[0]}`); break;
+      case "gt": conds.push(`${col} > ${vals[0]}`); break;
+      case "lt": conds.push(`${col} < ${vals[0]}`); break;
+      case "gte": conds.push(`${col} >= ${vals[0]}`); break;
+      case "lte": conds.push(`${col} <= ${vals[0]}`); break;
+      case "in": conds.push(`${col} IN (${vals.join(", ")})`); break;
+      case "not_in": conds.push(`${col} NOT IN (${vals.join(", ")})`); break;
+    }
+  }
+  let where = `"${tf}" IS NOT NULL`;
+  if (conds.length > 0) {
+    const joinOp = source.relation === "OR" ? " OR " : " AND ";
+    where += ` AND (${conds.join(joinOp)})`;
+  }
+  sql += ` WHERE ${where} GROUP BY ym ORDER BY ym`;
   return sql;
 }
 
@@ -177,6 +223,10 @@ export async function GET(request: NextRequest) {
           kpiConfigMap.set(row.kpi_key, {
             sources,
             expression: typeof cv.expression === "string" ? cv.expression : sources.map((_, i) => `s${i}`).join(" + "),
+            time_field: typeof cv.time_field === "string" ? cv.time_field : undefined,
+            status_field: typeof cv.status_field === "string" ? cv.status_field : undefined,
+            completed_value: typeof cv.completed_value === "string" ? cv.completed_value : undefined,
+            months: typeof cv.months === "number" ? cv.months : undefined,
           });
         }
       }
@@ -475,6 +525,52 @@ export async function GET(request: NextRequest) {
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     });
 
+    // ---- Real cumulative completion trend from configured data source (requirement_trend) ----
+    let cumulativeTrend: Array<{ month: string; completed: number; total: number }> | null = null;
+    const trendConfig = kpiConfigMap.get("requirement_trend");
+    if (trendConfig && trendConfig.sources.length > 0 && trendConfig.time_field) {
+      const statusField = trendConfig.status_field || "状态";
+      const completedValue = trendConfig.completed_value || "已完成";
+      const trendMonthsCount = trendConfig.months || 6;
+      const monthlyTotal = new Map<string, number>();
+      const monthlyCompleted = new Map<string, number>();
+      for (const project of projects) {
+        if (!project.project_schema) continue;
+        const schema = safeSchema(String(project.project_schema));
+        for (const source of trendConfig.sources) {
+          try {
+            const sql = buildTrendSQL(schema, source, trendConfig.time_field, statusField, completedValue);
+            const { data } = await client.rpc("execute_sql", { p_sql: sql });
+            const rows = data as Array<{ ym: string; total: string; completed: string }> | null;
+            if (!rows) continue;
+            for (const r of rows) {
+              monthlyTotal.set(r.ym, (monthlyTotal.get(r.ym) || 0) + Number(r.total));
+              monthlyCompleted.set(r.ym, (monthlyCompleted.get(r.ym) || 0) + Number(r.completed));
+            }
+          } catch { /* ignore */ }
+        }
+      }
+      if (monthlyTotal.size > 0) {
+        // Continuous last-N-months axis with cumulative sums up to each month
+        const labels: string[] = [];
+        for (let i = trendMonthsCount - 1; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          labels.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+        }
+        cumulativeTrend = labels.map((m) => {
+          let cumT = 0;
+          let cumC = 0;
+          for (const [ym, tot] of monthlyTotal) {
+            if (ym <= m) cumT += tot;
+          }
+          for (const [ym, done] of monthlyCompleted) {
+            if (ym <= m) cumC += done;
+          }
+          return { month: m, completed: cumC, total: cumT };
+        });
+      }
+    }
+
     // ============================================================
     // 预警计算引擎
     // ============================================================
@@ -760,7 +856,7 @@ export async function GET(request: NextRequest) {
 
     // ---- Build requirement detail list from configured data source ----
     const reqDetailConfig = kpiConfigMap.get("requirement_detail");
-    const detailColumns: Array<{ name: string; label: string }> = [];
+    const detailColumns: Array<{ name: string; label: string; type?: string }> = [];
     const detailList: Array<Record<string, unknown>> = [];
 
     if (reqDetailConfig && reqDetailConfig.sources.length > 0) {
@@ -772,14 +868,27 @@ export async function GET(request: NextRequest) {
         });
         const colRows = colDefData as Array<{ columns_config: unknown }> | null;
         if (colRows && colRows.length > 0) {
-          const cols = colRows[0].columns_config as Array<{ name: string; label?: string }> | null;
+          const cols = colRows[0].columns_config as Array<{ name: string; label?: string; type?: string }> | null;
           if (cols) {
             for (const c of cols) {
-              detailColumns.push({ name: c.name, label: c.label || c.name });
+              detailColumns.push({ name: c.name, label: c.label || c.name, type: c.type });
             }
           }
         }
       } catch { /* ignore */ }
+
+      // Load product module name map (code -> module_name) for resolving "procurement_module" columns
+      const moduleNameMap = new Map<string, string>();
+      const moduleColumns = detailColumns.filter((c) => c.type === "procurement_module").map((c) => c.name);
+      if (moduleColumns.length > 0) {
+        try {
+          const { data: pmRows } = await client.rpc("dp_select", { p_table: "product_module_types" });
+          for (const r of (pmRows as Array<Record<string, unknown>>) || []) {
+            const code = String(r.code || "");
+            if (code) moduleNameMap.set(code, String(r.module_name || code));
+          }
+        } catch { /* ignore */ }
+      }
 
       // Query real data from project schemas
       for (const project of projects) {
@@ -787,7 +896,7 @@ export async function GET(request: NextRequest) {
         if (!project.project_schema) continue;
         const projectName = String(project.project_name || "");
         const ci = project.customer_info as Record<string, unknown> | undefined;
-        const customerName = String(ci?.company_name || "");
+        const customerName = String(project.final_customer || ci?.company_name || "");
 
         for (const source of reqDetailConfig.sources) {
           try {
@@ -796,6 +905,25 @@ export async function GET(request: NextRequest) {
             const rows = data as Array<Record<string, unknown>> | null;
             if (rows) {
               for (const row of rows) {
+                for (const colName of moduleColumns) {
+                  const v = row[colName];
+                  if (v == null) continue;
+                  if (typeof v === "string") {
+                    const t = v.trim();
+                    if (t.startsWith("[") && t.endsWith("]")) {
+                      try {
+                        const arr = JSON.parse(t);
+                        if (Array.isArray(arr)) {
+                          row[colName] = arr.map((x) => moduleNameMap.get(String(x)) || String(x)).join("、");
+                          continue;
+                        }
+                      } catch { /* fall through */ }
+                    }
+                    row[colName] = moduleNameMap.get(t) || t;
+                  } else if (Array.isArray(v)) {
+                    row[colName] = (v as unknown[]).map((x) => moduleNameMap.get(String(x)) || String(x)).join("、");
+                  }
+                }
                 detailList.push({
                   customer_name: customerName,
                   project_name: projectName,
@@ -890,7 +1018,7 @@ export async function GET(request: NextRequest) {
             avg_processing_days: 14,
             completion_velocity: 2.3,
           },
-          cumulative_trend: trendMonths.map((m, i) => ({
+          cumulative_trend: cumulativeTrend || trendMonths.map((m, i) => ({
             month: m,
             completed: Math.round(reqTotal * (0.1 + i * 0.12)),
             total: Math.round(reqTotal * (0.2 + i * 0.14)),
