@@ -1,4 +1,9 @@
-import { Pool, PoolClient } from 'pg';
+import { Pool, PoolClient, types } from 'pg';
+
+// 让 PostgreSQL 的 DATE 列以纯字符串 "YYYY-MM-DD" 返回。
+// 否则 pg 驱动会把 DATE 解析成 JS Date 对象，JSON 序列化后变成
+// "2026-01-26T16:00:00.000Z"，导致详情/导出/存储都带上时间与时区。
+types.setTypeParser(1082, (value: string) => value); // 1082 = date OID
 
 let pool: Pool | null = null;
 
