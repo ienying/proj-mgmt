@@ -740,9 +740,11 @@ CREATE TABLE IF NOT EXISTS issue_mgmt_issue_categories (
   id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
   code VARCHAR(50) NOT NULL UNIQUE,
   name VARCHAR(100) NOT NULL,
+  parent_id VARCHAR(36),
   description TEXT,
   sort_order INTEGER DEFAULT 0,
   is_enabled BOOLEAN DEFAULT true,
+  form_fields JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
 
