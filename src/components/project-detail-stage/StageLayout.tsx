@@ -39,7 +39,11 @@ export function StageLayout({
     if (currentUser.id && currentUser.id === (project.created_by || "")) return true;
     if (currentUser.name && currentUser.name === (project.role_project_manager || "")) return true;
     const members = Array.isArray(project.members) ? project.members : [];
-    return members.some((m: any) => m.user_id === currentUser.id);
+    return members.some(
+      (m: any) =>
+        m.user_id === currentUser.id ||
+        (currentUser.name && m.name === currentUser.name)
+    );
   }, [currentUser, project.role_project_manager, project.members, project.created_by]);
   const [activePanel, setActivePanel] = useState<PanelKey>("scope");
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);

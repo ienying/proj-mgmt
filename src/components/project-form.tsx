@@ -49,8 +49,88 @@ import {
   Copy,
   ClipboardList,
   Hammer,
+  ChevronsUpDown,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
+
+// 项目成员「关联账号」搜索下拉：选中用户后回填 user_id，同时把姓名自动带出
+function MemberAccountPicker({
+  value,
+  users,
+  onSelect,
+}: {
+  value: string;
+  users: { id: string; name: string }[];
+  onSelect: (u: { id: string; name: string } | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const selected = users.find((u) => u.id === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between font-normal"
+        >
+          <span className={selected ? "" : "text-slate-400"}>
+            {selected ? selected.name : "关联账号（可选）"}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[240px] p-0" align="start">
+        <Command>
+          <CommandInput
+            placeholder="搜索用户..."
+            value={search}
+            onValueChange={setSearch}
+          />
+          <CommandList>
+            <CommandEmpty>未找到用户</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value="__none__"
+                onSelect={() => {
+                  onSelect(null);
+                  setSearch("");
+                  setOpen(false);
+                }}
+              >
+                <Check className="mr-2 h-4 w-4 opacity-0" />
+                不关联（仅记录姓名）
+              </CommandItem>
+              {users
+                .filter((u) => !search || u.name.includes(search))
+                .slice(0, 50)
+                .map((u) => (
+                  <CommandItem
+                    key={u.id}
+                    value={u.name}
+                    onSelect={() => {
+                      onSelect(u);
+                      setSearch("");
+                      setOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={`mr-2 h-4 w-4 ${selected?.id === u.id ? "opacity-100" : "opacity-0"}`}
+                    />
+                    {u.name}
+                  </CommandItem>
+                ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 // 中国省级行政区（含港澳台）
 const PROVINCES = [
@@ -446,6 +526,24 @@ export function ProjectForm({
 
   // 项目成员
   const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
+
+  // 用户账号列表（用于成员关联账号）
+  const [userList, setUserList] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    fetch("/api/users", {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((r) => r.json())
+      .then((d) =>
+        setUserList(
+          ((d.data || []) as Array<Record<string, unknown>>).map((u) => ({
+            id: String(u.id || ""),
+            name: String(u.name || ""),
+          }))
+        )
+      )
+      .catch(() => {});
+  }, [token]);
 
   // 采购模块
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
@@ -1383,7 +1481,11 @@ export function ProjectForm({
       const isCreator = currentUser?.id && (initialData as Record<string, unknown>).created_by === currentUser.id;
       const isPM = currentUser?.name && (initialData as Record<string, unknown>).role_project_manager === currentUser.name;
       const members = ((initialData as Record<string, unknown>).members as Array<Record<string, unknown>>) || [];
-      const isMember = members.some((m: Record<string, unknown>) => m.user_id === currentUser?.id);
+      const isMember = members.some(
+        (m: Record<string, unknown>) =>
+          m.user_id === currentUser?.id ||
+          (currentUser?.name && m.name === currentUser.name)
+      );
       if (!isSuperAdmin && !isCreator && !isPM && !isMember) {
         toast.error("没有编辑权限，仅超级管理员、项目创建人、项目经理和项目成员可编辑");
         return;
@@ -2172,10 +2274,26 @@ export function ProjectForm({
                     <X className="h-4 w-4" />
                   </button>
                   <div className="text-xs font-medium text-slate-500">成员 {index + 1}</div>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-4 gap-3">
+                    <MemberAccountPicker
+                      value={pm.user_id}
+                      users={userList}
+                      onSelect={(u) => {
+                        if (u) {
+                          updateProjectMember(pm.id, "user_id", u.id);
+                          updateProjectMember(pm.id, "name", u.name);
+                        } else {
+                          updateProjectMember(pm.id, "user_id", "");
+                        }
+                      }}
+                    />
                     <Input
                       value={pm.name}
-                      onChange={(e) => updateProjectMember(pm.id, "name", e.target.value)}
+                      onChange={(e) => {
+                        updateProjectMember(pm.id, "name", e.target.value);
+                        // 手动改姓名后，之前关联的账号已不再一致，清除 user_id 避免误匹配
+                        if (pm.user_id) updateProjectMember(pm.id, "user_id", "");
+                      }}
                       placeholder="姓名"
                     />
                     <Select

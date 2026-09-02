@@ -58,7 +58,10 @@ export async function canEditProject(
 
   if (members) {
     const isMember = (members as Record<string, unknown>[]).some(
-      (m) => m.project_id === projectId && m.user_id === userId,
+      (m) =>
+        m.project_id === projectId &&
+        (m.user_id === userId ||
+          (userName && String(m.name || "").trim() === userName.trim())),
     );
     if (isMember) {
       return { allowed: true, projectId };
@@ -123,7 +126,10 @@ export async function canEditProjectBySchema(
 
   if (members) {
     const isMember = (members as Record<string, unknown>[]).some(
-      (m) => m.project_id === projectId && m.user_id === userId,
+      (m) =>
+        m.project_id === projectId &&
+        (m.user_id === userId ||
+          (userName && String(m.name || "").trim() === userName.trim())),
     );
     if (isMember) {
       return { allowed: true, projectId };

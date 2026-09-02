@@ -390,7 +390,11 @@ export function ProjectDetail({
     if (currentUser.id && currentUser.id === (p.created_by || "")) return true;
     if (currentUser.name && currentUser.name === (p.role_project_manager || "")) return true;
     const members = Array.isArray(p.members) ? p.members : [];
-    return members.some((m: any) => m.user_id === currentUser.id);
+    return members.some(
+      (m: any) =>
+        m.user_id === currentUser.id ||
+        (currentUser.name && m.name === currentUser.name)
+    );
   }, [currentUser, project]);
 
   const [activeModule, setActiveModule] = useState("scope");
