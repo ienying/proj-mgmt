@@ -190,7 +190,7 @@ export default function TaskCenterCreateWizard({ currentUser, onSave, onBack, in
     fetch("/api/tasks/defs?status=active&_limit=5").then(r => r.json()).then(j => {
       if (j.data) setRecentDefs(j.data.slice(0, 5));
     }).catch(() => {});
-    fetch("/api/users").then(r => r.json()).then(j => { if (j.data) setSystemUsers(j.data); }).catch(() => {});
+    fetch("/api/users", { headers: { Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}` } }).then(r => r.json()).then(j => { if (j.data) setSystemUsers(j.data); }).catch(() => {});
     fetch("/api/projects", { headers: { Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}` } }).then(r => r.json()).then(j => { if (j.data) setProjects(j.data); }).catch(() => {});
     // Load reference data sources for dropdown options
     fetch("/api/standards").then(r => r.json()).then(j => {

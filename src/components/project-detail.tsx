@@ -685,7 +685,8 @@ export function ProjectDetail({
         }
       } catch {}
       try {
-        const uRes = await fetch("/api/users");
+        const token = localStorage.getItem("auth_token");
+        const uRes = await fetch("/api/users", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
         const uJson = await uRes.json();
         setUserList((uJson.data || []).map((u: any) => ({ id: u.id, name: u.name })));
       } catch {}

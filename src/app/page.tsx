@@ -475,7 +475,22 @@ export default function HomePage() {
   };
 
   const handleUserDelete = async (id: string) => {
+    const target = users.find((u) => u.id === id);
+    const label = target?.name || target?.username || id;
+    if (!confirm(`确定要删除用户「${label}」吗？此操作不可恢复。`)) return;
     try {
+      const res = await fetch(`/api/users/${id}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        let errMsg = "删除失败";
+        try {
+          const err = await res.json();
+          errMsg = err.error || errMsg;
+        } catch {}
+        throw new Error(errMsg);
+      }
       setUsers((prev) => prev.filter((u) => u.id !== id));
       toast.success("用户删除成功");
     } catch (error: any) {

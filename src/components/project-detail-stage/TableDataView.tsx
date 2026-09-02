@@ -75,7 +75,8 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
       .then(r => r.json())
       .then(d => setProductModules((d.data || []).map((item: any) => ({ code: item.code, name: item.module_name || item.product_name || item.code }))))
       .catch(() => {});
-    fetch("/api/users")
+    const token = localStorage.getItem("auth_token");
+    fetch("/api/users", { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       .then(r => r.json())
       .then(d => setUserList((d.data || []).map((u: any) => ({ id: u.id, name: u.name }))))
       .catch(() => {});

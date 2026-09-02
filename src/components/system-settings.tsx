@@ -222,9 +222,10 @@ export default function SystemSettings({
     } else {
       // Create user via API with password
       try {
+        const token = localStorage.getItem("auth_token");
         const res = await fetch("/api/users", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
           body: JSON.stringify({
             ...formData,
             password: formData.password || "yuansu0718", // default password
@@ -305,8 +306,22 @@ export default function SystemSettings({
     if (!confirm(`确定要删除选中的 ${selectedIds.size} 个用户吗？此操作不可恢复。`)) return;
     setBatchLoading(true);
     try {
+      const token = localStorage.getItem("auth_token");
       const ids = Array.from(selectedIds);
-      await Promise.all(ids.map((id) => fetch(`/api/users/${id}`, { method: "DELETE" })));
+      const results = await Promise.allSettled(
+        ids.map((id) =>
+          fetch(`/api/users/${id}`, {
+            method: "DELETE",
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          })
+        )
+      );
+      const failed = results.filter(
+        (r) => r.status === "rejected" || (r.status === "fulfilled" && !r.value.ok)
+      ).length;
+      if (failed > 0) {
+        alert(`批量删除完成，${failed} 个失败`);
+      }
       clearSelection();
       window.location.reload();
     } catch {
@@ -1559,6 +1574,7 @@ function KnowledgeCategoryPanel() {
 function AttachmentTagPanel() {
   const [tags, setTags] = useState<Array<{ id: string; name: string; sort_order: number; is_enabled: boolean }>>([]);
   const [loading, setLoading] = useState(true);
+  const [addOpen, setAddOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [editTagId, setEditTagId] = useState<string | null>(null);
   const [editTagName, setEditTagName] = useState("");
@@ -1576,17 +1592,25 @@ function AttachmentTagPanel() {
   useEffect(() => { loadTags(); }, []);
 
   const handleAdd = async () => {
-    if (!newTagName.trim()) return;
+    if (!newTagName.trim()) {
+      toast.error("请输入标签名称");
+      return;
+    }
     try {
-      await fetch("/api/knowledge/categories/tags", {
+      const res = await fetch("/api/knowledge/categories/tags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newTagName.trim() }),
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || "添加标签失败");
+      }
+      setAddOpen(false);
       setNewTagName("");
       loadTags();
       toast.success("标签已添加");
-    } catch (e) { toast.error("添加标签失败"); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : "添加标签失败"); }
   };
 
   const handleUpdate = async (id: string) => {
@@ -1618,18 +1642,9 @@ function AttachmentTagPanel() {
     <div className="border-t pt-6 mt-6">
       <div className="flex items-center justify-between mb-3">
         <h4 className="text-base font-semibold text-gray-800">附件标签管理</h4>
-        <div className="flex items-center gap-2">
-          <Input
-            value={newTagName}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTagName(e.target.value)}
-            placeholder="新标签名称"
-            className="h-8 w-36"
-            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") handleAdd(); }}
-          />
-          <Button size="sm" onClick={handleAdd} className="bg-indigo-600 hover:bg-indigo-700">
-            <Plus className="h-3 w-3 mr-1" /> 添加
-          </Button>
-        </div>
+        <Button size="sm" type="button" onClick={() => setAddOpen(true)} className="bg-indigo-600 hover:bg-indigo-700">
+          <Plus className="h-3 w-3 mr-1" /> 添加标签
+        </Button>
       </div>
       <p className="text-sm text-gray-500 mb-3">管理发布内容时可为附件选择的标签，用于分类和搜索。</p>
       <div className="space-y-1">
@@ -1661,6 +1676,30 @@ function AttachmentTagPanel() {
         ))}
         {tags.length === 0 && <p className="text-sm text-gray-400 text-center py-4">暂无标签</p>}
       </div>
+
+      {/* 新增标签弹窗 */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>新增附件标签</DialogTitle>
+            <DialogDescription>用于发布内容时对附件进行分类和搜索。</DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <label className="text-sm font-medium text-gray-700 mb-1 block">标签名称</label>
+            <Input
+              autoFocus
+              value={newTagName}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTagName(e.target.value)}
+              placeholder="输入标签名称"
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") handleAdd(); }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setAddOpen(false); setNewTagName(""); }}>取消</Button>
+            <Button onClick={handleAdd} className="bg-indigo-600 hover:bg-indigo-700" disabled={!newTagName.trim()}>确定</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

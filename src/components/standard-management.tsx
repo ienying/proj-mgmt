@@ -785,7 +785,8 @@ export function StandardManagement({
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await fetch("/api/users");
+        const token = localStorage.getItem("auth_token");
+        const res = await fetch("/api/users", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
         const json = await res.json();
         if (json.data && Array.isArray(json.data)) {
           setUserList(json.data.map((item: Record<string, unknown>) => ({

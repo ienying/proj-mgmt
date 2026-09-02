@@ -120,7 +120,8 @@ export default function TaskCenterDetail({ instance, def, currentUser, onRefresh
 
   // Load system users for assignment dropdown
   useEffect(() => {
-    fetch("/api/users")
+    const token = localStorage.getItem("auth_token");
+    fetch("/api/users", { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       .then(r => r.json())
       .then(j => { if (j.data) setSystemUsers(j.data); })
       .catch(() => {});
