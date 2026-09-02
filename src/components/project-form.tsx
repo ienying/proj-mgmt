@@ -1642,7 +1642,7 @@ export function ProjectForm({
                 </div>
                 <div className="col-span-2 space-y-1.5">
                   <Label>
-                    项目编号 <span className="text-red-500">*</span>
+                    项目编号（填订单编号，找对应商务获取） <span className="text-red-500">*</span>
                   </Label>
                   {isEditMode ? (
                     <Input
@@ -1729,7 +1729,7 @@ export function ProjectForm({
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>部门</Label>
+                  <Label>项目所属部门</Label>
                   <Select value={department} onValueChange={setDepartment}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="请选择部门" />
