@@ -45,6 +45,24 @@ function isColEditable(col: { type: string; readonly?: boolean }, row?: Record<s
   return true;
 }
 
+// 解析附件/视频字段值：兼容 JSON 数组字符串、JSONB 直接返回的数组、以及旧版纯 key 字符串
+function parseFiles(raw: unknown): Array<{ key: string; name: string; size: number }> {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return (raw as Array<{ key: string; name: string; size: number }>).filter((f) => f && f.key);
+  }
+  const s = String(raw);
+  if (!s || s === "—" || s === "undefined" || s === "null") return [];
+  try {
+    const parsed = JSON.parse(s);
+    if (Array.isArray(parsed)) {
+      return (parsed as Array<{ key: string; name: string; size: number }>).filter((f) => f && f.key);
+    }
+  } catch {}
+  const fn = s.split("/").pop()?.split("?")[0]?.replace(/^\d+_/, "") || "文件";
+  return [{ key: s, name: fn, size: 0 }];
+}
+
 export function TableDataView({ tableName, tableCode, projectSchema, tableDef, onBack, userName, canEdit = false }: TableDataViewProps) {
   const { token } = useAuth();
   const [records, setRecords] = useState<Array<Record<string, unknown>>>([]);
@@ -306,6 +324,23 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
 
     // 系统模块类型：显示名称而非代码
     const displayVal = col.type === "procurement_module" ? (productModules.find(m => m.code === rawVal)?.name || rawVal) : val;
+
+    // 附件/视频列：显示可点击下载的文件名，而非原始 JSON
+    if (col.type === "attachment" || col.type === "video") {
+      const files = parseFiles(row[col.name]);
+      if (files.length === 0) return <span className="text-gray-400">—</span>;
+      return (
+        <span className="flex flex-wrap items-center gap-1">
+          {files.map((f, fi) => (
+            <a key={f.key || fi} href={`/api/files/download?key=${encodeURIComponent(f.key)}`} target="_blank"
+              className="inline-flex items-center gap-1 text-[11px]" style={{ color: "var(--s-blue)", cursor: "pointer", textDecoration: "none" }}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); fetch(`/api/files/download?key=${encodeURIComponent(f.key)}`).then(r=>r.json()).then(json=>{ if(json.url) window.open(json.url,"_blank"); }).catch(()=>{}); }}>
+              📎 {f.name || (f.key.split("/").pop()?.replace(/^\d+_/, "") || f.key)}
+            </a>
+          ))}
+        </span>
+      );
+    }
 
     if (isEditing) {
       if (col.type === "procurement_module") {
@@ -611,14 +646,22 @@ export function TableDataView({ tableName, tableCode, projectSchema, tableDef, o
                                         const fd = new FormData(); fd.append("file", file); fd.append("fileType", f.type); fd.append("projectCode", projectSchema);
                                         try { const res = await fetch("/api/files/upload", { method: "POST", body: fd }); const d = await res.json(); if (d.key) setDrawerEditData(prev => ({ ...prev, [f.name]: d.key })); } catch {}
                                       }} className="text-[11px]" />
-                                      {val && <span className="text-[11px] ml-2" style={{ color: "var(--s-text-muted)" }}>当前: {(val as string).split("/").pop()?.replace(/^\d+_/, "") || val}</span>}
+                                      {val && <span className="text-[11px] ml-2" style={{ color: "var(--s-text-muted)" }}>当前: {parseFiles(val).map((fl) => fl.name).join("、") || val}</span>}
                                     </div>
-                                  ) : val ? (
-                                    <a href={`/api/files/download?key=${encodeURIComponent(val as string)}`} target="_blank" className="text-[11px]" style={{ color: "var(--s-blue)", cursor: "pointer", textDecoration: "none" }}
-                                      onClick={(e) => { e.preventDefault(); fetch(`/api/files/download?key=${encodeURIComponent(val as string)}`).then(r=>r.json()).then(json=>{ if(json.url) window.open(json.url,"_blank"); }).catch(()=>{}); }}>
-                                      📎 {(val as string).split("/").pop()?.replace(/^\d+_/, "") || val}
-                                    </a>
-                                  ) : "—"
+                                  ) : (() => {
+                                    const files = parseFiles(record[f.name]);
+                                    return files.length > 0 ? (
+                                      <div className="flex flex-col gap-1">
+                                        {files.map((file, fi) => (
+                                          <a key={file.key || fi} href={`/api/files/download?key=${encodeURIComponent(file.key)}`} target="_blank"
+                                            className="inline-flex items-center gap-1 text-[11px]" style={{ color: "var(--s-blue)", cursor: "pointer", textDecoration: "none" }}
+                                            onClick={(e) => { e.preventDefault(); fetch(`/api/files/download?key=${encodeURIComponent(file.key)}`).then(r=>r.json()).then(json=>{ if(json.url) window.open(json.url,"_blank"); }).catch(()=>{}); }}>
+                                            📎 {file.name || (file.key.split("/").pop()?.replace(/^\d+_/, "") || file.key)}
+                                          </a>
+                                        ))}
+                                      </div>
+                                    ) : "—";
+                                  })()
                                 ) : drawerEditing && !f.readonly ? (
                                   f.type === "textarea" ? <textarea value={val} onChange={e => setDrawerEditData(prev => ({ ...prev, [f.name]: e.target.value }))} className="w-full border-none outline-none resize-y text-[13px] font-sans" style={{ minHeight: 60, color: "var(--s-text)", background: "transparent" }} />
                                   : f.type === "select" && f.options?.length ? <select value={val} onChange={e => setDrawerEditData(prev => ({ ...prev, [f.name]: e.target.value }))} className="w-full border-none outline-none text-[13px] font-sans" style={{ color: "var(--s-text)", background: "transparent" }}><option value="">—</option>{f.options.map((o: string) => <option key={o} value={o}>{o}</option>)}</select>
